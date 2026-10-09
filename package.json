@@ -1,0 +1,42 @@
+{
+  "name": "mayorly-app",
+  "productName": "Mayorly",
+  "version": "0.1.0",
+  "description": "Mayorly desktop app, Windows first. A transparent focus HUD with continuous flows and superset rotation rules.",
+  "author": "Shane Li",
+  "private": true,
+  "type": "module",
+  "main": "out/main/index.js",
+  "homepage": "https://github.com/shane1595042264/mayorly-app",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "web": "vite --config vite.web.config.ts",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "icon": "node scripts/make-icon.mjs",
+    "dist": "electron-vite build && electron-builder --win --publish never",
+    "shot": "electron scripts/shot.cjs"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@fontsource/barlow-condensed": "5.3.0",
+    "@fontsource/geist-mono": "5.3.0",
+    "@phosphor-icons/react": "2.1.10",
+    "@types/node": "24.19.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "motion": "14.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vitest": "5.0.3"
+  }
+}

@@ -1,0 +1,153 @@
+@import '@fontsource/barlow-condensed/400.css';
+@import '@fontsource/barlow-condensed/500.css';
+@import '@fontsource/barlow-condensed/600.css';
+@import '@fontsource/geist-mono/400.css';
+@import '@fontsource/geist-mono/500.css';
+
+/*
+  Mayorly HUD tokens. A tactical-visor language borrowed in spirit from
+  Battlefield 2042's HUD and Plus system; nothing here is EA material.
+  One accent (signal amber) means "live" or "the thing you are about to pick".
+  One shape rule: square corners everywhere, panels get two chamfered corners.
+  The overlay always sits on top of your own apps, so there is one theme: ink on
+  a scrim, with text shadows that keep it legible over white and black alike.
+*/
+:root {
+  --ink: #edf0f1;
+  --ink-2: rgb(237 240 241 / 0.68);
+  --ink-3: rgb(237 240 241 / 0.52);
+  --ink-4: rgb(237 240 241 / 0.2);
+  --line: rgb(237 240 241 / 0.14);
+  --line-2: rgb(237 240 241 / 0.3);
+  --void: #0b0d0e;
+  --glass: rgb(11 13 14 / 0.86);
+  --glass-2: rgb(11 13 14 / 0.62);
+  --glass-3: rgb(237 240 241 / 0.045);
+  --accent: #f0ae3c;
+  --accent-2: rgb(240 174 60 / 0.42);
+  --accent-3: rgb(240 174 60 / 0.14);
+  --shadow-text: 0 1px 2px rgb(0 0 0 / 0.65), 0 0 16px rgb(0 0 0 / 0.38);
+
+  --font-ui: 'Barlow Condensed', Bahnschrift, 'Segoe UI', sans-serif;
+  --font-data: 'Geist Mono', ui-monospace, Consolas, monospace;
+  --chamfer: 14px;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --hud-scale: 1;
+
+  /* z scale, the only one in the app */
+  --z-vignette: 10;
+  --z-hud: 20;
+  --z-feed: 30;
+  --z-callout: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.25;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+/* Browser preview only: something to sit on top of, like your desktop would be. */
+body.web {
+  background: #2a3034 url('https://picsum.photos/seed/mayorly-desk-overlay/2400/1350') center / cover no-repeat;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+:focus { outline: none; }
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.num { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--font-data); letter-spacing: 0; }
+.caps {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 600;
+}
+
+.stage {
+  position: fixed;
+  inset: 0;
+  perspective: 1600px;
+  perspective-origin: 50% 50%;
+  overflow: hidden;
+}
+
+.vignette {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-vignette);
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 50%, rgb(6 8 9 / 0.5), rgb(6 8 9 / 0.84)),
+    linear-gradient(rgb(6 8 9 / 0.12), rgb(6 8 9 / 0.12));
+}
+
+.vignette.light {
+  background: linear-gradient(to top, rgb(6 8 9 / 0.7), rgb(6 8 9 / 0.25) 45%, rgb(6 8 9 / 0) 75%);
+}
+
+/* Key cap, used for every keyboard hint. */
+.key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--line-2);
+  font-family: var(--font-data);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--ink-2);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.hint-row {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-shadow: var(--shadow-text);
+}
+.hint-row span { display: inline-flex; gap: 6px; align-items: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
