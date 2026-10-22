@@ -59,9 +59,8 @@ export interface Bridge {
   setMode(mode: UiMode): void
   /** Field mode only: the pointer is over an interactive HUD element. */
   setHit(hit: boolean): void
-  /** The pet is hovered and the card is unfolding, so a compact window has to grow. */
-  setHover(expanded: boolean): void
-  /** The shell's layout, sent on load and whenever the pet changes side. */
+  /** The shell's layout: asked for on mount, and pushed whenever the pet changes side or is dragged. */
+  getLayout(): Promise<Layout>
   onLayout(fn: (layout: Layout) => void): () => void
   /** Accounts: Google sign-in through the system browser, state synced to mayorly-api. */
   accountsAvailable(): Promise<boolean>
@@ -82,8 +81,8 @@ export const IPC = {
   command: 'mayorly:command',
   setMode: 'mayorly:set-mode',
   setHit: 'mayorly:set-hit',
-  setHover: 'mayorly:set-hover',
   layout: 'mayorly:layout',
+  getLayout: 'mayorly:get-layout',
   accountsAvailable: 'mayorly:accounts-available',
   getAccount: 'mayorly:get-account',
   signIn: 'mayorly:sign-in',

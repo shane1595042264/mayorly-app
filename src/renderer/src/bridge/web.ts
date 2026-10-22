@@ -92,7 +92,7 @@ export function createWebBridge(): Bridge {
     onCommand: (fn) => sub(cmdSubs, fn),
     setMode: (_mode: UiMode) => {},
     setHit: () => {},
-    setHover: () => {},
+    getLayout: async () => ({ compact: false, side: 'right' as const, dragging: false }),
     onLayout: () => () => {},
     accountsAvailable: async () => false,
     getAccount: async () => null,

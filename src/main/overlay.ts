@@ -10,8 +10,7 @@ import { IPC, type Layout, type UiMode } from '../shared/bridge'
 // never steals a keystroke from the app you are working in. The other modes take
 // focus until closed.
 //
-// macOS: in field mode the window is only as big as the pet, plus the one-line
-// caption it shows on hover, sits where the tomato was dragged, and takes clicks like any
+// macOS: in field mode the window is only as big as the pet, sits where the tomato was dragged, and takes clicks like any
 // small floating window. Nothing is click-through. The tomato is a native drag
 // region, so the window server moves the window itself; when the move settles the
 // window is hung off the tomato again on the side it now favours. Plus, deck and
@@ -21,13 +20,13 @@ import { IPC, type Layout, type UiMode } from '../shared/bridge'
 const mac = process.platform === 'darwin'
 const debug = process.env.MAYORLY_DEBUG ? (...a: unknown[]) => console.error('[overlay]', ...a) : () => {}
 
-/** Compact window: the tomato and its sign, nothing else. */
-const COMPACT = { width: 220, height: 64 }
-/** With the one-line caption above the pet while it is hovered. */
-const EXPANDED = { width: 300, height: 110 }
-/** The pet's own corner inside the compact window; matches `body.compact .pet-wrap` in hud.css. */
+/** The pet at HUD scale 1: the tomato, its hop, and a sign wide enough for the caption. The window
+ * is sized from this and the HUD scale, and never resized on hover: a resize paints one frame of
+ * old content at the new position, and the tomato jumps. Matches `body.compact` in hud.css. */
+const PET = { width: 300, height: 60 }
+/** The pet's own corner inside the window; matches `body.compact .pet-wrap` in hud.css. */
 const INSET = { x: 8, y: 8 }
-/** The tomato sprite, so the window can be placed around its centre. */
+/** The tomato sprite at scale 1, so the window can be placed around its centre. */
 const TOMATO = 48
 /** How often the cursor is sampled for hover on macOS. */
 const HOVER_POLL_MS = 40
@@ -48,7 +47,7 @@ export class Overlay {
   private hoverTimer: NodeJS.Timeout | null = null
   private cursor = { x: NaN, y: NaN, inside: false }
   private anchor: Anchor | null = null
-  private expanded = false
+  private scale = 1
   private dragging = false
   private fitting = false
   private settle: NodeJS.Timeout | null = null
@@ -127,7 +126,6 @@ export class Overlay {
       this.win.blur()
       this.win.setFocusable(false)
       if (mac) {
-        this.expanded = false
         this.fit()
         this.win.setIgnoreMouseEvents(false)
       } else {
@@ -153,15 +151,22 @@ export class Overlay {
     if (this.mode === 'field' && !this.win.isDestroyed()) this.win.setIgnoreMouseEvents(!hit, { forward: true })
   }
 
-  /** macOS: the caption appears on hover, so the window grows a little to hold it. */
-  setHover(expanded: boolean) {
-    if (!mac || this.dragging || expanded === this.expanded) return
-    this.expanded = expanded
-    if (this.mode === 'field') this.fit()
+  /** The HUD scale setting: the pet window grows with it so nothing is clipped. */
+  setScale(scale: number) {
+    const next = Math.min(1.6, Math.max(0.7, Number(scale) || 1))
+    if (next === this.scale) return
+    this.scale = next
+    if (mac && this.mode === 'field') this.fit()
+  }
+
+  /** The tomato's half width at the current scale. */
+  private get half() {
+    return (TOMATO / 2) * this.scale
   }
 
   /** The user is dragging the window by the tomato. Drop the caption, pause hover, wait for it to settle. */
   private onMoving() {
+    debug('moving', 'fitting', this.fitting, 'mode', this.mode, 'bounds', JSON.stringify(this.win.getBounds()))
     if (this.fitting || this.mode !== 'field') return
     if (!this.dragging) {
       this.dragging = true
@@ -176,17 +181,17 @@ export class Overlay {
   private onMoved() {
     this.settle = null
     this.dragging = false
+    debug('moved', JSON.stringify(this.win.getBounds()), 'anchor', JSON.stringify(this.anchor), 'scale', this.scale)
     const b = this.win.getBounds()
     const wa = this.display().workArea
     const side = this.side(wa, this.anchor ?? this.defaultAnchor(wa))
     const a: Anchor = {
-      x: side === 'right' ? b.x + b.width - INSET.x - TOMATO / 2 : b.x + INSET.x + TOMATO / 2,
+      x: side === 'right' ? b.x + b.width - INSET.x - this.half : b.x + INSET.x + this.half,
       y: b.y + b.height - INSET.y,
     }
     const nearest = screen.getDisplayNearestPoint(a)
     this.displayId = nearest.id
     this.anchor = this.clampAnchor(a, nearest.workArea)
-    this.expanded = false
     this.fit()
     this.saveAnchor()
     this.sendLayout()
@@ -231,6 +236,7 @@ export class Overlay {
   }
 
   private fit() {
+    debug('fit', 'mode', this.mode, 'scale', this.scale, 'anchor', JSON.stringify(this.anchor))
     const target = this.display()
     this.displayId = target.id
     this.fitting = true
@@ -244,23 +250,23 @@ export class Overlay {
   }
 
   private defaultAnchor(wa: Rectangle): Anchor {
-    return { x: wa.x + wa.width - 64 - TOMATO / 2, y: wa.y + wa.height - 28 }
+    return { x: wa.x + wa.width - 64 - this.half, y: wa.y + wa.height - 28 }
   }
 
   private clampAnchor(a: Anchor, wa: Rectangle): Anchor {
-    const mx = INSET.x + TOMATO / 2
+    const mx = INSET.x + this.half
     return {
       x: Math.min(Math.max(a.x, wa.x + mx), wa.x + wa.width - mx),
-      y: Math.min(Math.max(a.y, wa.y + INSET.y + TOMATO), wa.y + wa.height - INSET.y),
+      y: Math.min(Math.max(a.y, wa.y + INSET.y + TOMATO * this.scale), wa.y + wa.height - INSET.y),
     }
   }
 
-  /** The compact or expanded window, hung off the tomato on the side it favours, kept on screen. */
+  /** The field window, hung off the tomato on the side it favours, kept on screen. */
   private fieldBounds(display: Display): Rectangle {
     const wa = display.workArea
     const a = this.anchor ?? (this.anchor = this.defaultAnchor(wa))
-    const size = this.expanded ? EXPANDED : COMPACT
-    const x = this.side(wa, a) === 'right' ? a.x + TOMATO / 2 + INSET.x - size.width : a.x - TOMATO / 2 - INSET.x
+    const size = { width: Math.ceil(PET.width * this.scale) + INSET.x * 2, height: Math.ceil(PET.height * this.scale) + INSET.y * 2 }
+    const x = this.side(wa, a) === 'right' ? a.x + this.half + INSET.x - size.width : a.x - this.half - INSET.x
     const y = a.y + INSET.y - size.height
     return {
       x: Math.round(Math.min(Math.max(x, wa.x), wa.x + wa.width - size.width)),
@@ -270,11 +276,14 @@ export class Overlay {
     }
   }
 
+  layout(): Layout {
+    const wa = this.display().workArea
+    return { compact: mac, side: this.side(wa, this.anchor ?? this.defaultAnchor(wa)), dragging: this.dragging }
+  }
+
   private sendLayout() {
     if (this.win.isDestroyed()) return
-    const wa = this.display().workArea
-    const layout: Layout = { compact: mac, side: this.side(wa, this.anchor ?? this.defaultAnchor(wa)), dragging: this.dragging }
-    this.win.webContents.send(IPC.layout, layout)
+    this.win.webContents.send(IPC.layout, this.layout())
   }
 
   private loadAnchor(): Anchor | null {

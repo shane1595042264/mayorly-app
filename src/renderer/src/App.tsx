@@ -39,7 +39,11 @@ export function App() {
   }, [])
 
   // The shell says whether the window is the pet alone (macOS) and which side it hangs on.
-  useEffect(() => bridge.onLayout(setLayout), [])
+  // Asked for on mount as well as subscribed to: the first push can land before this effect runs.
+  useEffect(() => {
+    void bridge.getLayout().then(setLayout)
+    return bridge.onLayout(setLayout)
+  }, [])
   useEffect(() => {
     document.body.classList.toggle('compact', layout.compact)
     document.body.classList.toggle('side-left', layout.side === 'left')

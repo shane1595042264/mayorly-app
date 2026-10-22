@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { motion, useReducedMotion } from 'motion/react'
 import { blockView, clock, dayStats, startOfDay, type MayorlyState } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
 import tomato from '../assets/tomato@1x.png'
-import { bridge } from '../bridge'
 import { hotkeyLabel } from '../lib/keys'
 import { useNow } from '../store'
 
-// The resting HUD is the founder's tomato holding one number: the clock while a block
-// runs, today's tomatoes when the desk is idle. Hover it and it hops and says in one
-// line what the desk is on. Everything else is a hotkey; the sign opens the swap menu.
-// On macOS the tomato is the window's drag handle.
+// The resting HUD is the founder's tomato holding one sign: the clock while a block
+// runs, today's tomatoes when the desk is idle. Hover it and it hops and the sign
+// says in one line what the desk is on. Everything else is a hotkey; the sign opens
+// the swap menu. On macOS the tomato is the window's drag handle. Nothing here
+// changes the window's size: that would make the tomato jump for a frame.
 
 interface Props {
   s: MayorlyState
@@ -29,16 +29,12 @@ export function Pet({ s, mode, open, side, dragging, notice }: Props) {
   const v = blockView(s, now)
   const right = side === 'right'
   const away = mode !== 'field'
-  const showCaption = (hover && !dragging && !away) || (!!notice && !away)
+  const showCaption = (hover && !dragging) || !!notice
 
   // A drag ends hover: the pointer is wherever the window was dropped.
   useEffect(() => {
     if (dragging) setHover(false)
   }, [dragging])
-  // The shell grows the window for the caption; a notice needs the room too.
-  useEffect(() => {
-    bridge.setHover(showCaption)
-  }, [showCaption])
 
   let sign: string
   let tone: 'idle' | 'live' | 'hold' | 'rest' | 'ready'
@@ -54,6 +50,7 @@ export function Pet({ s, mode, open, side, dragging, notice }: Props) {
     caption = v.status === 'paused' ? `Holding  ${what}` : v.status === 'ready' ? `Ready  ${what}` : what
   }
   const breathing = tone === 'live' && !reduce && !dragging
+  const text = showCaption ? (notice ?? caption) : sign
 
   return (
     <motion.div
@@ -65,25 +62,15 @@ export function Pet({ s, mode, open, side, dragging, notice }: Props) {
       onMouseLeave={() => setHover(false)}
       data-hit
     >
-      <AnimatePresence>
-        {showCaption && (
-          <motion.p
-            key="caption"
-            className={`pet-caption ${notice ? 'is-notice' : ''}`}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4, transition: { duration: 0.12 } }}
-            transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-            role="status"
-          >
-            {notice ?? caption}
-          </motion.p>
-        )}
-      </AnimatePresence>
-
       <div className="pet" aria-label="Desk status">
-        <button type="button" className={`pet-sign num tone-${tone} ${tone === 'hold' ? 'pulse' : ''}`} onClick={() => open('plus')} title={v ? 'Swap' : 'Deploy'}>
-          {sign}
+        <button
+          type="button"
+          className={`pet-sign num tone-${tone} ${tone === 'hold' ? 'pulse' : ''} ${showCaption ? 'is-caption' : ''} ${notice ? 'is-notice' : ''}`}
+          onClick={() => open('plus')}
+          title={showCaption ? text : v ? 'Swap' : 'Deploy'}
+          role="status"
+        >
+          {text}
         </button>
         <motion.div
           className="pet-body"

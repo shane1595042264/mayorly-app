@@ -49,7 +49,6 @@ function boot() {
   ipcMain.handle(IPC.dispatch, (_e, action: Action) => engine.dispatch(action))
   ipcMain.on(IPC.setMode, (_e, mode: UiMode) => overlay.setMode(mode))
   ipcMain.on(IPC.setHit, (_e, hit: boolean) => overlay.setHit(hit))
-  ipcMain.on(IPC.setHover, (_e, expanded: boolean) => overlay.setHover(expanded))
 
   // Account and sync. The session lives encrypted in userData; the sync loop pushes
   // this machine's state and takes the server's when another machine wrote first.
@@ -69,6 +68,7 @@ function boot() {
     send(IPC.account, session?.user ?? null)
     send(IPC.sync, sync.current())
   })
+  ipcMain.handle(IPC.getLayout, () => overlay.layout())
   ipcMain.handle(IPC.accountsAvailable, () => accountsConfigured())
   ipcMain.handle(IPC.getAccount, () => session?.user ?? null)
   ipcMain.handle(IPC.signIn, async () => {
@@ -85,6 +85,7 @@ function boot() {
 
   let applied: Settings | null = null
   const applySettings = (s: Settings) => {
+    overlay.setScale(s.hudScale)
     if (applied && JSON.stringify(applied.hotkeys) === JSON.stringify(s.hotkeys) && applied.openAtLogin === s.openAtLogin) return
     if (!applied || JSON.stringify(applied.hotkeys) !== JSON.stringify(s.hotkeys)) {
       const failed = registerHotkeys(s.hotkeys, {

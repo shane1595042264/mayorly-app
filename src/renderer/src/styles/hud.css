@@ -29,27 +29,13 @@ body.compact .objectives,
 body.compact .callout-wrap,
 body.compact .feed { display: none; }
 
-.pet-caption {
-  margin: 0 0 6px;
-  max-width: 280px;
-  padding: 3px 8px 2px;
-  border: 1px solid var(--line);
-  background: var(--glass);
-  color: var(--ink-2);
-  font-size: 12px;
-  line-height: 1.3;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-shadow: none;
-}
-.pet-caption.is-notice { color: var(--ink); border-color: var(--accent-2); white-space: normal; }
 
 .pet {
   display: flex;
   align-items: flex-end;
   gap: 10px;
+  /* Headroom for the hop and the breath, so the compact window never clips the tomato. */
+  padding-top: 8px;
 }
 .pet-left .pet { flex-direction: row-reverse; }
 .pet-body {
@@ -89,6 +75,20 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
 .pet-sign.tone-rest { color: var(--ink-2); }
 .pet-sign.tone-ready { color: var(--ink-2); border-color: var(--accent-2); }
 .pet-sign.tone-idle { color: var(--ink-3); }
+/* On hover the sign carries the caption instead of the number, in the same box. */
+.pet-sign.is-caption {
+  max-width: 232px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-2);
+  border-color: var(--line-2);
+}
+.pet-sign.is-notice { color: var(--ink); border-color: var(--accent-2); }
 
 /* ------------------------------------------------------------ objectives */
 
