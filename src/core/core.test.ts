@@ -253,3 +253,34 @@ describe('format', () => {
     expect(clock(62 * MIN)).toBe('1:02:00')
   })
 })
+
+describe('sync', () => {
+  it('a synced state replaces entries and ledgers but keeps this machine\'s own settings', () => {
+    const w = world()
+    w.do({ type: 'settings/update', patch: { hotkeys: { ...w.s.settings.hotkeys, plus: 'Ctrl+Alt+T' }, hudScale: 1.3, focusMin: 30 } })
+    const other = structuredClone(w.s)
+    other.entries = [{ ...other.entries[0] ?? { id: 'x', title: 'from the other machine', ledgerId: null, estimateMin: null, createdAt: T0, doneAt: null, order: 0 }, title: 'from the other machine' } as never]
+    other.settings = { ...other.settings, hotkeys: { ...other.settings.hotkeys, plus: 'Alt+T' }, hudScale: 0.8, focusMin: 50 }
+    w.do({ type: 'sync/replace', state: other })
+    expect(w.s.entries.map((e) => e.title)).toEqual(['from the other machine'])
+    expect(w.s.settings.hotkeys.plus).toBe('Ctrl+Alt+T')
+    expect(w.s.settings.hudScale).toBe(1.3)
+    expect(w.s.settings.focusMin).toBe(50)
+  })
+
+  it('a desk running on the other machine arrives paused', () => {
+    const w = world()
+    const other = structuredClone(w.s)
+    const r = reduce(other, { type: 'desk/deploy', mode: 'pomodoro', ledgerId: other.ledgers[0].id }, { now: T0, newId: () => 'o1', random: () => 0.5 })
+    expect(r.state.desk.status).toBe('running')
+    w.do({ type: 'sync/replace', state: r.state })
+    expect(w.s.desk.status).toBe('paused')
+  })
+
+  it('garbage from the server is ignored', () => {
+    const w = world()
+    const before = w.s
+    w.do({ type: 'sync/replace', state: { nope: true } })
+    expect(w.s).toBe(before)
+  })
+})

@@ -4,6 +4,10 @@ import type {
 } from './model'
 import { advance, blitzBlock, firstBlock, firstOpenInLedger, initialPlan, nextInFlow, openFlow, type DeployOpts } from './planner'
 import { CLERK_LOG_CAP, LEDGER_CAP, tokensForTomato } from './rules'
+import { migrate } from './seed'
+
+/** Settings that belong to the machine, not the account: a sync never overwrites them. */
+export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound'] as const
 
 export type Action =
   | { type: 'entry/capture'; text: string }
@@ -26,6 +30,8 @@ export type Action =
   | { type: 'desk/swap'; entryId?: Id | null; ledgerId?: Id | null }
   | { type: 'desk/tick' }
   | { type: 'settings/update'; patch: Partial<Settings> }
+  /** The account's state arrived from the sync server and replaces this copy. */
+  | { type: 'sync/replace'; state: unknown }
 
 export interface Result {
   state: MayorlyState
@@ -35,6 +41,18 @@ export interface Result {
 export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Clerk = prefixClerk): Result {
   // The heartbeat runs every second; only pay for a copy when something is due.
   if (action.type === 'desk/tick' && !tickDue(state, ctx.now)) return { state, events: [] }
+
+  if (action.type === 'sync/replace') {
+    const incoming = migrate(action.state)
+    if (!incoming) return { state, events: [] }
+    incoming.settings = sanitiseSettings({ ...incoming.settings, ...Object.fromEntries(DEVICE_SETTINGS.map((k) => [k, state.settings[k]])) })
+    // A desk left running on another machine is not running here: time this
+    // machine could not see is not desk time. Pause it where that copy last was.
+    if (incoming.desk.status === 'running') {
+      return reduce(incoming, { type: 'desk/pause', at: Math.min(ctx.now, incoming.desk.runStartedAt ?? ctx.now) }, ctx, clerk)
+    }
+    return { state: incoming, events: [] }
+  }
 
   const s = structuredClone(state)
   const ev: HudEvent[] = []
