@@ -24,4 +24,25 @@ nsis:
   artifactName: Mayorly-Setup-${version}.${ext}
 portable:
   artifactName: Mayorly-${version}-portable.${ext}
+mac:
+  icon: build/icon.icns
+  category: public.app-category.productivity
+  # No Apple Developer ID yet. "-" is an ad-hoc signature: without it electron-builder
+  # ships only Electron's own linker signature, and a downloaded copy is refused as
+  # "damaged". Ad-hoc signed, Gatekeeper offers Open Anyway in Privacy & Security.
+  # Hardened runtime is for notarization, which needs the paid certificate; with an
+  # ad-hoc identity it only breaks library validation, so it stays off until then.
+  identity: "-"
+  hardenedRuntime: false
+  extendInfo:
+    # Menu bar app: no Dock icon, no app switcher entry. Same idea as skipTaskbar on Windows.
+    LSUIElement: true
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  artifactName: Mayorly-${version}-${arch}.${ext}
+dmg:
+  artifactName: Mayorly-${version}-${arch}.${ext}
 publish: null

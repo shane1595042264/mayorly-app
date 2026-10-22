@@ -1,0 +1,40 @@
+# Builds the Windows installer and the macOS disk images. A Mac can only be built on
+# macOS, so each platform gets its own runner. Both builds are unsigned (see README).
+name: dist
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+jobs:
+  dist:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist:win
+          - os: macos-latest
+            script: dist:mac
+    runs-on: ${{ matrix.os }}
+    # Accounts: set these as repository variables (the id and url are public) and a secret.
+    env:
+      MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL }}
+      MAIN_VITE_GOOGLE_CLIENT_ID: ${{ vars.MAIN_VITE_GOOGLE_CLIENT_ID }}
+      MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.MAIN_VITE_GOOGLE_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run ${{ matrix.script }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mayorly-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
