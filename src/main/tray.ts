@@ -1,6 +1,7 @@
-import { Menu, Tray, nativeImage, shell, app } from 'electron'
+import { Menu, Tray, nativeImage, shell, app, type NativeImage } from 'electron'
 import { blockView, clock, type MayorlyState } from '@core/index'
-import trayIcon from '../../build/tray.png?asset'
+import tray1x from '../../build/tomato@1x.png?asset'
+import tray2x from '../../build/tray.png?asset'
 import type { Engine } from './engine'
 import type { Overlay } from './overlay'
 
@@ -10,10 +11,24 @@ export interface TrayActions {
   dataDir: string
 }
 
+/**
+ * Windows takes the 2x tomato and scales it to the tray. The macOS menu bar is 16 points,
+ * so it gets the hand-drawn 16 px tomato as 1x and the same pixels doubled as 2x; file
+ * name conventions (@2x) do not survive bundling, so the pair is built here.
+ */
+function trayImage(): NativeImage {
+  if (process.platform !== 'darwin') return nativeImage.createFromPath(tray2x)
+  const img = nativeImage.createFromPath(tray1x)
+  const twice = nativeImage.createFromPath(tray2x)
+  img.addRepresentation({ scaleFactor: 2, width: 32, height: 32, buffer: twice.toBitmap() })
+  return img
+}
+
 export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): Tray {
-  const tray = new Tray(nativeImage.createFromPath(trayIcon))
+  const tray = new Tray(trayImage())
   tray.setToolTip('Mayorly')
-  tray.on('click', () => act.command('deck'))
+  // On macOS a click opens the menu itself (and would fire this as well); Deck is in the menu.
+  if (process.platform !== 'darwin') tray.on('click', () => act.command('deck'))
 
   const rebuild = (s: MayorlyState) => {
     const v = blockView(s, Date.now())

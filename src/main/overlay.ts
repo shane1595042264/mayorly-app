@@ -1,36 +1,83 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { BrowserWindow, screen, type Display } from 'electron'
-import type { UiMode } from '../shared/bridge'
+import { BrowserWindow, screen, type Display, type Rectangle } from 'electron'
+import { IPC, type Layout, type UiMode } from '../shared/bridge'
 
-// One transparent, always-on-top window covering the work area of a display.
-// In field mode it ignores the mouse (with move events forwarded so the HUD can
-// still react to hover) and can never take focus, so it never steals a keystroke
-// from the app you are working in. The other modes take focus until closed.
+// One transparent, always-on-top, frameless window.
+//
+// Windows: it covers the work area. In field mode it ignores the mouse (with move
+// events forwarded so the HUD can react to hover) and can never take focus, so it
+// never steals a keystroke from the app you are working in. The other modes take
+// focus until closed.
+//
+// macOS: in field mode the window is only as big as the pet, plus the one-line
+// caption it shows on hover, sits where the tomato was dragged, and takes clicks like any
+// small floating window. Nothing is click-through. The tomato is a native drag
+// region, so the window server moves the window itself; when the move settles the
+// window is hung off the tomato again on the side it now favours. Plus, deck and
+// capture grow it to the work area. It is a panel, so it can take typing without
+// activating Mayorly, and closing them leaves the app you were in active.
+
+const mac = process.platform === 'darwin'
+const debug = process.env.MAYORLY_DEBUG ? (...a: unknown[]) => console.error('[overlay]', ...a) : () => {}
+
+/** Compact window: the tomato and its sign, nothing else. */
+const COMPACT = { width: 220, height: 64 }
+/** With the one-line caption above the pet while it is hovered. */
+const EXPANDED = { width: 300, height: 110 }
+/** The pet's own corner inside the compact window; matches `body.compact .pet-wrap` in hud.css. */
+const INSET = { x: 8, y: 8 }
+/** The tomato sprite, so the window can be placed around its centre. */
+const TOMATO = 48
+/** How often the cursor is sampled for hover on macOS. */
+const HOVER_POLL_MS = 40
+/** A window move with no further movement for this long has settled. */
+const MOVE_SETTLE_MS = 180
+
+/** The tomato's bottom centre, in screen points. The side it favours decides how the window hangs off it. */
+interface Anchor {
+  x: number
+  y: number
+}
 
 export class Overlay {
   win: BrowserWindow
   mode: UiMode = 'field'
   private hit = false
   private displayId: number
+  private hoverTimer: NodeJS.Timeout | null = null
+  private cursor = { x: NaN, y: NaN, inside: false }
+  private anchor: Anchor | null = null
+  private expanded = false
+  private dragging = false
+  private fitting = false
+  private settle: NodeJS.Timeout | null = null
+  private readonly anchorFile: string
 
-  constructor() {
-    const display = screen.getPrimaryDisplay()
+  constructor(dataDir: string) {
+    this.anchorFile = join(dataDir, 'hud.json')
+    if (mac) this.anchor = this.loadAnchor()
+    const display = this.anchor ? screen.getDisplayNearestPoint(this.anchor) : screen.getPrimaryDisplay()
     this.displayId = display.id
     this.win = new BrowserWindow({
-      ...display.workArea,
+      ...(mac ? this.fieldBounds(display) : display.workArea),
       show: false,
       frame: false,
       transparent: true,
       backgroundColor: '#00000000',
       hasShadow: false,
       resizable: false,
-      movable: false,
+      // macOS: the tomato is a drag region (hud.css), so the window must be movable.
+      movable: mac,
       minimizable: false,
       maximizable: false,
       fullscreenable: false,
       skipTaskbar: true,
+      hiddenInMissionControl: true,
       focusable: false,
       alwaysOnTop: true,
+      // The type cannot change after construction.
+      ...(mac ? { type: 'panel' as const } : {}),
       title: 'Mayorly',
       webPreferences: {
         preload: join(__dirname, '../preload/index.cjs'),
@@ -42,8 +89,21 @@ export class Overlay {
       },
     })
     this.pin()
-    this.win.setIgnoreMouseEvents(true, { forward: true })
+    if (mac) {
+      // The process is already a UI element (accessory policy), so skip the transform
+      // that would otherwise blink the window.
+      this.win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
+    } else {
+      this.win.setIgnoreMouseEvents(true, { forward: true })
+    }
+    // showInactive, never show: show() would activate the app or make the panel key.
     this.win.once('ready-to-show', () => this.win.showInactive())
+    this.win.webContents.on('did-finish-load', () => this.sendLayout())
+    if (mac) {
+      this.win.on('will-move', () => this.onMoving())
+      this.win.on('move', () => this.onMoving())
+    }
+    this.startHoverPoll()
 
     screen.on('display-metrics-changed', () => this.fit())
     screen.on('display-removed', () => this.fit())
@@ -54,19 +114,29 @@ export class Overlay {
     else void this.win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  /** Re-assert topmost. Some focus changes on Windows quietly drop the level. */
+  /** Re-assert topmost. Some focus changes on Windows quietly drop the level. 'screen-saver' is also the right macOS level: above the Dock and menu bar. */
   private pin() {
     this.win.setAlwaysOnTop(true, 'screen-saver')
   }
 
   setMode(mode: UiMode) {
     if (this.win.isDestroyed()) return
+    debug('mode', mode)
     this.mode = mode
     if (mode === 'field') {
       this.win.blur()
       this.win.setFocusable(false)
-      this.win.setIgnoreMouseEvents(!this.hit, { forward: true })
+      if (mac) {
+        this.expanded = false
+        this.fit()
+        this.win.setIgnoreMouseEvents(false)
+      } else {
+        this.win.setIgnoreMouseEvents(!this.hit, { forward: true })
+      }
+      this.startHoverPoll()
     } else {
+      this.stopHoverPoll()
+      if (mac) this.fit()
       if (!this.win.isVisible()) this.win.showInactive()
       this.win.setIgnoreMouseEvents(false)
       this.win.setFocusable(true)
@@ -76,17 +146,61 @@ export class Overlay {
     this.pin()
   }
 
+  /** Windows field mode: the pointer is over a HUD control, so stop ignoring the mouse. */
   setHit(hit: boolean) {
     this.hit = hit
+    if (mac) return
     if (this.mode === 'field' && !this.win.isDestroyed()) this.win.setIgnoreMouseEvents(!hit, { forward: true })
+  }
+
+  /** macOS: the caption appears on hover, so the window grows a little to hold it. */
+  setHover(expanded: boolean) {
+    if (!mac || this.dragging || expanded === this.expanded) return
+    this.expanded = expanded
+    if (this.mode === 'field') this.fit()
+  }
+
+  /** The user is dragging the window by the tomato. Drop the caption, pause hover, wait for it to settle. */
+  private onMoving() {
+    if (this.fitting || this.mode !== 'field') return
+    if (!this.dragging) {
+      this.dragging = true
+      this.stopHoverPoll()
+      this.sendLayout()
+    }
+    if (this.settle) clearTimeout(this.settle)
+    this.settle = setTimeout(() => this.onMoved(), MOVE_SETTLE_MS)
+  }
+
+  /** The move settled: read the tomato's new place off the window, re-hang the window around it, remember it. */
+  private onMoved() {
+    this.settle = null
+    this.dragging = false
+    const b = this.win.getBounds()
+    const wa = this.display().workArea
+    const side = this.side(wa, this.anchor ?? this.defaultAnchor(wa))
+    const a: Anchor = {
+      x: side === 'right' ? b.x + b.width - INSET.x - TOMATO / 2 : b.x + INSET.x + TOMATO / 2,
+      y: b.y + b.height - INSET.y,
+    }
+    const nearest = screen.getDisplayNearestPoint(a)
+    this.displayId = nearest.id
+    this.anchor = this.clampAnchor(a, nearest.workArea)
+    this.expanded = false
+    this.fit()
+    this.saveAnchor()
+    this.sendLayout()
+    this.startHoverPoll()
   }
 
   toggleVisible() {
     if (this.win.isVisible()) {
       this.win.hide()
+      this.stopHoverPoll()
     } else {
       this.win.showInactive()
       this.pin()
+      this.startHoverPoll()
     }
   }
 
@@ -102,14 +216,116 @@ export class Overlay {
 
   moveTo(displayId: number) {
     this.displayId = displayId
+    if (mac) {
+      this.anchor = this.defaultAnchor(this.display().workArea)
+      this.saveAnchor()
+      this.sendLayout()
+    }
     this.fit()
   }
 
+  // ---- geometry ----------------------------------------------------------------
+
+  private display(): Display {
+    return screen.getAllDisplays().find((d) => d.id === this.displayId) ?? screen.getPrimaryDisplay()
+  }
+
   private fit() {
-    const all = screen.getAllDisplays()
-    const target: Display = all.find((d) => d.id === this.displayId) ?? screen.getPrimaryDisplay()
+    const target = this.display()
     this.displayId = target.id
-    this.win.setBounds(target.workArea)
+    this.fitting = true
+    this.win.setBounds(mac && this.mode === 'field' ? this.fieldBounds(target) : target.workArea)
+    this.fitting = false
     this.pin()
+  }
+
+  private side(wa: Rectangle, a: Anchor): Layout['side'] {
+    return a.x < wa.x + wa.width / 2 ? 'left' : 'right'
+  }
+
+  private defaultAnchor(wa: Rectangle): Anchor {
+    return { x: wa.x + wa.width - 64 - TOMATO / 2, y: wa.y + wa.height - 28 }
+  }
+
+  private clampAnchor(a: Anchor, wa: Rectangle): Anchor {
+    const mx = INSET.x + TOMATO / 2
+    return {
+      x: Math.min(Math.max(a.x, wa.x + mx), wa.x + wa.width - mx),
+      y: Math.min(Math.max(a.y, wa.y + INSET.y + TOMATO), wa.y + wa.height - INSET.y),
+    }
+  }
+
+  /** The compact or expanded window, hung off the tomato on the side it favours, kept on screen. */
+  private fieldBounds(display: Display): Rectangle {
+    const wa = display.workArea
+    const a = this.anchor ?? (this.anchor = this.defaultAnchor(wa))
+    const size = this.expanded ? EXPANDED : COMPACT
+    const x = this.side(wa, a) === 'right' ? a.x + TOMATO / 2 + INSET.x - size.width : a.x - TOMATO / 2 - INSET.x
+    const y = a.y + INSET.y - size.height
+    return {
+      x: Math.round(Math.min(Math.max(x, wa.x), wa.x + wa.width - size.width)),
+      y: Math.round(Math.min(Math.max(y, wa.y), wa.y + wa.height - size.height)),
+      width: size.width,
+      height: size.height,
+    }
+  }
+
+  private sendLayout() {
+    if (this.win.isDestroyed()) return
+    const wa = this.display().workArea
+    const layout: Layout = { compact: mac, side: this.side(wa, this.anchor ?? this.defaultAnchor(wa)), dragging: this.dragging }
+    this.win.webContents.send(IPC.layout, layout)
+  }
+
+  private loadAnchor(): Anchor | null {
+    try {
+      if (!existsSync(this.anchorFile)) return null
+      const raw = JSON.parse(readFileSync(this.anchorFile, 'utf8')) as { anchor?: Anchor }
+      const a = raw.anchor
+      if (!a || typeof a.x !== 'number' || typeof a.y !== 'number') return null
+      return this.clampAnchor(a, screen.getDisplayNearestPoint(a).workArea)
+    } catch {
+      return null
+    }
+  }
+
+  private saveAnchor() {
+    if (!this.anchor) return
+    try {
+      writeFileSync(this.anchorFile, JSON.stringify({ anchor: this.anchor }))
+    } catch (err) {
+      console.error('[overlay] could not save the HUD position:', err)
+    }
+  }
+
+  // ---- hover on macOS ------------------------------------------------------------
+  // AppKit only delivers mouse-moved events to the key window, and in field mode the
+  // panel never is one, so the cursor is sampled and the page gets the same mousemove.
+
+  private startHoverPoll() {
+    if (!mac || this.hoverTimer) return
+    this.hoverTimer = setInterval(() => this.pollCursor(), HOVER_POLL_MS)
+  }
+
+  private stopHoverPoll() {
+    if (!this.hoverTimer) return
+    clearInterval(this.hoverTimer)
+    this.hoverTimer = null
+    this.cursor = { x: NaN, y: NaN, inside: false }
+  }
+
+  private pollCursor() {
+    if (this.win.isDestroyed() || this.mode !== 'field' || !this.win.isVisible()) return
+    const p = screen.getCursorScreenPoint()
+    if (p.x === this.cursor.x && p.y === this.cursor.y) return
+    const b = this.win.getBounds()
+    const x = p.x - b.x
+    const y = p.y - b.y
+    const inside = x >= 0 && y >= 0 && x < b.width && y < b.height
+    const wasInside = this.cursor.inside
+    this.cursor = { x: p.x, y: p.y, inside }
+    const wc = this.win.webContents
+    if (inside) wc.sendInputEvent({ type: 'mouseMove', x, y })
+    else if (wasInside) wc.sendInputEvent({ type: 'mouseLeave', x: 0, y: 0 })
   }
 }

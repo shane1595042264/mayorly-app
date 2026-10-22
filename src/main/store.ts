@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { join } from 'node:path'
 import { firstRunState, migrate, type MayorlyState } from '@core/index'
 
-// Local-first: one JSON file in the user's AppData, written atomically.
+// Local-first: one JSON file in the user's app data folder (AppData on Windows,
+// Application Support on macOS), written atomically.
 // The spec's long-term target is SQLite; everything goes through this module
 // so swapping the backend touches nothing else.
 

@@ -10,11 +10,42 @@ export type UiMode = 'field' | 'plus' | 'deck' | 'capture'
 /** Hotkey-driven requests from the shell to the HUD. */
 export type Command = 'plus' | 'capture' | 'deck'
 
+/** How the shell lays the HUD out. Compact: the window is only the pet and what it unfolds (macOS). */
+export interface Layout {
+  compact: boolean
+  /** Which screen edge the pet is nearer, so the card unfolds toward the centre. */
+  side: 'left' | 'right'
+  /** The window is being dragged by its tomato; nothing unfolds until it settles. */
+  dragging: boolean
+}
+
 export interface DisplayInfo {
   id: number
   label: string
   primary: boolean
   current: boolean
+}
+
+/** Hotkeys that could not be registered, and why when the shell knows. */
+export interface HotkeyFailures {
+  keys: string[]
+  /** macOS 15.0 and 15.1 refused combos whose only modifiers were Option and Shift. */
+  reason?: 'option-only'
+}
+
+/** The signed-in account, from the sync server. */
+export interface Account {
+  email: string
+  name: string | null
+  avatarUrl: string | null
+}
+
+export interface SyncStatus {
+  /** off: not signed in. idle: in step as of `at`. */
+  phase: 'off' | 'idle' | 'syncing' | 'error'
+  at: number | null
+  revision: number
+  message?: string
 }
 
 export interface Bridge {
@@ -28,8 +59,19 @@ export interface Bridge {
   setMode(mode: UiMode): void
   /** Field mode only: the pointer is over an interactive HUD element. */
   setHit(hit: boolean): void
-  /** Hotkeys that could not be registered (taken by another app). */
-  onHotkeyFailures(fn: (keys: string[]) => void): () => void
+  /** The pet is hovered and the card is unfolding, so a compact window has to grow. */
+  setHover(expanded: boolean): void
+  /** The shell's layout, sent on load and whenever the pet changes side. */
+  onLayout(fn: (layout: Layout) => void): () => void
+  /** Accounts: Google sign-in through the system browser, state synced to mayorly-api. */
+  accountsAvailable(): Promise<boolean>
+  getAccount(): Promise<Account | null>
+  signIn(): Promise<Account>
+  signOut(): Promise<void>
+  onAccount(fn: (account: Account | null) => void): () => void
+  onSync(fn: (status: SyncStatus) => void): () => void
+  /** Hotkeys that could not be registered (taken by another app, or refused by the OS). */
+  onHotkeyFailures(fn: (failures: HotkeyFailures) => void): () => void
 }
 
 export const IPC = {
@@ -40,5 +82,13 @@ export const IPC = {
   command: 'mayorly:command',
   setMode: 'mayorly:set-mode',
   setHit: 'mayorly:set-hit',
+  setHover: 'mayorly:set-hover',
+  layout: 'mayorly:layout',
+  accountsAvailable: 'mayorly:accounts-available',
+  getAccount: 'mayorly:get-account',
+  signIn: 'mayorly:sign-in',
+  signOut: 'mayorly:sign-out',
+  account: 'mayorly:account',
+  sync: 'mayorly:sync',
   hotkeyFailures: 'mayorly:hotkey-failures',
 } as const

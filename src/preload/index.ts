@@ -16,6 +16,14 @@ const bridge: Bridge = {
   onCommand: (fn) => sub(IPC.command, fn),
   setMode: (mode) => ipcRenderer.send(IPC.setMode, mode),
   setHit: (hit) => ipcRenderer.send(IPC.setHit, hit),
+  setHover: (expanded) => ipcRenderer.send(IPC.setHover, expanded),
+  onLayout: (fn) => sub(IPC.layout, fn),
+  accountsAvailable: () => ipcRenderer.invoke(IPC.accountsAvailable),
+  getAccount: () => ipcRenderer.invoke(IPC.getAccount),
+  signIn: () => ipcRenderer.invoke(IPC.signIn),
+  signOut: () => ipcRenderer.invoke(IPC.signOut),
+  onAccount: (fn) => sub(IPC.account, fn),
+  onSync: (fn) => sub(IPC.sync, fn),
   onHotkeyFailures: (fn) => sub(IPC.hotkeyFailures, fn),
 }
 
