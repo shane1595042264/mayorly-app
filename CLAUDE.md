@@ -1,6 +1,6 @@
 # Mayorly app: instructions for Claude
 
-This is the application layer of Mayorly, a life OS: entries filed into ledgers, one desk timer, tomatoes that pay tokens. Windows first, Electron, React. The product rules come from `mayorly-design`; this repo turns them into code and puts a transparent HUD on top.
+This is the application layer of Mayorly, a life OS: entries filed into ledgers, one desk timer, tomatoes that pay tokens. Windows and macOS, Electron, React. The product rules come from `mayorly-design`; this repo turns them into code and puts a transparent HUD on top.
 
 ## Rules that are not negotiable
 
@@ -20,7 +20,11 @@ This is the application layer of Mayorly, a life OS: entries filed into ledgers,
 | `src/core/superset-syntax.ts` | the one-line `/ss legal 25, dance 20 x3` grammar |
 | `src/core/core.test.ts` | rules tested against a fake clock |
 | `src/main/engine.ts` | heartbeat, sleep detection, broadcast |
-| `src/main/overlay.ts` | the transparent window, click-through, focus hand-off |
+| `src/main/overlay.ts` | the window: on Windows the click-through overlay, on macOS the pet-sized panel that follows the tomato |
+| `src/renderer/src/hud/Pet.tsx` | the resting HUD: the tomato, its number, the hover caption |
+| `src/renderer/src/lib/keys.ts` | keys matched by position, hotkeys shown as Option on a Mac |
+| `src/main/auth.ts`, `session.ts`, `sync.ts` | Google sign-in through the system browser, the encrypted session, the sync loop |
+| `server/` | mayorly-api: Google sign-in, one state document per account, last writer wins |
 | `src/shared/bridge.ts` | the client contract |
 | `src/renderer/src/bridge/web.ts` | the same engine in a browser tab, for `npm run web` |
 
@@ -38,13 +42,21 @@ To screenshot the browser preview at full resolution:
 SHOT_URL="http://localhost:5199/?demo" SHOT_OUT=shot.png SHOT_JS='...' npx electron scripts/shot.cjs
 ```
 
-Parameters go in the environment because Electron on Windows exits before running the script when a file path is passed as a positional argument. The capture window is offscreen with throttling off; a plain hidden window never runs `requestAnimationFrame`, so Motion animations would stay at their initial frame.
+Parameters go in the environment, which works the same on both platforms; Electron on Windows exits before running the script when a file path is passed as a positional argument. The capture window is offscreen with throttling off; a plain hidden window never runs `requestAnimationFrame`, so Motion animations would stay at their initial frame.
 
 ## Things that look like bugs and are not
 
+- **The resting HUD is only the tomato and a number.** Hover gives one line of text and a hop, nothing more. Hold, skip, clear and stand down live in the Plus menu and the command line; there is no control strip.
 - **The overlay window is never focusable in field mode.** That is how it avoids stealing keystrokes. Plus, deck and capture flip it on and hand focus back with `blur()`.
 - **A held Alt+T fires the command repeatedly.** The renderer ignores repeats until the key is released; releasing after 400 ms closes the menu (hold to peek).
 - **A swap does not reset the block clock** except in blitz, where the timer belongs to the entry.
 - **Superset slots with nothing open still run**, as ledger time.
 - **A desk found running at launch is paused at the last heartbeat.** Time the app could not see is not desk time.
 - **`npm run web` with no query loads from localStorage**; `?demo` and `?fresh` never write to it.
+- **On a Mac the window is the pet, not the screen.** Field mode is a 220 by 64 point panel around the tomato (a little taller while the caption shows), movable by dragging the tomato, and it takes clicks like any small window. Nothing is click-through on macOS; the `data-hit` path is Windows only. Plus, deck and capture grow the window to the work area and shrink it back. The position is saved in `hud.json` beside the state file.
+- **On a Mac the field HUD polls the cursor for hover.** AppKit only sends mouse-moved events to the key window, and the pet never is one, so `overlay.ts` samples the pointer and feeds the page the same mousemove.
+- **Hotkeys are stored as `Alt+T` on a Mac too.** Alt is Electron's cross-platform spelling for Option. The HUD labels them Option, the Settings field accepts Option, Cmd and Control and stores Alt.
+- **Clicking the menu bar icon on a Mac opens the menu, not the Deck.** That is the macOS convention; Deck is in the menu.
+- **Sync is last writer wins and the server knows no rules.** `sync/replace` in the reducer is the only way a server document enters this machine; it keeps this machine's own settings (`DEVICE_SETTINGS`) and pauses a desk left running elsewhere. The server stores JSON and a revision, nothing else.
+- **Accounts need `MAIN_VITE_API_URL` and `MAIN_VITE_GOOGLE_CLIENT_ID` at build time** (see `.env.example`). Without them the Settings tab has no Account section and nothing talks to the network.
+- **A Mac build is ad-hoc signed, not notarized.** There is no Developer ID. Gatekeeper refuses the first launch and offers Open Anyway in Privacy & Security. `npm run dist:mac` only works on macOS.

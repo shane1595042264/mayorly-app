@@ -1,6 +1,6 @@
 # Architecture
 
-**Status:** v0.1, Windows first. Last updated 2026-10-09.
+**Status:** v0.1, Windows and macOS. Last updated 2026-10-19.
 
 This repo is the application layer of Mayorly: the rules of the product as running code, and the first client on top of them. The design repo says what Mayorly is; this repo is what it does. Anything that later draws pixels, talks to a phone, or plugs into Stardew sits on the same core and speaks the same contract.
 
@@ -80,18 +80,25 @@ A superset slot that targets a ledger with nothing open still runs, as ledger ti
 
 ## The HUD
 
-The overlay is one transparent, frameless, always-on-top window over a display's work area.
+The overlay is one transparent, frameless, always-on-top window. On Windows it covers a display's work area; on macOS, in field mode, it is only as big as the pet.
 
-- **Field mode** is the resting state. The window ignores the mouse with move events forwarded, so the page can tell when the pointer is over a HUD control (`data-hit`) and only then catch clicks. The window is not focusable in field mode, so no keystroke ever lands in it by accident.
+- **Field mode** is the resting state: the tomato and one number (`Pet.tsx`), a caption and a hop on hover, nothing else. On Windows the window ignores the mouse with move events forwarded, so the page can tell when the pointer is over the pet (`data-hit`) and only then catch clicks. The window is not focusable in field mode, so no keystroke ever lands in it by accident.
 - **Plus, deck and capture** make the window focusable and interactive, then hand focus back on close.
+- **On macOS the window is a panel, and in field mode it is the pet.** A panel can take typing without Mayorly becoming the active app, so the app you were in keeps the menu bar and gets its keys back the moment the HUD closes. The process runs as an accessory (no Dock icon) and the window joins every Space and sits over fullscreen apps. In field mode the shell hangs a 220 by 64 point window off the tomato, on the side of the screen it is nearer; the tomato is a native drag region, and when a move settles the window is re-hung around it and the position saved to `hud.json`. Plus, deck and capture grow the window to the work area. Nothing is click-through on macOS. Hover comes from polling the cursor, because AppKit only sends mouse-moved events to the key window.
 - **Depth is CSS 3D.** One perspective on the stage; panels are rotated planes, and the Plus slab is a real box with four edge faces. Panels lean toward the pointer through Motion springs on motion values, never React state.
 - **One accent** (signal amber) means live or about to be picked. One shape rule: square corners, two chamfered corners on panels. One theme, because the overlay is always on top of something else; legibility comes from scrims and text shadow.
 
 ## Persistence
 
-`%APPDATA%\Mayorly\mayorly.json`, written to a temp file and renamed, debounced. An unreadable file is moved aside, never overwritten. The file carries a schema number and `migrate()` fills new fields without dropping anything.
+`%APPDATA%\Mayorly\mayorly.json` on Windows and `~/Library/Application Support/Mayorly/mayorly.json` on macOS, written to a temp file and renamed, debounced. An unreadable file is moved aside, never overwritten. The file carries a schema number and `migrate()` fills new fields without dropping anything.
 
 The spec's target is SQLite with transactions. `src/main/store.ts` is the only module that knows the format, so swapping it touches nothing else. Segments are the one collection that grows without bound, roughly 1 MB a year of heavy use, which is the trigger to move.
+
+## Account and sync
+
+`server/` is mayorly-api: Hono on Node, Postgres, deployed on Railway from its Dockerfile. It mirrors the shanejli.com contract: the client brings a Google ID token, `POST /auth/google` verifies it against Google's key set, finds or creates the user, and returns a 30-day JWT. The desktop app gets the ID token the way an installed app does: the system browser signs in, Google redirects to a one-shot loopback server on 127.0.0.1 (PKCE), and the code is exchanged for tokens. The session is kept in `session.bin`, encrypted with the OS keychain.
+
+Sync is one document per account with a revision (`GET`/`PUT /sync/state`). The main process pushes a few seconds after a change (at most every 20 s while a block runs, since the heartbeat changes state every second), pulls on launch and once a minute, and flushes once on quit. A `PUT` carries the revision it was based on; `409` returns the document that won, which enters this machine through `sync/replace` in the reducer. That action keeps this machine's own settings and pauses a desk left running elsewhere. The server stores JSON and a revision and holds no rules.
 
 ## How the rest of Mayorly plugs in
 
