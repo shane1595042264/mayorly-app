@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { Action, HudEvent, MayorlyState } from '@core/index'
+import type { Account, SyncStatus } from '../../shared/bridge'
 import { bridge } from './bridge'
 
 let state: MayorlyState | null = null
@@ -35,6 +36,20 @@ export function useHudEvents(fn: (e: HudEvent[]) => void) {
     return () => void eventSubs.delete(fn)
   }, [fn])
 }
+
+// The account and the sync status, pushed by the shell.
+let account: Account | null = null
+let sync: SyncStatus = { phase: 'off', at: null, revision: 0 }
+const accountSubs = new Set<() => void>()
+void bridge.getAccount().then((a) => { account = a; accountSubs.forEach((f) => f()) })
+bridge.onAccount((a) => { account = a; accountSubs.forEach((f) => f()) })
+bridge.onSync((s) => { sync = s; accountSubs.forEach((f) => f()) })
+const subAccount = (f: () => void) => {
+  accountSubs.add(f)
+  return () => void accountSubs.delete(f)
+}
+export const useAccount = () => useSyncExternalStore(subAccount, () => account)
+export const useSyncStatus = () => useSyncExternalStore(subAccount, () => sync)
 
 /** Wall clock, re-rendering at `ms` intervals aligned to the second. */
 export function useNow(ms = 250): number {

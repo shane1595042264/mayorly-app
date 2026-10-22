@@ -8,6 +8,7 @@ import {
 } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
 import { Glyph } from '../lib/glyphs'
+import { hotkeyLabel, matchesAcceleratorKey, physicalKey } from '../lib/keys'
 import { Scramble } from '../lib/Scramble'
 import { useLean } from '../lib/parallax'
 import { sfx } from '../lib/sound'
@@ -171,8 +172,11 @@ export function PlusMenu({ s, close, open }: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.altKey && e.key.toLowerCase() === 't') return
-      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key
+      // The swap hotkey itself (held to peek) is the shell's; app menu chords are not ours.
+      if (e.altKey && matchesAcceleratorKey(e, s.settings.hotkeys.plus)) return
+      if (e.metaKey || e.ctrlKey) return
+      // By key position, so WASD, Q, E and 1-9 work while Option is held on a Mac.
+      const k = physicalKey(e)
       if (k === 'Escape') return close()
       if (k === 'Tab') {
         e.preventDefault()
@@ -194,7 +198,7 @@ export function PlusMenu({ s, close, open }: Props) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [arm, arms, cursor, close, open, move, applyOpt])
+  }, [arm, arms, cursor, close, open, move, applyOpt, s.settings.hotkeys.plus])
 
   // Snap the slab when the loadout changes, like an attachment seating.
   useHudEvents(
@@ -286,7 +290,7 @@ export function PlusMenu({ s, close, open }: Props) {
           empty="No ledgers yet. Write one in the deck."
           onHover={(i) => { setArm('ledger'); setCursor((c) => ({ ...c, ledger: i })) }} onApply={applyOpt} />
         <ArmView id="entry" title="Entry" keyHint="←" active={arm === 'entry'} opts={arms.entry} cursor={cursor.entry}
-          empty={ledger ? `Nothing open in ${ledger.code}. Capture with ${s.settings.hotkeys.capture}.` : 'Flow is empty.'}
+          empty={ledger ? `Nothing open in ${ledger.code}. Capture with ${hotkeyLabel(s.settings.hotkeys.capture)}.` : 'Flow is empty.'}
           onHover={(i) => { setArm('entry'); setCursor((c) => ({ ...c, entry: i })) }} onApply={applyOpt} />
         <ArmView id="mode" title="Mode" keyHint="→" active={arm === 'mode'} opts={arms.mode} cursor={cursor.mode}
           empty=""

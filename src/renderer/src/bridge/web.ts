@@ -3,6 +3,7 @@ import {
   type Action, type HudEvent, type MayorlyState,
 } from '@core/index'
 import type { Bridge, Command, UiMode } from '../../../shared/bridge'
+import { physicalKey } from '../lib/keys'
 import { demoState } from './demo'
 
 // The same engine the main process runs, inside the page. Lets the HUD run in a
@@ -64,7 +65,9 @@ export function createWebBridge(): Bridge {
   window.addEventListener('keydown', (e) => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return
     const hk = state.settings.hotkeys
-    const combo = `Alt+${e.shiftKey ? 'Shift+' : ''}${e.key.length === 1 ? e.key.toUpperCase() : e.key}`
+    // By key position: with Option held, macOS reports the composed character, not the letter.
+    const k = physicalKey(e)
+    const combo = `Alt+${e.shiftKey ? 'Shift+' : ''}${k.length === 1 ? k.toUpperCase() : k}`
     const map: Record<string, Command | 'pause'> = { [hk.plus]: 'plus', [hk.capture]: 'capture', [hk.deck]: 'deck', [hk.pause]: 'pause' }
     const cmd = map[combo]
     if (!cmd) return
@@ -89,6 +92,14 @@ export function createWebBridge(): Bridge {
     onCommand: (fn) => sub(cmdSubs, fn),
     setMode: (_mode: UiMode) => {},
     setHit: () => {},
+    setHover: () => {},
+    onLayout: () => () => {},
+    accountsAvailable: async () => false,
+    getAccount: async () => null,
+    signIn: async () => { throw new Error('Sign in from the desktop app') },
+    signOut: async () => {},
+    onAccount: () => () => {},
+    onSync: () => () => {},
     onHotkeyFailures: () => () => {},
   }
 }

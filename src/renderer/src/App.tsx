@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import type { Command, UiMode } from '../../shared/bridge'
+import type { Command, Layout, UiMode } from '../../shared/bridge'
 import { bridge } from './bridge'
 import { Capture } from './capture/Capture'
 import { Deck } from './deck/Deck'
 import { Callout } from './hud/Callout'
 import { Feed } from './hud/Feed'
-import { FieldHud } from './hud/FieldHud'
 import { Objectives } from './hud/Objectives'
+import { Pet } from './hud/Pet'
+import { hotkeyLabel, matchesAcceleratorKey, MODIFIER_KEYS } from './lib/keys'
 import { setSoundEnabled, sfx } from './lib/sound'
 import { PlusMenu } from './plus/PlusMenu'
-import { useMayorly } from './store'
+import { current, useMayorly } from './store'
 
 /** How long the swap hotkey must be held before releasing it closes the menu (hold to peek). */
 const PEEK_MS = 400
@@ -21,6 +22,7 @@ export function App() {
   const modeRef = useRef<UiMode>('field')
   const held = useRef<{ since: number } | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
+  const [layout, setLayout] = useState<Layout>({ compact: false, side: 'right', dragging: false })
 
   const setMode = useCallback((m: UiMode) => {
     if (modeRef.current === m) return
@@ -35,6 +37,14 @@ export function App() {
     bridge.setMode('field')
     document.body.classList.toggle('web', bridge.kind === 'web')
   }, [])
+
+  // The shell says whether the window is the pet alone (macOS) and which side it hangs on.
+  useEffect(() => bridge.onLayout(setLayout), [])
+  useEffect(() => {
+    document.body.classList.toggle('compact', layout.compact)
+    document.body.classList.toggle('side-left', layout.side === 'left')
+    document.body.classList.toggle('side-right', layout.side === 'right')
+  }, [layout])
 
   // Hotkeys from the shell. Holding the swap key auto-repeats, so ignore repeats until it is released.
   useEffect(
@@ -57,7 +67,11 @@ export function App() {
 
   useEffect(() => {
     const up = (e: KeyboardEvent) => {
-      if (!held.current || (e.key.toLowerCase() !== 't' && e.key !== 'Alt')) return
+      if (!held.current) return
+      // The swap key or one of its modifiers going up ends the hold. Matched by key
+      // position: with Option held, macOS reports the letter as the character it composes.
+      const plus = current()?.settings.hotkeys.plus ?? 'Alt+T'
+      if (!matchesAcceleratorKey(e, plus) && !MODIFIER_KEYS.has(e.key)) return
       const long = Date.now() - held.current.since > PEEK_MS
       held.current = null
       if (long && modeRef.current === 'plus') setMode('field')
@@ -76,14 +90,30 @@ export function App() {
         bridge.setHit(hit)
       }
     }
+    // Leaving the window altogether (relatedTarget null) lets a hovered control go.
+    const leave = (e: MouseEvent) => {
+      if (e.relatedTarget === null && last) {
+        last = false
+        bridge.setHit(false)
+      }
+    }
     window.addEventListener('mousemove', move)
-    return () => window.removeEventListener('mousemove', move)
+    window.addEventListener('mouseout', leave)
+    return () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseout', leave)
+    }
   }, [])
 
   useEffect(
     () =>
-      bridge.onHotkeyFailures((keys) => {
-        setWarning(`${keys.join(', ')} ${keys.length === 1 ? 'is' : 'are'} held by another app. Pick another in Deck, Settings.`)
+      bridge.onHotkeyFailures(({ keys, reason }) => {
+        const names = keys.map(hotkeyLabel).join(', ')
+        setWarning(
+          reason === 'option-only'
+            ? `macOS 15.0 and 15.1 refuse Option-only combos such as ${names}. Add Control, like Ctrl+Alt+T, in Deck, Settings.`
+            : `${names} ${keys.length === 1 ? 'is' : 'are'} held by another app. Pick another in Deck, Settings.`,
+        )
         setTimeout(() => setWarning(null), 9000)
       }),
     [],
@@ -110,7 +140,7 @@ export function App() {
       </AnimatePresence>
 
       <Objectives s={s} mode={mode} />
-      <FieldHud s={s} mode={mode} open={setMode} />
+      <Pet s={s} mode={mode} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} notice={layout.compact ? warning : null} />
       <Feed />
       <Callout quiet={mode !== 'field'} />
 
@@ -121,7 +151,7 @@ export function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {warning && (
+        {warning && !layout.compact && (
           <motion.p className="toast" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role="status">
             {warning}
           </motion.p>

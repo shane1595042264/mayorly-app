@@ -8,181 +8,87 @@
   overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
 
-/* ------------------------------------------------------------ field HUD
-   Bottom corner, angled like a visor panel: the outer edge leans toward you. */
+/* ------------------------------------------------------------ the pet
+   Bottom corner: the tomato and its sign. The card is gone; hotkeys do the rest. */
 
-.hud {
+/* The pet owns the corner. The card is a child of it and only unfolds on hover. */
+.pet-wrap {
   position: absolute;
-  bottom: 92px;
-  width: fit-content;
-  min-width: 320px;
-  max-width: 460px;
+  bottom: 28px;
   z-index: var(--z-hud);
   display: grid;
-  gap: 7px;
-  text-shadow: var(--shadow-text);
-  transform-style: preserve-3d;
 }
-.hud-right { right: 64px; justify-items: end; text-align: right; transform-origin: 100% 100%; }
-.hud-left { left: 64px; justify-items: start; text-align: left; transform-origin: 0% 100%; }
-.hud-right .hud-controls { right: 0; }
-.hud-left .hud-controls { left: 0; }
+.pet-right { right: 64px; justify-items: end; transform-origin: 100% 100%; }
+.pet-left { left: 64px; justify-items: start; transform-origin: 0% 100%; }
 
-.hud-scrim {
-  position: absolute;
-  inset: -70px -80px -56px -140px;
-  z-index: -1;
-  pointer-events: none;
-  background: radial-gradient(closest-side at 72% 72%, rgb(5 7 8 / 0.5), rgb(5 7 8 / 0));
-}
-.hud-left .hud-scrim {
-  inset: -70px -140px -56px -80px;
-  background: radial-gradient(closest-side at 28% 72%, rgb(5 7 8 / 0.5), rgb(5 7 8 / 0));
-}
+/* Compact: the window is the pet. The shell hangs it off the tomato on the side it favours. */
+body.compact .pet-wrap { bottom: 8px; }
+body.compact .pet-right { right: 8px; }
+body.compact .pet-left { left: 8px; }
+body.compact .objectives,
+body.compact .callout-wrap,
+body.compact .feed { display: none; }
 
-.hud-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
+.pet-caption {
+  margin: 0 0 6px;
+  max-width: 280px;
+  padding: 3px 8px 2px;
+  border: 1px solid var(--line);
+  background: var(--glass);
   color: var(--ink-2);
-}
-.hud-code {
-  padding: 2px 6px 1px;
-  background: var(--ink);
-  color: var(--void);
-  font-size: 11px;
-  font-weight: 500;
-  text-shadow: none;
-  letter-spacing: 0.04em;
-}
-.is-rest .hud-code { background: transparent; color: var(--ink-2); outline: 1px solid var(--line-2); }
-.hud-round { color: var(--ink-3); font-size: 11px; }
-
-.hud-title {
-  max-width: 460px;
-  font-size: 19px;
-  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  text-shadow: none;
 }
-.is-idle .hud-title { color: var(--ink-2); }
+.pet-caption.is-notice { color: var(--ink); border-color: var(--accent-2); white-space: normal; }
 
-.hud-readout {
+.pet {
   display: flex;
   align-items: flex-end;
-  gap: 14px;
-}
-.hud-right .hud-readout { flex-direction: row; }
-.hud-clock {
-  font-size: 94px;
-  font-weight: 600;
-  line-height: 0.8;
-  letter-spacing: -0.01em;
-}
-.hud-clock.dim { color: var(--ink-4); }
-.st-paused .hud-clock, .is-rest .hud-clock, .st-ready .hud-clock { color: var(--ink-2); }
-
-.hud-side {
-  display: grid;
-  gap: 7px;
-  justify-items: start;
-  padding-bottom: 3px;
-  font-size: 13px;
-  color: var(--ink-2);
-}
-.hud-tag {
-  padding: 2px 7px 1px;
-  border: 1px solid var(--line-2);
-  font-size: 12px;
-  color: var(--ink-2);
-}
-.hud-tag.live { color: var(--accent); border-color: var(--accent-2); }
-.pulse { animation: pulse 1.6s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: 0.35; } }
-
-.hud-bar {
-  position: relative;
-  width: 100%;
-  height: 2px;
-  overflow: hidden;
-  background: var(--ink-4);
-}
-.hud-bar-fill {
-  position: absolute;
-  inset: 0;
-  transform-origin: 0 50%;
-  background: var(--ink-2);
-  transition: transform 0.3s linear;
-}
-.hud-bar-fill.live { background: var(--accent); }
-
-.hud-economy {
-  display: flex;
-  align-items: center;
   gap: 10px;
-  font-size: 12px;
-  color: var(--ink-2);
 }
-.hud-pips { display: inline-flex; gap: 3px; }
-.pip {
-  position: relative;
+.pet-left .pet { flex-direction: row-reverse; }
+.pet-body {
   display: block;
-  width: 6px;
-  height: 14px;
-  overflow: hidden;
-  border: 1px solid var(--ink-3);
-  transform: skewX(-18deg);
+  line-height: 0;
 }
-.pip.full { background: var(--ink); border-color: var(--ink); }
-.pip b {
-  position: absolute;
-  inset: 0;
-  transform-origin: 50% 100%;
-  background: var(--accent);
+/* Compact (macOS): the tomato is the window's drag handle; the sign still takes the click. */
+body.compact .pet-body { -webkit-app-region: drag; cursor: grab; }
+body.compact .pet-sign { -webkit-app-region: no-drag; }
+.pet-sprite {
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.55));
+  user-select: none;
+  -webkit-user-drag: none;
 }
-.hud-earned { color: var(--accent); font-size: 12px; }
-.hud-balance { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-3); font-size: 12px; margin-left: 10px; }
-
-.hud-next {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  max-width: 460px;
-  font-size: 13px;
-  color: var(--ink-3);
-}
-.hud-next .mono { font-size: 11px; }
-
-.hud-controls {
-  position: absolute;
-  top: calc(100% + 8px);
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  translate: 0 4px;
-  transition: opacity 0.2s var(--ease), translate 0.2s var(--ease);
-}
-.hud:hover .hud-controls,
-.hud:focus-within .hud-controls,
-.is-idle .hud-controls { opacity: 1; translate: 0 0; }
-
-.ctl {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 30px;
-  padding: 0 11px;
-  border: 1px solid var(--line);
-  background: var(--glass-2);
-  color: var(--ink-2);
+.pet-sign {
+  margin-bottom: 8px;
+  padding: 4px 9px 2px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: border-color 0.15s, color 0.15s;
+  border: 1px solid var(--line-2);
+  background: var(--glass);
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
   text-shadow: none;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
 }
-.ctl:hover { border-color: var(--line-2); color: var(--ink); background: var(--glass); }
-.ctl:active { translate: 0 1px; }
-.ctl-label { font-size: 12px; }
+.pet-sign:hover { border-color: var(--ink-2); }
+.pet-sign:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+.pet-sign.tone-live { color: var(--accent); border-color: var(--accent-2); }
+.pet-sign.tone-rest { color: var(--ink-2); }
+.pet-sign.tone-ready { color: var(--ink-2); border-color: var(--accent-2); }
+.pet-sign.tone-idle { color: var(--ink-3); }
 
 /* ------------------------------------------------------------ objectives */
 

@@ -36,7 +36,7 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
         else close()
         return
       }
-      if (typing || e.altKey || e.ctrlKey) return
+      if (typing || e.altKey || e.ctrlKey || e.metaKey) return
       const i = TABS.indexOf(remembered)
       if (e.key === 'q' || e.key === 'Q') setTab(TABS[(i + TABS.length - 1) % TABS.length])
       if (e.key === 'e' || e.key === 'E') setTab(TABS[(i + 1) % TABS.length])

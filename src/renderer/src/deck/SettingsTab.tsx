@@ -1,6 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { GoogleLogo } from '@phosphor-icons/react'
 import type { HotkeyAction, MayorlyState, Settings } from '@core/index'
-import { dispatch } from '../store'
+import { bridge } from '../bridge'
+import { hotkeyLabel, IS_MAC } from '../lib/keys'
+import { dispatch, useAccount, useNow, useSyncStatus } from '../store'
+
+const EXAMPLE = IS_MAC ? 'Option+T' : 'Alt+T'
+/** Electron's accelerator grammar, every modifier spelling it accepts, one key. */
+const ACCELERATOR = /^((Ctrl|Control|Alt|Option|AltGr|Shift|Super|Meta|Cmd|Command|CmdOrCtrl|CommandOrControl)\+)+([A-Z0-9]|F\d{1,2}|Space|Tab|`)$/i
+/** Stored accelerators keep Electron's cross-platform spelling: Option is Alt. */
+const normalise = (v: string) => v.trim().replace(/\bOption\b/gi, 'Alt')
 
 const HOTKEYS: [HotkeyAction, string][] = [
   ['plus', 'Swap menu'],
@@ -53,9 +62,14 @@ export function SettingsTab({ s, kind }: { s: MayorlyState; kind: 'electron' | '
         </div>
       </section>
 
+      {kind === 'electron' && <AccountSection />}
+
       <section>
         <h3 className="side-title caps">Hotkeys</h3>
-        <p className="field-help">Global, they work from any app. Use a modifier combo such as Alt+T or Ctrl+Shift+Space.</p>
+        <p className="field-help">
+          Global, they work from any app. Use a modifier combo such as {EXAMPLE} or Ctrl+Shift+Space.
+          {IS_MAC && ' Option combos replace the characters they would type while Mayorly runs.'}
+        </p>
         <div className="hotkeys">
           {HOTKEYS.map(([action, label]) => (
             <HotkeyField key={action} label={label} value={st.hotkeys[action]} onCommit={(v) => set({ hotkeys: { ...st.hotkeys, [action]: v } })} />
@@ -66,9 +80,67 @@ export function SettingsTab({ s, kind }: { s: MayorlyState; kind: 'electron' | '
   )
 }
 
+function AccountSection() {
+  const account = useAccount()
+  const sync = useSyncStatus()
+  const now = useNow(10_000)
+  const [available, setAvailable] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => void bridge.accountsAvailable().then(setAvailable), [])
+
+  const signIn = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await bridge.signIn()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  let line = ''
+  if (sync.phase === 'syncing') line = 'Syncing'
+  else if (sync.phase === 'error') line = sync.message ?? 'Sync failed'
+  else if (sync.phase === 'idle' && sync.at) {
+    const m = Math.round((now - sync.at) / 60_000)
+    line = m < 1 ? 'Synced just now' : `Synced ${m} min ago`
+  }
+
+  return (
+    <section>
+      <h3 className="side-title caps">Account</h3>
+      {!available ? (
+        <p className="field-help">This build has no sync server configured.</p>
+      ) : account ? (
+        <div className="account">
+          <div className="account-who">
+            <span>{account.name ?? account.email}</span>
+            {account.name && <span className="field-help">{account.email}</span>}
+          </div>
+          <span className={`field-help ${sync.phase === 'error' ? 'field-error' : ''}`}>{line}</span>
+          <button className="btn ghost" onClick={() => void bridge.signOut()}>Sign out</button>
+        </div>
+      ) : (
+        <div className="account">
+          <p className="field-help">Keeps your ledgers, entries and record on the server, and the same on every machine you sign in on.</p>
+          <button className="btn primary" onClick={() => void signIn()} disabled={busy}>
+            <GoogleLogo size={16} weight="bold" aria-hidden />
+            {busy ? 'Waiting for the browser' : 'Sign in with Google'}
+          </button>
+          {error && <span className="field-error">{error}</span>}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function HotkeyField({ label, value, onCommit }: { label: string; value: string; onCommit: (v: string) => void }) {
   const [v, setV] = useState(value)
-  const valid = /^((Ctrl|Alt|Shift|Super|CommandOrControl)\+)+([A-Z0-9]|F\d{1,2}|Space|Tab|`)$/i.test(v)
+  const valid = ACCELERATOR.test(v)
+  const reads = hotkeyLabel(normalise(v))
   return (
     <label className="field">
       <span className="field-label caps">{label}</span>
@@ -77,19 +149,51 @@ function HotkeyField({ label, value, onCommit }: { label: string; value: string;
         value={v}
         spellCheck={false}
         onChange={(e) => setV(e.target.value)}
-        onBlur={() => (valid && v !== value ? onCommit(v) : setV(value))}
+        onBlur={() => {
+          if (!valid) return setV(value)
+          const next = normalise(v)
+          setV(next)
+          if (next !== value) onCommit(next)
+        }}
         onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
       />
-      {!valid && <span className="field-error">Needs a modifier and one key, like Alt+T</span>}
+      {!valid && <span className="field-error">Needs a modifier and one key, like {EXAMPLE}</span>}
+      {valid && reads !== v && <span className="field-help">{reads}</span>}
     </label>
   )
 }
 
+/**
+ * Typed freely, clamped on commit. Clamping on every keystroke turned "1" then "4"
+ * into "14" then the maximum, so a value could never be replaced by typing.
+ */
 function Num({ label, help, value, min, max, onChange }: { label: string; help: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
+  const [text, setText] = useState(String(value))
+  const [editing, setEditing] = useState(false)
+  const commit = () => {
+    setEditing(false)
+    const n = Math.min(max, Math.max(min, Math.round(Number(text)) || min))
+    setText(String(n))
+    if (n !== value) onChange(n)
+  }
   return (
     <label className="field">
       <span className="field-label caps">{label}</span>
-      <input className="mono num" type="number" min={min} max={max} value={value} onChange={(e) => onChange(Math.min(max, Math.max(min, Number(e.target.value) || min)))} />
+      <input
+        className="mono num"
+        type="number"
+        min={min}
+        max={max}
+        value={editing ? text : String(value)}
+        onFocus={(e) => {
+          setText(String(value))
+          setEditing(true)
+          e.target.select()
+        }}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+      />
       <span className="field-help">{help}</span>
     </label>
   )
