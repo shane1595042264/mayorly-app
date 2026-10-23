@@ -14,7 +14,9 @@ export type Action =
   | { type: 'entry/capture'; text: string; filing?: Filing }
   | { type: 'entry/add'; title: string; ledgerId: Id | null; estimateMin: number | null }
   /** The clerk filed an existing entry (a tray sweep): ledger, an estimate if it had none, and its log line. */
-  | { type: 'entry/file'; id: Id; ledgerId: Id | null; estimateMin: number | null; log: string; model?: string }
+  | { type: 'entry/file'; id: Id; ledgerId: Id | null; estimateMin: number | null; log: string; model?: string; confidence?: 'sure' | 'unsure' }
+  /** You looked at an unsure filing and left it: the question mark goes, no rule is learned. */
+  | { type: 'entry/confirm'; id: Id }
   | { type: 'rule/add'; text: string }
   | { type: 'rule/update'; id: Id; text: string }
   | { type: 'rule/delete'; id: Id }
@@ -72,7 +74,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const filing = byClerk ? action.filing! : clerk.file(text, s.ledgers)
       if (!filing.title) break
       const e = addEntry(s, ctx, filing.title, filing.ledgerId, filing.estimateMin)
-      if (byClerk) e.clerkFiled = { ledgerId: filing.ledgerId, model: filing.model ?? 'clerk' }
+      if (byClerk) e.clerkFiled = { ledgerId: filing.ledgerId, model: filing.model ?? 'clerk', confidence: filing.confidence ?? 'sure' }
       log(s, now, filing.log)
       break
     }
@@ -88,9 +90,14 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       if (action.ledgerId !== null && !s.ledgers.some((l) => l.id === action.ledgerId)) break
       if (action.ledgerId === e.ledgerId) break
       e.ledgerId = action.ledgerId
-      e.clerkFiled = { ledgerId: action.ledgerId, model: action.model ?? 'clerk' }
+      e.clerkFiled = { ledgerId: action.ledgerId, model: action.model ?? 'clerk', confidence: action.confidence ?? 'sure' }
       if (e.estimateMin === null && action.estimateMin !== null) e.estimateMin = clampEstimate(action.estimateMin)
       if (typeof action.log === 'string' && action.log.trim()) log(s, now, action.log)
+      break
+    }
+    case 'entry/confirm': {
+      const e = s.entries.find((x) => x.id === action.id)
+      if (e?.clerkFiled) e.clerkFiled.confidence = 'sure'
       break
     }
     case 'rule/add': {

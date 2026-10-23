@@ -362,3 +362,11 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .rules-list { display: grid; gap: 6px; margin-bottom: 8px; }
 .rule-row { display: flex; align-items: center; gap: 8px; }
 .rule-row input { flex: 1; min-width: 0; }
+
+/* The clerk's doubt: a question mark beside the ledger it guessed. */
+.unsure {
+  width: 20px; height: 20px; padding: 0;
+  border: 1px solid var(--accent-2); background: var(--accent-3); color: var(--accent);
+  font-family: var(--font-data); font-size: 12px; font-weight: 500; line-height: 1; cursor: pointer;
+}
+.unsure:hover { background: var(--accent-2); color: var(--void); }

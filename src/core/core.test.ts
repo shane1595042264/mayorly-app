@@ -357,3 +357,17 @@ describe('house rules', () => {
     expect(w.s.houseRules).toHaveLength(0)
   })
 })
+
+describe('an unsure clerk', () => {
+  it('keeps its guess and its doubt until the user moves or confirms the entry', () => {
+    const w = world()
+    const car = w.ledger('CAR')
+    w.do({ type: 'entry/capture', text: 'oct 26 on page', filing: { title: 'oct 26 on page', ledgerId: car.id, estimateMin: null, log: 'x', model: 'test', confidence: 'unsure' } })
+    const e = w.entry('oct 26 on page')
+    expect(e.ledgerId).toBe(car.id)
+    expect(e.clerkFiled?.confidence).toBe('unsure')
+    w.do({ type: 'entry/confirm', id: e.id })
+    expect(w.entry('oct 26 on page').clerkFiled?.confidence).toBe('sure')
+    expect(w.s.houseRules).toHaveLength(0)
+  })
+})

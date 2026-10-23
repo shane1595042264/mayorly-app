@@ -142,6 +142,9 @@ function LedgerRow({ s, e, index, now, live }: { s: MayorlyState; e: Entry; inde
         <option value="">TRAY</option>
         {s.ledgers.map((l) => <option key={l.id} value={l.id}>{l.code}</option>)}
       </select>
+      {e.clerkFiled?.confidence === 'unsure' && (
+        <button className="unsure" title="The clerk was not sure. Move it to teach a rule, or click to keep it here." aria-label="Clerk unsure, click to confirm" onClick={() => dispatch({ type: 'entry/confirm', id: e.id })}>?</button>
+      )}
       {editing ? (
         <input
           className="row-edit"

@@ -33,8 +33,8 @@ export interface Entry {
   order: number
   createdAt: Epoch
   doneAt: Epoch | null
-  /** Set when the AI clerk chose the ledger; cleared once you move it, which teaches the clerk a house rule. */
-  clerkFiled?: { ledgerId: Id | null; model: string }
+  /** Set when the AI clerk chose the ledger; cleared once you move it, which teaches the clerk a house rule. `unsure` shows as a question mark. */
+  clerkFiled?: { ledgerId: Id | null; model: string; confidence: 'sure' | 'unsure' }
 }
 
 /**

@@ -12,6 +12,8 @@ export interface Filing {
   log: string
   /** The model that filed it, when the AI clerk did; the prefix clerk leaves it out. */
   model?: string
+  /** The AI clerk's own confidence; the prefix clerk is always sure of a prefix. */
+  confidence?: 'sure' | 'unsure'
 }
 
 export interface Clerk {
