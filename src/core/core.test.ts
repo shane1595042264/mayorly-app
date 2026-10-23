@@ -40,12 +40,11 @@ function world(seed?: (s: MayorlyState) => void) {
 }
 
 describe('token economy', () => {
-  it('pays 12 per tomato, 18 each once a sitting reaches 3', () => {
-    expect([1, 2, 3, 4].map(tokensForTomato)).toEqual([12, 12, 30, 18])
-    expect(tokensForSitting(1)).toBe(12)
-    expect(tokensForSitting(2)).toBe(24)
-    expect(tokensForSitting(3)).toBe(54)
-    expect(tokensForSitting(5)).toBe(90)
+  it('pays one token per tomato, no bonus for long sittings', () => {
+    expect([1, 2, 3, 4].map(tokensForTomato)).toEqual([1, 1, 1, 1])
+    expect(tokensForSitting(1)).toBe(1)
+    expect(tokensForSitting(3)).toBe(3)
+    expect(tokensForSitting(5)).toBe(5)
   })
 })
 
@@ -96,7 +95,7 @@ describe('pomodoro', () => {
     expect(w.s.desk.block).toMatchObject({ kind: 'focus', label: 'Career' })
     w.wait(25 * MIN)
     expect(w.s.desk.block).toMatchObject({ kind: 'rest', label: 'Rest' })
-    expect(balance(w.s)).toBe(12)
+    expect(balance(w.s)).toBe(1)
     w.wait(5 * MIN)
     expect(w.s.desk.block?.kind).toBe('focus')
     expect(w.s.desk.block?.entryId).toBe(w.entry('tailor resume').id)
@@ -122,7 +121,7 @@ describe('pomodoro', () => {
     w.do({ type: 'desk/deploy', mode: 'pomodoro' })
     w.wait(4 * 25 * MIN + 3 * 5 * MIN)
     expect(w.s.desk.block).toMatchObject({ kind: 'rest', label: 'Long rest', durationMs: 15 * MIN })
-    expect(balance(w.s)).toBe(18 * 4)
+    expect(balance(w.s)).toBe(4)
   })
   it('pausing banks block time and pays nothing while paused', () => {
     const w = world()
@@ -134,7 +133,7 @@ describe('pomodoro', () => {
     w.do({ type: 'desk/resume' })
     expect(blockView(w.s, w.now)!.remainingMs).toBe(15 * MIN)
     w.wait(15 * MIN)
-    expect(balance(w.s)).toBe(12)
+    expect(balance(w.s)).toBe(1)
   })
 })
 
@@ -154,14 +153,14 @@ describe('superset rotation', () => {
     ])
     expect(w.s.desk.plan?.round).toBe(2)
   })
-  it('finishes after the last round and pays the long-grind bonus', () => {
+  it('finishes after the last round and pays a token a tomato', () => {
     const w = world()
     w.do({ type: 'desk/deploy', mode: 'superset', supersetId: w.s.supersets[0].id })
     // 3 rounds: 9 focus blocks, 6 rests, 2 round rests.
     w.wait(9 * 25 * MIN + 6 * 5 * MIN + 2 * 15 * MIN)
     expect(w.s.desk.status).toBe('idle')
     const end = w.events.find((e) => e.type === 'sitting-end')
-    expect(end).toMatchObject({ reason: 'complete', tomatoes: 9, tokens: 9 * 18 })
+    expect(end).toMatchObject({ reason: 'complete', tomatoes: 9, tokens: 9 })
   })
   it('pulls the next entry from the same ledger when one is cleared mid-block', () => {
     const w = world()
@@ -406,40 +405,44 @@ describe('the couch', () => {
     return w
   }
 
-  it('entertainment is bought by the minute, earns nothing, and refunds what was not used', () => {
+  it('one token buys one leisure block of the focus length, rests are free, nothing is earned', () => {
     const w = rich()
     const before = balance(w.s)
-    expect(before).toBeGreaterThanOrEqual(54)
+    expect(before).toBe(3)
     w.do({ type: 'leisure/add', title: 'civilization 6' })
     const civ = w.s.leisure[0]
-    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: civ.id, minutes: 30 })
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: civ.id })
     expect(w.s.desk.block?.kind).toBe('leisure')
-    expect(balance(w.s)).toBe(before - 30)
-    w.wait(10 * MIN)
-    expect(balance(w.s)).toBe(before - 30)
-    const tomatoesBefore = w.s.tokens.filter((t) => t.reason === 'tomato').length
+    expect(w.s.desk.block?.durationMs).toBe(25 * MIN)
+    expect(balance(w.s)).toBe(before - 1)
+    w.wait(25 * MIN + 1000)
+    expect(w.s.desk.block?.kind).toBe('rest')
+    expect(balance(w.s)).toBe(before - 1)
+    w.wait(5 * MIN + 1000)
+    expect(w.s.desk.block?.kind).toBe('leisure')
+    expect(balance(w.s)).toBe(before - 2)
+    const tomatoes = w.s.tokens.filter((t) => t.reason === 'tomato').length
     w.do({ type: 'desk/standDown' })
-    expect(w.s.tokens.filter((t) => t.reason === 'tomato').length).toBe(tomatoesBefore)
-    expect(balance(w.s)).toBe(before - 10)
+    expect(w.s.tokens.filter((t) => t.reason === 'tomato').length).toBe(tomatoes)
+    expect(balance(w.s)).toBe(before - 2)
     expect(w.s.desk.status).toBe('idle')
   })
 
-  it('the couch counts down and ends on its own, keeping every token paid', () => {
+  it('the couch ends on its own when the tokens run out', () => {
     const w = rich()
-    const before = balance(w.s)
     w.do({ type: 'leisure/add', title: 'young sheldon' })
-    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: w.s.leisure[0].id, minutes: 5 })
-    w.wait(5 * MIN + 2000)
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: w.s.leisure[0].id })
+    w.wait(3 * 25 * MIN + 2 * 5 * MIN + 15 * MIN + 5000)
+    expect(balance(w.s)).toBe(0)
     expect(w.s.desk.status).toBe('idle')
-    expect(balance(w.s)).toBe(before - 5)
   })
 
-  it('cannot be bought with tokens you do not have', () => {
+  it('cannot be started with no tokens', () => {
     const w = world()
     w.do({ type: 'leisure/add', title: 'slay the spire 2' })
-    const r = w.do({ type: 'desk/deploy', mode: 'couch', leisureId: w.s.leisure[0].id, minutes: 30 })
+    const r = w.do({ type: 'desk/deploy', mode: 'couch', leisureId: w.s.leisure[0].id })
     expect(w.s.desk.status).toBe('idle')
-    expect(r.events.some((e) => e.type === 'notice' && e.text.startsWith('Not enough tokens'))).toBe(true)
+    expect(r.events.some((e) => e.type === 'notice' && e.text.startsWith('No tokens'))).toBe(true)
   })
 
   it('the clerk sends entertainment to the couch list, not the flow', () => {

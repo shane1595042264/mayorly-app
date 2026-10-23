@@ -3,7 +3,7 @@ import type {
   Block, Ctx, Entry, GlyphName, HudEvent, Id, Ledger, MayorlyState, Mode, Settings, Superset,
 } from './model'
 import { advance, blitzBlock, firstBlock, firstOpenInLedger, initialPlan, nextInFlow, openFlow, type DeployOpts } from './planner'
-import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_MIN, tokensForTomato } from './rules'
+import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_BLOCK, tokensForTomato } from './rules'
 import { migrate } from './seed'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
@@ -32,7 +32,7 @@ export type Action =
   | { type: 'ledger/delete'; id: Id }
   | { type: 'superset/save'; superset: Superset }
   | { type: 'superset/delete'; id: Id }
-  | { type: 'desk/deploy'; mode: Mode; supersetId?: Id | null; entryId?: Id | null; ledgerId?: Id | null; leisureId?: Id | null; minutes?: number }
+  | { type: 'desk/deploy'; mode: Mode; supersetId?: Id | null; entryId?: Id | null; ledgerId?: Id | null; leisureId?: Id | null }
   | { type: 'leisure/add'; title: string }
   | { type: 'leisure/update'; id: Id; patch: { title?: string } }
   | { type: 'leisure/delete'; id: Id }
@@ -267,7 +267,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       s.supersets = s.supersets.filter((x) => x.id !== action.id)
       break
     case 'desk/deploy':
-      deploy(s, ctx, ev, { mode: action.mode, supersetId: action.supersetId, entryId: action.entryId, ledgerId: action.ledgerId, leisureId: action.leisureId, minutes: action.minutes })
+      deploy(s, ctx, ev, { mode: action.mode, supersetId: action.supersetId, entryId: action.entryId, ledgerId: action.ledgerId, leisureId: action.leisureId })
       break
     case 'leisure/add': {
       const title = action.title.trim().slice(0, 120)
@@ -366,15 +366,13 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
   const now = ctx.now
   const plan = initialPlan(s, opts, ctx.random)
   if (!plan) {
-    ev.push({ type: 'notice', at: now, text: opts.mode === 'blitz' ? 'Flow is empty' : opts.mode === 'couch' ? 'Pick something and a number of minutes' : 'Superset has no slots' })
+    ev.push({ type: 'notice', at: now, text: opts.mode === 'blitz' ? 'Flow is empty' : opts.mode === 'couch' ? 'Pick something from the couch list' : 'Superset has no slots' })
     return
   }
   if (plan.mode === 'couch') {
-    // The couch is paid up front, by the minute, out of tokens earned at the desk. Nothing is earned there.
-    const price = (plan.paidTokens ?? 0) * LEISURE_TOKENS_PER_MIN
-    const have = s.tokens.reduce((n, t) => n + t.amount, 0)
-    if (have < price) {
-      ev.push({ type: 'notice', at: now, text: `Not enough tokens: ${price} needed, ${have} banked` })
+    // Each leisure block costs one token, taken as it starts. Nothing is earned on the couch.
+    if (balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
+      ev.push({ type: 'notice', at: now, text: 'No tokens: a tomato at the desk buys a block on the couch' })
       return
     }
     // The couch is its own sitting; a desk left running is stood down first.
@@ -382,7 +380,6 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
     const sittingId = ctx.newId()
     s.sittings.push({ id: sittingId, startedAt: now, endedAt: null, tomatoMs: s.settings.focusMin * 60_000, focusMs: 0, tomatoes: 0, tokens: 0 })
     s.desk.sittingId = sittingId
-    s.tokens.push({ id: `${sittingId}:leisure`, at: now, amount: -price, reason: 'leisure', sittingId, leisureId: plan.leisureId ?? undefined })
     s.desk.plan = plan
     const block = firstBlock(s, plan, now)
     if (!block) {
@@ -392,7 +389,7 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
     startBlock(s, ctx, ev, block, now, true)
     return
   }
-  // A couch sitting ends when work starts: the unused minutes come back.
+  // A couch sitting ends when work starts.
   if (s.desk.plan?.mode === 'couch') endSitting(s, now, ev, 'stood')
   // Redeploying mid-sitting keeps the sitting, so a new plan never costs banked tomatoes.
   if (s.desk.status === 'running') closeSegment(s, now)
@@ -419,6 +416,16 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
 }
 
 function startBlock(s: MayorlyState, ctx: Ctx, ev: HudEvent[], block: Block, at: number, force: boolean) {
+  if (block.kind === 'leisure') {
+    // A leisure block is bought as it starts. Out of tokens, the couch sitting ends.
+    const sittingId = s.desk.sittingId
+    if (!sittingId || balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
+      ev.push({ type: 'notice', at, text: 'Out of tokens: back to the desk' })
+      endSitting(s, at, ev, 'complete')
+      return
+    }
+    s.tokens.push({ id: `${sittingId}:leisure:${block.round}`, at, amount: -LEISURE_TOKENS_PER_BLOCK, reason: 'leisure', sittingId, leisureId: block.leisureId ?? undefined })
+  }
   const auto = force || block.kind === 'leisure' || (block.kind === 'focus' ? s.settings.autoStartFocus : s.settings.autoStartRest)
   s.desk.block = block
   s.desk.bankMs = 0
@@ -502,13 +509,6 @@ function endSitting(s: MayorlyState, at: number, ev: HudEvent[], reason: 'stood'
   const d = s.desk
   if (d.status === 'running') closeSegment(s, at)
   mint(s, at, ev)
-  // Leaving the couch early gives the unused whole minutes back.
-  if (d.plan?.mode === 'couch' && d.sittingId && d.block) {
-    const used = s.segments.filter((x) => x.sittingId === d.sittingId && x.kind === 'leisure').reduce((n, x) => n + ((x.end ?? at) - x.start), 0)
-    const unused = Math.floor(Math.max(0, (d.block.durationMs ?? 0) - used) / 60_000)
-    const refund = Math.min(d.plan.paidTokens ?? 0, unused) * LEISURE_TOKENS_PER_MIN
-    if (refund > 0) s.tokens.push({ id: `${d.sittingId}:refund`, at, amount: refund, reason: 'refund', sittingId: d.sittingId, leisureId: d.plan.leisureId ?? undefined })
-  }
   const sitting = s.sittings.find((x) => x.id === d.sittingId)
   if (sitting) {
     sitting.endedAt = at
@@ -556,6 +556,8 @@ function tick(s: MayorlyState, ctx: Ctx, ev: HudEvent[]) {
     startBlock(s, { ...ctx, now: end }, ev, next, end, false)
   }
 }
+
+const balanceOf = (s: MayorlyState) => s.tokens.reduce((n, t) => n + t.amount, 0)
 
 function liveFocus(s: MayorlyState, now: number): number {
   const sitting = s.sittings.find((x) => x.id === s.desk.sittingId)

@@ -35,7 +35,7 @@ Nouns are the spec's, unchanged:
 | desk | `Desk` | the one timer |
 | sitting | `Sitting` | from deploy to stand down; the unit the long-grind bonus is counted over |
 | tomato | minted in the reducer | one per `tomatoMs` of accumulated focus in a sitting |
-| token | `TokenTx` | 12 per tomato, 18 each once a sitting reaches 3, never from ticking a box |
+| token | `TokenTx` | one per tomato, never from ticking a box; spent one per leisure block |
 
 New nouns this layer adds:
 

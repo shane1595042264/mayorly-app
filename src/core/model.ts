@@ -106,9 +106,8 @@ export interface Plan {
   sequence: number[]
   /** Focus blocks finished in this plan, drives the long-rest cadence. */
   focusCount: number
-  /** couch: the entertainment bought, and the tokens paid for it. */
+  /** couch: the entertainment being consumed. */
   leisureId?: Id | null
-  paidTokens?: number
 }
 
 export interface Sitting {

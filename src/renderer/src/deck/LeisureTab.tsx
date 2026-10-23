@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import { Couch, Play, Stop, Trash } from '@phosphor-icons/react'
-import { balance, blockView, clock, leisureList, leisureSpentMs, leisureTokensSpent, LEISURE_TOKENS_PER_MIN, span, type MayorlyState } from '@core/index'
+import { balance, blockView, clock, leisureList, leisureSpentMs, leisureTokensSpent, LEISURE_TOKENS_PER_BLOCK, span, type MayorlyState } from '@core/index'
 import { dispatch, useNow } from '../store'
 
-// Entertainment lives here, outside the ledgers: games, shows, streams. It is bought
-// with tokens earned at the desk, a token a minute, and consumed on the couch as a
-// countdown that earns nothing. Leaving early gives the unused minutes back.
-
-const PRESETS = [15, 25, 30, 45, 60]
+// Entertainment lives here, outside the ledgers: games, shows, streams. The couch runs
+// on the same focus and rest cadence as a pomodoro; each leisure block costs one token,
+// taken as it starts, rests are free, and nothing is earned.
 
 export function LeisureTab({ s }: { s: MayorlyState }) {
   const now = useNow(1000)
@@ -16,8 +14,7 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
   const v = blockView(s, now)
   const onCouch = v?.block.kind === 'leisure' ? v : null
   const [draft, setDraft] = useState('')
-  const [minutes, setMinutes] = useState(30)
-  const price = minutes * LEISURE_TOKENS_PER_MIN
+  const price = LEISURE_TOKENS_PER_BLOCK
 
   const add = () => {
     if (!draft.trim()) return
@@ -35,18 +32,12 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
             <button type="submit" className="btn" disabled={!draft.trim()}>Add</button>
           </div>
           <p className="field-help">
-            Games, shows, streams, anything with no productive value. Outside the ledgers, never earns. Bought with tokens, {LEISURE_TOKENS_PER_MIN} a minute; what you do not use comes back.
+            Games, shows, streams, anything with no productive value. Outside the ledgers, never earns. Runs like a pomodoro: {s.settings.focusMin} minutes on, {s.settings.shortRestMin} off. Each block costs {price} token, taken as it starts; rests are free.
           </p>
         </form>
 
         <div className="leisure-buy">
-          <span className="field-label caps">Minutes</span>
-          <div className="seg" role="radiogroup" aria-label="Minutes to buy">
-            {PRESETS.map((m) => (
-              <button key={m} role="radio" aria-checked={minutes === m} className={minutes === m ? 'on' : ''} onClick={() => setMinutes(m)}>{m}</button>
-            ))}
-          </div>
-          <span className={`mono num ${have < price ? 'field-error' : 'dim'}`}>{price} tokens, {have} banked</span>
+          <span className={`mono num ${have < price ? 'field-error' : 'dim'}`}>{have} tokens banked: {have} {have === 1 ? 'block' : 'blocks'} on the couch</span>
         </div>
 
         {onCouch && (
@@ -82,10 +73,10 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
                   <span className="row-actions">
                     <button
                       className="icon-btn"
-                      aria-label={`Buy ${minutes} minutes of ${it.title}`}
-                      title={have < price ? `Needs ${price} tokens` : `Buy ${minutes} minutes for ${price} tokens and start`}
+                      aria-label={`Sit down with ${it.title}`}
+                      title={have < price ? 'Needs a token: earn one at the desk' : `${s.settings.focusMin} minutes for ${price} token, then a rest`}
                       disabled={have < price || live}
-                      onClick={() => dispatch({ type: 'desk/deploy', mode: 'couch', leisureId: it.id, minutes })}
+                      onClick={() => dispatch({ type: 'desk/deploy', mode: 'couch', leisureId: it.id })}
                     >
                       <Play size={14} />
                     </button>
