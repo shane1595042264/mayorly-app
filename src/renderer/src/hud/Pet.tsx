@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
-import { motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { blockView, clock, dayStats, startOfDay, type MayorlyState } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
 import tomato from '../assets/tomato@1x.png'
+import { bridge } from '../bridge'
 import { hotkeyLabel } from '../lib/keys'
 import { useNow } from '../store'
 
 // The resting HUD is the founder's tomato holding one sign: the clock while a block
 // runs, today's tomatoes when the desk is idle. Hover it and it hops and the sign
 // says in one line what the desk is on. Everything else is a hotkey; the sign opens
-// the swap menu. On macOS the tomato is the window's drag handle. Nothing here
-// changes the window's size: that would make the tomato jump for a frame.
+// the swap menu. On macOS the tomato is the window's drag handle, the window is exactly
+// the pet, and the caption is the shell's own click-through window beside it. Nothing
+// here changes the window's size: that would make the tomato jump for a frame.
 
 interface Props {
   s: MayorlyState
@@ -18,11 +20,13 @@ interface Props {
   open: (m: UiMode) => void
   side: 'left' | 'right'
   dragging: boolean
+  /** The window is the pet alone (macOS): the caption goes to the shell. */
+  compact: boolean
   /** Something the shell needs to say (a hotkey that failed); shown in place of the caption. */
   notice: string | null
 }
 
-export function Pet({ s, mode, open, side, dragging, notice }: Props) {
+export function Pet({ s, mode, open, side, dragging, compact, notice }: Props) {
   const now = useNow(250)
   const reduce = useReducedMotion()
   const [hover, setHover] = useState(false)
@@ -50,7 +54,12 @@ export function Pet({ s, mode, open, side, dragging, notice }: Props) {
     caption = v.status === 'paused' ? `Holding  ${what}` : v.status === 'ready' ? `Ready  ${what}` : what
   }
   const breathing = tone === 'live' && !reduce && !dragging
-  const text = showCaption ? (notice ?? caption) : sign
+  const text = notice ?? caption
+
+  // macOS: the caption is the shell's window. Elsewhere it is drawn above the pet.
+  useEffect(() => {
+    if (compact) bridge.setCaption(showCaption ? text : null)
+  }, [compact, showCaption, text])
 
   return (
     <motion.div
@@ -62,15 +71,30 @@ export function Pet({ s, mode, open, side, dragging, notice }: Props) {
       onMouseLeave={() => setHover(false)}
       data-hit
     >
+      <AnimatePresence>
+        {showCaption && !compact && (
+          <motion.p
+            key="caption"
+            className={`pet-sign is-caption pet-caption ${notice ? 'is-notice' : ''}`}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4, transition: { duration: 0.12 } }}
+            transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+            role="status"
+          >
+            {text}
+          </motion.p>
+        )}
+      </AnimatePresence>
+
       <div className="pet" aria-label="Desk status">
         <button
           type="button"
-          className={`pet-sign num tone-${tone} ${tone === 'hold' ? 'pulse' : ''} ${showCaption ? 'is-caption' : ''} ${notice ? 'is-notice' : ''}`}
+          className={`pet-sign num tone-${tone} ${tone === 'hold' ? 'pulse' : ''}`}
           onClick={() => open('plus')}
-          title={showCaption ? text : v ? 'Swap' : 'Deploy'}
-          role="status"
+          title={v ? 'Swap' : 'Deploy'}
         >
-          {text}
+          {sign}
         </button>
         <motion.div
           className="pet-body"

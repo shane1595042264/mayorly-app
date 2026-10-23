@@ -69,6 +69,7 @@ function boot() {
     send(IPC.sync, sync.current())
   })
   ipcMain.handle(IPC.getLayout, () => overlay.layout())
+  ipcMain.on(IPC.setCaption, (_e, text: string | null) => overlay.setCaption(text))
   ipcMain.handle(IPC.accountsAvailable, () => accountsConfigured())
   ipcMain.handle(IPC.getAccount, () => session?.user ?? null)
   ipcMain.handle(IPC.signIn, async () => {

@@ -22,9 +22,9 @@
 .pet-left { left: 64px; justify-items: start; transform-origin: 0% 100%; }
 
 /* Compact: the window is the pet. The shell hangs it off the tomato on the side it favours. */
-body.compact .pet-wrap { bottom: 8px; }
-body.compact .pet-right { right: 8px; }
-body.compact .pet-left { left: 8px; }
+body.compact .pet-wrap { bottom: 4px; }
+body.compact .pet-right { right: 4px; }
+body.compact .pet-left { left: 4px; }
 body.compact .objectives,
 body.compact .callout-wrap,
 body.compact .feed { display: none; }
@@ -54,8 +54,12 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
   -webkit-user-drag: none;
 }
 .pet-sign {
+  /* Fixed width: the window is sized to the pet, so the sign cannot grow with its number. */
+  width: 80px;
   margin-bottom: 8px;
-  padding: 4px 9px 2px;
+  padding: 4px 6px 2px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
   font-family: var(--font-ui);
   transition: border-color 0.15s, color 0.15s;
@@ -75,9 +79,14 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
 .pet-sign.tone-rest { color: var(--ink-2); }
 .pet-sign.tone-ready { color: var(--ink-2); border-color: var(--accent-2); }
 .pet-sign.tone-idle { color: var(--ink-3); }
-/* On hover the sign carries the caption instead of the number, in the same box. */
+/* The caption: one line in the sign's dress. Above the pet in the overlay (Windows), its own
+   click-through window beside the pet on a Mac. */
 .pet-sign.is-caption {
-  max-width: 232px;
+  width: auto;
+  max-width: 300px;
+  margin: 0 0 6px;
+  padding: 3px 8px 2px;
+  text-align: left;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -294,3 +303,11 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
   box-shadow: inset 2px 0 0 var(--accent);
   font-size: 15px;
 }
+.pet-sign.is-notice { color: var(--ink); border-color: var(--accent-2); white-space: normal; }
+
+/* The caption window's page (macOS): transparent air, the box hugs the tomato's side. */
+body.caption { background: transparent; }
+.caption-page { position: fixed; inset: 0; display: flex; align-items: center; padding: 0 4px; }
+.caption-page.side-right { justify-content: flex-end; }
+.caption-page.side-left { justify-content: flex-start; }
+.caption-float { margin: 0; }

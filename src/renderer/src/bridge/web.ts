@@ -92,6 +92,8 @@ export function createWebBridge(): Bridge {
     onCommand: (fn) => sub(cmdSubs, fn),
     setMode: (_mode: UiMode) => {},
     setHit: () => {},
+    setCaption: () => {},
+    onCaption: () => () => {},
     getLayout: async () => ({ compact: false, side: 'right' as const, dragging: false }),
     onLayout: () => () => {},
     accountsAvailable: async () => false,

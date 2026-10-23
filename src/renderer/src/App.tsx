@@ -144,7 +144,7 @@ export function App() {
       </AnimatePresence>
 
       <Objectives s={s} mode={mode} />
-      <Pet s={s} mode={mode} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} notice={layout.compact ? warning : null} />
+      <Pet s={s} mode={mode} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} compact={layout.compact} notice={layout.compact ? warning : null} />
       <Feed />
       <Callout quiet={mode !== 'field'} />
 

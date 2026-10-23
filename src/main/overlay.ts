@@ -20,12 +20,15 @@ import { IPC, type Layout, type UiMode } from '../shared/bridge'
 const mac = process.platform === 'darwin'
 const debug = process.env.MAYORLY_DEBUG ? (...a: unknown[]) => console.error('[overlay]', ...a) : () => {}
 
-/** The pet at HUD scale 1: the tomato, its hop, and a sign wide enough for the caption. The window
- * is sized from this and the HUD scale, and never resized on hover: a resize paints one frame of
- * old content at the new position, and the tomato jumps. Matches `body.compact` in hud.css. */
-const PET = { width: 300, height: 60 }
+/** The pet at HUD scale 1: the fixed-width sign, the gap, the tomato, and the hop's headroom.
+ * The window is exactly this at the HUD scale, so nothing invisible catches a click, and it is
+ * never resized on hover: a resize paints one frame of old content at the new position and the
+ * tomato jumps. The caption is a separate click-through window. Matches `body.compact` in hud.css. */
+const PET = { width: 80 + 10 + 48, height: 48 + 8 }
 /** The pet's own corner inside the window; matches `body.compact .pet-wrap` in hud.css. */
-const INSET = { x: 8, y: 8 }
+const INSET = { x: 4, y: 4 }
+/** The caption window: generous, because it is click-through; the text hugs the tomato's side. */
+const CAPTION = { width: 360, height: 40 }
 /** The tomato sprite at scale 1, so the window can be placed around its centre. */
 const TOMATO = 48
 /** How often the cursor is sampled for hover on macOS. */
@@ -49,6 +52,8 @@ export class Overlay {
   private anchor: Anchor | null = null
   private scale = 1
   private dragging = false
+  private caption: BrowserWindow | null = null
+  private captionText: string | null = null
   private fitting = false
   private settle: NodeJS.Timeout | null = null
   private readonly anchorFile: string
@@ -113,6 +118,81 @@ export class Overlay {
     else void this.win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  /**
+   * macOS: the hover caption lives in its own small window beside the pet, always
+   * click-through, so the pet window can be exactly the pet. It shows the same
+   * renderer in caption mode and gets its text over IPC.
+   */
+  setCaption(text: string | null) {
+    if (!mac || this.win.isDestroyed()) return
+    this.captionText = text
+    if (!text) {
+      this.caption?.hide()
+      return
+    }
+    if (!this.caption) {
+      this.caption = new BrowserWindow({
+        ...CAPTION,
+        show: false,
+        frame: false,
+        transparent: true,
+        backgroundColor: '#00000000',
+        hasShadow: false,
+        resizable: false,
+        movable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        skipTaskbar: true,
+        hiddenInMissionControl: true,
+        focusable: false,
+        alwaysOnTop: true,
+        type: 'panel',
+        title: 'Mayorly caption',
+        webPreferences: {
+          preload: join(__dirname, '../preload/index.cjs'),
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          backgroundThrottling: false,
+          spellcheck: false,
+        },
+      })
+      this.caption.setAlwaysOnTop(true, 'screen-saver')
+      this.caption.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
+      // Display only: every click falls through to whatever is beneath.
+      this.caption.setIgnoreMouseEvents(true)
+      const page = process.env.ELECTRON_RENDERER_URL ? `${process.env.ELECTRON_RENDERER_URL}?caption` : null
+      if (page) void this.caption.loadURL(page)
+      else void this.caption.loadFile(join(__dirname, '../renderer/index.html'), { query: { caption: '1' } })
+      this.caption.webContents.on('did-finish-load', () => this.pushCaption())
+      this.caption.on('closed', () => { this.caption = null })
+    }
+    this.placeCaption()
+    this.pushCaption()
+    if (!this.caption.isVisible()) this.caption.showInactive()
+  }
+
+  private pushCaption() {
+    if (!this.caption || this.caption.isDestroyed()) return
+    this.caption.webContents.send(IPC.caption, { text: this.captionText ?? '', side: this.layout().side })
+  }
+
+  /** Beside the pet, toward the centre of the screen, level with the sign. */
+  private placeCaption() {
+    if (!this.caption) return
+    const b = this.win.getBounds()
+    const wa = this.display().workArea
+    const side = this.layout().side
+    const x = side === 'right' ? b.x - CAPTION.width + INSET.x : b.x + b.width - INSET.x
+    const y = b.y + b.height - INSET.y - Math.round((30 + 8) * this.scale) - Math.round((CAPTION.height - 30 * this.scale) / 2)
+    this.caption.setBounds({
+      x: Math.round(Math.min(Math.max(x, wa.x), wa.x + wa.width - CAPTION.width)),
+      y: Math.round(Math.min(Math.max(y, wa.y), wa.y + wa.height - CAPTION.height)),
+      ...CAPTION,
+    })
+  }
+
   /** Re-assert topmost. Some focus changes on Windows quietly drop the level. 'screen-saver' is also the right macOS level: above the Dock and menu bar. */
   private pin() {
     this.win.setAlwaysOnTop(true, 'screen-saver')
@@ -122,6 +202,7 @@ export class Overlay {
     if (this.win.isDestroyed()) return
     debug('mode', mode)
     this.mode = mode
+    if (mode !== 'field') this.setCaption(null)
     if (mode === 'field') {
       this.win.blur()
       this.win.setFocusable(false)
@@ -166,11 +247,11 @@ export class Overlay {
 
   /** The user is dragging the window by the tomato. Drop the caption, pause hover, wait for it to settle. */
   private onMoving() {
-    debug('moving', 'fitting', this.fitting, 'mode', this.mode, 'bounds', JSON.stringify(this.win.getBounds()))
     if (this.fitting || this.mode !== 'field') return
     if (!this.dragging) {
       this.dragging = true
       this.stopHoverPoll()
+      this.setCaption(null)
       this.sendLayout()
     }
     if (this.settle) clearTimeout(this.settle)
@@ -181,7 +262,6 @@ export class Overlay {
   private onMoved() {
     this.settle = null
     this.dragging = false
-    debug('moved', JSON.stringify(this.win.getBounds()), 'anchor', JSON.stringify(this.anchor), 'scale', this.scale)
     const b = this.win.getBounds()
     const wa = this.display().workArea
     const side = this.side(wa, this.anchor ?? this.defaultAnchor(wa))
@@ -201,6 +281,7 @@ export class Overlay {
   toggleVisible() {
     if (this.win.isVisible()) {
       this.win.hide()
+      this.setCaption(null)
       this.stopHoverPoll()
     } else {
       this.win.showInactive()
@@ -236,7 +317,6 @@ export class Overlay {
   }
 
   private fit() {
-    debug('fit', 'mode', this.mode, 'scale', this.scale, 'anchor', JSON.stringify(this.anchor))
     const target = this.display()
     this.displayId = target.id
     this.fitting = true

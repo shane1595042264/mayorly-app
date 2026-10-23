@@ -59,6 +59,10 @@ export interface Bridge {
   setMode(mode: UiMode): void
   /** Field mode only: the pointer is over an interactive HUD element. */
   setHit(hit: boolean): void
+  /** macOS: the hover caption is its own click-through window beside the pet; null hides it. */
+  setCaption(text: string | null): void
+  /** The caption window's own page: the text to show and which side of the pet it sits on. */
+  onCaption(fn: (caption: { text: string; side: 'left' | 'right' }) => void): () => void
   /** The shell's layout: asked for on mount, and pushed whenever the pet changes side or is dragged. */
   getLayout(): Promise<Layout>
   onLayout(fn: (layout: Layout) => void): () => void
@@ -83,6 +87,8 @@ export const IPC = {
   setHit: 'mayorly:set-hit',
   layout: 'mayorly:layout',
   getLayout: 'mayorly:get-layout',
+  setCaption: 'mayorly:set-caption',
+  caption: 'mayorly:caption',
   accountsAvailable: 'mayorly:accounts-available',
   getAccount: 'mayorly:get-account',
   signIn: 'mayorly:sign-in',
