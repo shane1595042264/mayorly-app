@@ -370,3 +370,26 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
   font-family: var(--font-data); font-size: 12px; font-weight: 500; line-height: 1; cursor: pointer;
 }
 .unsure:hover { background: var(--accent-2); color: var(--void); }
+
+/* ------------------------------------------------------------ the clerk asks */
+
+.clerk-ask {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  translate: -50% 0;
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(560px, calc(100% - 48px));
+  padding: 12px 14px;
+  border: 1px solid var(--accent-2);
+  background: var(--glass);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.45);
+  clip-path: polygon(var(--chamfer) 0, 100% 0, 100% calc(100% - var(--chamfer)), calc(100% - var(--chamfer)) 100%, 0 100%, 0 var(--chamfer));
+}
+.clerk-ask-sprite { width: 48px; height: 48px; image-rendering: pixelated; flex: none; }
+.clerk-ask-body { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.clerk-ask-q { margin: 0; font-size: 16px; color: var(--ink); }
+.clerk-ask input { width: 100%; }

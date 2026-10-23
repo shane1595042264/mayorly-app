@@ -37,6 +37,7 @@ const bridge: Bridge = {
   },
   onAi: (fn) => sub(IPC.ai, fn),
   onClerk: (fn) => sub(IPC.clerk, fn),
+  onClerkAsk: (fn) => sub(IPC.clerkAsk, fn),
   onHotkeyFailures: (fn) => sub(IPC.hotkeyFailures, fn),
 }
 

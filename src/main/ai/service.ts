@@ -237,6 +237,31 @@ export class AiClerk {
     }
   }
 
+  /**
+   * One short, natural question about an entry the user just corrected or confirmed,
+   * so the answer can sharpen the house rule. Null when no key works or the model is slow.
+   */
+  async askAbout(title: string, to: string, from: string | null, reason: 'moved' | 'confirmed'): Promise<string | null> {
+    const k = this.pick()
+    if (!k) return null
+    const model = k.preferredModel ?? k.defaultModel
+    const system = 'You are the clerk of Mayorly, a personal ledger system, and you file the user\'s entries. You were just corrected or confirmed. Ask the user one short, natural question, at most twelve words, about what the entry means or why it belongs there, so you file better next time. Plain words, no preamble, no quotation marks, just the question.'
+    const prompt = reason === 'moved'
+      ? `You filed "${title}" under ${from ?? 'the tray'}; the user moved it to ${to}.`
+      : `You filed "${title}" under ${to} but were not sure; the user said it is right.`
+    try {
+      const r = await Promise.race([
+        generate(k.provider, k.key, model, { system, prompt, maxTokens: 60 }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new ProviderError('other', 0, 'slow')), 6_000)),
+      ])
+      this.record({ at: Date.now(), provider: k.provider, model, feature: 'file', inputTokens: r.inputTokens, outputTokens: r.outputTokens, costMicroUsd: costMicroUsd(k.provider, model, r.inputTokens, r.outputTokens) })
+      const q = r.text.trim().split('\n')[0].replace(/^["'\s]+|["'\s]+$/g, '')
+      return q && q.length <= 140 ? q : null
+    } catch {
+      return null
+    }
+  }
+
   // ---- internals ----
 
   private pick(): KeyRecord | null {

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import type { Command, Layout, UiMode } from '../../shared/bridge'
 import { bridge } from './bridge'
 import { Capture } from './capture/Capture'
+import { ClerkAsk } from './deck/ClerkAsk'
 import { Deck } from './deck/Deck'
 import { Callout } from './hud/Callout'
 import { Feed } from './hud/Feed'
@@ -151,7 +152,7 @@ export function App() {
   // A click outside the open interface closes it, like clicking away from a menu.
   const onStageDown = (e: React.PointerEvent) => {
     if (modeRef.current === 'field') return
-    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .capture, .toast')
+    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .capture, .toast, .clerk-ask')
     if (!inside) close()
   }
 
@@ -180,6 +181,8 @@ export function App() {
         {mode === 'deck' && <Deck key="deck" s={s} close={close} kind={bridge.kind} />}
         {mode === 'capture' && <Capture key="capture" s={s} close={close} />}
       </AnimatePresence>
+
+      {mode !== 'field' && <ClerkAsk />}
 
       <AnimatePresence>
         {warning && !layout.compact && (

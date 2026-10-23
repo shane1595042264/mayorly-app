@@ -114,6 +114,7 @@ export function createWebBridge(): Bridge {
     },
     onAi: () => () => {},
     onClerk: () => () => {},
+    onClerkAsk: () => () => {},
     onHotkeyFailures: () => () => {},
   }
 }

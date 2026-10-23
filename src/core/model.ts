@@ -193,6 +193,8 @@ export type HudEvent =
   | { type: 'cleared'; at: Epoch; entryId: Id; title: string }
   | { type: 'sitting-end'; at: Epoch; reason: 'stood' | 'complete' | 'flow-clear'; focusMs: Ms; tomatoes: number; tokens: number }
   | { type: 'notice'; at: Epoch; text: string }
+  /** You corrected or confirmed a filing; the clerk may ask why, and the answer goes into the rule. */
+  | { type: 'clerk-wonders'; at: Epoch; entryId: Id; ruleId: Id | null; title: string; ledgerId: Id | null; fromLedgerId: Id | null; reason: 'moved' | 'confirmed' }
 
 /** Everything impure the reducer needs, passed in so the core stays deterministic. */
 export interface Ctx {

@@ -66,6 +66,14 @@ export interface AiKeyPublic {
   createdAt: number
 }
 
+/** The clerk's question after you corrected or confirmed a filing. Answering is optional. */
+export interface ClerkQuestion {
+  entryId: string
+  ruleId: string | null
+  title: string
+  question: string
+}
+
 export interface ClerkNotice {
   phase: 'working' | 'done'
   text: string
@@ -117,6 +125,7 @@ export interface Bridge {
   onAi(fn: (ai: AiPublic) => void): () => void
   /** What the clerk is doing right now, for the pet to say. */
   onClerk(fn: (n: ClerkNotice) => void): () => void
+  onClerkAsk(fn: (q: ClerkQuestion) => void): () => void
   /** Hotkeys that could not be registered (taken by another app, or refused by the OS). */
   onHotkeyFailures(fn: (failures: HotkeyFailures) => void): () => void
 }
@@ -148,5 +157,6 @@ export const IPC = {
   aiSweep: 'mayorly:ai-sweep',
   ai: 'mayorly:ai',
   clerk: 'mayorly:clerk',
+  clerkAsk: 'mayorly:clerk-ask',
   hotkeyFailures: 'mayorly:hotkey-failures',
 } as const

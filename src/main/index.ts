@@ -1,6 +1,6 @@
 import { hostname } from 'node:os'
 import { app, globalShortcut, ipcMain, nativeTheme } from 'electron'
-import type { Action, Settings } from '@core/index'
+import type { Action, HudEvent, Settings } from '@core/index'
 import { IPC, type AiProvider, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { AiClerk, KeyCheckError } from './ai/service'
 import { signInWithGoogle } from './auth'
@@ -150,7 +150,16 @@ function boot() {
   engine.on((state, events) => {
     send(IPC.state, state)
     if (events.length) send(IPC.events, events)
+    for (const ev of events) if (ev.type === 'clerk-wonders') void ask(ev)
   })
+  // After a correction or a confirmation the clerk asks one question; the answer is optional.
+  const ask = async (ev: Extract<HudEvent, { type: 'clerk-wonders' }>) => {
+    const name = (id: string | null) => engine.state.ledgers.find((l) => l.id === id)?.name ?? null
+    const to = name(ev.ledgerId) ?? 'the tray'
+    const asked = await clerk.askAbout(ev.title, to, name(ev.fromLedgerId), ev.reason)
+    const question = asked ?? (ev.reason === 'moved' ? `What makes "${ev.title}" ${to}?` : `Noted. What is "${ev.title}" about?`)
+    send(IPC.clerkAsk, { entryId: ev.entryId, ruleId: ev.ruleId, title: ev.title, question })
+  }
 
   let applied: Settings | null = null
   const applySettings = (s: Settings) => {

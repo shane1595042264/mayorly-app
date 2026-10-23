@@ -20,6 +20,8 @@ export type Action =
   | { type: 'rule/add'; text: string }
   | { type: 'rule/update'; id: Id; text: string }
   | { type: 'rule/delete'; id: Id }
+  /** Your answer to the clerk's question: appended to the rule it learned, or a new rule when it only confirmed. */
+  | { type: 'rule/explain'; entryId: Id; ruleId: Id | null; text: string }
   | { type: 'entry/update'; id: Id; patch: Partial<Pick<Entry, 'title' | 'ledgerId' | 'estimateMin'>> }
   | { type: 'entry/complete'; id: Id }
   | { type: 'entry/reopen'; id: Id }
@@ -97,7 +99,23 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     }
     case 'entry/confirm': {
       const e = s.entries.find((x) => x.id === action.id)
-      if (e?.clerkFiled) e.clerkFiled.confidence = 'sure'
+      if (!e?.clerkFiled) break
+      e.clerkFiled.confidence = 'sure'
+      ev.push({ type: 'clerk-wonders', at: now, entryId: e.id, ruleId: null, title: e.title, ledgerId: e.ledgerId, fromLedgerId: e.ledgerId, reason: 'confirmed' })
+      break
+    }
+    case 'rule/explain': {
+      const text = action.text.trim().slice(0, 400)
+      if (!text) break
+      const rule = action.ruleId ? s.houseRules.find((r) => r.id === action.ruleId) : undefined
+      if (rule) {
+        rule.text = `${rule.text} ${text}`.slice(0, 600)
+      } else {
+        const e = s.entries.find((x) => x.id === action.entryId)
+        if (!e) break
+        s.houseRules.push({ id: ctx.newId(), text: `"${e.title}" belongs in ${ledgerName(s, e.ledgerId)}: ${text}`.slice(0, 600), createdAt: now, learnedFrom: { title: e.title, fromLedgerId: e.ledgerId, toLedgerId: e.ledgerId } })
+      }
+      log(s, now, `clerk told: ${text.length > 60 ? text.slice(0, 59) + '…' : text}`)
       break
     }
     case 'rule/add': {
@@ -125,8 +143,9 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
         const to = validLedger(s, p.ledgerId)
         // Moving an entry the clerk filed is a correction: it becomes a house rule.
         if (e.clerkFiled && to !== e.clerkFiled.ledgerId) {
-          learnRule(s, ctx, e.title, e.clerkFiled.ledgerId, to)
+          const ruleId = learnRule(s, ctx, e.title, e.clerkFiled.ledgerId, to)
           log(s, now, `house rule learned: '${e.title.length > 40 ? e.title.slice(0, 39) + '…' : e.title}' -> ${ledgerCode(s, to)}, not ${ledgerCode(s, e.clerkFiled.ledgerId)}`)
+          ev.push({ type: 'clerk-wonders', at: now, entryId: e.id, ruleId, title: e.title, ledgerId: to, fromLedgerId: e.clerkFiled.ledgerId, reason: 'moved' })
         }
         delete e.clerkFiled
         e.ledgerId = to
@@ -526,11 +545,13 @@ const ledgerCode = (s: MayorlyState, id: Id | null) => s.ledgers.find((l) => l.i
 const ledgerName = (s: MayorlyState, id: Id | null) => s.ledgers.find((l) => l.id === id)?.name ?? 'the tray'
 
 /** One correction, one rule, in plain words the clerk can read back. The same correction twice does not make two. */
-function learnRule(s: MayorlyState, ctx: Ctx, title: string, from: Id | null, to: Id | null) {
-  const dup = s.houseRules.some((r) => r.learnedFrom && r.learnedFrom.title.toLowerCase() === title.toLowerCase() && r.learnedFrom.toLedgerId === to)
-  if (dup) return
+function learnRule(s: MayorlyState, ctx: Ctx, title: string, from: Id | null, to: Id | null): Id {
+  const dup = s.houseRules.find((r) => r.learnedFrom && r.learnedFrom.title.toLowerCase() === title.toLowerCase() && r.learnedFrom.toLedgerId === to)
+  if (dup) return dup.id
+  const id = ctx.newId()
   const text = `Entries like "${title}" go to ${ledgerName(s, to)}, not ${ledgerName(s, from)}.`
-  s.houseRules.push({ id: ctx.newId(), text, createdAt: ctx.now, learnedFrom: { title, fromLedgerId: from, toLedgerId: to } })
+  s.houseRules.push({ id, text, createdAt: ctx.now, learnedFrom: { title, fromLedgerId: from, toLedgerId: to } })
+  return id
 }
 
 function maxOrder(s: MayorlyState): number {

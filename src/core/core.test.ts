@@ -371,3 +371,28 @@ describe('an unsure clerk', () => {
     expect(w.s.houseRules).toHaveLength(0)
   })
 })
+
+describe('explaining to the clerk', () => {
+  it('a move raises the question and the answer lands in the learned rule', () => {
+    const w = world()
+    const car = w.ledger('CAR'), dnc = w.ledger('DNC')
+    w.do({ type: 'entry/capture', text: 'on page sprint review', filing: { title: 'on page sprint review', ledgerId: dnc.id, estimateMin: null, log: 'x', model: 'test' } })
+    const e = w.entry('on page sprint review')
+    const r = w.do({ type: 'entry/update', id: e.id, patch: { ledgerId: car.id } })
+    const q = r.events.find((x) => x.type === 'clerk-wonders')
+    expect(q && q.type === 'clerk-wonders' && q.reason).toBe('moved')
+    w.do({ type: 'rule/explain', entryId: e.id, ruleId: q && q.type === 'clerk-wonders' ? q.ruleId : null, text: 'On Page is the company I work for.' })
+    expect(w.s.houseRules[0].text).toBe('Entries like "on page sprint review" go to Career, not Dance. On Page is the company I work for.')
+  })
+
+  it('a confirmation with an answer writes a new rule', () => {
+    const w = world()
+    const lgl = w.ledger('LGL')
+    w.do({ type: 'entry/capture', text: 'oct 26 on page', filing: { title: 'oct 26 on page', ledgerId: lgl.id, estimateMin: null, log: 'x', model: 'test', confidence: 'unsure' } })
+    const e = w.entry('oct 26 on page')
+    const r = w.do({ type: 'entry/confirm', id: e.id })
+    expect(r.events.some((x) => x.type === 'clerk-wonders' && x.reason === 'confirmed')).toBe(true)
+    w.do({ type: 'rule/explain', entryId: e.id, ruleId: null, text: 'the contract deadline' })
+    expect(w.s.houseRules[0].text).toBe('"oct 26 on page" belongs in Legal: the contract deadline')
+  })
+})
