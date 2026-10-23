@@ -35,6 +35,7 @@ export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): 
     const status =
       !v ? 'Desk idle'
         : v.status === 'paused' ? `Holding  ${v.block.label}`
+          : v.block.kind === 'leisure' ? `Couch  ${v.block.label}  ${v.remainingMs !== null ? clock(v.remainingMs) : ''}`
           : v.block.kind === 'rest' ? `${v.block.label}  ${v.remainingMs !== null ? clock(v.remainingMs) : ''}`
             : `${v.ledger?.code ?? 'FREE'}  ${v.entry?.title ?? v.block.label}`
     tray.setToolTip(`Mayorly  ${status}`)

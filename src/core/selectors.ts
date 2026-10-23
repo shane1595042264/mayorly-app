@@ -148,3 +148,23 @@ export function objectives(s: MayorlyState) {
     }),
   }
 }
+
+/** Time consumed on the couch for one entertainment, all time. */
+export function leisureSpentMs(s: MayorlyState, leisureId: Id, now: number): Ms {
+  let ms = 0
+  for (const seg of s.segments) {
+    if (seg.kind !== 'leisure' || seg.leisureId !== leisureId) continue
+    ms += (seg.end ?? now) - seg.start
+  }
+  return ms
+}
+
+/** Tokens paid for one entertainment, net of refunds. */
+export function leisureTokensSpent(s: MayorlyState, leisureId: Id): number {
+  return -s.tokens.filter((t) => t.leisureId === leisureId).reduce((n, t) => n + t.amount, 0)
+}
+
+/** Entertainment on the list, newest first. */
+export function leisureList(s: MayorlyState) {
+  return s.leisure.filter((x) => x.archivedAt === null).sort((a, b) => b.createdAt - a.createdAt)
+}

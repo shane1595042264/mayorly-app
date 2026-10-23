@@ -6,7 +6,7 @@ This is the application layer of Mayorly, a life OS: entries filed into ledgers,
 
 - **Every rule lives in `src/core`, and `src/core` stays pure.** No Electron, no DOM, no `Date.now()`, no `Math.random()`. Time, ids and randomness arrive through `Ctx`. If a rule needs the clock, pass it in.
 - **State changes only through `reduce()`.** The main process is the only writer. Renderers dispatch actions and render snapshots. Do not add renderer-side state that matters after a restart.
-- **The economy is the spec's.** 12 tokens per tomato, 18 each once a sitting reaches 3, tokens only from desk time. No streaks, no decay, no penalties, nothing that punishes a hold or a bad week. Change `src/core/rules.ts` only after the design repo changes.
+- **The economy is the spec's.** 12 tokens per tomato, 18 each once a sitting reaches 3, tokens only from desk time; leisure costs 1 token a minute, paid up front, unused whole minutes refunded, nothing earned on the couch. No streaks, no decay, no penalties, nothing that punishes a hold or a bad week. Change `src/core/rules.ts` only after the design repo changes.
 - **No AI-generated art.** The app icon is the founder's hand-drawn tomato at integer scale. UI icons come from Phosphor; do not hand-draw SVG icons.
 - **No em dashes in user-visible copy.** HUD copy is short, plain, and neutral. The clerk speaks in machine-log voice only.
 
@@ -16,7 +16,7 @@ This is the application layer of Mayorly, a life OS: entries filed into ledgers,
 |---|---|
 | `src/core/model.ts` | every type; nouns match the product spec |
 | `src/core/reducer.ts` | all actions, the desk state machine, tomato minting |
-| `src/core/planner.ts` | pomodoro, blitz and superset sequencing |
+| `src/core/planner.ts` | pomodoro, blitz, superset and couch sequencing |
 | `src/core/superset-syntax.ts` | the one-line `/ss legal 25, dance 20 x3` grammar |
 | `src/core/core.test.ts` | rules tested against a fake clock |
 | `src/main/engine.ts` | heartbeat, sleep detection, broadcast |

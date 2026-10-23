@@ -77,12 +77,14 @@ export interface Superset {
  * blitz: run the flow top to bottom, one entry at a time, timed against its estimate (Blitzit).
  * superset: rotate through a superset's slots automatically.
  */
-export type Mode = 'pomodoro' | 'blitz' | 'superset'
+export type Mode = 'pomodoro' | 'blitz' | 'superset' | 'couch'
 
 export interface Block {
-  kind: 'focus' | 'rest'
+  kind: 'focus' | 'rest' | 'leisure'
   ledgerId: Id | null
   entryId: Id | null
+  /** leisure: what is being consumed. */
+  leisureId?: Id | null
   /** null counts up with no end, used by blitz entries that have no estimate. */
   durationMs: Ms | null
   slotIndex: number | null
@@ -104,6 +106,9 @@ export interface Plan {
   sequence: number[]
   /** Focus blocks finished in this plan, drives the long-rest cadence. */
   focusCount: number
+  /** couch: the entertainment bought, and the tokens paid for it. */
+  leisureId?: Id | null
+  paidTokens?: number
 }
 
 export interface Sitting {
@@ -121,9 +126,11 @@ export interface Sitting {
 export interface Segment {
   id: Id
   sittingId: Id
-  kind: 'focus' | 'rest'
+  kind: 'focus' | 'rest' | 'leisure'
   ledgerId: Id | null
   entryId: Id | null
+  /** leisure segments: the entertainment being consumed. */
+  leisureId?: Id | null
   start: Epoch
   end: Epoch | null
 }
@@ -145,9 +152,22 @@ export interface Desk {
 export interface TokenTx {
   id: Id
   at: Epoch
+  /** Positive when earned, negative when spent. */
   amount: number
-  reason: 'tomato'
+  reason: 'tomato' | 'leisure' | 'refund'
   sittingId: Id
+  leisureId?: Id
+}
+
+/**
+ * Entertainment: games, shows, streams, anything with no productive value. Outside
+ * the ledgers, never earns, and is bought with tokens by the minute on the couch.
+ */
+export interface LeisureItem {
+  id: Id
+  title: string
+  createdAt: Epoch
+  archivedAt: Epoch | null
 }
 
 export interface ClerkLine {
@@ -182,6 +202,7 @@ export interface MayorlyState {
   tokens: TokenTx[]
   clerkLog: ClerkLine[]
   houseRules: HouseRule[]
+  leisure: LeisureItem[]
   desk: Desk
   settings: Settings
 }

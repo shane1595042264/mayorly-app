@@ -79,6 +79,8 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
 .pet-sign.tone-rest { color: var(--ink-2); }
 .pet-sign.tone-ready { color: var(--ink-2); border-color: var(--accent-2); }
 .pet-sign.tone-idle { color: var(--ink-3); }
+/* The couch: the one other colour, reserved by the spec for leisure. Nothing is earned here. */
+.pet-sign.tone-couch { color: var(--leisure); border-color: var(--leisure-2); }
 /* The caption: one line in the sign's dress. Above the pet in the overlay (Windows), its own
    click-through window beside the pet on a Mac. */
 .pet-sign.is-caption {

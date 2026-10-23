@@ -26,6 +26,9 @@
   --accent: #f0ae3c;
   --accent-2: rgb(240 174 60 / 0.42);
   --accent-3: rgb(240 174 60 / 0.14);
+  /* Leisure: purple, the spec's colour for time that is bought, not earned. */
+  --leisure: #b48cf2;
+  --leisure-2: rgb(180 140 242 / 0.45);
   --shadow-text: 0 1px 2px rgb(0 0 0 / 0.65), 0 0 16px rgb(0 0 0 / 0.38);
 
   --font-ui: 'Barlow Condensed', Bahnschrift, 'Segoe UI', sans-serif;

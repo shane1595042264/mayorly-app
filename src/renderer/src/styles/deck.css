@@ -393,3 +393,13 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .clerk-ask-body { flex: 1; min-width: 0; display: grid; gap: 6px; }
 .clerk-ask-q { margin: 0; font-size: 16px; color: var(--ink); }
 .clerk-ask input { width: 100%; }
+
+/* ------------------------------------------------------------ leisure */
+
+.leisure-buy { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
+.leisure-live {
+  display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 10px 14px;
+  border: 1px solid var(--leisure-2); color: var(--leisure);
+}
+.leisure-live .ellipsis { flex: 1; color: var(--ink); }
+.row.leisure-row.live { border-color: var(--leisure-2); box-shadow: inset 2px 0 0 var(--leisure); }

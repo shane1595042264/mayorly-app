@@ -75,7 +75,10 @@ function boot() {
     try {
       say({ phase: 'working', text: `Clerk is sorting the tray, ${tray.length} ${tray.length === 1 ? 'entry' : 'entries'}` })
       const filed = await clerk.fileMany(tray.map((e) => ({ id: e.id, title: e.title })), engine.state.ledgers, engine.state.houseRules.map((r) => r.text))
-      for (const [id, f] of filed) engine.dispatch({ type: 'entry/file', id, ledgerId: f.ledgerId, estimateMin: f.estimateMin, log: f.log, model: f.model, confidence: f.confidence })
+      for (const [id, f] of filed) {
+        if (f.leisure) engine.dispatch({ type: 'entry/toLeisure', id, log: f.log })
+        else engine.dispatch({ type: 'entry/file', id, ledgerId: f.ledgerId, estimateMin: f.estimateMin, log: f.log, model: f.model, confidence: f.confidence })
+      }
       const unsure = [...filed.values()].filter((f) => f.confidence === 'unsure').length
       say({ phase: 'done', text: filed.size === 0 ? 'The clerk could not read the tray this time' : `Clerk filed ${filed.size} of ${tray.length} from the tray${unsure ? `, ${unsure} with a question mark` : ''}` })
     } finally {
@@ -90,7 +93,7 @@ function boot() {
       const r = engine.dispatch(filing ? { ...action, filing } : action)
       const ledger = filing?.ledgerId ? engine.state.ledgers.find((l) => l.id === filing.ledgerId) : null
       const title = short(filing?.title ?? action.text.trim())
-      say({ phase: 'done', text: ledger ? `'${title}' went to ${ledger.name}${filing?.confidence === 'unsure' ? ', best guess' : ''}` : `'${title}' stays in the tray` })
+      say({ phase: 'done', text: filing?.leisure ? `'${title}' is entertainment: on the couch list` : ledger ? `'${title}' went to ${ledger.name}${filing?.confidence === 'unsure' ? ', best guess' : ''}` : `'${title}' stays in the tray` })
       void sweepTray()
       return r
     }

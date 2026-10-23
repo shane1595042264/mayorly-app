@@ -41,7 +41,7 @@ export function Pet({ s, mode, open, side, dragging, compact, notice }: Props) {
   }, [dragging])
 
   let sign: string
-  let tone: 'idle' | 'live' | 'hold' | 'rest' | 'ready'
+  let tone: 'idle' | 'live' | 'hold' | 'rest' | 'ready' | 'couch'
   let caption: string
   if (!v) {
     sign = String(dayStats(s, startOfDay(now), now).tomatoes)
@@ -49,8 +49,8 @@ export function Pet({ s, mode, open, side, dragging, compact, notice }: Props) {
     caption = `Desk idle. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.`
   } else {
     sign = v.remainingMs === null ? clock(v.elapsedMs, false) : v.overtimeMs > 0 ? `+${clock(v.overtimeMs, false)}` : clock(v.remainingMs)
-    tone = v.status === 'paused' ? 'hold' : v.status === 'ready' ? 'ready' : v.block.kind === 'focus' ? 'live' : 'rest'
-    const what = v.block.kind === 'focus' ? `${v.ledger?.code ?? 'FREE'}  ${v.entry?.title ?? `${v.block.label}, no entry`}` : v.block.label
+    tone = v.block.kind === 'leisure' ? 'couch' : v.status === 'paused' ? 'hold' : v.status === 'ready' ? 'ready' : v.block.kind === 'focus' ? 'live' : 'rest'
+    const what = v.block.kind === 'leisure' ? `On the couch  ${v.block.label}` : v.block.kind === 'focus' ? `${v.ledger?.code ?? 'FREE'}  ${v.entry?.title ?? `${v.block.label}, no entry`}` : v.block.label
     caption = v.status === 'paused' ? `Holding  ${what}` : v.status === 'ready' ? `Ready  ${what}` : what
   }
   const breathing = tone === 'live' && !reduce && !dragging

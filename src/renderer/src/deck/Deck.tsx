@@ -5,12 +5,13 @@ import { balance, type MayorlyState } from '@core/index'
 import { useLean } from '../lib/parallax'
 import { sfx } from '../lib/sound'
 import { FlowTab } from './FlowTab'
+import { LeisureTab } from './LeisureTab'
 import { RecordTab } from './RecordTab'
 import { SettingsTab } from './SettingsTab'
 import { ShelfTab } from './ShelfTab'
 import { SupersetsTab } from './SupersetsTab'
 
-const TABS = ['Flow', 'Shelf', 'Supersets', 'Record', 'Settings'] as const
+const TABS = ['Flow', 'Shelf', 'Supersets', 'Leisure', 'Record', 'Settings'] as const
 type Tab = (typeof TABS)[number]
 
 let remembered: Tab = 'Flow'
@@ -86,6 +87,7 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
           {tab === 'Flow' && <FlowTab s={s} />}
           {tab === 'Shelf' && <ShelfTab s={s} />}
           {tab === 'Supersets' && <SupersetsTab s={s} />}
+          {tab === 'Leisure' && <LeisureTab s={s} />}
           {tab === 'Record' && <RecordTab s={s} />}
           {tab === 'Settings' && <SettingsTab s={s} kind={kind} />}
         </div>

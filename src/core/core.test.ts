@@ -396,3 +396,61 @@ describe('explaining to the clerk', () => {
     expect(w.s.houseRules[0].text).toBe('"oct 26 on page" belongs in Legal: the contract deadline')
   })
 })
+
+describe('the couch', () => {
+  function rich() {
+    const w = world()
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: w.ledger('CAR').id })
+    w.wait(3 * 25 * MIN + 10 * MIN + 5000)
+    w.do({ type: 'desk/standDown' })
+    return w
+  }
+
+  it('entertainment is bought by the minute, earns nothing, and refunds what was not used', () => {
+    const w = rich()
+    const before = balance(w.s)
+    expect(before).toBeGreaterThanOrEqual(54)
+    w.do({ type: 'leisure/add', title: 'civilization 6' })
+    const civ = w.s.leisure[0]
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: civ.id, minutes: 30 })
+    expect(w.s.desk.block?.kind).toBe('leisure')
+    expect(balance(w.s)).toBe(before - 30)
+    w.wait(10 * MIN)
+    expect(balance(w.s)).toBe(before - 30)
+    const tomatoesBefore = w.s.tokens.filter((t) => t.reason === 'tomato').length
+    w.do({ type: 'desk/standDown' })
+    expect(w.s.tokens.filter((t) => t.reason === 'tomato').length).toBe(tomatoesBefore)
+    expect(balance(w.s)).toBe(before - 10)
+    expect(w.s.desk.status).toBe('idle')
+  })
+
+  it('the couch counts down and ends on its own, keeping every token paid', () => {
+    const w = rich()
+    const before = balance(w.s)
+    w.do({ type: 'leisure/add', title: 'young sheldon' })
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: w.s.leisure[0].id, minutes: 5 })
+    w.wait(5 * MIN + 2000)
+    expect(w.s.desk.status).toBe('idle')
+    expect(balance(w.s)).toBe(before - 5)
+  })
+
+  it('cannot be bought with tokens you do not have', () => {
+    const w = world()
+    w.do({ type: 'leisure/add', title: 'slay the spire 2' })
+    const r = w.do({ type: 'desk/deploy', mode: 'couch', leisureId: w.s.leisure[0].id, minutes: 30 })
+    expect(w.s.desk.status).toBe('idle')
+    expect(r.events.some((e) => e.type === 'notice' && e.text.startsWith('Not enough tokens'))).toBe(true)
+  })
+
+  it('the clerk sends entertainment to the couch list, not the flow', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'play civilization 6', filing: { title: 'play civilization 6', ledgerId: null, estimateMin: null, log: 'x', model: 'test', leisure: true } })
+    expect(w.s.entries.map((e) => e.title)).not.toContain('play civilization 6')
+    expect(w.s.leisure.map((x) => x.title)).toContain('play civilization 6')
+    w.do({ type: 'entry/capture', text: 'stream watch 2026' })
+    const e = w.entry('stream watch 2026')
+    w.do({ type: 'entry/toLeisure', id: e.id })
+    expect(w.s.entries.some((x) => x.id === e.id)).toBe(false)
+    expect(w.s.leisure.map((x) => x.title)).toContain('stream watch 2026')
+  })
+})

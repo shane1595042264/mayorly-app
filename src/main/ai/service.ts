@@ -144,8 +144,9 @@ export class AiClerk {
       'You are the clerk of Mayorly, a personal ledger system. The user typed one line into the capture tray.',
       'Decide which ledger it belongs to from the list, by each ledger\'s criterion. Never invent a ledger.',
       'Always pick the best-fitting ledger, even when the fit is poor; say so with the confidence field instead of leaving it out.',
+      'Entertainment is not a ledger: games, shows, streams, films, scrolling, anything with no productive value gets ledgerCode LEISURE. Exercise, study and work are not entertainment.',
       'The house rules are the user\'s own corrections and come before the criteria.',
-      `Reply with JSON only, no prose: {"ledgerCode": one of ${ledgers.map((l) => l.code).join(', ')}, "confidence": "sure" or "unsure", "title": string, "estimateMin": number or null}. ledgerCode is never null.`,
+      `Reply with JSON only, no prose: {"ledgerCode": one of ${ledgers.map((l) => l.code).join(', ')}, LEISURE, "confidence": "sure" or "unsure", "title": string, "estimateMin": number or null}. ledgerCode is never null.`,
       'title: the entry as a short line in the user\'s own words, without the ledger name, tags such as #dance, or the time estimate.',
       'estimateMin: the minutes if the line states a duration (~20, 20 min, 1h), otherwise null.',
     ].join(' ')
@@ -158,10 +159,13 @@ export class AiClerk {
       this.record({ at: Date.now(), provider: k.provider, model, feature: 'file', inputTokens: r.inputTokens, outputTokens: r.outputTokens, costMicroUsd: costMicroUsd(k.provider, model, r.inputTokens, r.outputTokens) })
       const parsed = parseFiling(r.text)
       if (!parsed) return null
-      const named = parsed.ledgerCode ? ledgers.find((l) => l.code.toLowerCase() === parsed.ledgerCode!.toLowerCase()) ?? null : null
-      const ledger = named ?? bestGuess(text, ledgers)
       const title = parsed.title.trim() || text.trim()
       const quoted = `'${title.length > 40 ? title.slice(0, 39) + '…' : title}'`
+      if (parsed.ledgerCode?.toUpperCase() === 'LEISURE') {
+        return { title, ledgerId: null, estimateMin: parsed.estimateMin, log: `couch ${quoted}: entertainment (clerk, ${model})`, model, confidence: parsed.confidence, leisure: true }
+      }
+      const named = parsed.ledgerCode ? ledgers.find((l) => l.code.toLowerCase() === parsed.ledgerCode!.toLowerCase()) ?? null : null
+      const ledger = named ?? bestGuess(text, ledgers)
       const est = parsed.estimateMin ? ` est ${parsed.estimateMin}m` : ''
       const confidence = named ? parsed.confidence : 'unsure'
       return {
@@ -187,8 +191,8 @@ export class AiClerk {
    * only the ledger and a missing estimate come back. Entries the model leaves out
    * or answers nonsense for stay where they are.
    */
-  async fileMany(entries: { id: string; title: string }[], ledgers: Ledger[], rules: string[] = []): Promise<Map<string, { ledgerId: string | null; estimateMin: number | null; log: string; model: string; confidence: 'sure' | 'unsure' }>> {
-    const out = new Map<string, { ledgerId: string | null; estimateMin: number | null; log: string; model: string; confidence: 'sure' | 'unsure' }>()
+  async fileMany(entries: { id: string; title: string }[], ledgers: Ledger[], rules: string[] = []): Promise<Map<string, { ledgerId: string | null; estimateMin: number | null; log: string; model: string; confidence: 'sure' | 'unsure'; leisure?: boolean }>> {
+    const out = new Map<string, { ledgerId: string | null; estimateMin: number | null; log: string; model: string; confidence: 'sure' | 'unsure'; leisure?: boolean }>()
     const k = this.pick()
     if (!k || entries.length === 0) return out
     const model = k.preferredModel ?? k.defaultModel
@@ -196,8 +200,9 @@ export class AiClerk {
       'You are the clerk of Mayorly, a personal ledger system. Here are entries waiting in the tray, each with a number.',
       'For each, decide which ledger it belongs to by each ledger\'s criterion. Never invent a ledger.',
       'Always pick the best-fitting ledger, even when the fit is poor; say so with the confidence field instead of leaving it out.',
+      'Entertainment is not a ledger: games, shows, streams, films, scrolling, anything with no productive value gets ledgerCode LEISURE. Exercise, study and work are not entertainment.',
       'The house rules are the user\'s own corrections and come before the criteria.',
-      `Reply with JSON only, no prose and no wrapper object: an array of {"n": number, "ledgerCode": one of ${ledgers.map((l) => l.code).join(', ')}, "confidence": "sure" or "unsure", "estimateMin": number or null}, one per entry. ledgerCode is never null.`,
+      `Reply with JSON only, no prose and no wrapper object: an array of {"n": number, "ledgerCode": one of ${ledgers.map((l) => l.code).join(', ')}, LEISURE, "confidence": "sure" or "unsure", "estimateMin": number or null}, one per entry. ledgerCode is never null.`,
       'estimateMin: the minutes if the entry states a duration, otherwise null. ledgerCode: null when no ledger fits.',
     ].join(' ')
     const prompt = `${ledgerList(ledgers)}${houseRules(rules)}\nEntries:\n${entries.map((e, i) => `- ${i + 1}: ${e.title}`).join('\n')}`
@@ -218,6 +223,10 @@ export class AiClerk {
         const entry = entries[n - 1]
         if (!entry) continue
         const code = typeof row.ledgerCode === 'string' ? row.ledgerCode : null
+        if (code?.toUpperCase() === 'LEISURE') {
+          out.set(entry.id, { ledgerId: null, estimateMin: null, log: `couch '${entry.title.length > 40 ? entry.title.slice(0, 39) + '…' : entry.title}': entertainment (clerk, ${model}, from the tray)`, model, confidence: 'sure', leisure: true })
+          continue
+        }
         const named = code ? ledgers.find((l) => l.code.toLowerCase() === code.toLowerCase()) ?? null : null
         const ledger = named ?? bestGuess(entry.title, ledgers)
         if (!ledger) continue

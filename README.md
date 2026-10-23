@@ -15,6 +15,7 @@ It is the architecture north star for the whole project: the entries, ledgers, d
 - **Swap in real time.** Hold or tap **Alt+T** for the Plus menu: the loadout floats in 3D with four attachment arms around it. Ledger up, entry left, mode right, orders down. Press **1-9** to jump ledgers, or click. The block timer keeps running through a swap; only the work changes.
 - **Tracks time.** Every second of desk time is a segment against an entry and a ledger. The Record tab shows today by ledger, the last seven days, and the clerk's log.
 - **Tokens, by the spec.** 12 per tomato, 18 each once a sitting reaches three. Earned only at the desk. Nothing decays, no streaks, an explicit hold.
+- **Leisure is bought, not earned.** Games, shows and streams live on the couch list in the deck, outside the ledgers. Buy minutes with tokens, one a minute; the couch counts them down in purple and earns nothing. Get up early and the unused minutes come back. The clerk sends entertainment it recognises here on its own.
 
 ![The Plus menu: swap ledger, entry, mode or orders around the 3D loadout](docs/screenshots/plus.jpg)
 

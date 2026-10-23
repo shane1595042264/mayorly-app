@@ -14,6 +14,8 @@ export interface Filing {
   model?: string
   /** The AI clerk's own confidence; the prefix clerk is always sure of a prefix. */
   confidence?: 'sure' | 'unsure'
+  /** The line is entertainment: it goes to the couch list, not a ledger. */
+  leisure?: boolean
 }
 
 export interface Clerk {

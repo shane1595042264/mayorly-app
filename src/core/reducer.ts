@@ -3,7 +3,7 @@ import type {
   Block, Ctx, Entry, GlyphName, HudEvent, Id, Ledger, MayorlyState, Mode, Settings, Superset,
 } from './model'
 import { advance, blitzBlock, firstBlock, firstOpenInLedger, initialPlan, nextInFlow, openFlow, type DeployOpts } from './planner'
-import { CLERK_LOG_CAP, LEDGER_CAP, tokensForTomato } from './rules'
+import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_MIN, tokensForTomato } from './rules'
 import { migrate } from './seed'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
@@ -32,7 +32,12 @@ export type Action =
   | { type: 'ledger/delete'; id: Id }
   | { type: 'superset/save'; superset: Superset }
   | { type: 'superset/delete'; id: Id }
-  | { type: 'desk/deploy'; mode: Mode; supersetId?: Id | null; entryId?: Id | null; ledgerId?: Id | null }
+  | { type: 'desk/deploy'; mode: Mode; supersetId?: Id | null; entryId?: Id | null; ledgerId?: Id | null; leisureId?: Id | null; minutes?: number }
+  | { type: 'leisure/add'; title: string }
+  | { type: 'leisure/update'; id: Id; patch: { title?: string } }
+  | { type: 'leisure/delete'; id: Id }
+  /** The clerk says a tray entry is entertainment: it becomes a couch item and leaves the flow. */
+  | { type: 'entry/toLeisure'; id: Id; log?: string }
   | { type: 'desk/pause'; at?: number }
   | { type: 'desk/resume' }
   | { type: 'desk/skip' }
@@ -75,6 +80,14 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const byClerk = !!(action.filing && validFiling(s, action.filing))
       const filing = byClerk ? action.filing! : clerk.file(text, s.ledgers)
       if (!filing.title) break
+      if (byClerk && filing.leisure) {
+        // Entertainment never enters the flow: it goes straight to the couch list.
+        if (!s.leisure.some((x) => x.archivedAt === null && x.title.toLowerCase() === filing.title.toLowerCase())) {
+          s.leisure.push({ id: ctx.newId(), title: filing.title, createdAt: now, archivedAt: null })
+        }
+        log(s, now, filing.log)
+        break
+      }
       const e = addEntry(s, ctx, filing.title, filing.ledgerId, filing.estimateMin)
       if (byClerk) e.clerkFiled = { ledgerId: filing.ledgerId, model: filing.model ?? 'clerk', confidence: filing.confidence ?? 'sure' }
       log(s, now, filing.log)
@@ -254,8 +267,39 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       s.supersets = s.supersets.filter((x) => x.id !== action.id)
       break
     case 'desk/deploy':
-      deploy(s, ctx, ev, { mode: action.mode, supersetId: action.supersetId, entryId: action.entryId, ledgerId: action.ledgerId })
+      deploy(s, ctx, ev, { mode: action.mode, supersetId: action.supersetId, entryId: action.entryId, ledgerId: action.ledgerId, leisureId: action.leisureId, minutes: action.minutes })
       break
+    case 'leisure/add': {
+      const title = action.title.trim().slice(0, 120)
+      if (!title) break
+      s.leisure.push({ id: ctx.newId(), title, createdAt: now, archivedAt: null })
+      break
+    }
+    case 'leisure/update': {
+      const it = s.leisure.find((x) => x.id === action.id)
+      if (!it) break
+      if (action.patch.title?.trim()) it.title = action.patch.title.trim().slice(0, 120)
+      if (s.desk.block?.leisureId === it.id) s.desk.block.label = it.title
+      break
+    }
+    case 'leisure/delete': {
+      const it = s.leisure.find((x) => x.id === action.id)
+      if (!it) break
+      if (s.desk.plan?.mode === 'couch' && s.desk.plan.leisureId === it.id) endSitting(s, now, ev, 'stood')
+      it.archivedAt = now
+      break
+    }
+    case 'entry/toLeisure': {
+      const e = s.entries.find((x) => x.id === action.id)
+      if (!e || e.doneAt !== null) break
+      if (!s.leisure.some((x) => x.archivedAt === null && x.title.toLowerCase() === e.title.toLowerCase())) {
+        s.leisure.push({ id: ctx.newId(), title: e.title, createdAt: now, archivedAt: null })
+      }
+      if (s.desk.block?.entryId === e.id) swapTo(s, ctx, ev, null, s.desk.block.ledgerId)
+      s.entries = s.entries.filter((x) => x.id !== e.id)
+      log(s, now, action.log?.trim() || `couch '${e.title.length > 40 ? e.title.slice(0, 39) + '…' : e.title}': entertainment, not a ledger`)
+      break
+    }
     case 'desk/pause': {
       const at = Math.min(action.at ?? now, now)
       if (s.desk.status !== 'running' || s.desk.runStartedAt === null) break
@@ -322,9 +366,34 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
   const now = ctx.now
   const plan = initialPlan(s, opts, ctx.random)
   if (!plan) {
-    ev.push({ type: 'notice', at: now, text: opts.mode === 'blitz' ? 'Flow is empty' : 'Superset has no slots' })
+    ev.push({ type: 'notice', at: now, text: opts.mode === 'blitz' ? 'Flow is empty' : opts.mode === 'couch' ? 'Pick something and a number of minutes' : 'Superset has no slots' })
     return
   }
+  if (plan.mode === 'couch') {
+    // The couch is paid up front, by the minute, out of tokens earned at the desk. Nothing is earned there.
+    const price = (plan.paidTokens ?? 0) * LEISURE_TOKENS_PER_MIN
+    const have = s.tokens.reduce((n, t) => n + t.amount, 0)
+    if (have < price) {
+      ev.push({ type: 'notice', at: now, text: `Not enough tokens: ${price} needed, ${have} banked` })
+      return
+    }
+    // The couch is its own sitting; a desk left running is stood down first.
+    if (s.desk.status !== 'idle' || s.desk.sittingId) endSitting(s, now, ev, 'stood')
+    const sittingId = ctx.newId()
+    s.sittings.push({ id: sittingId, startedAt: now, endedAt: null, tomatoMs: s.settings.focusMin * 60_000, focusMs: 0, tomatoes: 0, tokens: 0 })
+    s.desk.sittingId = sittingId
+    s.tokens.push({ id: `${sittingId}:leisure`, at: now, amount: -price, reason: 'leisure', sittingId, leisureId: plan.leisureId ?? undefined })
+    s.desk.plan = plan
+    const block = firstBlock(s, plan, now)
+    if (!block) {
+      endSitting(s, now, ev, 'complete')
+      return
+    }
+    startBlock(s, ctx, ev, block, now, true)
+    return
+  }
+  // A couch sitting ends when work starts: the unused minutes come back.
+  if (s.desk.plan?.mode === 'couch') endSitting(s, now, ev, 'stood')
   // Redeploying mid-sitting keeps the sitting, so a new plan never costs banked tomatoes.
   if (s.desk.status === 'running') closeSegment(s, now)
   if (!s.desk.sittingId) {
@@ -350,7 +419,7 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
 }
 
 function startBlock(s: MayorlyState, ctx: Ctx, ev: HudEvent[], block: Block, at: number, force: boolean) {
-  const auto = force || (block.kind === 'focus' ? s.settings.autoStartFocus : s.settings.autoStartRest)
+  const auto = force || block.kind === 'leisure' || (block.kind === 'focus' ? s.settings.autoStartFocus : s.settings.autoStartRest)
   s.desk.block = block
   s.desk.bankMs = 0
   if (auto) {
@@ -433,6 +502,13 @@ function endSitting(s: MayorlyState, at: number, ev: HudEvent[], reason: 'stood'
   const d = s.desk
   if (d.status === 'running') closeSegment(s, at)
   mint(s, at, ev)
+  // Leaving the couch early gives the unused whole minutes back.
+  if (d.plan?.mode === 'couch' && d.sittingId && d.block) {
+    const used = s.segments.filter((x) => x.sittingId === d.sittingId && x.kind === 'leisure').reduce((n, x) => n + ((x.end ?? at) - x.start), 0)
+    const unused = Math.floor(Math.max(0, (d.block.durationMs ?? 0) - used) / 60_000)
+    const refund = Math.min(d.plan.paidTokens ?? 0, unused) * LEISURE_TOKENS_PER_MIN
+    if (refund > 0) s.tokens.push({ id: `${d.sittingId}:refund`, at, amount: refund, reason: 'refund', sittingId: d.sittingId, leisureId: d.plan.leisureId ?? undefined })
+  }
   const sitting = s.sittings.find((x) => x.id === d.sittingId)
   if (sitting) {
     sitting.endedAt = at
@@ -510,6 +586,7 @@ function openSegment(s: MayorlyState, ctx: Ctx, at: number) {
     kind: block.kind,
     ledgerId: block.ledgerId,
     entryId: block.entryId,
+    ...(block.kind === 'leisure' ? { leisureId: block.leisureId ?? null } : {}),
     start: at,
     end: null,
   })

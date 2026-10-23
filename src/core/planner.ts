@@ -115,6 +115,15 @@ export interface DeployOpts {
   entryId?: Id | null
   /** pomodoro: work this ledger, with or without an entry. */
   ledgerId?: Id | null
+  /** couch: the entertainment and how many minutes of it are being bought. */
+  leisureId?: Id | null
+  minutes?: number
+}
+
+/** The one block of a couch plan: the time bought, counting down. */
+export function leisureBlock(s: MayorlyState, leisureId: Id, minutes: number): Block {
+  const item = s.leisure.find((x) => x.id === leisureId)
+  return { kind: 'leisure', ledgerId: null, entryId: null, leisureId, durationMs: minutes * MIN, slotIndex: null, round: 1, label: item?.title ?? 'Leisure' }
 }
 
 export function initialPlan(s: MayorlyState, opts: DeployOpts, random: () => number): Plan | null {
@@ -127,6 +136,14 @@ export function initialPlan(s: MayorlyState, opts: DeployOpts, random: () => num
     step: 0,
     sequence: [],
     focusCount: 0,
+  }
+  if (opts.mode === 'couch') {
+    const item = s.leisure.find((x) => x.id === opts.leisureId && x.archivedAt === null)
+    const minutes = Math.round(Number(opts.minutes))
+    if (!item || !Number.isFinite(minutes) || minutes < 1 || minutes > 24 * 60) return null
+    plan.leisureId = item.id
+    plan.paidTokens = minutes
+    return plan
   }
   if (opts.mode === 'superset') {
     const ss = s.supersets.find((x) => x.id === opts.supersetId)
@@ -151,6 +168,7 @@ export function initialPlan(s: MayorlyState, opts: DeployOpts, random: () => num
 
 export function firstBlock(s: MayorlyState, plan: Plan, now: number): Block | null {
   const minutes = s.settings.focusMin
+  if (plan.mode === 'couch') return plan.leisureId ? leisureBlock(s, plan.leisureId, plan.paidTokens ?? 0) : null
   if (plan.mode === 'superset') {
     const ss = supersetOf(s, plan)
     return ss ? focusForSlot(s, ss, plan.sequence[0], 1) : null
@@ -172,6 +190,9 @@ export function advance(
   random: () => number,
 ): Block | null {
   const st = s.settings
+
+  // The couch is one block: when the time bought is up, the sitting is over.
+  if (plan.mode === 'couch') return null
 
   if (plan.mode === 'blitz') {
     const next = nextInFlow(s, finished.entryId, finished.entryId ?? undefined)

@@ -6,6 +6,8 @@ export const TOKENS_PER_TOMATO = 12
 export const BONUS_AT = 3
 export const BONUS_RATE = 0.5
 export const CLERK_LOG_CAP = 200
+/** Leisure costs this many tokens per minute: 30 minutes of a game is 30 tokens, about two and a half tomatoes. */
+export const LEISURE_TOKENS_PER_MIN = 1
 /** A heartbeat gap longer than this means the machine slept; the desk pauses at the last beat. */
 export const SLEEP_GAP_MS = 2 * 60_000
 
