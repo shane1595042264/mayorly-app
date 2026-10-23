@@ -1,20 +1,27 @@
 import { useState } from 'react'
-import { LockSimple, Plus } from '@phosphor-icons/react'
+import { ArrowLeft, Check, LockSimple, PencilSimple, Play, Plus, Trash } from '@phosphor-icons/react'
 import {
-  dayStats, LEDGER_CAP, ledgerEntries, span, startOfDay, type GlyphName, type Ledger, type MayorlyState,
+  dayStats, entrySpentMs, LEDGER_CAP, ledgerEntries, span, startOfDay, type Entry, type GlyphName, type Ledger, type MayorlyState,
 } from '@core/index'
 import { Glyph, GLYPHS } from '../lib/glyphs'
 import { dispatch, useNow } from '../store'
 
 // The ledger shelf: nine bays. Every ledger here is hand-written by you, so the
-// clerk may file into it but never rename, merge or remove it.
+// clerk may file into it but never rename, merge or remove it. A bay opens the
+// ledger; the pencil on the bay edits it.
 
 export function ShelfTab({ s }: { s: MayorlyState }) {
   const now = useNow(10_000)
   const today = dayStats(s, startOfDay(now), now)
   const [editing, setEditing] = useState<string | null>(null)
+  const [open, setOpen] = useState<string | null>(null)
   const slots = Array.from({ length: LEDGER_CAP }, (_, i) => s.ledgers[i] ?? null)
   const firstEmpty = slots.findIndex((l) => l === null)
+
+  const opened = open ? s.ledgers.find((l) => l.id === open) : null
+  if (opened) {
+    return <LedgerView s={s} ledger={opened} now={now} back={() => setOpen(null)} edit={() => { setOpen(null); setEditing(opened.id) }} />
+  }
 
   return (
     <div className="shelf">
@@ -35,25 +42,143 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
               <div key={`e${i}`} className="bay bay-void" aria-hidden />
             )
           }
-          const open = ledgerEntries(s, l.id).length
+          const openCount = ledgerEntries(s, l.id).length
           const ms = today.byLedger.find((b) => b.ledgerId === l.id)?.focusMs ?? 0
           return (
-            <button key={l.id} className="bay" onClick={() => setEditing(l.id)} aria-label={`Edit ${l.name}`}>
+            <div key={l.id} className="bay bay-open" role="button" tabIndex={0} onClick={() => setOpen(l.id)} onKeyDown={(e) => e.key === 'Enter' && setOpen(l.id)} aria-label={`Open ${l.name}`}>
               <span className="bay-n mono dim">{i + 1}</span>
+              <button
+                type="button"
+                className="icon-btn bay-edit"
+                title={`Edit ${l.name}`}
+                aria-label={`Edit ${l.name}`}
+                onClick={(e) => { e.stopPropagation(); setEditing(l.id) }}
+              >
+                <PencilSimple size={14} />
+              </button>
               <span className="bay-glyph"><Glyph name={l.glyph} size={26} /></span>
               <span className="bay-code mono">{l.code}</span>
               <span className="bay-name">{l.name}</span>
               <span className="bay-crit">{l.criterion || 'No criterion written yet.'}</span>
               <span className="bay-stats mono num">
-                <span>{open} open</span>
+                <span>{openCount} open</span>
                 <span>{span(ms)} today</span>
                 {l.handWritten && <LockSimple size={12} aria-label="Hand-written, locked from the clerk" />}
               </span>
-            </button>
+            </div>
           )
         })}
       </div>
     </div>
+  )
+}
+
+/** Inside one ledger: its open entries, and what was cleared today. */
+function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: Ledger; now: number; back: () => void; edit: () => void }) {
+  const entries = ledgerEntries(s, ledger.id)
+  const today = startOfDay(now)
+  const cleared = s.entries.filter((e) => e.ledgerId === ledger.id && e.doneAt !== null && e.doneAt >= today).sort((a, b) => b.doneAt! - a.doneAt!)
+  const ms = dayStats(s, today, now).byLedger.find((b) => b.ledgerId === ledger.id)?.focusMs ?? 0
+  const live = s.desk.block?.entryId
+
+  return (
+    <div className="ledger-view">
+      <div className="ledger-head">
+        <button className="btn ghost" onClick={back}><ArrowLeft size={14} /> Shelf</button>
+        <span className="bay-glyph"><Glyph name={ledger.glyph} size={22} /></span>
+        <span className="bay-code mono">{ledger.code}</span>
+        <h2 className="ledger-name">{ledger.name}</h2>
+        <span className="ledger-stats mono num dim">{entries.length} open, {span(ms)} today</span>
+        <span className="ledger-actions">
+          <button className="btn" onClick={() => dispatch({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: ledger.id })} title={`Pomodoro on ${ledger.name}, no entry`}>
+            <Play size={14} /> Focus here
+          </button>
+          <button className="btn ghost" onClick={edit}><PencilSimple size={14} /> Edit ledger</button>
+        </span>
+      </div>
+      <p className="shelf-note dim">{ledger.criterion || 'No criterion written yet.'}</p>
+
+      {entries.length === 0 ? (
+        <div className="empty">
+          <p className="empty-title">Nothing open in {ledger.name}.</p>
+          <p>Capture with {s.settings.hotkeys.capture}; the clerk files here by the criterion above, or prefix the line with {ledger.code.toLowerCase()}:.</p>
+        </div>
+      ) : (
+        <ol className="flow-list">
+          {entries.map((e, i) => <LedgerRow key={e.id} s={s} e={e} index={i} now={now} live={live === e.id} />)}
+        </ol>
+      )}
+
+      {cleared.length > 0 && (
+        <section className="flow-cleared">
+          <h3 className="side-title caps">Cleared today</h3>
+          <ol className="flow-list">
+            {cleared.map((e) => (
+              <li key={e.id} className="row done">
+                <span className="row-title ellipsis">{e.title}</span>
+                <span className="row-time mono num">{span(entrySpentMs(s, e.id, now))}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function LedgerRow({ s, e, index, now, live }: { s: MayorlyState; e: Entry; index: number; now: number; live: boolean }) {
+  const [editing, setEditing] = useState(false)
+  const [title, setTitle] = useState(e.title)
+  const spent = entrySpentMs(s, e.id, now)
+  return (
+    <li className={`row ${live ? 'live' : ''}`}>
+      <span className="row-n mono num dim">{String(index + 1).padStart(2, '0')}</span>
+      <select
+        className="code-select mono"
+        value={e.ledgerId ?? ''}
+        onChange={(ev) => dispatch({ type: 'entry/update', id: e.id, patch: { ledgerId: ev.target.value || null } })}
+        aria-label="Ledger"
+      >
+        <option value="">TRAY</option>
+        {s.ledgers.map((l) => <option key={l.id} value={l.id}>{l.code}</option>)}
+      </select>
+      {editing ? (
+        <input
+          className="row-edit"
+          autoFocus
+          value={title}
+          onChange={(ev) => setTitle(ev.target.value)}
+          onBlur={() => {
+            setEditing(false)
+            if (title.trim() && title !== e.title) dispatch({ type: 'entry/update', id: e.id, patch: { title } })
+          }}
+          onKeyDown={(ev) => {
+            if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur()
+            if (ev.key === 'Escape') { setTitle(e.title); setEditing(false) }
+          }}
+        />
+      ) : (
+        <span className="row-title ellipsis" onDoubleClick={() => setEditing(true)} title="Double-click to rename">{e.title}</span>
+      )}
+      <span className="row-time mono num">
+        {spent >= 60_000 ? span(spent) : ''}
+        <input
+          className="est"
+          type="number"
+          min={0}
+          step={5}
+          value={e.estimateMin ?? ''}
+          placeholder="est"
+          aria-label="Estimate in minutes"
+          onChange={(ev) => dispatch({ type: 'entry/update', id: e.id, patch: { estimateMin: ev.target.value ? Number(ev.target.value) : null } })}
+        />
+      </span>
+      <span className="row-actions">
+        <button className="icon-btn" aria-label={`Focus on ${e.title}`} title="Pomodoro on this entry" onClick={() => dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })}><Play size={14} /></button>
+        <button className="icon-btn" aria-label={`Clear ${e.title}`} title="Clear" onClick={() => dispatch({ type: 'entry/complete', id: e.id })}><Check size={14} /></button>
+        <button className="icon-btn" aria-label={`Delete ${e.title}`} title="Delete" onClick={() => dispatch({ type: 'entry/delete', id: e.id })}><Trash size={14} /></button>
+      </span>
+    </li>
   )
 }
 

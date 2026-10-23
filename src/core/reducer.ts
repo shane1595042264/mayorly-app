@@ -1,4 +1,4 @@
-import { deriveCode, prefixClerk, type Clerk } from './clerk'
+import { deriveCode, prefixClerk, type Clerk, type Filing } from './clerk'
 import type {
   Block, Ctx, Entry, GlyphName, HudEvent, Id, Ledger, MayorlyState, Mode, Settings, Superset,
 } from './model'
@@ -10,8 +10,14 @@ import { migrate } from './seed'
 export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound'] as const
 
 export type Action =
-  | { type: 'entry/capture'; text: string }
+  /** `filing` is the AI clerk's answer, when there is one; the reducer checks it and otherwise files by prefix. */
+  | { type: 'entry/capture'; text: string; filing?: Filing }
   | { type: 'entry/add'; title: string; ledgerId: Id | null; estimateMin: number | null }
+  /** The clerk filed an existing entry (a tray sweep): ledger, an estimate if it had none, and its log line. */
+  | { type: 'entry/file'; id: Id; ledgerId: Id | null; estimateMin: number | null; log: string; model?: string }
+  | { type: 'rule/add'; text: string }
+  | { type: 'rule/update'; id: Id; text: string }
+  | { type: 'rule/delete'; id: Id }
   | { type: 'entry/update'; id: Id; patch: Partial<Pick<Entry, 'title' | 'ledgerId' | 'estimateMin'>> }
   | { type: 'entry/complete'; id: Id }
   | { type: 'entry/reopen'; id: Id }
@@ -62,9 +68,11 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     case 'entry/capture': {
       const text = action.text.trim()
       if (!text) break
-      const filing = clerk.file(text, s.ledgers)
+      const byClerk = !!(action.filing && validFiling(s, action.filing))
+      const filing = byClerk ? action.filing! : clerk.file(text, s.ledgers)
       if (!filing.title) break
-      addEntry(s, ctx, filing.title, filing.ledgerId, filing.estimateMin)
+      const e = addEntry(s, ctx, filing.title, filing.ledgerId, filing.estimateMin)
+      if (byClerk) e.clerkFiled = { ledgerId: filing.ledgerId, model: filing.model ?? 'clerk' }
       log(s, now, filing.log)
       break
     }
@@ -74,12 +82,48 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       addEntry(s, ctx, title, validLedger(s, action.ledgerId), clampEstimate(action.estimateMin))
       break
     }
+    case 'entry/file': {
+      const e = s.entries.find((x) => x.id === action.id)
+      if (!e || e.doneAt !== null) break
+      if (action.ledgerId !== null && !s.ledgers.some((l) => l.id === action.ledgerId)) break
+      if (action.ledgerId === e.ledgerId) break
+      e.ledgerId = action.ledgerId
+      e.clerkFiled = { ledgerId: action.ledgerId, model: action.model ?? 'clerk' }
+      if (e.estimateMin === null && action.estimateMin !== null) e.estimateMin = clampEstimate(action.estimateMin)
+      if (typeof action.log === 'string' && action.log.trim()) log(s, now, action.log)
+      break
+    }
+    case 'rule/add': {
+      const text = action.text.trim()
+      if (!text) break
+      s.houseRules.push({ id: ctx.newId(), text: text.slice(0, 300), createdAt: now })
+      break
+    }
+    case 'rule/update': {
+      const r = s.houseRules.find((x) => x.id === action.id)
+      if (!r) break
+      const text = action.text.trim()
+      if (text) r.text = text.slice(0, 300)
+      break
+    }
+    case 'rule/delete':
+      s.houseRules = s.houseRules.filter((x) => x.id !== action.id)
+      break
     case 'entry/update': {
       const e = s.entries.find((x) => x.id === action.id)
       if (!e) break
       const p = action.patch
       if (p.title !== undefined && p.title.trim()) e.title = p.title.trim()
-      if (p.ledgerId !== undefined) e.ledgerId = validLedger(s, p.ledgerId)
+      if (p.ledgerId !== undefined) {
+        const to = validLedger(s, p.ledgerId)
+        // Moving an entry the clerk filed is a correction: it becomes a house rule.
+        if (e.clerkFiled && to !== e.clerkFiled.ledgerId) {
+          learnRule(s, ctx, e.title, e.clerkFiled.ledgerId, to)
+          log(s, now, `house rule learned: '${e.title.length > 40 ? e.title.slice(0, 39) + '…' : e.title}' -> ${ledgerCode(s, to)}, not ${ledgerCode(s, e.clerkFiled.ledgerId)}`)
+        }
+        delete e.clerkFiled
+        e.ledgerId = to
+      }
       if (p.estimateMin !== undefined) e.estimateMin = clampEstimate(p.estimateMin)
       const b = s.desk.block
       if (b?.entryId === e.id) {
@@ -457,8 +501,8 @@ function closeSegment(s: MayorlyState, at: number) {
 
 // ---------------------------------------------------------------- helpers
 
-function addEntry(s: MayorlyState, ctx: Ctx, title: string, ledgerId: Id | null, estimateMin: number | null) {
-  s.entries.push({
+function addEntry(s: MayorlyState, ctx: Ctx, title: string, ledgerId: Id | null, estimateMin: number | null): Entry {
+  const e: Entry = {
     id: ctx.newId(),
     title,
     ledgerId,
@@ -466,7 +510,20 @@ function addEntry(s: MayorlyState, ctx: Ctx, title: string, ledgerId: Id | null,
     order: maxOrder(s) + 1,
     createdAt: ctx.now,
     doneAt: null,
-  })
+  }
+  s.entries.push(e)
+  return e
+}
+
+const ledgerCode = (s: MayorlyState, id: Id | null) => s.ledgers.find((l) => l.id === id)?.code ?? 'the tray'
+const ledgerName = (s: MayorlyState, id: Id | null) => s.ledgers.find((l) => l.id === id)?.name ?? 'the tray'
+
+/** One correction, one rule, in plain words the clerk can read back. The same correction twice does not make two. */
+function learnRule(s: MayorlyState, ctx: Ctx, title: string, from: Id | null, to: Id | null) {
+  const dup = s.houseRules.some((r) => r.learnedFrom && r.learnedFrom.title.toLowerCase() === title.toLowerCase() && r.learnedFrom.toLedgerId === to)
+  if (dup) return
+  const text = `Entries like "${title}" go to ${ledgerName(s, to)}, not ${ledgerName(s, from)}.`
+  s.houseRules.push({ id: ctx.newId(), text, createdAt: ctx.now, learnedFrom: { title, fromLedgerId: from, toLedgerId: to } })
 }
 
 function maxOrder(s: MayorlyState): number {
@@ -516,6 +573,14 @@ export function sanitiseSuperset(s: MayorlyState, ss: Superset): Superset {
     order: ss.order === 'shuffle' ? 'shuffle' : 'fixed',
     onClear: ss.onClear === 'next-slot' ? 'next-slot' : 'next-in-ledger',
   }
+}
+
+/** A filing from outside the core is trusted only if it names a real ledger and a real title. */
+function validFiling(s: MayorlyState, f: Filing): boolean {
+  if (!f || typeof f.title !== 'string' || !f.title.trim() || typeof f.log !== 'string') return false
+  if (f.ledgerId !== null && !s.ledgers.some((l) => l.id === f.ledgerId)) return false
+  if (f.estimateMin !== null && (!Number.isFinite(f.estimateMin) || f.estimateMin <= 0 || f.estimateMin > 24 * 60)) return false
+  return true
 }
 
 export function sanitiseSettings(x: Settings): Settings {

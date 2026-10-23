@@ -10,6 +10,7 @@ import { demoState } from './demo'
 // plain browser for development and screenshots. Persists to localStorage.
 
 const KEY = 'mayorly.web.v1'
+const NO_AI = { keys: [], preferredProvider: null, providers: { gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Anthropic Claude', xai: 'xAI Grok' }, usage: { days: 30, calls: 0, costMicroUsd: 0 } }
 
 export function createWebBridge(): Bridge {
   const newId = () => crypto.randomUUID()
@@ -102,6 +103,17 @@ export function createWebBridge(): Bridge {
     signOut: async () => {},
     onAccount: () => () => {},
     onSync: () => () => {},
+    ai: {
+      get: async () => NO_AI,
+      addKey: async () => { throw new Error('AI keys live in the desktop app') },
+      removeKey: async () => NO_AI,
+      recheckKey: async () => NO_AI,
+      setPreferredModel: async () => NO_AI,
+      setPreferredProvider: async () => NO_AI,
+      sweepTray: async () => {},
+    },
+    onAi: () => () => {},
+    onClerk: () => () => {},
     onHotkeyFailures: () => () => {},
   }
 }

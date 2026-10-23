@@ -32,6 +32,7 @@ export function emptyState(): MayorlyState {
     segments: [],
     tokens: [],
     clerkLog: [],
+    houseRules: [],
     desk: { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0 },
     settings: { ...DEFAULT_SETTINGS, hotkeys: { ...DEFAULT_HOTKEYS } },
   }

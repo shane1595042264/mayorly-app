@@ -1,7 +1,8 @@
 import { hostname } from 'node:os'
 import { app, globalShortcut, ipcMain, nativeTheme } from 'electron'
 import type { Action, Settings } from '@core/index'
-import { IPC, type Command, type UiMode } from '../shared/bridge'
+import { IPC, type AiProvider, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
+import { AiClerk, KeyCheckError } from './ai/service'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
 import { Engine } from './engine'
@@ -39,14 +40,80 @@ function boot() {
     if (!overlay.win.isVisible()) overlay.toggleVisible()
     send(IPC.command, cmd)
   }
+  // Losing focus (Cmd-Tab, a click into another app's window) closes whatever is open.
+  // The first moments after opening are ignored: making the window key can bounce once.
+  let opened = 0
+  ipcMain.on(IPC.setMode, (_e, mode: UiMode) => { if (mode !== 'field') opened = Date.now() })
+  overlay.win.on('blur', () => {
+    if (overlay.mode !== 'field' && Date.now() - opened > 400) send(IPC.command, 'close')
+  })
   const togglePause = () => {
     const st = engine.state.desk.status
     if (st === 'running') engine.dispatch({ type: 'desk/pause' })
     else if (st === 'paused' || st === 'ready') engine.dispatch({ type: 'desk/resume' })
   }
 
+  // The AI clerk: a captured line goes to the user's own model first, when there is
+  // one, and arrives at the reducer with its filing. Any failure files by prefix.
+  const clerk = new AiClerk(dataDir, (pub) => send(IPC.ai, pub))
+  const say = (n: ClerkNotice) => send(IPC.clerk, n)
+  const short = (t: string) => (t.length > 36 ? `${t.slice(0, 35)}…` : t)
+  // Everything still in the tray goes to the clerk in one call; what fits a ledger moves.
+  let sweeping = false
+  const sweepTray = async () => {
+    if (sweeping) return
+    if (!clerk.enabled()) {
+      say({ phase: 'done', text: 'No working AI key: add one in Settings for the clerk to sort the tray' })
+      return
+    }
+    const tray = engine.state.entries.filter((e) => e.ledgerId === null && e.doneAt === null)
+    if (tray.length === 0) {
+      say({ phase: 'done', text: 'The tray is empty' })
+      return
+    }
+    sweeping = true
+    try {
+      say({ phase: 'working', text: `Clerk is sorting the tray, ${tray.length} ${tray.length === 1 ? 'entry' : 'entries'}` })
+      const filed = await clerk.fileMany(tray.map((e) => ({ id: e.id, title: e.title })), engine.state.ledgers, engine.state.houseRules.map((r) => r.text))
+      for (const [id, f] of filed) engine.dispatch({ type: 'entry/file', id, ledgerId: f.ledgerId, estimateMin: f.estimateMin, log: f.log, model: f.model })
+      say({ phase: 'done', text: filed.size === 0 ? 'Nothing in the tray fits a ledger yet' : `Clerk filed ${filed.size} of ${tray.length} from the tray` })
+    } finally {
+      sweeping = false
+    }
+  }
   ipcMain.handle(IPC.getState, () => engine.state)
-  ipcMain.handle(IPC.dispatch, (_e, action: Action) => engine.dispatch(action))
+  ipcMain.handle(IPC.dispatch, async (_e, action: Action) => {
+    if (action.type === 'entry/capture' && clerk.enabled()) {
+      say({ phase: 'working', text: `Clerk is filing '${short(action.text.trim())}'` })
+      const filing = await clerk.fileEntry(action.text, engine.state.ledgers, engine.state.houseRules.map((r) => r.text))
+      const r = engine.dispatch(filing ? { ...action, filing } : action)
+      const ledger = filing?.ledgerId ? engine.state.ledgers.find((l) => l.id === filing.ledgerId) : null
+      const title = short(filing?.title ?? action.text.trim())
+      say({ phase: 'done', text: ledger ? `'${title}' went to ${ledger.name}` : `'${title}' stays in the tray` })
+      void sweepTray()
+      return r
+    }
+    return engine.dispatch(action)
+  })
+  const aiCall = async (fn: () => Promise<unknown> | unknown) => {
+    try {
+      return await fn()
+    } catch (err) {
+      if (err instanceof KeyCheckError) throw new Error(`${err.code}: ${err.message}`)
+      throw err
+    }
+  }
+  ipcMain.handle(IPC.aiGet, () => clerk.public())
+  ipcMain.handle(IPC.aiSweep, () => sweepTray())
+  ipcMain.handle(IPC.aiAddKey, (_e, key: string) => aiCall(async () => {
+    const pub = await clerk.addKey(String(key))
+    void sweepTray()
+    return pub
+  }))
+  ipcMain.handle(IPC.aiRemoveKey, (_e, id: string) => clerk.removeKey(String(id)))
+  ipcMain.handle(IPC.aiRecheckKey, (_e, id: string) => clerk.recheckKey(String(id)))
+  ipcMain.handle(IPC.aiPreferredModel, (_e, id: string, model: string | null) => clerk.setPreferredModel(String(id), model))
+  ipcMain.handle(IPC.aiPreferredProvider, (_e, provider: AiProvider | null) => clerk.setPreferredProvider(provider))
   ipcMain.on(IPC.setMode, (_e, mode: UiMode) => overlay.setMode(mode))
   ipcMain.on(IPC.setHit, (_e, hit: boolean) => overlay.setHit(hit))
 
@@ -117,6 +184,8 @@ function boot() {
   createTray(engine, overlay, { command, togglePause, dataDir })
   overlay.load()
   engine.start()
+  // The tray is sorted once at every launch, after the window is up.
+  setTimeout(() => void sweepTray(), 4000)
 
   app.on('second-instance', () => command('deck'))
   // macOS: opening the app again from Finder or Launchpad arrives here, not as a second instance.

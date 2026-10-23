@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Reorder, useDragControls } from 'motion/react'
-import { ArrowCounterClockwise, Check, DotsSixVertical, Lightning, Play, Trash } from '@phosphor-icons/react'
+import { ArrowCounterClockwise, Check, DotsSixVertical, Lightning, Play, Sparkle, Trash } from '@phosphor-icons/react'
 import {
   entrySpentMs, openFlow, prefixClerk, span, startOfDay, type Entry, type MayorlyState,
 } from '@core/index'
-import { dispatch, useNow } from '../store'
+import { bridge } from '../bridge'
+import { dispatch, useAi, useNow } from '../store'
 
 export function FlowTab({ s }: { s: MayorlyState }) {
   const now = useNow(5000)
@@ -24,6 +25,18 @@ export function FlowTab({ s }: { s: MayorlyState }) {
     .sort((a, b) => b.doneAt! - a.doneAt!)
   const byId = new Map(flow.map((e) => [e.id, e]))
   const live = s.desk.block?.entryId
+  const ai = useAi()
+  const clerkOn = ai.keys.some((k) => k.status === 'ok')
+  const trayCount = flow.filter((e) => e.ledgerId === null).length
+  const [sorting, setSorting] = useState(false)
+  const autoClassify = async () => {
+    setSorting(true)
+    try {
+      await bridge.ai.sweepTray()
+    } finally {
+      setSorting(false)
+    }
+  }
 
   return (
     <div className="flow">
@@ -40,6 +53,15 @@ export function FlowTab({ s }: { s: MayorlyState }) {
           <label htmlFor="flow-add" className="field-label caps">New entry</label>
           <div className="flow-add-row">
             <input id="flow-add" value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="career: tailor resume for the posting ~45" spellCheck={false} autoComplete="off" />
+            <button
+              type="button"
+              className="btn"
+              disabled={!clerkOn || trayCount === 0 || sorting}
+              title={!clerkOn ? 'Add an AI key in Settings for the clerk to sort the tray' : trayCount === 0 ? 'The tray is empty' : 'Send the tray to the clerk now'}
+              onClick={() => void autoClassify()}
+            >
+              <Sparkle size={16} /> {sorting ? 'Sorting' : 'Auto-classify'}
+            </button>
             <button type="button" className="btn" disabled={flow.length === 0} onClick={() => dispatch({ type: 'desk/deploy', mode: 'blitz' })}>
               <Lightning size={16} /> Blitz the flow
             </button>

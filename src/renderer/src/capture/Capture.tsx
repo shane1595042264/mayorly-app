@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import { CaretRight } from '@phosphor-icons/react'
 import { matchLedger, parseSuperset, prefixClerk, type Action, type MayorlyState } from '@core/index'
-import { dispatch } from '../store'
+import { aiOn, dispatch } from '../store'
 
 // The command line. Plain text is an entry for the clerk to file. A leading slash
 // is an order:  /ss legal 25, dance 20 x3   /pomo dance   /blitz   /hold   /stand
@@ -66,9 +66,11 @@ function plan(raw: string, s: MayorlyState): Plan {
   const f = prefixClerk.file(text, s.ledgers)
   const ledger = s.ledgers.find((l) => l.id === f.ledgerId)
   const est = f.estimateMin ? `   est ${f.estimateMin}m` : ''
+  // With a key, the clerk reads the line itself; the prefix is the floor, not the answer.
+  const clerk = aiOn() && !ledger
   return {
-    tone: ledger ? 'file' : 'tray',
-    text: ledger ? `${ledger.code}  ${ledger.name}   ${f.title}${est}` : `Tray   ${f.title}${est}`,
+    tone: ledger ? 'file' : clerk ? 'file' : 'tray',
+    text: ledger ? `${ledger.code}  ${ledger.name}   ${f.title}${est}` : clerk ? `Clerk files   ${f.title}${est}` : `Tray   ${f.title}${est}`,
     run: () => dispatch({ type: 'entry/capture', text }),
   }
 }

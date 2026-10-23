@@ -84,7 +84,7 @@ export class Overlay {
       ...(mac ? { type: 'panel' as const } : {}),
       title: 'Mayorly',
       webPreferences: {
-        preload: join(__dirname, '../preload/index.cjs'),
+        preload: join(import.meta.dirname, '../preload/index.cjs'),
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
@@ -115,7 +115,7 @@ export class Overlay {
 
   load() {
     if (process.env.ELECTRON_RENDERER_URL) void this.win.loadURL(process.env.ELECTRON_RENDERER_URL)
-    else void this.win.loadFile(join(__dirname, '../renderer/index.html'))
+    else void this.win.loadFile(join(import.meta.dirname, '../renderer/index.html'))
   }
 
   /**
@@ -150,7 +150,7 @@ export class Overlay {
         type: 'panel',
         title: 'Mayorly caption',
         webPreferences: {
-          preload: join(__dirname, '../preload/index.cjs'),
+          preload: join(import.meta.dirname, '../preload/index.cjs'),
           sandbox: true,
           contextIsolation: true,
           nodeIntegration: false,
@@ -164,7 +164,7 @@ export class Overlay {
       this.caption.setIgnoreMouseEvents(true)
       const page = process.env.ELECTRON_RENDERER_URL ? `${process.env.ELECTRON_RENDERER_URL}?caption` : null
       if (page) void this.caption.loadURL(page)
-      else void this.caption.loadFile(join(__dirname, '../renderer/index.html'), { query: { caption: '1' } })
+      else void this.caption.loadFile(join(import.meta.dirname, '../renderer/index.html'), { query: { caption: '1' } })
       this.caption.webContents.on('did-finish-load', () => this.pushCaption())
       this.caption.on('closed', () => { this.caption = null })
     }

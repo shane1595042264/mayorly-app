@@ -33,6 +33,21 @@ export interface Entry {
   order: number
   createdAt: Epoch
   doneAt: Epoch | null
+  /** Set when the AI clerk chose the ledger; cleared once you move it, which teaches the clerk a house rule. */
+  clerkFiled?: { ledgerId: Id | null; model: string }
+}
+
+/**
+ * A standing instruction to the clerk, in the user's words. Most are learned: when
+ * you move an entry the clerk filed, the correction becomes a rule the clerk reads
+ * before every filing. Any rule can be edited or removed in Settings.
+ */
+export interface HouseRule {
+  id: Id
+  text: string
+  createdAt: Epoch
+  /** The correction this rule was learned from, if it was. */
+  learnedFrom?: { title: string; fromLedgerId: Id | null; toLedgerId: Id | null }
 }
 
 export type SlotTarget = { kind: 'ledger'; ledgerId: Id } | { kind: 'entry'; entryId: Id }
@@ -166,6 +181,7 @@ export interface MayorlyState {
   segments: Segment[]
   tokens: TokenTx[]
   clerkLog: ClerkLine[]
+  houseRules: HouseRule[]
   desk: Desk
   settings: Settings
 }

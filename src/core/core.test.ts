@@ -284,3 +284,76 @@ describe('sync', () => {
     expect(w.s).toBe(before)
   })
 })
+
+describe('the AI clerk', () => {
+  it('a filing that names a real ledger is used as given', () => {
+    const w = world()
+    const dnc = w.ledger('DNC')
+    w.do({ type: 'entry/capture', text: 'practice the footwork combo for 20', filing: { title: 'practice the footwork combo', ledgerId: dnc.id, estimateMin: 20, log: "filed 'practice the footwork combo' -> DNC (clerk, test)" } })
+    const e = w.entry('practice the footwork combo')
+    expect(e.ledgerId).toBe(dnc.id)
+    expect(e.estimateMin).toBe(20)
+    expect(w.s.clerkLog.at(-1)?.text).toContain('clerk, test')
+  })
+
+  it('a filing that names a ledger that does not exist falls back to the prefix clerk', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: reply to the landlord', filing: { title: 'reply to the landlord', ledgerId: 'nope', estimateMin: null, log: 'bad' } })
+    expect(w.entry('reply to the landlord').ledgerId).toBe(w.ledger('LGL').id)
+  })
+})
+
+describe('the tray sweep', () => {
+  it('entry/file moves a tray entry into a ledger and logs it', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'apply for 10 jobs' })
+    const e = w.entry('apply for 10 jobs')
+    expect(e.ledgerId).toBeNull()
+    w.do({ type: 'entry/file', id: e.id, ledgerId: w.ledger('CAR').id, estimateMin: 90, log: "filed 'apply for 10 jobs' -> CAR (clerk, test)" })
+    expect(w.entry('apply for 10 jobs').ledgerId).toBe(w.ledger('CAR').id)
+    expect(w.entry('apply for 10 jobs').estimateMin).toBe(90)
+    expect(w.s.clerkLog.at(-1)?.text).toContain('-> CAR')
+  })
+
+  it('entry/file ignores unknown ledgers and cleared entries', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'book a haircut' })
+    const e = w.entry('book a haircut')
+    w.do({ type: 'entry/file', id: e.id, ledgerId: 'nope', estimateMin: null, log: 'x' })
+    expect(w.entry('book a haircut').ledgerId).toBeNull()
+  })
+})
+
+describe('house rules', () => {
+  it('moving an entry the clerk filed teaches a rule naming both ledgers', () => {
+    const w = world()
+    const car = w.ledger('CAR'), dnc = w.ledger('DNC')
+    w.do({ type: 'entry/capture', text: 'battle prep drills', filing: { title: 'battle prep drills', ledgerId: car.id, estimateMin: null, log: 'x', model: 'test' } })
+    const e = w.entry('battle prep drills')
+    expect(e.clerkFiled?.ledgerId).toBe(car.id)
+    w.do({ type: 'entry/update', id: e.id, patch: { ledgerId: dnc.id } })
+    expect(w.s.houseRules).toHaveLength(1)
+    expect(w.s.houseRules[0].text).toBe('Entries like "battle prep drills" go to Dance, not Career.')
+    expect(w.entry('battle prep drills').clerkFiled).toBeUndefined()
+    // Moving it again is the user's own business, not a correction of the clerk.
+    w.do({ type: 'entry/update', id: e.id, patch: { ledgerId: car.id } })
+    expect(w.s.houseRules).toHaveLength(1)
+  })
+
+  it('an entry filed by prefix teaches nothing when moved', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'career: tailor resume' })
+    w.do({ type: 'entry/update', id: w.entry('tailor resume').id, patch: { ledgerId: w.ledger('LGL').id } })
+    expect(w.s.houseRules).toHaveLength(0)
+  })
+
+  it('rules can be written, edited and removed by hand', () => {
+    const w = world()
+    w.do({ type: 'rule/add', text: 'Anything about visas is Legal.' })
+    const id = w.s.houseRules[0].id
+    w.do({ type: 'rule/update', id, text: 'Anything about visas or forms is Legal.' })
+    expect(w.s.houseRules[0].text).toContain('forms')
+    w.do({ type: 'rule/delete', id })
+    expect(w.s.houseRules).toHaveLength(0)
+  })
+})

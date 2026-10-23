@@ -7,8 +7,8 @@ import type { Action, HudEvent, MayorlyState } from '../core/index'
 /** field: the passive HUD, clicks fall through to your apps. The rest take focus. */
 export type UiMode = 'field' | 'plus' | 'deck' | 'capture'
 
-/** Hotkey-driven requests from the shell to the HUD. */
-export type Command = 'plus' | 'capture' | 'deck'
+/** Hotkey-driven requests from the shell to the HUD. `close` returns to field mode (the window lost focus). */
+export type Command = 'plus' | 'capture' | 'deck' | 'close'
 
 /** How the shell lays the HUD out. Compact: the window is only the pet and what it unfolds (macOS). */
 export interface Layout {
@@ -48,6 +48,36 @@ export interface SyncStatus {
   message?: string
 }
 
+/** Bring-your-own-key AI for the clerk. The key itself never crosses the bridge, only its last four. */
+export type AiProvider = 'gemini' | 'openai' | 'anthropic' | 'xai'
+
+export interface AiKeyPublic {
+  id: string
+  provider: AiProvider
+  keyHint: string
+  /** Text models this key can use, cheapest first. */
+  models: string[]
+  /** The cheapest model that answered the key check. */
+  defaultModel: string
+  preferredModel: string | null
+  status: 'ok' | 'failing'
+  lastError: string | null
+  lastCheckedAt: number
+  createdAt: number
+}
+
+export interface ClerkNotice {
+  phase: 'working' | 'done'
+  text: string
+}
+
+export interface AiPublic {
+  keys: AiKeyPublic[]
+  preferredProvider: AiProvider | null
+  providers: Record<AiProvider, string>
+  usage: { days: number; calls: number; costMicroUsd: number }
+}
+
 export interface Bridge {
   kind: 'electron' | 'web'
   getState(): Promise<MayorlyState>
@@ -73,6 +103,20 @@ export interface Bridge {
   signOut(): Promise<void>
   onAccount(fn: (account: Account | null) => void): () => void
   onSync(fn: (status: SyncStatus) => void): () => void
+  /** The AI clerk's keys and settings. Every call returns the whole public state. */
+  ai: {
+    get(): Promise<AiPublic>
+    addKey(key: string): Promise<AiPublic>
+    removeKey(id: string): Promise<AiPublic>
+    recheckKey(id: string): Promise<AiPublic>
+    setPreferredModel(id: string, model: string | null): Promise<AiPublic>
+    setPreferredProvider(provider: AiProvider | null): Promise<AiPublic>
+    /** Send everything in the tray to the clerk now. */
+    sweepTray(): Promise<void>
+  }
+  onAi(fn: (ai: AiPublic) => void): () => void
+  /** What the clerk is doing right now, for the pet to say. */
+  onClerk(fn: (n: ClerkNotice) => void): () => void
   /** Hotkeys that could not be registered (taken by another app, or refused by the OS). */
   onHotkeyFailures(fn: (failures: HotkeyFailures) => void): () => void
 }
@@ -95,5 +139,14 @@ export const IPC = {
   signOut: 'mayorly:sign-out',
   account: 'mayorly:account',
   sync: 'mayorly:sync',
+  aiGet: 'mayorly:ai-get',
+  aiAddKey: 'mayorly:ai-add-key',
+  aiRemoveKey: 'mayorly:ai-remove-key',
+  aiRecheckKey: 'mayorly:ai-recheck-key',
+  aiPreferredModel: 'mayorly:ai-preferred-model',
+  aiPreferredProvider: 'mayorly:ai-preferred-provider',
+  aiSweep: 'mayorly:ai-sweep',
+  ai: 'mayorly:ai',
+  clerk: 'mayorly:clerk',
   hotkeyFailures: 'mayorly:hotkey-failures',
 } as const

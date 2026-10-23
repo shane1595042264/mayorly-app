@@ -4,6 +4,12 @@ Newest first. Each entry records what was decided, why, and what would reverse i
 
 ## 2026-10-22
 
+### The clerk is the user's own model, chosen by the key alone
+The spec calls the clerk a swappable classifier. It is the user's own API key, the shanejli.com way: the provider is read from the key's shape, its models are listed, the cheapest text model that answers one token becomes the default, and every call is recorded with its cost. The key is sealed with the OS keychain beside the state file and never synced. The reducer trusts a filing only if it names a real ledger and a real title; otherwise the prefix clerk files as before, so a dead key or a slow network costs nothing but the AI. **Rejected:** running the clerk through mayorly-api with the server's own keys, which would make every capture a billable server call and put the key where the user cannot see it.
+
+### Corrections are house rules, written in words
+When the user moves an entry the clerk filed, that is the only signal the clerk was wrong, so the reducer turns it into a rule: entries like this go to that ledger, not the one chosen. Rules are plain sentences, part of the state, shown and editable in Settings, and go into every prompt ahead of the criteria. **Rejected:** fine-tuning or embeddings; a dozen sentences do the job and the user can read and correct them.
+
 ### Accounts are Google sign-in and a sync server, the shanejli.com way
 The founder asked for sign-in like shanejli.com and for all data to reach a server. shanejli.com's backend verifies a Google ID token and issues its own JWT, so mayorly-api does the same (`server/`), as its own small Railway service with its own Postgres rather than a module in shaneBackend: Mayorly's data stays Mayorly's, and the website is untouched. The desktop app cannot use the website's web client (Google forbids its consent screen in embedded views and a web client cannot do the loopback exchange), so it uses a Google "Desktop app" client and the loopback flow through the system browser. **Cost:** a second service to run, and a Google Cloud client to create.
 

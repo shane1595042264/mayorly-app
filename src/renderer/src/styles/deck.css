@@ -331,3 +331,34 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .account { display: grid; gap: 10px; justify-items: start; }
 .account-who { display: grid; gap: 2px; }
 .account .btn { display: inline-flex; align-items: center; gap: 8px; }
+
+/* ------------------------------------------------------------ ai clerk */
+
+.ai-key { display: grid; gap: 8px; padding: 10px 12px; border: 1px solid var(--line); margin-bottom: 10px; }
+.ai-key.failing { border-color: rgb(255 155 140 / 0.4); }
+.ai-key-head { display: flex; align-items: center; gap: 10px; }
+.ai-key-actions { margin-left: auto; display: inline-flex; gap: 4px; }
+.ai-status { font-size: 11px; padding: 1px 6px; border: 1px solid var(--line-2); color: var(--ink-2); }
+.ai-status.ok { color: var(--accent); border-color: var(--accent-2); }
+.ai-status.failing { color: #ff9b8c; border-color: rgb(255 155 140 / 0.5); }
+.ai-add { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.ai-add input { flex: 1; min-width: 0; }
+
+/* ------------------------------------------------------------ inside a ledger */
+
+.bay-open { cursor: pointer; }
+.bay-edit { position: absolute; top: 8px; right: 34px; opacity: 0.5; }
+.bay-open:hover .bay-edit, .bay-open:focus-within .bay-edit { opacity: 1; }
+.ledger-view { display: grid; gap: 14px; }
+.ledger-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.ledger-name { margin: 0; font-size: 24px; font-weight: 500; }
+.ledger-stats { font-size: 12px; }
+.ledger-actions { margin-left: auto; display: inline-flex; gap: 6px; }
+.ledger-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.row.done { opacity: 0.6; }
+
+/* ------------------------------------------------------------ house rules */
+
+.rules-list { display: grid; gap: 6px; margin-bottom: 8px; }
+.rule-row { display: flex; align-items: center; gap: 8px; }
+.rule-row input { flex: 1; min-width: 0; }

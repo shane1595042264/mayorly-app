@@ -65,6 +65,12 @@ Mayorly lives in the tray, the menu bar on a Mac. Right-click it on Windows, or 
 
 Your data is one JSON file, written atomically: `%APPDATA%\Mayorly\mayorly.json` on Windows, `~/Library/Application Support/Mayorly/mayorly.json` on macOS. Nothing leaves the machine unless you sign in.
 
+## The clerk
+
+Deck, Settings, AI clerk: paste one API key from Anthropic, OpenAI, Google Gemini or xAI. The provider is read from the key's shape, its models are listed and the cheapest one is made to answer once; you can pick another. From then on the clerk files every captured line by your ledgers' criteria, trims the title and reads the estimate, and sweeps the tray on launch, after each capture, and when you press Auto-classify in the Flow. Keys stay on this machine. Without a key, the clerk files by prefix and tag only.
+
+Move an entry the clerk filed and the correction becomes a house rule in your words, which the clerk reads before every filing. Rules are edited in Settings and sync with your account.
+
 ## Account and sync
 
 Deck, Settings, Account: **Sign in with Google**. The browser opens for Google, and from then on your ledgers, entries, supersets and record live on the sync server too and follow you to every machine you sign in on. Hotkeys, HUD side and scale, open at login and sound stay per machine. Last writer wins: if two machines change things at once, the one that reached the server first keeps its version. A desk left running on one machine arrives paused on the other. Sign out any time; the local file stays.

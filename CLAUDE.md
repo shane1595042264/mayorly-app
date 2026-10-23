@@ -25,6 +25,7 @@ This is the application layer of Mayorly, a life OS: entries filed into ledgers,
 | `src/renderer/src/lib/keys.ts` | keys matched by position, hotkeys shown as Option on a Mac |
 | `src/main/auth.ts`, `session.ts`, `sync.ts` | Google sign-in through the system browser, the encrypted session, the sync loop |
 | `server/` | mayorly-api: Google sign-in, one state document per account, last writer wins |
+| `src/main/ai/` | the AI clerk: provider from the key's shape, cheapest model that answers, sealed keys, filing and the tray sweep |
 | `src/shared/bridge.ts` | the client contract |
 | `src/renderer/src/bridge/web.ts` | the same engine in a browser tab, for `npm run web` |
 
@@ -57,6 +58,9 @@ Parameters go in the environment, which works the same on both platforms; Electr
 - **On a Mac the field HUD polls the cursor for hover.** AppKit only sends mouse-moved events to the key window, and the pet never is one, so `overlay.ts` samples the pointer and feeds the page the same mousemove.
 - **Hotkeys are stored as `Alt+T` on a Mac too.** Alt is Electron's cross-platform spelling for Option. The HUD labels them Option, the Settings field accepts Option, Cmd and Control and stores Alt.
 - **Clicking the menu bar icon on a Mac opens the menu, not the Deck.** That is the macOS convention; Deck is in the menu.
+- **The AI clerk never writes state itself.** It returns a `Filing`; `entry/capture` and `entry/file` in the reducer check it (real ledger, real title) and file by prefix otherwise. Keys live in `ai.bin`, sealed with the OS keychain, never in state and never synced.
+- **A correction is a house rule.** Entries the clerk filed carry `clerkFiled`; moving one writes a `HouseRule` in the reducer, in words, naming the ledger chosen and the ledger wanted. Rules are state, sync with the account, and go into every clerk prompt ahead of the criteria.
+- **Interfaces close on a click outside and when the window loses focus.** The shell sends `close` on blur; the renderer closes on a pointer down outside the open panel.
 - **Sync is last writer wins and the server knows no rules.** `sync/replace` in the reducer is the only way a server document enters this machine; it keeps this machine's own settings (`DEVICE_SETTINGS`) and pauses a desk left running elsewhere. The server stores JSON and a revision, nothing else.
 - **Accounts need `MAIN_VITE_API_URL` and `MAIN_VITE_GOOGLE_CLIENT_ID` at build time** (see `.env.example`). Without them the Settings tab has no Account section and nothing talks to the network.
 - **A Mac build is ad-hoc signed, not notarized.** There is no Developer ID. Gatekeeper refuses the first launch and offers Open Anyway in Privacy & Security. `npm run dist:mac` only works on macOS.

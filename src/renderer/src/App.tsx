@@ -23,6 +23,21 @@ export function App() {
   const held = useRef<{ since: number } | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
   const [layout, setLayout] = useState<Layout>({ compact: false, side: 'right', dragging: false })
+  const [clerk, setClerk] = useState<string | null>(null)
+
+  // The clerk narrates on the pet: a working line stays until the result, a result stays a few seconds.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const off = bridge.onClerk((n) => {
+      if (timer) clearTimeout(timer)
+      setClerk(n.text)
+      if (n.phase === 'done') timer = setTimeout(() => setClerk(null), 5000)
+    })
+    return () => {
+      off()
+      if (timer) clearTimeout(timer)
+    }
+  }, [])
 
   const setMode = useCallback((m: UiMode) => {
     if (modeRef.current === m) return
@@ -55,6 +70,11 @@ export function App() {
     () =>
       bridge.onCommand((cmd: Command) => {
         const cur = modeRef.current
+        if (cmd === 'close') {
+          held.current = null
+          if (cur !== 'field') setMode('field')
+          return
+        }
         if (cmd === 'plus') {
           if (cur === 'plus') {
             if (!held.current) setMode('field')
@@ -128,8 +148,15 @@ export function App() {
   if (!s) return null
   const close = () => setMode('field')
 
+  // A click outside the open interface closes it, like clicking away from a menu.
+  const onStageDown = (e: React.PointerEvent) => {
+    if (modeRef.current === 'field') return
+    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .capture, .toast')
+    if (!inside) close()
+  }
+
   return (
-    <main className="stage">
+    <main className="stage" onPointerDownCapture={onStageDown}>
       <AnimatePresence>
         {mode !== 'field' && (
           <motion.div
@@ -144,7 +171,7 @@ export function App() {
       </AnimatePresence>
 
       <Objectives s={s} mode={mode} />
-      <Pet s={s} mode={mode} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} compact={layout.compact} notice={layout.compact ? warning : null} />
+      <Pet s={s} mode={mode} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} compact={layout.compact} notice={clerk ?? (layout.compact ? warning : null)} />
       <Feed />
       <Callout quiet={mode !== 'field'} />
 

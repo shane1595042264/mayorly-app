@@ -10,6 +10,8 @@ export interface Filing {
   estimateMin: number | null
   /** Machine-log voice. No feelings, no advice. */
   log: string
+  /** The model that filed it, when the AI clerk did; the prefix clerk leaves it out. */
+  model?: string
 }
 
 export interface Clerk {

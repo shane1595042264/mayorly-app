@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { Action, HudEvent, MayorlyState } from '@core/index'
-import type { Account, SyncStatus } from '../../shared/bridge'
+import type { Account, AiPublic, SyncStatus } from '../../shared/bridge'
 import { bridge } from './bridge'
 
 let state: MayorlyState | null = null
@@ -49,6 +49,15 @@ const subAccount = (f: () => void) => {
   return () => void accountSubs.delete(f)
 }
 export const useAccount = () => useSyncExternalStore(subAccount, () => account)
+
+// The AI clerk's public state: keys by hint, models, usage. Pushed after every change.
+let ai: AiPublic = { keys: [], preferredProvider: null, providers: { gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Anthropic Claude', xai: 'xAI Grok' }, usage: { days: 30, calls: 0, costMicroUsd: 0 } }
+const aiSubs = new Set<() => void>()
+void bridge.ai.get().then((a) => { ai = a; aiSubs.forEach((f) => f()) })
+bridge.onAi((a) => { ai = a; aiSubs.forEach((f) => f()) })
+export const useAi = () => useSyncExternalStore((f) => { aiSubs.add(f); return () => void aiSubs.delete(f) }, () => ai)
+/** True when a working key exists, so capture can say the clerk will file by AI. */
+export const aiOn = () => ai.keys.some((k) => k.status === 'ok')
 export const useSyncStatus = () => useSyncExternalStore(subAccount, () => sync)
 
 /** Wall clock, re-rendering at `ms` intervals aligned to the second. */

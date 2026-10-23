@@ -26,6 +26,17 @@ const bridge: Bridge = {
   signOut: () => ipcRenderer.invoke(IPC.signOut),
   onAccount: (fn) => sub(IPC.account, fn),
   onSync: (fn) => sub(IPC.sync, fn),
+  ai: {
+    get: () => ipcRenderer.invoke(IPC.aiGet),
+    addKey: (key) => ipcRenderer.invoke(IPC.aiAddKey, key),
+    removeKey: (id) => ipcRenderer.invoke(IPC.aiRemoveKey, id),
+    recheckKey: (id) => ipcRenderer.invoke(IPC.aiRecheckKey, id),
+    setPreferredModel: (id, model) => ipcRenderer.invoke(IPC.aiPreferredModel, id, model),
+    setPreferredProvider: (provider) => ipcRenderer.invoke(IPC.aiPreferredProvider, provider),
+    sweepTray: () => ipcRenderer.invoke(IPC.aiSweep),
+  },
+  onAi: (fn) => sub(IPC.ai, fn),
+  onClerk: (fn) => sub(IPC.clerk, fn),
   onHotkeyFailures: (fn) => sub(IPC.hotkeyFailures, fn),
 }
 
