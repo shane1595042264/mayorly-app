@@ -27,7 +27,7 @@ export function Feed() {
     useCallback(
       (events: HudEvent[]) => {
         for (const e of events) {
-          if (e.type === 'tomato') push({ score: `+${e.tokens}`, text: e.n === 3 ? `Tomato ${e.n}  long-grind bonus` : `Tomato ${e.n}` })
+          if (e.type === 'tomato') push({ score: `+${e.tokens}`, text: `Tomato ${e.n}` })
           else if (e.type === 'swap') push({ text: `Swap  ${code(e.ledgerId)}` })
           else if (e.type === 'cleared') push({ text: `Cleared  ${e.title}` })
           else if (e.type === 'notice') push({ text: e.text })
