@@ -52,6 +52,7 @@ export function Pet({ s, mode, open, side, dragging, compact, notice }: Props) {
     tone = v.block.kind === 'leisure' ? 'couch' : v.status === 'paused' ? 'hold' : v.status === 'ready' ? 'ready' : v.block.kind === 'focus' ? 'live' : 'rest'
     const what = v.block.kind === 'leisure' ? `On the couch  ${v.block.label}` : v.block.kind === 'focus' ? `${v.ledger?.code ?? 'FREE'}  ${v.entry?.title ?? `${v.block.label}, no entry`}` : v.block.label
     caption = v.status === 'paused' ? `Holding  ${what}` : v.status === 'ready' ? `Ready  ${what}` : what
+    if (s.desk.holster) caption += `   ${hotkeyLabel(s.settings.hotkeys.switch)}: ${s.desk.holster.block.label}`
   }
   const breathing = tone === 'live' && !reduce && !dragging
   const text = notice ?? caption

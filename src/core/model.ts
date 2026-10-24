@@ -146,6 +146,8 @@ export interface Desk {
   runStartedAt: Epoch | null
   /** Block time banked before the current run (pauses split runs). */
   bankMs: Ms
+  /** The previous session, parked by the quick switch, its clock stopped where it was. */
+  holster: HeldSession | null
 }
 
 export interface TokenTx {
@@ -167,6 +169,16 @@ export interface LeisureItem {
   title: string
   createdAt: Epoch
   archivedAt: Epoch | null
+  /** Context switch rules: cues, in your words, for when to leave this and go do something else. No logic, just the reminder. */
+  cues: string[]
+}
+
+/** A session parked by the quick switch: its plan, its block with the time already spent on it, and its sitting. */
+export interface HeldSession {
+  sittingId: Id
+  plan: Plan
+  block: Block
+  bankMs: Ms
 }
 
 export interface ClerkLine {
@@ -174,7 +186,7 @@ export interface ClerkLine {
   text: string
 }
 
-export type HotkeyAction = 'plus' | 'capture' | 'deck' | 'pause' | 'hide'
+export type HotkeyAction = 'plus' | 'capture' | 'deck' | 'pause' | 'hide' | 'switch'
 
 export interface Settings {
   /** Focus length, and the tomato interval. */
@@ -213,6 +225,8 @@ export type HudEvent =
   | { type: 'cleared'; at: Epoch; entryId: Id; title: string }
   | { type: 'sitting-end'; at: Epoch; reason: 'stood' | 'complete' | 'flow-clear'; focusMs: Ms; tomatoes: number; tokens: number }
   | { type: 'notice'; at: Epoch; text: string }
+  /** The quick switch: now on `label`, the other session parked. */
+  | { type: 'switch'; at: Epoch; label: string; parked: string | null }
   /** You corrected or confirmed a filing; the clerk may ask why, and the answer goes into the rule. */
   | { type: 'clerk-wonders'; at: Epoch; entryId: Id; ruleId: Id | null; title: string; ledgerId: Id | null; fromLedgerId: Id | null; reason: 'moved' | 'confirmed' }
 

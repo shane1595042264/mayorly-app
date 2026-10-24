@@ -1,6 +1,6 @@
 import { deriveCode, prefixClerk, type Clerk, type Filing } from './clerk'
 import type {
-  Block, Ctx, Entry, GlyphName, HudEvent, Id, Ledger, MayorlyState, Mode, Settings, Superset,
+  Block, Ctx, Entry, GlyphName, HeldSession, HudEvent, Id, Ledger, MayorlyState, Mode, Settings, Superset,
 } from './model'
 import { advance, blitzBlock, firstBlock, firstOpenInLedger, initialPlan, nextInFlow, openFlow, type DeployOpts } from './planner'
 import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_BLOCK, tokensForTomato } from './rules'
@@ -36,6 +36,10 @@ export type Action =
   | { type: 'leisure/add'; title: string }
   | { type: 'leisure/update'; id: Id; patch: { title?: string } }
   | { type: 'leisure/delete'; id: Id }
+  | { type: 'leisure/cue-add'; id: Id; text: string }
+  | { type: 'leisure/cue-delete'; id: Id; index: number }
+  /** The quick switch: park the current session with its clock where it is and pick up the parked one where it was. */
+  | { type: 'desk/switch' }
   /** The clerk says a tray entry is entertainment: it becomes a couch item and leaves the flow. */
   | { type: 'entry/toLeisure'; id: Id; log?: string }
   | { type: 'desk/pause'; at?: number }
@@ -83,7 +87,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       if (byClerk && filing.leisure) {
         // Entertainment never enters the flow: it goes straight to the couch list.
         if (!s.leisure.some((x) => x.archivedAt === null && x.title.toLowerCase() === filing.title.toLowerCase())) {
-          s.leisure.push({ id: ctx.newId(), title: filing.title, createdAt: now, archivedAt: null })
+          s.leisure.push({ id: ctx.newId(), title: filing.title, createdAt: now, archivedAt: null, cues: [] })
         }
         log(s, now, filing.log)
         break
@@ -272,7 +276,32 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     case 'leisure/add': {
       const title = action.title.trim().slice(0, 120)
       if (!title) break
-      s.leisure.push({ id: ctx.newId(), title, createdAt: now, archivedAt: null })
+      s.leisure.push({ id: ctx.newId(), title, createdAt: now, archivedAt: null, cues: [] })
+      break
+    }
+    case 'leisure/cue-add': {
+      const it = s.leisure.find((x) => x.id === action.id)
+      const text = action.text.trim().slice(0, 160)
+      if (!it || !text) break
+      it.cues = [...(it.cues ?? []), text]
+      break
+    }
+    case 'leisure/cue-delete': {
+      const it = s.leisure.find((x) => x.id === action.id)
+      if (!it) break
+      it.cues = (it.cues ?? []).filter((_, i) => i !== action.index)
+      break
+    }
+    case 'desk/switch': {
+      const d = s.desk
+      if (!d.holster) {
+        ev.push({ type: 'notice', at: now, text: 'Nothing parked to switch to' })
+        break
+      }
+      const held = d.holster
+      const parked = park(s, now)
+      restore(s, ctx, held, now, true)
+      ev.push({ type: 'switch', at: now, label: s.desk.block?.label ?? '', parked: parked?.block.label ?? null })
       break
     }
     case 'leisure/update': {
@@ -293,7 +322,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const e = s.entries.find((x) => x.id === action.id)
       if (!e || e.doneAt !== null) break
       if (!s.leisure.some((x) => x.archivedAt === null && x.title.toLowerCase() === e.title.toLowerCase())) {
-        s.leisure.push({ id: ctx.newId(), title: e.title, createdAt: now, archivedAt: null })
+        s.leisure.push({ id: ctx.newId(), title: e.title, createdAt: now, archivedAt: null, cues: [] })
       }
       if (s.desk.block?.entryId === e.id) swapTo(s, ctx, ev, null, s.desk.block.ledgerId)
       s.entries = s.entries.filter((x) => x.id !== e.id)
@@ -375,8 +404,8 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
       ev.push({ type: 'notice', at: now, text: 'No tokens: a tomato at the desk buys a block on the couch' })
       return
     }
-    // The couch is its own sitting; a desk left running is stood down first.
-    if (s.desk.status !== 'idle' || s.desk.sittingId) endSitting(s, now, ev, 'stood')
+    // The couch is its own sitting; whatever was running is parked for the quick switch.
+    park(s, now)
     const sittingId = ctx.newId()
     s.sittings.push({ id: sittingId, startedAt: now, endedAt: null, tomatoMs: s.settings.focusMin * 60_000, focusMs: 0, tomatoes: 0, tokens: 0 })
     s.desk.sittingId = sittingId
@@ -389,10 +418,8 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
     startBlock(s, ctx, ev, block, now, true)
     return
   }
-  // A couch sitting ends when work starts.
-  if (s.desk.plan?.mode === 'couch') endSitting(s, now, ev, 'stood')
-  // Redeploying mid-sitting keeps the sitting, so a new plan never costs banked tomatoes.
-  if (s.desk.status === 'running') closeSegment(s, now)
+  // Whatever was running is parked for the quick switch; the new plan is a sitting of its own.
+  park(s, now)
   if (!s.desk.sittingId) {
     const id = ctx.newId()
     s.sittings.push({
@@ -514,7 +541,56 @@ function endSitting(s: MayorlyState, at: number, ev: HudEvent[], reason: 'stood'
     sitting.endedAt = at
     ev.push({ type: 'sitting-end', at, reason, focusMs: sitting.focusMs, tomatoes: sitting.tomatoes, tokens: sitting.tokens })
   }
-  s.desk = { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0 }
+  const held = d.holster
+  s.desk = { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null }
+  // The parked session comes back, paused where it was.
+  if (held) restore(s, null, held, at, false)
+}
+
+/**
+ * Parks the current session: its segment closes, the time run so far banks on the block,
+ * and it waits in the holster with its own sitting. A session already parked there is let
+ * go first; its sitting ends. Returns what was parked.
+ */
+function park(s: MayorlyState, at: number): HeldSession | null {
+  const d = s.desk
+  if (d.status === 'idle' || !d.block || !d.plan || !d.sittingId) {
+    d.holster = d.holster ?? null
+    return null
+  }
+  if (d.holster) {
+    const old = s.sittings.find((x) => x.id === d.holster!.sittingId)
+    if (old && old.endedAt === null) old.endedAt = at
+  }
+  if (d.status === 'running') closeSegment(s, at)
+  const bankMs = d.bankMs + (d.status === 'running' && d.runStartedAt !== null ? Math.max(0, at - d.runStartedAt) : 0)
+  const held: HeldSession = { sittingId: d.sittingId, plan: d.plan, block: d.block, bankMs }
+  d.holster = held
+  d.status = 'idle'
+  d.sittingId = null
+  d.plan = null
+  d.block = null
+  d.runStartedAt = null
+  d.bankMs = 0
+  return held
+}
+
+/** Brings a parked session back as the current one, running (the switch) or paused (after a stand down). */
+function restore(s: MayorlyState, ctx: Ctx | null, held: HeldSession, at: number, run: boolean) {
+  const d = s.desk
+  if (d.holster === held) d.holster = null
+  d.sittingId = held.sittingId
+  d.plan = held.plan
+  d.block = held.block
+  d.bankMs = held.bankMs
+  if (run && ctx) {
+    d.status = 'running'
+    d.runStartedAt = at
+    openSegment(s, ctx, at)
+  } else {
+    d.status = 'paused'
+    d.runStartedAt = null
+  }
 }
 
 function tickDue(s: MayorlyState, now: number): boolean {

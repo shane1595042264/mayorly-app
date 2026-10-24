@@ -175,6 +175,7 @@ function boot() {
         deck: () => command('deck'),
         pause: togglePause,
         hide: () => overlay.toggleVisible(),
+        switch: () => engine.dispatch({ type: 'desk/switch' }),
       })
       if (failed.length) {
         const failures = { keys: failed, reason: refusedAsOptionOnly(failed) ? ('option-only' as const) : undefined }

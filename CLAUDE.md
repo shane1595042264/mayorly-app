@@ -52,6 +52,7 @@ Parameters go in the environment, which works the same on both platforms; Electr
 - **A held Alt+T fires the command repeatedly.** The renderer ignores repeats until the key is released; releasing after 400 ms closes the menu (hold to peek).
 - **A swap does not reset the block clock** except in blitz, where the timer belongs to the entry.
 - **Superset slots with nothing open still run**, as ledger time.
+- **Deploying anything parks the running session.** The desk holds one parked session in `desk.holster`, with its own sitting and the time already spent on its block. `desk/switch` (Alt+Q) swaps the two; a stand down brings the parked one back paused. Nothing is minted while parked.
 - **A desk found running at launch is paused at the last heartbeat.** Time the app could not see is not desk time.
 - **`npm run web` with no query loads from localStorage**; `?demo` and `?fresh` never write to it.
 - **On a Mac the window is the pet, not the screen.** Field mode is a 220 by 64 point panel around the tomato (a little taller while the caption shows), movable by dragging the tomato, and it takes clicks like any small window. Nothing is click-through on macOS; the `data-hit` path is Windows only. Plus, deck and capture grow the window to the work area and shrink it back. The position is saved in `hud.json` beside the state file.

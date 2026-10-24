@@ -216,13 +216,15 @@ describe('swap', () => {
     const byCode = Object.fromEntries(today.byLedger.map((b) => [w.s.ledgers.find((l) => l.id === b.ledgerId)?.code, b.focusMs]))
     expect(byCode).toEqual({ LGL: 7 * MIN, DNC: 3 * MIN })
   })
-  it('redeploying mid-sitting keeps banked focus toward the bonus', () => {
+  it('redeploying parks the running session for the quick switch; its tomato is kept', () => {
     const w = world()
     w.do({ type: 'desk/deploy', mode: 'pomodoro' })
     w.wait(40 * MIN)
     w.do({ type: 'desk/deploy', mode: 'superset', supersetId: w.s.supersets[0].id })
-    expect(w.s.sittings).toHaveLength(1)
+    expect(w.s.sittings).toHaveLength(2)
     expect(w.s.sittings[0].tomatoes).toBe(1)
+    expect(w.s.desk.holster?.plan.mode).toBe('pomodoro')
+    expect(w.s.desk.plan?.mode).toBe('superset')
   })
 })
 
@@ -455,5 +457,76 @@ describe('the couch', () => {
     w.do({ type: 'entry/toLeisure', id: e.id })
     expect(w.s.entries.some((x) => x.id === e.id)).toBe(false)
     expect(w.s.leisure.map((x) => x.title)).toContain('stream watch 2026')
+  })
+})
+
+describe('the quick switch', () => {
+  it('parks the running session with its clock where it is and brings the other back where it was', () => {
+    const w = world()
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: w.ledger('CAR').id })
+    w.wait(3 * 25 * MIN + 2 * 5 * MIN + 15 * MIN + 5000)
+    w.do({ type: 'desk/standDown' })
+    expect(balance(w.s)).toBe(3)
+    w.do({ type: 'entry/capture', text: 'career: read the book ~60' })
+    const book = w.entry('read the book')
+    w.do({ type: 'leisure/add', title: 'twitch stream' })
+    const stream = w.s.leisure[0]
+    // Reading first: 7 minutes in.
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: book.id })
+    w.wait(7 * MIN)
+    // On the couch: the reading session is parked at 7 minutes.
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: stream.id })
+    expect(w.s.desk.block?.kind).toBe('leisure')
+    expect(w.s.desk.holster?.block.entryId).toBe(book.id)
+    expect(w.s.desk.holster?.bankMs).toBe(7 * MIN)
+    expect(balance(w.s)).toBe(2)
+    w.wait(3 * MIN)
+    // Rookie dies: back to the book at 18 minutes left, the stream parked at 3 minutes in.
+    const r = w.do({ type: 'desk/switch' })
+    expect(r.events.some((e) => e.type === 'switch')).toBe(true)
+    expect(w.s.desk.block?.entryId).toBe(book.id)
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(18 * MIN)
+    expect(w.s.desk.holster?.block.kind).toBe('leisure')
+    expect(w.s.desk.holster?.bankMs).toBe(3 * MIN)
+    w.wait(2 * MIN)
+    // And back: the stream resumes at 22 minutes left, no second token taken.
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block?.kind).toBe('leisure')
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(22 * MIN)
+    expect(balance(w.s)).toBe(2)
+    expect(w.s.desk.holster?.bankMs).toBe(9 * MIN)
+    // Getting up returns the parked book, paused where it was.
+    w.do({ type: 'desk/standDown' })
+    expect(w.s.desk.status).toBe('paused')
+    expect(w.s.desk.block?.entryId).toBe(book.id)
+    expect(w.s.desk.bankMs).toBe(9 * MIN)
+    expect(w.s.desk.holster).toBeNull()
+  })
+
+  it('with nothing parked the switch only says so', () => {
+    const w = world()
+    const r = w.do({ type: 'desk/switch' })
+    expect(r.events.some((e) => e.type === 'notice')).toBe(true)
+  })
+
+  it('cues are plain words on a leisure item', () => {
+    const w = world()
+    w.do({ type: 'leisure/add', title: 'twitch stream' })
+    const id = w.s.leisure[0].id
+    w.do({ type: 'leisure/cue-add', id, text: 'rookie dies in game' })
+    w.do({ type: 'leisure/cue-add', id, text: 'ad break' })
+    expect(w.s.leisure[0].cues).toEqual(['rookie dies in game', 'ad break'])
+    w.do({ type: 'leisure/cue-delete', id, index: 0 })
+    expect(w.s.leisure[0].cues).toEqual(['ad break'])
+  })
+
+  it('the switch hotkey exists on an older save', () => {
+    const w = world()
+    const old = structuredClone(w.s) as unknown as { settings: { hotkeys: Record<string, string> }; leisure: unknown[] }
+    delete old.settings.hotkeys.switch
+    old.leisure = [{ id: 'l1', title: 'old item', createdAt: T0, archivedAt: null }]
+    w.do({ type: 'sync/replace', state: old })
+    expect(w.s.settings.hotkeys.switch).toBe('Alt+Q')
+    expect(w.s.leisure[0].cues).toEqual([])
   })
 })

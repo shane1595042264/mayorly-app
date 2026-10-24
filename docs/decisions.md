@@ -4,6 +4,9 @@ Newest first. Each entry records what was decided, why, and what would reverse i
 
 ## 2026-10-22
 
+### The quick switch: one parked session, clocks never reset
+The founder wanted the FPS weapon swap: Q to the previous session, Q back, timers untouched. The desk gets a holster for exactly one parked session, kept with its own sitting and the time already banked on its block. Deploying anything parks what was running; the switch swaps the two; standing down brings the parked one back paused; the parked one mints nothing. With the bonus gone there is no reason left to fold a redeploy into the old sitting, so every deploy is a sitting of its own. **Rejected:** a stack of parked sessions, which is a task list by another name. Leisure items carry context switch rules, cues in the user's words with no logic behind them, shown while on the couch.
+
 ### One token per tomato, no bonus; one token per leisure block
 The founder dropped the 12-per-tomato rate and the long-sitting bonus: the bonus rewarded one kind of day over another, and the point is to keep the economy stupidly simple. A tomato is a token. The couch pairs with it: it runs on the same focus and rest cadence as a pomodoro, and each leisure block costs one token as it starts, rests free, no refunds, so a tomato of work is a block of play. The product spec in mayorly-design changed in the same commit. **Reverses if:** the balance stops meaning anything because it is too easy to earn; then prices move, not the rate.
 

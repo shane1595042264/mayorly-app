@@ -31,6 +31,7 @@ export function Feed() {
           else if (e.type === 'swap') push({ text: `Swap  ${code(e.ledgerId)}` })
           else if (e.type === 'cleared') push({ text: `Cleared  ${e.title}` })
           else if (e.type === 'notice') push({ text: e.text })
+          else if (e.type === 'switch') push({ text: `Switch  ${e.label}${e.parked ? `  (${e.parked} parked)` : ''}` })
           else if (e.type === 'sitting-end' && e.focusMs > 0) push({ text: `Sitting  ${span(e.focusMs)}  ${e.tomatoes} tomatoes` })
         }
       },

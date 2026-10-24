@@ -18,6 +18,7 @@ const HOTKEYS: [HotkeyAction, string][] = [
   ['deck', 'Deck'],
   ['pause', 'Hold and resume'],
   ['hide', 'Hide the HUD'],
+  ['switch', 'Switch to the parked session'],
 ]
 
 export function SettingsTab({ s, kind }: { s: MayorlyState; kind: 'electron' | 'web' }) {

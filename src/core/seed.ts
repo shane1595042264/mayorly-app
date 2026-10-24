@@ -6,6 +6,7 @@ export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   deck: 'Alt+M',
   pause: 'Alt+P',
   hide: 'Alt+H',
+  switch: 'Alt+Q',
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -34,7 +35,7 @@ export function emptyState(): MayorlyState {
     clerkLog: [],
     houseRules: [],
     leisure: [],
-    desk: { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0 },
+    desk: { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null },
     settings: { ...DEFAULT_SETTINGS, hotkeys: { ...DEFAULT_HOTKEYS } },
   }
 }
@@ -80,6 +81,7 @@ export function migrate(raw: unknown): MayorlyState | null {
     ...base,
     ...x,
     desk: { ...base.desk, ...x.desk },
+    leisure: (x.leisure ?? []).map((it) => ({ ...it, cues: Array.isArray(it.cues) ? it.cues : [] })),
     settings: { ...base.settings, ...x.settings, hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys } },
   } as MayorlyState
 }

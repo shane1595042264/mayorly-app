@@ -53,6 +53,7 @@ export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): 
         click: act.togglePause,
       },
       { label: overlay.win.isVisible() ? 'Hide HUD' : 'Show HUD', accelerator: hk.hide, click: () => { overlay.toggleVisible(); rebuild(engine.state) } },
+      { label: s.desk.holster ? `Switch to ${s.desk.holster.block.label}` : 'Switch session', accelerator: hk.switch, enabled: !!s.desk.holster, click: () => engine.dispatch({ type: 'desk/switch' }) },
       { type: 'separator' },
       {
         label: 'Display',
@@ -80,7 +81,7 @@ export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): 
   let last = ''
   engine.on((s) => {
     // Only rebuild when something the menu shows has changed, not on every tick.
-    const key = JSON.stringify([s.desk.status, s.desk.block?.label, s.desk.block?.entryId, s.settings.hotkeys, s.settings.openAtLogin])
+    const key = JSON.stringify([s.desk.status, s.desk.block?.label, s.desk.block?.entryId, s.desk.holster?.block.label ?? null, s.settings.hotkeys, s.settings.openAtLogin])
     if (key !== last) {
       last = key
       rebuild(s)

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Couch, Play, Stop, Trash } from '@phosphor-icons/react'
-import { balance, blockView, clock, leisureList, leisureSpentMs, leisureTokensSpent, LEISURE_TOKENS_PER_BLOCK, span, type MayorlyState } from '@core/index'
+import { CaretDown, CaretRight, Couch, Play, Plus, Stop, Trash, X } from '@phosphor-icons/react'
+import { balance, blockView, clock, leisureList, leisureSpentMs, leisureTokensSpent, LEISURE_TOKENS_PER_BLOCK, span, type LeisureItem, type MayorlyState } from '@core/index'
+import { hotkeyLabel } from '../lib/keys'
 import { dispatch, useNow } from '../store'
 
 // Entertainment lives here, outside the ledgers: games, shows, streams. The couch runs
@@ -14,7 +15,9 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
   const v = blockView(s, now)
   const onCouch = v?.block.kind === 'leisure' ? v : null
   const [draft, setDraft] = useState('')
+  const [open, setOpen] = useState<string | null>(null)
   const price = LEISURE_TOKENS_PER_BLOCK
+  const onItem = onCouch ? items.find((x) => x.id === onCouch.block.leisureId) : null
 
   const add = () => {
     if (!draft.trim()) return
@@ -41,12 +44,20 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
         </div>
 
         {onCouch && (
-          <div className="leisure-live">
-            <Couch size={18} />
-            <span className="caps">On the couch</span>
-            <span className="ellipsis">{onCouch.block.label}</span>
-            <span className="mono num">{onCouch.remainingMs !== null ? clock(onCouch.remainingMs) : ''}</span>
-            <button className="btn ghost" onClick={() => dispatch({ type: 'desk/standDown' })}><Stop size={14} /> Get up</button>
+          <div className="leisure-live-wrap">
+            <div className="leisure-live">
+              <Couch size={18} />
+              <span className="caps">On the couch</span>
+              <span className="ellipsis">{onCouch.block.label}</span>
+              <span className="mono num">{onCouch.remainingMs !== null ? clock(onCouch.remainingMs) : ''}</span>
+              <button className="btn ghost" onClick={() => dispatch({ type: 'desk/standDown' })}><Stop size={14} /> Get up</button>
+            </div>
+            {onItem && onItem.cues.length > 0 && (
+              <p className="leisure-cues-live">
+                <span className="caps dim">Switch when</span> {onItem.cues.join('  ·  ')}
+                {s.desk.holster && <span className="dim">   {hotkeyLabel(s.settings.hotkeys.switch)} goes back to {s.desk.holster.block.label}</span>}
+              </p>
+            )}
           </div>
         )}
 
@@ -61,11 +72,14 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
               const spent = leisureSpentMs(s, it.id, now)
               const tokens = leisureTokensSpent(s, it.id)
               const live = onCouch?.block.leisureId === it.id
+              const expanded = open === it.id
               return (
-                <li key={it.id} className={`row ${live ? 'live leisure-row' : 'leisure-row'}`}>
+                <li key={it.id} className={`row ${live ? 'live leisure-row' : 'leisure-row'} ${expanded ? 'expanded' : ''}`}>
                   <span className="row-n mono num dim">{String(i + 1).padStart(2, '0')}</span>
-                  <Couch size={16} className="dim" aria-hidden />
-                  <span className="row-title ellipsis">{it.title}</span>
+                  <button className="icon-btn" aria-label={expanded ? 'Hide context switch rules' : 'Show context switch rules'} title="Context switch rules" onClick={() => setOpen(expanded ? null : it.id)}>
+                    {expanded ? <CaretDown size={14} /> : <CaretRight size={14} />}
+                  </button>
+                  <span className="row-title ellipsis">{it.title}{it.cues.length > 0 && <span className="dim mono num">  {it.cues.length} {it.cues.length === 1 ? 'cue' : 'cues'}</span>}</span>
                   <span className="row-time mono num">
                     {spent >= 60_000 ? span(spent) : ''}
                     {tokens > 0 ? `${tokens} tokens` : ''}
@@ -84,12 +98,45 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
                       <Trash size={14} />
                     </button>
                   </span>
+                  {expanded && <Cues item={it} />}
                 </li>
               )
             })}
           </ol>
         )}
       </section>
+    </div>
+  )
+}
+
+/**
+ * Context switch rules: cues in your words for when to leave this and do something
+ * else ("rookie dies in game"). No logic behind them; the app shows them while you
+ * are on the couch and the quick switch does the leaving.
+ */
+function Cues({ item }: { item: LeisureItem }) {
+  const [draft, setDraft] = useState('')
+  const add = () => {
+    if (!draft.trim()) return
+    dispatch({ type: 'leisure/cue-add', id: item.id, text: draft })
+    setDraft('')
+  }
+  return (
+    <div className="cues">
+      <span className="field-label caps">Context switch rules</span>
+      {item.cues.length === 0 && <span className="field-help">When should you switch away? A cue, not a rule: "rookie dies in game", "ad break", "queue pops".</span>}
+      <ul className="cues-list">
+        {item.cues.map((c, i) => (
+          <li key={i}>
+            <span>{c}</span>
+            <button className="icon-btn" aria-label={`Remove cue: ${c}`} title="Remove" onClick={() => dispatch({ type: 'leisure/cue-delete', id: item.id, index: i })}><X size={12} /></button>
+          </li>
+        ))}
+      </ul>
+      <div className="ai-add">
+        <input value={draft} placeholder="rookie dies in game" onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
+        <button className="btn" onClick={add} disabled={!draft.trim()}><Plus size={14} /> Add cue</button>
+      </div>
     </div>
   )
 }

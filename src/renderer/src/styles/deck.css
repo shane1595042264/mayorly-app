@@ -403,3 +403,14 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 }
 .leisure-live .ellipsis { flex: 1; color: var(--ink); }
 .row.leisure-row.live { border-color: var(--leisure-2); box-shadow: inset 2px 0 0 var(--leisure); }
+
+/* ------------------------------------------------------------ context switch rules */
+
+.row.expanded { flex-wrap: wrap; }
+.cues { flex-basis: 100%; display: grid; gap: 8px; padding: 10px 0 4px 36px; }
+.cues-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.cues-list li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.cues-list li::before { content: ''; width: 6px; height: 6px; background: var(--leisure); }
+.leisure-live-wrap { margin-top: 16px; }
+.leisure-live-wrap .leisure-live { margin-top: 0; }
+.leisure-cues-live { margin: 6px 0 0; padding: 0 14px; font-size: 13px; color: var(--ink-2); }
