@@ -16,11 +16,23 @@ import { current, useMayorly } from './store'
 
 /** How long the swap hotkey must be held before releasing it closes the menu (hold to peek). */
 const PEEK_MS = 400
+/** On a Mac the window is the pet. The pet fades out in that small window before the window grows. */
+const PET_FADE_MS = 140
+/** And a panel finishes its exit in the full window before the window shrinks back to the pet. */
+const PANEL_EXIT_MS = 200
 
 export function App() {
   const s = useMayorly()
+  // `mode` is the logical mode, set at once for hotkeys and focus. `shown` is what the stage
+  // renders; on a Mac it trails `mode` so each animation plays in a window of the right size.
   const [mode, setModeState] = useState<UiMode>('field')
+  const [shown, setShown] = useState<UiMode>('field')
+  const [petAway, setPetAway] = useState(false)
   const modeRef = useRef<UiMode>('field')
+  /** The mode the shell was last told; its window size follows it. */
+  const shellMode = useRef<UiMode>('field')
+  const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const layoutRef = useRef<Layout>({ compact: false, side: 'right', dragging: false })
   const held = useRef<{ since: number } | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
   const [layout, setLayout] = useState<Layout>({ compact: false, side: 'right', dragging: false })
@@ -40,13 +52,46 @@ export function App() {
     }
   }, [])
 
+  const tellShell = (m: UiMode) => {
+    shellMode.current = m
+    bridge.setMode(m)
+  }
+
   const setMode = useCallback((m: UiMode) => {
     if (modeRef.current === m) return
     if (m === 'field') sfx.close()
     else sfx.open()
     modeRef.current = m
     setModeState(m)
-    bridge.setMode(m)
+    if (pending.current) {
+      clearTimeout(pending.current)
+      pending.current = null
+    }
+    const windowIsBig = shellMode.current !== 'field'
+    if (!layoutRef.current.compact || (m !== 'field' && windowIsBig)) {
+      // Windows, or moving between panels: the window does not change size, nothing to wait for.
+      setPetAway(m !== 'field')
+      setShown(m)
+      tellShell(m)
+      return
+    }
+    if (m !== 'field') {
+      // Opening: the pet fades out where it is, in the small window; then the window grows and the panel comes in.
+      setPetAway(true)
+      pending.current = setTimeout(() => {
+        pending.current = null
+        tellShell(m)
+        setShown(m)
+      }, PET_FADE_MS)
+    } else {
+      // Closing: the panel plays its exit in the full window; then the window shrinks and the pet fades back.
+      setShown('field')
+      pending.current = setTimeout(() => {
+        pending.current = null
+        tellShell('field')
+        setPetAway(false)
+      }, PANEL_EXIT_MS)
+    }
   }, [])
 
   useEffect(() => {
@@ -61,6 +106,7 @@ export function App() {
     return bridge.onLayout(setLayout)
   }, [])
   useEffect(() => {
+    layoutRef.current = layout
     document.body.classList.toggle('compact', layout.compact)
     document.body.classList.toggle('side-left', layout.side === 'left')
     document.body.classList.toggle('side-right', layout.side === 'right')
@@ -159,10 +205,10 @@ export function App() {
   return (
     <main className="stage" onPointerDownCapture={onStageDown}>
       <AnimatePresence>
-        {mode !== 'field' && (
+        {shown !== 'field' && (
           <motion.div
             key="vignette"
-            className={`vignette ${mode === 'capture' ? 'light' : ''}`}
+            className={`vignette ${shown === 'capture' ? 'light' : ''}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -172,17 +218,17 @@ export function App() {
       </AnimatePresence>
 
       <Objectives s={s} mode={mode} />
-      <Pet s={s} mode={mode} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} compact={layout.compact} notice={clerk ?? (layout.compact ? warning : null)} />
+      <Pet s={s} away={petAway} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} compact={layout.compact} notice={clerk ?? (layout.compact ? warning : null)} />
       <Feed />
       <Callout quiet={mode !== 'field'} />
 
       <AnimatePresence>
-        {mode === 'plus' && <PlusMenu key="plus" s={s} close={close} open={setMode} />}
-        {mode === 'deck' && <Deck key="deck" s={s} close={close} kind={bridge.kind} />}
-        {mode === 'capture' && <Capture key="capture" s={s} close={close} />}
+        {shown === 'plus' && <PlusMenu key="plus" s={s} close={close} open={setMode} />}
+        {shown === 'deck' && <Deck key="deck" s={s} close={close} kind={bridge.kind} />}
+        {shown === 'capture' && <Capture key="capture" s={s} close={close} />}
       </AnimatePresence>
 
-      {mode !== 'field' && <ClerkAsk />}
+      {shown !== 'field' && <ClerkAsk />}
 
       <AnimatePresence>
         {warning && !layout.compact && (

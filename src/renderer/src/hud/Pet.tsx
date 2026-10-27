@@ -16,7 +16,8 @@ import { useNow } from '../store'
 
 interface Props {
   s: MayorlyState
-  mode: UiMode
+  /** A panel is open or opening: the pet fades where it stands and comes back when the panel is gone. */
+  away: boolean
   open: (m: UiMode) => void
   side: 'left' | 'right'
   dragging: boolean
@@ -26,13 +27,12 @@ interface Props {
   notice: string | null
 }
 
-export function Pet({ s, mode, open, side, dragging, compact, notice }: Props) {
+export function Pet({ s, away, open, side, dragging, compact, notice }: Props) {
   const now = useNow(250)
   const reduce = useReducedMotion()
   const [hover, setHover] = useState(false)
   const v = blockView(s, now)
   const right = side === 'right'
-  const away = mode !== 'field'
   const showCaption = (hover && !dragging) || !!notice
 
   // A drag ends hover: the pointer is wherever the window was dropped.
@@ -66,8 +66,8 @@ export function Pet({ s, mode, open, side, dragging, compact, notice }: Props) {
     <motion.div
       className={`pet-wrap ${right ? 'pet-right' : 'pet-left'}`}
       style={{ scale: s.settings.hudScale }}
-      animate={{ opacity: away ? 0 : 1, x: away ? (right ? 24 : -24) : 0 }}
-      transition={{ type: 'spring', stiffness: 160, damping: 24 }}
+      animate={{ opacity: away ? 0 : 1, y: away ? 4 : 0 }}
+      transition={away ? { duration: 0.14, ease: 'easeOut' } : { type: 'spring', stiffness: 220, damping: 26 }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       data-hit
