@@ -23,7 +23,7 @@ export interface KeyDef {
 export const SCOPES: { id: Scope; title: string; blurb: string }[] = [
   { id: 'global', title: 'Anywhere', blurb: 'System-wide, with a modifier, so no other app sees them.' },
   { id: 'deck', title: 'Deck', blurb: 'While the deck is open.' },
-  { id: 'list', title: 'Lists', blurb: 'The flow, a ledger, the couch list. Keys act on the selected row.' },
+  { id: 'list', title: 'Lists', blurb: 'The flow, a ledger, the supersets, the couch list. Keys act on the selected row.' },
   { id: 'shelf', title: 'Shelf', blurb: 'The nine bays.' },
   { id: 'move', title: 'Moving the tomato', blurb: 'After the move hotkey, until Enter.' },
   { id: 'keymap', title: 'This screen', blurb: '' },

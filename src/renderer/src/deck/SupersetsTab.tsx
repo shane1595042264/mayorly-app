@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
+import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { Minus, Plus, Repeat, Rocket, Trash, X } from '@phosphor-icons/react'
 import {
   formatSuperset, parseSuperset, span, type Id, type MayorlyState, type Superset,
 } from '@core/index'
-import { dispatch } from '../store'
+import { current, dispatch } from '../store'
 
 // Superset = your own rotation rule. The desk moves through the slots by itself:
 // legal, then dance, then career, rest between, round after round.
@@ -30,6 +31,49 @@ export function SupersetsTab({ s }: { s: MayorlyState }) {
   }, [selected, s.supersets])
 
   const running = s.desk.plan?.mode === 'superset' ? s.desk.plan.supersetId : null
+
+  // The keyboard: j and k pick a superset, Enter deploys it, x deletes it, n starts a new one, r goes to its name.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (keymapOpen() || e.altKey || e.ctrlKey || e.metaKey) return
+      if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select')) return
+      const st = current()
+      const a = st ? actionFor(e, 'list', st.settings) : null
+      if (!a) return
+      const list = s.supersets
+      const i = list.findIndex((x) => x.id === selected)
+      const pick = (ss: Superset | undefined) => {
+        if (!ss) return
+        setSelected(ss.id)
+        setDraft(ss)
+      }
+      if (a === 'list.down') pick(list[Math.min(i + 1, list.length - 1)])
+      else if (a === 'list.up') pick(list[Math.max(i - 1, 0)])
+      else if (a === 'list.top') pick(list[0])
+      else if (a === 'list.bottom') pick(list[list.length - 1])
+      else if (a === 'list.new') {
+        if (s.ledgers.length === 0) return
+        const b = blank(s)
+        setDraft(b)
+        setSelected(b.id)
+      } else if (a === 'list.go') {
+        if (!draft || draft.slots.length === 0) return
+        dispatch({ type: 'superset/save', superset: draft })
+        dispatch({ type: 'desk/deploy', mode: 'superset', supersetId: draft.id })
+      } else if (a === 'list.delete') {
+        if (!draft || !saved) return
+        dispatch({ type: 'superset/delete', id: draft.id })
+        setDraft(null)
+      } else if (a === 'list.rename') {
+        if (!draft) return
+        document.getElementById('ss-name')?.focus()
+      } else return
+      e.preventDefault()
+      recordUse(a)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [s, selected, draft, saved])
 
   return (
     <div className="supersets">
@@ -110,7 +154,7 @@ function Editor({ s, draft, setDraft, dirty, isNew, running }: {
       <div className="form-row">
         <label className="field grow">
           <span className="field-label caps">Name</span>
-          <input value={draft.name} onChange={(e) => patch({ name: e.target.value })} maxLength={32} />
+          <input id="ss-name" value={draft.name} onChange={(e) => patch({ name: e.target.value })} maxLength={32} />
         </label>
       </div>
 
