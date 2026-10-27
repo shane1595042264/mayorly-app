@@ -404,13 +404,40 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .leisure-live .ellipsis { flex: 1; color: var(--ink); }
 .row.leisure-row.live { border-color: var(--leisure-2); box-shadow: inset 2px 0 0 var(--leisure); }
 
-/* ------------------------------------------------------------ context switch rules */
+/* ------------------------------------------------------------ context switch rules
+   The leisure row has no ledger column. Its cues are a band attached under the row,
+   never a cell inside it. */
 
-.row.expanded { flex-wrap: wrap; }
-.cues { flex-basis: 100%; display: grid; gap: 8px; padding: 10px 0 4px 36px; }
-.cues-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-.cues-list li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-.cues-list li::before { content: ''; width: 6px; height: 6px; background: var(--leisure); }
+.row.leisure-row { grid-template-columns: 22px 24px minmax(0, 1fr) auto auto; }
+.row.leisure-row.expanded { border-color: var(--line); border-bottom-color: transparent; background: rgb(237 240 241 / 0.045); }
+.row-cue-count { margin-left: 10px; font-size: 11px; }
+
+.cues-band {
+  display: grid;
+  gap: 10px;
+  margin-top: -4px;
+  padding: 10px 12px 12px 66px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  background: rgb(237 240 241 / 0.045);
+}
+.cues-band.live { border-color: var(--leisure-2); }
+.cues-head { display: grid; gap: 2px; }
+.cues-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.cue {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 6px 3px 9px;
+  border: 1px solid var(--leisure-2); color: var(--ink);
+  font-size: 13px; line-height: 1.2;
+}
+.cue-x {
+  display: inline-grid; place-items: center; width: 18px; height: 18px; padding: 0;
+  border: 0; background: transparent; color: var(--ink-3); cursor: pointer;
+}
+.cue-x:hover { color: var(--ink); }
+.cues-add { display: flex; gap: 8px; align-items: center; max-width: 520px; }
+.cues-add input { flex: 1; min-width: 0; height: 32px; }
+.cues-add .btn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .leisure-live-wrap { margin-top: 16px; }
 .leisure-live-wrap .leisure-live { margin-top: 0; }
 .leisure-cues-live { margin: 6px 0 0; padding: 0 14px; font-size: 13px; color: var(--ink-2); }

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { CaretDown, CaretRight, Couch, Play, Plus, Stop, Trash, X } from '@phosphor-icons/react'
+import { Fragment, useState } from 'react'
+import { CaretDown, CaretRight, Play, Plus, Stop, Trash, X } from '@phosphor-icons/react'
 import { balance, blockView, clock, leisureList, leisureSpentMs, leisureTokensSpent, LEISURE_TOKENS_PER_BLOCK, span, type LeisureItem, type MayorlyState } from '@core/index'
 import { hotkeyLabel } from '../lib/keys'
 import { dispatch, useNow } from '../store'
@@ -74,12 +74,16 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
               const live = onCouch?.block.leisureId === it.id
               const expanded = open === it.id
               return (
-                <li key={it.id} className={`row ${live ? 'live leisure-row' : 'leisure-row'} ${expanded ? 'expanded' : ''}`}>
+                <Fragment key={it.id}>
+                <li className={`row leisure-row ${live ? 'live' : ''} ${expanded ? 'expanded' : ''}`}>
                   <span className="row-n mono num dim">{String(i + 1).padStart(2, '0')}</span>
-                  <button className="icon-btn" aria-label={expanded ? 'Hide context switch rules' : 'Show context switch rules'} title="Context switch rules" onClick={() => setOpen(expanded ? null : it.id)}>
+                  <button className="icon-btn" aria-expanded={expanded} aria-label={expanded ? 'Hide context switch rules' : 'Show context switch rules'} title="Context switch rules" onClick={() => setOpen(expanded ? null : it.id)}>
                     {expanded ? <CaretDown size={14} /> : <CaretRight size={14} />}
                   </button>
-                  <span className="row-title ellipsis">{it.title}{it.cues.length > 0 && <span className="dim mono num">  {it.cues.length} {it.cues.length === 1 ? 'cue' : 'cues'}</span>}</span>
+                  <span className="row-title ellipsis">
+                    {it.title}
+                    {it.cues.length > 0 && <span className="row-cue-count mono num dim">{it.cues.length} {it.cues.length === 1 ? 'cue' : 'cues'}</span>}
+                  </span>
                   <span className="row-time mono num">
                     {spent >= 60_000 ? span(spent) : ''}
                     {tokens > 0 ? `${tokens} tokens` : ''}
@@ -98,8 +102,9 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
                       <Trash size={14} />
                     </button>
                   </span>
-                  {expanded && <Cues item={it} />}
                 </li>
+                {expanded && <Cues item={it} live={live} />}
+                </Fragment>
               )
             })}
           </ol>
@@ -112,9 +117,10 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
 /**
  * Context switch rules: cues in your words for when to leave this and do something
  * else ("rookie dies in game"). No logic behind them; the app shows them while you
- * are on the couch and the quick switch does the leaving.
+ * are on the couch and the quick switch does the leaving. A band under the row, so
+ * the row keeps its shape.
  */
-function Cues({ item }: { item: LeisureItem }) {
+function Cues({ item, live }: { item: LeisureItem; live: boolean }) {
   const [draft, setDraft] = useState('')
   const add = () => {
     if (!draft.trim()) return
@@ -122,21 +128,25 @@ function Cues({ item }: { item: LeisureItem }) {
     setDraft('')
   }
   return (
-    <div className="cues">
-      <span className="field-label caps">Context switch rules</span>
-      {item.cues.length === 0 && <span className="field-help">When should you switch away? A cue, not a rule: "rookie dies in game", "ad break", "queue pops".</span>}
-      <ul className="cues-list">
-        {item.cues.map((c, i) => (
-          <li key={i}>
-            <span>{c}</span>
-            <button className="icon-btn" aria-label={`Remove cue: ${c}`} title="Remove" onClick={() => dispatch({ type: 'leisure/cue-delete', id: item.id, index: i })}><X size={12} /></button>
-          </li>
-        ))}
-      </ul>
-      <div className="ai-add">
-        <input value={draft} placeholder="rookie dies in game" onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} />
+    <li className={`cues-band ${live ? 'live' : ''}`}>
+      <div className="cues-head">
+        <span className="field-label caps">Context switch rules</span>
+        <span className="field-help">When to leave {item.title} for something else. A cue, not a rule.</span>
+      </div>
+      {item.cues.length > 0 && (
+        <ul className="cues-list">
+          {item.cues.map((c, i) => (
+            <li key={i} className="cue">
+              <span>{c}</span>
+              <button className="cue-x" aria-label={`Remove cue: ${c}`} title="Remove" onClick={() => dispatch({ type: 'leisure/cue-delete', id: item.id, index: i })}><X size={11} weight="bold" /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="cues-add">
+        <input value={draft} placeholder={item.cues.length ? 'Another cue' : 'rookie dies in game'} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} aria-label="New cue" />
         <button className="btn" onClick={add} disabled={!draft.trim()}><Plus size={14} /> Add cue</button>
       </div>
-    </div>
+    </li>
   )
 }
