@@ -49,6 +49,10 @@ export function Callout({ quiet }: { quiet: boolean }) {
           } else if (e.type === 'sitting-end') {
             const title = e.reason === 'complete' ? 'Rotation complete' : e.reason === 'flow-clear' ? 'Flow clear' : 'Stood down'
             show({ kicker: 'Sitting', title, detail: `${span(e.focusMs)}   ${e.tomatoes} tomatoes   +${e.tokens} tokens` })
+          } else if (e.type === 'cleared') {
+            sfx.clear()
+          } else if (e.type === 'harvest') {
+            setTimeout(() => sfx.harvest(), 160)
           } else if (e.type === 'tomato') {
             sfx.tomato()
           } else if (e.type === 'swap') {

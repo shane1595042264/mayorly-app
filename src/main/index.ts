@@ -176,6 +176,11 @@ function boot() {
         pause: togglePause,
         hide: () => overlay.toggleVisible(),
         switch: () => engine.dispatch({ type: 'desk/switch' }),
+        clear: () => {
+          const id = engine.state.desk.block?.entryId
+          if (id) engine.dispatch({ type: 'entry/complete', id })
+          else say({ phase: 'done', text: 'Nothing on the desk to clear' })
+        },
       })
       if (failed.length) {
         const failures = { keys: failed, reason: refusedAsOptionOnly(failed) ? ('option-only' as const) : undefined }

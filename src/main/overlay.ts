@@ -24,7 +24,7 @@ const debug = process.env.MAYORLY_DEBUG ? (...a: unknown[]) => console.error('[o
  * The window is exactly this at the HUD scale, so nothing invisible catches a click, and it is
  * never resized on hover: a resize paints one frame of old content at the new position and the
  * tomato jumps. The caption is a separate click-through window. Matches `body.compact` in hud.css. */
-const PET = { width: 80 + 10 + 48, height: 48 + 8 }
+const PET = { width: 140 + 10 + 48, height: 48 + 8 }
 /** The pet's own corner inside the window; matches `body.compact .pet-wrap` in hud.css. */
 const INSET = { x: 4, y: 4 }
 /** The caption window: generous, because it is click-through; the text hugs the tomato's side. */

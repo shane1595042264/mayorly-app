@@ -35,6 +35,10 @@ export interface Entry {
   doneAt: Epoch | null
   /** Set when the AI clerk chose the ledger; cleared once you move it, which teaches the clerk a house rule. `unsure` shows as a question mark. */
   clerkFiled?: { ledgerId: Id | null; model: string; confidence: 'sure' | 'unsure' }
+  /** Tomatoes grown on this entry and not yet harvested. They pay out as tokens when the entry is cleared. */
+  tomatoes: number
+  /** When the entry was cleared and its tomatoes paid. */
+  harvestedAt?: Epoch
 }
 
 /**
@@ -155,9 +159,10 @@ export interface TokenTx {
   at: Epoch
   /** Positive when earned, negative when spent. */
   amount: number
-  reason: 'tomato' | 'leisure' | 'refund'
+  reason: 'tomato' | 'harvest' | 'leisure' | 'refund'
   sittingId: Id
   leisureId?: Id
+  entryId?: Id
 }
 
 /**
@@ -186,7 +191,7 @@ export interface ClerkLine {
   text: string
 }
 
-export type HotkeyAction = 'plus' | 'capture' | 'deck' | 'pause' | 'hide' | 'switch'
+export type HotkeyAction = 'plus' | 'capture' | 'deck' | 'pause' | 'hide' | 'switch' | 'clear'
 
 export interface Settings {
   /** Focus length, and the tomato interval. */
@@ -219,7 +224,10 @@ export interface MayorlyState {
 }
 
 export type HudEvent =
-  | { type: 'tomato'; at: Epoch; n: number; tokens: number }
+  /** A tomato ripened. On an entry it is banked there (tokens 0) until the entry is cleared; ledger time pays as it goes. */
+  | { type: 'tomato'; at: Epoch; n: number; tokens: number; entryId: Id | null }
+  /** An entry was cleared and its tomatoes paid out. */
+  | { type: 'harvest'; at: Epoch; entryId: Id; title: string; tomatoes: number; tokens: number }
   | { type: 'block'; at: Epoch; block: Block; started: boolean }
   | { type: 'swap'; at: Epoch; ledgerId: Id | null; entryId: Id | null }
   | { type: 'cleared'; at: Epoch; entryId: Id; title: string }

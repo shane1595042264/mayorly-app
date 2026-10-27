@@ -8,15 +8,15 @@ It is the architecture north star for the whole project: the entries, ledgers, d
 
 ## What it does
 
-- **Lock in on one thing.** Pick an entry or a ledger and deploy. At rest the HUD is only the founder's tomato holding one number: the countdown while a block runs, today's tomatoes when the desk is idle. Hover it for one line on what the desk is doing. On a Mac, drag the tomato to put it where you like.
+- **Lock in on one thing.** Pick an entry or a ledger and deploy. At rest the HUD is only the founder's tomato holding one number: the countdown while a block runs, today's tomatoes when the desk is idle, with the entry's name in small type above it, cut to one line. Hover it for the whole name. On a Mac, drag the tomato to put it where you like.
 - **Continuous flow, like Blitz.** Blitz mode runs your flow top to bottom. Clear an entry and the next one is already running, timed against its own estimate. No list to go back to.
 - **Pomodoro, like Focus To-Do.** Focus and rest cycles with a long rest every fourth, on any entry or on a ledger alone ("Dance time, no entry").
 - **Supersets: your own rotation rules.** Legal 25, Dance 20, Career 25, three rounds, five minutes of rest between, fifteen between rounds. The desk switches on its own. Order can be fixed or shuffled per round, and you choose what happens when you clear an entry mid-block.
 - **Swap in real time.** Hold or tap **Alt+T** for the Plus menu: the loadout floats in 3D with four attachment arms around it. Ledger up, entry left, mode right, orders down. Press **1-9** to jump ledgers, or click. The block timer keeps running through a swap; only the work changes.
 - **Tracks time.** Every second of desk time is a segment against an entry and a ledger. The Record tab shows today by ledger, the last seven days, and the clerk's log.
-- **Tokens, by the spec.** One per tomato. Earned only at the desk. No bonus for long sittings, nothing decays, no streaks, an explicit hold.
+- **Tokens, by the spec.** One per tomato, and a tomato grown on an entry pays out when you clear the entry, like a harvest. Ledger time with no entry pays as it goes. Earned only at the desk. No bonus for long sittings, nothing decays, no streaks, an explicit hold.
 - **Quick switch.** Alt+Q parks the running session and resumes the previous one, like swapping weapons. Clocks do not reset: a stream at 23 minutes left comes back at 23 minutes left, and the book picks up its own tomato where it stopped. Starting anything new parks what was running. Each leisure item carries **context switch rules**, cues in your words ("rookie dies in game") shown while you are on the couch.
-- **Leisure is bought, not earned.** Games, shows and streams live on the couch list in the deck, outside the ledgers. The couch runs like a pomodoro, the same focus and rest lengths; each leisure block costs one token as it starts, rests are free, and it is purple because nothing is earned. The clerk sends entertainment it recognises here on its own.
+- **Leisure is bought, not earned.** Games, shows and streams live on the couch list in the deck, outside the ledgers. The couch runs like a pomodoro, the same focus and rest lengths; each completed leisure block costs one token, rests are free, a block you leave early costs nothing, and it is purple because nothing is earned. The clerk sends entertainment it recognises here on its own.
 
 ![The Plus menu: swap ledger, entry, mode or orders around the 3D loadout](docs/screenshots/plus.jpg)
 
@@ -32,6 +32,7 @@ Global, from any app. All of them can be changed in Deck, Settings. On a Mac, Al
 | **Alt+P** | Hold and resume the desk. |
 | **Alt+H** | Hide or show the HUD. |
 | **Alt+Q** | Quick switch: park what you are on and pick up the previous session where its clock stopped. Press again to come back. |
+| **Alt+C** | Clear the entry on the desk. Its tomatoes pay out, and the desk moves to the next entry on its own. |
 
 Inside the Plus menu: arrow keys or WASD pick an arm, **Q / E** cycle, **Enter** applies, **1-9** jump to a ledger, **Tab** opens the deck, **Esc** closes.
 

@@ -90,4 +90,21 @@ export const sfx = {
     if (!a) return
     click(a, a.currentTime, 0.12, 4200)
   },
+  /** An entry cleared: one clean high ding with a soft tail. */
+  clear() {
+    const a = ac()
+    if (!a) return
+    const t = a.currentTime
+    click(a, t, 0.2, 5200)
+    tone(a, 1318, t, 0.12, 0.05)
+    tone(a, 1976, t + 0.04, 0.34, 0.045)
+  },
+  /** Tomatoes paid out: a short bright coin, one per harvest. */
+  harvest() {
+    const a = ac()
+    if (!a) return
+    const t = a.currentTime
+    tone(a, 1568, t, 0.09, 0.05, 'triangle')
+    tone(a, 2093, t + 0.07, 0.24, 0.06, 'triangle')
+  },
 }

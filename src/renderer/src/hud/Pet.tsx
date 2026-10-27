@@ -43,11 +43,14 @@ export function Pet({ s, away, open, side, dragging, compact, notice }: Props) {
   let sign: string
   let tone: 'idle' | 'live' | 'hold' | 'rest' | 'ready' | 'couch'
   let caption: string
+  /** The one line above the sign: what the desk is on. Cut to the sign's column; hover shows all of it. */
+  let task = ''
   if (!v) {
     sign = String(dayStats(s, startOfDay(now), now).tomatoes)
     tone = 'idle'
     caption = `Desk idle. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.`
   } else {
+    task = v.block.kind === 'leisure' ? v.block.label : v.block.kind === 'rest' ? v.block.label : v.entry ? `${v.ledger?.code ?? 'FREE'}  ${v.entry.title}` : v.block.label
     sign = v.remainingMs === null ? clock(v.elapsedMs, false) : v.overtimeMs > 0 ? `+${clock(v.overtimeMs, false)}` : clock(v.remainingMs)
     tone = v.block.kind === 'leisure' ? 'couch' : v.status === 'paused' ? 'hold' : v.status === 'ready' ? 'ready' : v.block.kind === 'focus' ? 'live' : 'rest'
     const what = v.block.kind === 'leisure' ? `On the couch  ${v.block.label}` : v.block.kind === 'focus' ? `${v.ledger?.code ?? 'FREE'}  ${v.entry?.title ?? `${v.block.label}, no entry`}` : v.block.label
@@ -89,14 +92,17 @@ export function Pet({ s, away, open, side, dragging, compact, notice }: Props) {
       </AnimatePresence>
 
       <div className="pet" aria-label="Desk status">
-        <button
-          type="button"
-          className={`pet-sign num tone-${tone} ${tone === 'hold' ? 'pulse' : ''}`}
-          onClick={() => open('plus')}
-          title={v ? 'Swap' : 'Deploy'}
-        >
-          {sign}
-        </button>
+        <div className="pet-col">
+          {task && <span className={`pet-task ellipsis tone-${tone}`} aria-label="On the desk">{task}</span>}
+          <button
+            type="button"
+            className={`pet-sign num tone-${tone} ${tone === 'hold' ? 'pulse' : ''}`}
+            onClick={() => open('plus')}
+            title={v ? 'Swap' : 'Deploy'}
+          >
+            {sign}
+          </button>
+        </div>
         <motion.div
           className="pet-body"
           title="Drag to move"

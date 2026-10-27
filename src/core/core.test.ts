@@ -95,7 +95,9 @@ describe('pomodoro', () => {
     expect(w.s.desk.block).toMatchObject({ kind: 'focus', label: 'Career' })
     w.wait(25 * MIN)
     expect(w.s.desk.block).toMatchObject({ kind: 'rest', label: 'Rest' })
-    expect(balance(w.s)).toBe(1)
+    // The tomato grew on the entry; it pays when the entry is cleared.
+    expect(balance(w.s)).toBe(0)
+    expect(w.entry('tailor resume').tomatoes).toBe(1)
     w.wait(5 * MIN)
     expect(w.s.desk.block?.kind).toBe('focus')
     expect(w.s.desk.block?.entryId).toBe(w.entry('tailor resume').id)
@@ -407,7 +409,7 @@ describe('the couch', () => {
     return w
   }
 
-  it('one token buys one leisure block of the focus length, rests are free, nothing is earned', () => {
+  it('a completed leisure block costs one token, rests are free, a block left early is free, nothing is earned', () => {
     const w = rich()
     const before = balance(w.s)
     expect(before).toBe(3)
@@ -416,17 +418,19 @@ describe('the couch', () => {
     w.do({ type: 'desk/deploy', mode: 'couch', leisureId: civ.id })
     expect(w.s.desk.block?.kind).toBe('leisure')
     expect(w.s.desk.block?.durationMs).toBe(25 * MIN)
-    expect(balance(w.s)).toBe(before - 1)
+    // Nothing is taken until the block completes.
+    expect(balance(w.s)).toBe(before)
     w.wait(25 * MIN + 1000)
     expect(w.s.desk.block?.kind).toBe('rest')
     expect(balance(w.s)).toBe(before - 1)
     w.wait(5 * MIN + 1000)
     expect(w.s.desk.block?.kind).toBe('leisure')
-    expect(balance(w.s)).toBe(before - 2)
+    expect(balance(w.s)).toBe(before - 1)
     const tomatoes = w.s.tokens.filter((t) => t.reason === 'tomato').length
     w.do({ type: 'desk/standDown' })
     expect(w.s.tokens.filter((t) => t.reason === 'tomato').length).toBe(tomatoes)
-    expect(balance(w.s)).toBe(before - 2)
+    // A block left early costs nothing.
+    expect(balance(w.s)).toBe(before - 1)
     expect(w.s.desk.status).toBe('idle')
   })
 
@@ -479,7 +483,7 @@ describe('the quick switch', () => {
     expect(w.s.desk.block?.kind).toBe('leisure')
     expect(w.s.desk.holster?.block.entryId).toBe(book.id)
     expect(w.s.desk.holster?.bankMs).toBe(7 * MIN)
-    expect(balance(w.s)).toBe(2)
+    expect(balance(w.s)).toBe(3)
     w.wait(3 * MIN)
     // Rookie dies: back to the book at 18 minutes left, the stream parked at 3 minutes in.
     const r = w.do({ type: 'desk/switch' })
@@ -493,7 +497,7 @@ describe('the quick switch', () => {
     w.do({ type: 'desk/switch' })
     expect(w.s.desk.block?.kind).toBe('leisure')
     expect(blockView(w.s, w.now)?.remainingMs).toBe(22 * MIN)
-    expect(balance(w.s)).toBe(2)
+    expect(balance(w.s)).toBe(3)
     expect(w.s.desk.holster?.bankMs).toBe(9 * MIN)
     // Getting up returns the parked book, paused where it was.
     w.do({ type: 'desk/standDown' })
@@ -528,5 +532,50 @@ describe('the quick switch', () => {
     w.do({ type: 'sync/replace', state: old })
     expect(w.s.settings.hotkeys.switch).toBe('Alt+Q')
     expect(w.s.leisure[0].cues).toEqual([])
+  })
+})
+
+describe('the harvest', () => {
+  it('tomatoes grow on the entry and pay out when it is cleared', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'career: write the report' })
+    const e = w.entry('write the report')
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })
+    const r = (() => { w.wait(25 * MIN); return w.events.filter((x) => x.type === 'tomato') })()
+    expect(r.at(-1)).toMatchObject({ tokens: 0, entryId: e.id })
+    expect(balance(w.s)).toBe(0)
+    expect(w.entry('write the report').tomatoes).toBe(1)
+    w.wait(5 * MIN + 25 * MIN)
+    expect(w.entry('write the report').tomatoes).toBe(2)
+    const res = w.do({ type: 'entry/complete', id: e.id })
+    expect(res.events.find((x) => x.type === 'harvest')).toMatchObject({ tomatoes: 2, tokens: 2 })
+    expect(balance(w.s)).toBe(2)
+    expect(w.entry('write the report').tomatoes).toBe(0)
+    expect(w.s.tokens.at(-1)?.reason).toBe('harvest')
+  })
+
+  it('ledger time with no entry pays as it goes', () => {
+    const w = world()
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: w.ledger('DNC').id })
+    w.wait(25 * MIN)
+    expect(balance(w.s)).toBe(1)
+  })
+
+  it('a deleted entry forfeits its tomatoes', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: abandoned form' })
+    const e = w.entry('abandoned form')
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })
+    w.wait(25 * MIN)
+    w.do({ type: 'entry/delete', id: e.id })
+    expect(balance(w.s)).toBe(0)
+  })
+
+  it('an older save gets a tomato count on every entry', () => {
+    const w = world()
+    const old = structuredClone(w.s) as unknown as { entries: Record<string, unknown>[] }
+    old.entries = [{ id: 'e1', title: 'old entry', ledgerId: null, estimateMin: null, order: 1, createdAt: T0, doneAt: null }]
+    w.do({ type: 'sync/replace', state: old })
+    expect(w.s.entries[0].tomatoes).toBe(0)
   })
 })

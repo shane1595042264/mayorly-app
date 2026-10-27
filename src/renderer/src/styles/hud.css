@@ -53,6 +53,21 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
   user-select: none;
   -webkit-user-drag: none;
 }
+/* The sign's column: the task line above, the number below. Its width is the window's. */
+.pet-col { display: grid; gap: 3px; width: 140px; justify-items: end; }
+.pet-left .pet-col { justify-items: start; }
+.pet-task {
+  max-width: 140px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  color: var(--ink-2);
+  text-shadow: var(--shadow-text);
+}
+.pet-left .pet-task { text-align: left; }
+.pet-task.tone-live { color: var(--ink); }
+.pet-task.tone-couch { color: var(--leisure); }
 .pet-sign {
   /* Fixed width: the window is sized to the pet, so the sign cannot grow with its number. */
   width: 80px;

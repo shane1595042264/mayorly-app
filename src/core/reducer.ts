@@ -443,15 +443,11 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
 }
 
 function startBlock(s: MayorlyState, ctx: Ctx, ev: HudEvent[], block: Block, at: number, force: boolean) {
-  if (block.kind === 'leisure') {
-    // A leisure block is bought as it starts. Out of tokens, the couch sitting ends.
-    const sittingId = s.desk.sittingId
-    if (!sittingId || balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
-      ev.push({ type: 'notice', at, text: 'Out of tokens: back to the desk' })
-      endSitting(s, at, ev, 'complete')
-      return
-    }
-    s.tokens.push({ id: `${sittingId}:leisure:${block.round}`, at, amount: -LEISURE_TOKENS_PER_BLOCK, reason: 'leisure', sittingId, leisureId: block.leisureId ?? undefined })
+  if (block.kind === 'leisure' && (!s.desk.sittingId || balanceOf(s) < LEISURE_TOKENS_PER_BLOCK)) {
+    // A leisure block needs a token in hand to start; it is charged when the block completes.
+    ev.push({ type: 'notice', at, text: 'Out of tokens: back to the desk' })
+    endSitting(s, at, ev, 'complete')
+    return
   }
   const auto = force || block.kind === 'leisure' || (block.kind === 'focus' ? s.settings.autoStartFocus : s.settings.autoStartRest)
   s.desk.block = block
@@ -499,6 +495,18 @@ function completeEntry(s: MayorlyState, ctx: Ctx, ev: HudEvent[], id: Id) {
   if (!e || e.doneAt !== null) return
   e.doneAt = now
   ev.push({ type: 'cleared', at: now, entryId: e.id, title: e.title })
+  // The harvest: every tomato grown on the entry pays out now.
+  const grown = e.tomatoes ?? 0
+  if (grown > 0) {
+    const amount = grown * tokensForTomato(1)
+    const sittingId = s.desk.sittingId ?? e.id
+    s.tokens.push({ id: `${e.id}:harvest:${now}`, at: now, amount, reason: 'harvest', sittingId, entryId: e.id })
+    const sitting = s.sittings.find((x) => x.id === s.desk.sittingId)
+    if (sitting) sitting.tokens += amount
+    e.tomatoes = 0
+    e.harvestedAt = now
+    ev.push({ type: 'harvest', at: now, entryId: e.id, title: e.title, tomatoes: grown, tokens: amount })
+  }
 
   const d = s.desk
   if (!d.block || d.block.entryId !== id || !d.plan) return
@@ -624,6 +632,10 @@ function tick(s: MayorlyState, ctx: Ctx, ev: HudEvent[]) {
     }
     closeSegment(s, end)
     mint(s, end, ev)
+    // A completed block of leisure is the tomato that costs one.
+    if (d.block.kind === 'leisure' && d.sittingId) {
+      s.tokens.push({ id: `${d.sittingId}:leisure:${d.block.round}`, at: end, amount: -LEISURE_TOKENS_PER_BLOCK, reason: 'leisure', sittingId: d.sittingId, leisureId: d.block.leisureId ?? undefined })
+    }
     const next = advance(s, d.plan, d.block, end, ctx.random)
     if (!next) {
       endSitting(s, end, ev, 'complete')
@@ -649,9 +661,16 @@ function mint(s: MayorlyState, at: number, ev: HudEvent[]) {
   while (sitting.tomatoes < due) {
     sitting.tomatoes++
     const amount = tokensForTomato(sitting.tomatoes)
-    sitting.tokens += amount
-    s.tokens.push({ id: `${sitting.id}:${sitting.tomatoes}`, at, amount, reason: 'tomato', sittingId: sitting.id })
-    ev.push({ type: 'tomato', at, n: sitting.tomatoes, tokens: amount })
+    const entry = s.entries.find((e) => e.id === s.desk.block?.entryId && e.doneAt === null)
+    if (entry) {
+      // Grown on the entry; it pays when the entry is cleared.
+      entry.tomatoes = (entry.tomatoes ?? 0) + 1
+      ev.push({ type: 'tomato', at, n: sitting.tomatoes, tokens: 0, entryId: entry.id })
+    } else {
+      sitting.tokens += amount
+      s.tokens.push({ id: `${sitting.id}:${sitting.tomatoes}`, at, amount, reason: 'tomato', sittingId: sitting.id })
+      ev.push({ type: 'tomato', at, n: sitting.tomatoes, tokens: amount, entryId: null })
+    }
   }
 }
 
@@ -691,6 +710,7 @@ function addEntry(s: MayorlyState, ctx: Ctx, title: string, ledgerId: Id | null,
     order: maxOrder(s) + 1,
     createdAt: ctx.now,
     doneAt: null,
+    tomatoes: 0,
   }
   s.entries.push(e)
   return e

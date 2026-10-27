@@ -4,6 +4,9 @@ Newest first. Each entry records what was decided, why, and what would reverse i
 
 ## 2026-10-22
 
+### Tokens are harvested: paid when the entry is cleared
+The founder wanted tokens to feel grown, not ticked: a tomato ripened on an entry is banked on it (`entry.tomatoes`) and pays out as a `harvest` transaction when the entry is cleared, which Alt+C does from anywhere. Ledger time with no entry pays as it goes, because there is nothing to harvest. A deleted entry forfeits its tomatoes. Leisure mirrors it: a block of play is charged when it completes, not when it starts, and a block left early costs nothing. **Rejected:** paying on sitting end, which rewards sitting rather than finishing. **Reverses if:** entries that never close pile up unpaid tomatoes; then a cap or an expiry, not a change of principle.
+
 ### The quick switch: one parked session, clocks never reset
 The founder wanted the FPS weapon swap: Q to the previous session, Q back, timers untouched. The desk gets a holster for exactly one parked session, kept with its own sitting and the time already banked on its block. Deploying anything parks what was running; the switch swaps the two; standing down brings the parked one back paused; the parked one mints nothing. With the bonus gone there is no reason left to fold a redeploy into the old sitting, so every deploy is a sitting of its own. **Rejected:** a stack of parked sessions, which is a task list by another name. Leisure items carry context switch rules, cues in the user's words with no logic behind them, shown while on the couch.
 

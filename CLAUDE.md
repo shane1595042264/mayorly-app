@@ -6,7 +6,7 @@ This is the application layer of Mayorly, a life OS: entries filed into ledgers,
 
 - **Every rule lives in `src/core`, and `src/core` stays pure.** No Electron, no DOM, no `Date.now()`, no `Math.random()`. Time, ids and randomness arrive through `Ctx`. If a rule needs the clock, pass it in.
 - **State changes only through `reduce()`.** The main process is the only writer. Renderers dispatch actions and render snapshots. Do not add renderer-side state that matters after a restart.
-- **The economy is the spec's.** One token per tomato, no bonus for long sittings, tokens only from desk time; a leisure block costs one token as it starts, rests are free, nothing is earned on the couch. No streaks, no decay, no penalties, nothing that punishes a hold or a bad week. Change `src/core/rules.ts` only after the design repo changes.
+- **The economy is the spec's.** One token per tomato; a tomato grown on an entry is paid when that entry is cleared (the harvest), ledger time with no entry pays as it goes, a deleted entry forfeits its tomatoes. No bonus for long sittings, tokens only from desk time; a completed leisure block costs one token, rests are free, a block left early is free, nothing is earned on the couch. No streaks, no decay, no penalties, nothing that punishes a hold or a bad week. Change `src/core/rules.ts` only after the design repo changes.
 - **No AI-generated art.** The app icon is the founder's hand-drawn tomato at integer scale. UI icons come from Phosphor; do not hand-draw SVG icons.
 - **No em dashes in user-visible copy.** HUD copy is short, plain, and neutral. The clerk speaks in machine-log voice only.
 
