@@ -1,6 +1,6 @@
 appId: app.mayorly
 productName: Mayorly
-copyright: Shane Li
+copyright: © 2026 Shane Li
 directories:
   output: dist
   buildResources: build

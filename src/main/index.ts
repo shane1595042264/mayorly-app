@@ -7,7 +7,7 @@ import { AiClerk, KeyCheckError } from './ai/service'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
 import { Engine } from './engine'
-import { installLog } from './log'
+import { installLog, log } from './log'
 import { SessionStore } from './session'
 import { Sync } from './sync'
 import { refusedAsOptionOnly, registerHotkeys } from './hotkeys'
@@ -321,6 +321,7 @@ function boot() {
     if (u.protocol !== 'mayorly:') return
     const what = (u.hostname || u.pathname.replace(/^\/+/, '')).toLowerCase()
     const text = (u.searchParams.get('text') ?? '').trim().slice(0, 500)
+    log.info('url', what, text ? `${text.length} chars` : '')
     if (what === 'capture' && text) void captureLine(text)
     else if (what === 'capture' || what === 'deck' || what === 'plus') command(what)
     else if (what === 'pause') togglePause()
