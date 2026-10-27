@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { ArrowsClockwise, GoogleLogo, Keyboard, Plus, Trash } from '@phosphor-icons/react'
-import type { HotkeyAction, MayorlyState, Settings } from '@core/index'
+import type { MayorlyState, Settings } from '@core/index'
 import type { AiProvider, AppInfo } from '../../../shared/bridge'
 import { bridge } from '../bridge'
 import { hotkeyLabel, IS_MAC } from '../lib/keys'
+import { GLOBAL_ACTIONS } from '../lib/keymap'
 import { dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
 
 const EXAMPLE = IS_MAC ? 'Option+T' : 'Alt+T'
@@ -12,16 +13,6 @@ const ACCELERATOR = /^((Ctrl|Control|Alt|Option|AltGr|Shift|Super|Meta|Cmd|Comma
 /** Stored accelerators keep Electron's cross-platform spelling: Option is Alt. */
 const normalise = (v: string) => v.trim().replace(/\bOption\b/gi, 'Alt')
 
-const HOTKEYS: [HotkeyAction, string][] = [
-  ['plus', 'Swap menu'],
-  ['capture', 'Capture'],
-  ['deck', 'Deck'],
-  ['pause', 'Hold and resume'],
-  ['hide', 'Hide the HUD'],
-  ['switch', 'Switch to the parked session'],
-  ['clear', 'Clear the entry on the desk'],
-  ['move', 'Move the tomato by keyboard'],
-]
 
 export function SettingsTab({ s, kind, openKeymap }: { s: MayorlyState; kind: 'electron' | 'web'; openKeymap: () => void }) {
   const st = s.settings
@@ -84,7 +75,7 @@ export function SettingsTab({ s, kind, openKeymap }: { s: MayorlyState; kind: 'e
           {IS_MAC && ' Option combos replace the characters they would type while Mayorly runs.'}
         </p>
         <div className="hotkeys">
-          {HOTKEYS.map(([action, label]) => (
+          {GLOBAL_ACTIONS.map(([action, label]) => (
             <HotkeyField key={action} label={label} value={st.hotkeys[action]} onCommit={(v) => set({ hotkeys: { ...st.hotkeys, [action]: v } })} />
           ))}
         </div>
@@ -150,6 +141,7 @@ function AccountSection() {
           <span className={`field-help ${sync.phase === 'error' ? 'field-error' : ''}`}>{line}</span>
           <div className="form-actions">
             <button className="btn ghost" onClick={() => void bridge.signOut()}>Sign out</button>
+            <button className="btn ghost" title="Every signed-in machine, this one included" onClick={() => void bridge.signOutEverywhere().catch((e) => setError(e instanceof Error ? e.message : String(e)))}>Sign out everywhere</button>
             <button className={`btn ghost ${confirm ? 'warn' : ''}`} onClick={() => void remove()} onBlur={() => setConfirm(false)}>
               {confirm ? 'Confirm: delete the account and its copy on the server' : 'Delete account'}
             </button>

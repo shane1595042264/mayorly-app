@@ -18,6 +18,7 @@ This is the application layer of Mayorly, a life OS: entries filed into ledgers,
 | `src/core/reducer.ts` | all actions, the desk state machine, tomato minting |
 | `src/core/planner.ts` | pomodoro, blitz, superset and couch sequencing |
 | `src/core/superset-syntax.ts` | the one-line `/ss legal 25, dance 20 x3` grammar |
+| `src/core/merge.ts` | two copies of one account's state become one without losing work |
 | `src/core/core.test.ts` | rules tested against a fake clock |
 | `src/main/engine.ts` | heartbeat, sleep detection, broadcast |
 | `src/main/store.ts`, `log.ts`, `updates.ts` | the save and its backups, the log file and crash handling, GitHub-release updates |
@@ -75,6 +76,6 @@ SHOT_URL="http://localhost:5199/?demo" SHOT_OUT=shot.png SHOT_JS='...' npx elect
 - **The AI clerk never writes state itself.** It returns a `Filing`; `entry/capture` and `entry/file` in the reducer check it (real ledger, real title) and file by prefix otherwise. Keys live in `ai.bin`, sealed with the OS keychain, never in state and never synced.
 - **A correction is a house rule.** Entries the clerk filed carry `clerkFiled`; moving one writes a `HouseRule` in the reducer, in words, naming the ledger chosen and the ledger wanted. Rules are state, sync with the account, and go into every clerk prompt ahead of the criteria.
 - **Interfaces close on a click outside and when the window loses focus.** The shell sends `close` on blur; the renderer closes on a pointer down outside the open panel.
-- **Sync is last writer wins and the server knows no rules.** `sync/replace` in the reducer is the only way a server document enters this machine; it keeps this machine's own settings (`DEVICE_SETTINGS`) and pauses a desk left running elsewhere. The server stores JSON and a revision, nothing else.
+- **Sync is last writer wins on the server, and never loses work on the client.** A server document enters this machine through `sync/replace` (taken whole, when nothing changed here since the last sync) or `sync/merge` (unioned with this machine's work otherwise; `src/core/merge.ts`); both keep this machine's own settings (`DEVICE_SETTINGS`) and pause a desk left running elsewhere, and the merge leaves a desk running here alone. `sync.json` beside the save holds the revision, the time and the hash of the last match. A document the reducer refuses blocks syncing until the app is updated. The server stores JSON, a revision and a per-user token version, nothing else.
 - **Accounts need `MAIN_VITE_API_URL` and `MAIN_VITE_GOOGLE_CLIENT_ID` at build time** (see `.env.example`). Without them the Settings tab has no Account section and nothing talks to the network.
 - **A Mac build is ad-hoc signed, not notarized.** There is no Developer ID. Gatekeeper refuses the first launch and offers Open Anyway in Privacy & Security. `npm run dist:mac` only works on macOS.

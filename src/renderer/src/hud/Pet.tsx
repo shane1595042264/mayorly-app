@@ -32,7 +32,8 @@ interface Props {
 const MOVE_HINT = 'Arrows or hjkl move it, 1 to 4 pick a corner, Enter when done'
 
 export function Pet({ s, away, moving, open, side, dragging, compact, notice }: Props) {
-  const now = useNow(250)
+  // Idle, the pet only counts today's tomatoes; a clock is what needs the quarter second.
+  const now = useNow(s.desk.status === 'idle' ? 10_000 : 250)
   const reduce = useReducedMotion()
   const [hover, setHover] = useState(false)
   const v = blockView(s, now)
@@ -94,9 +95,9 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice }: 
         )}
       </AnimatePresence>
 
-      <div className="pet" aria-label="Desk status">
+      <div className="pet" role="status" aria-label="Desk status">
         <div className="pet-col">
-          {task && <span className={`pet-task clamp tone-${tone}`} aria-label="On the desk">{task}</span>}
+          {task && <span className={`pet-task clamp tone-${tone}`} title={task}>{task}</span>}
           <button
             type="button"
             className={`pet-sign num tone-${tone} ${tone === 'hold' ? 'pulse' : ''}`}

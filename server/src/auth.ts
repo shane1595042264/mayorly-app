@@ -6,8 +6,10 @@ import { pool } from './db.js'
 // verifies it against Google's live key set, finds or creates the user, and hands
 // back its own 30-day JWT. Every other route takes that JWT as a bearer.
 
-if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') throw new Error('JWT_SECRET is required in production')
+if (process.env.NODE_ENV === 'production' && (process.env.JWT_SECRET ?? '').length < 32) throw new Error('JWT_SECRET of at least 32 characters is required in production')
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET ?? 'dev-secret-change-in-production')
+const ISSUER = 'mayorly-api'
+const SESSION_DAYS = 30
 
 /** Comma-separated: the desktop app's OAuth client, and any other client that may sign in. */
 const AUDIENCES = (process.env.GOOGLE_CLIENT_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean)
@@ -33,7 +35,7 @@ export async function signInWithGoogle(credential: string): Promise<GoogleResult
   if (AUDIENCES.length === 0) return { ok: false, status: 503, error: 'Sign-in is not configured on this server' }
   let payload: Record<string, unknown>
   try {
-    const r = await jwtVerify(credential, GOOGLE_JWKS, { issuer: ['https://accounts.google.com', 'accounts.google.com'], audience: AUDIENCES })
+    const r = await jwtVerify(credential, GOOGLE_JWKS, { issuer: ['https://accounts.google.com', 'accounts.google.com'], audience: AUDIENCES, clockTolerance: '60s' })
     payload = r.payload as Record<string, unknown>
   } catch (err) {
     const code = (err as { code?: string })?.code
@@ -44,23 +46,34 @@ export async function signInWithGoogle(credential: string): Promise<GoogleResult
   const googleId = payload.sub as string | undefined
   const email = payload.email as string | undefined
   if (!googleId || !email) return { ok: false, status: 400, error: 'Invalid token payload' }
+  if (payload.email_verified !== true) return { ok: false, status: 401, error: 'The Google account\'s email is not verified' }
   const name = (payload.name as string | undefined) ?? null
   const avatarUrl = (payload.picture as string | undefined) ?? null
 
-  const { rows } = await pool.query<{ id: string; email: string; name: string | null; avatar_url: string | null }>(
+  const { rows } = await pool.query<{ id: string; email: string; name: string | null; avatar_url: string | null; token_version: number }>(
     `INSERT INTO users (google_id, email, name, avatar_url) VALUES ($1, $2, $3, $4)
      ON CONFLICT (google_id) DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name, avatar_url = EXCLUDED.avatar_url, updated_at = now()
-     RETURNING id, email, name, avatar_url`,
+     RETURNING id, email, name, avatar_url, token_version`,
     [googleId, email, name, avatarUrl],
   )
   const row = rows[0]
   const user: User = { id: row.id, email: row.email, name: row.name, avatarUrl: row.avatar_url }
-  const token = await new SignJWT({ userId: user.id, email: user.email })
+  return { ok: true, user, token: await issueToken(user.id, row.token_version) }
+}
+
+/** A session token: the user, and the version of their sessions, which a sign-out everywhere bumps. */
+export async function issueToken(userId: string, version: number): Promise<string> {
+  return new SignJWT({ userId, v: version })
     .setProtectedHeader({ alg: 'HS256' })
+    .setIssuer(ISSUER)
     .setIssuedAt()
-    .setExpirationTime('30d')
+    .setExpirationTime(`${SESSION_DAYS}d`)
     .sign(JWT_SECRET)
-  return { ok: true, user, token }
+}
+
+/** Every token the user holds stops working; the caller gets none back. */
+export async function revokeAll(userId: string): Promise<void> {
+  await pool.query('UPDATE users SET token_version = token_version + 1, updated_at = now() WHERE id = $1', [userId])
 }
 
 export async function userById(id: string): Promise<User | null> {
@@ -70,19 +83,22 @@ export async function userById(id: string): Promise<User | null> {
   return r ? { id: r.id, email: r.email, name: r.name, avatarUrl: r.avatar_url } : null
 }
 
-export type AuthVars = { userId: string }
+export type AuthVars = { userId: string; tokenVersion: number }
 
 export const requireAuth = createMiddleware<{ Variables: AuthVars }>(async (c, next) => {
   const header = c.req.header('Authorization')
   if (!header?.startsWith('Bearer ')) return c.json({ error: 'Authentication required' }, 401)
   try {
-    const { payload } = await jwtVerify(header.slice(7).trim(), JWT_SECRET)
+    const { payload } = await jwtVerify(header.slice(7).trim(), JWT_SECRET, { algorithms: ['HS256'], issuer: ISSUER, clockTolerance: '60s' })
     const userId = payload.userId as string | undefined
     if (!userId) return c.json({ error: 'Authentication required' }, 401)
-    // A deleted account's token is still a valid signature; the row is what counts.
-    const { rows } = await pool.query('SELECT 1 FROM users WHERE id = $1', [userId])
-    if (!rows[0]) return c.json({ error: 'Authentication required' }, 401)
+    // A deleted account's token is still a valid signature; the row is what counts, and so is
+    // the version: a sign-out everywhere moves it past every token issued before.
+    const { rows } = await pool.query<{ token_version: number }>('SELECT token_version FROM users WHERE id = $1', [userId])
+    const row = rows[0]
+    if (!row || (typeof payload.v === 'number' ? payload.v : 0) !== row.token_version) return c.json({ error: 'Authentication required' }, 401)
     c.set('userId', userId)
+    c.set('tokenVersion', row.token_version)
   } catch {
     return c.json({ error: 'Authentication required' }, 401)
   }

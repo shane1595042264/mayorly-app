@@ -3,8 +3,9 @@ import { join } from 'node:path'
 import { safeStorage } from 'electron'
 import type { Session } from './auth'
 
-// The session token on disk, encrypted with the OS keychain (Keychain on macOS,
-// DPAPI on Windows) when that is available, which it is on both.
+// The session token on disk, encrypted with the OS keychain (Keychain on macOS, DPAPI on
+// Windows). When the keychain is not available the token stays in memory for this run and
+// nothing is written: a token in the clear on disk is worse than signing in again.
 
 export class SessionStore {
   private readonly file: string
@@ -17,8 +18,8 @@ export class SessionStore {
     try {
       if (!existsSync(this.file)) return null
       const raw = readFileSync(this.file)
-      const text = safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(raw) : raw.toString('utf8')
-      const s = JSON.parse(text) as Session
+      if (!safeStorage.isEncryptionAvailable()) return null
+      const s = JSON.parse(safeStorage.decryptString(raw)) as Session
       return s && typeof s.token === 'string' && s.user ? s : null
     } catch (err) {
       console.error('[session] could not read the saved sign-in:', err)
@@ -27,8 +28,11 @@ export class SessionStore {
   }
 
   save(s: Session) {
-    const text = JSON.stringify(s)
-    writeFileSync(this.file, safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text) : Buffer.from(text, 'utf8'))
+    if (!safeStorage.isEncryptionAvailable()) {
+      console.warn('[session] the keychain is not available; the sign-in is kept for this run only')
+      return
+    }
+    writeFileSync(this.file, safeStorage.encryptString(JSON.stringify(s)))
   }
 
   clear() {

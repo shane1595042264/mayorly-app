@@ -108,7 +108,8 @@ export interface AiPublic {
 export interface Bridge {
   kind: 'electron' | 'web'
   getState(): Promise<MayorlyState>
-  dispatch(action: Action): void
+  /** Resolves when the main process has reduced it; rejects when it could not. */
+  dispatch(action: Action): Promise<unknown>
   onState(fn: (state: MayorlyState) => void): () => void
   onEvents(fn: (events: HudEvent[]) => void): () => void
   onCommand(fn: (cmd: Command) => void): () => void
@@ -130,6 +131,10 @@ export interface Bridge {
   signOut(): Promise<void>
   /** Removes the account and its document from the server, then signs out here. */
   deleteAccount(): Promise<void>
+  /** Every session of the account stops working, this one included. */
+  signOutEverywhere(): Promise<void>
+  /** A line for the shell's log file: the renderer has no file of its own. */
+  log(level: 'warn' | 'error', message: string): void
   /** Version, platform and where the data lives. */
   getInfo(): Promise<AppInfo>
   /** Writes the whole state as JSON where the user says; the path, or null when cancelled. */
@@ -184,6 +189,8 @@ export const IPC = {
   signIn: 'mayorly:sign-in',
   signOut: 'mayorly:sign-out',
   deleteAccount: 'mayorly:delete-account',
+  signOutEverywhere: 'mayorly:sign-out-everywhere',
+  log: 'mayorly:log',
   getInfo: 'mayorly:get-info',
   exportState: 'mayorly:export-state',
   importState: 'mayorly:import-state',

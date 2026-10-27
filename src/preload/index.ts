@@ -10,7 +10,7 @@ function sub<T>(channel: string, fn: (v: T) => void): () => void {
 const bridge: Bridge = {
   kind: 'electron',
   getState: () => ipcRenderer.invoke(IPC.getState),
-  dispatch: (action) => void ipcRenderer.invoke(IPC.dispatch, action),
+  dispatch: (action) => ipcRenderer.invoke(IPC.dispatch, action),
   onState: (fn) => sub(IPC.state, fn),
   onEvents: (fn) => sub(IPC.events, fn),
   onCommand: (fn) => sub(IPC.command, fn),
@@ -25,6 +25,8 @@ const bridge: Bridge = {
   signIn: () => ipcRenderer.invoke(IPC.signIn),
   signOut: () => ipcRenderer.invoke(IPC.signOut),
   deleteAccount: () => ipcRenderer.invoke(IPC.deleteAccount),
+  signOutEverywhere: () => ipcRenderer.invoke(IPC.signOutEverywhere),
+  log: (level, message) => ipcRenderer.send(IPC.log, level, message),
   getInfo: () => ipcRenderer.invoke(IPC.getInfo),
   exportState: () => ipcRenderer.invoke(IPC.exportState),
   importState: () => ipcRenderer.invoke(IPC.importState),

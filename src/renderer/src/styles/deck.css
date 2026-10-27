@@ -173,7 +173,7 @@
 .deck .row-edit { height: 32px; }
 .row-time { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-2); }
 .deck .est { width: 64px; height: 30px; font-size: 12px; text-align: right; }
-.row-actions { display: flex; gap: 2px; opacity: 0.55; transition: opacity 0.15s; }
+.row-actions { display: flex; gap: 2px; opacity: 0.8; transition: opacity 0.15s; }
 .row:hover .row-actions, .row:focus-within .row-actions { opacity: 1; }
 
 .flow-side { padding-left: 24px; border-left: 1px solid var(--line); }
@@ -245,7 +245,7 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .ss-item.on { border-color: var(--ink-3); box-shadow: inset 2px 0 0 var(--accent); }
 .ss-item-name { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 500; }
 .ss-item .small { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.live-tag { margin-left: auto; padding: 1px 6px; border: 1px solid var(--accent-2); color: var(--accent); font-size: 10px; }
+.live-tag { margin-left: auto; padding: 1px 6px; border: 1px solid var(--accent-2); color: var(--accent); font-size: 11px; }
 .ss-new { display: flex; align-items: center; gap: 8px; border-style: dashed; color: var(--ink-2); }
 .ss-new:disabled { opacity: 0.4; }
 

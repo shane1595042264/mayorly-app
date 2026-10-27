@@ -52,9 +52,14 @@ export function installLog(dataDir: string) {
   process.on('unhandledRejection', (reason) => write('error', ['unhandledRejection', reason instanceof Error ? reason : String(reason)]))
   app.on('child-process-gone', (_e, d) => write('error', ['child-process-gone', d]))
   // A renderer that dies comes back; the state lives in the main process, so nothing is lost.
+  // Three deaths in five minutes is not a glitch, and the log is left to say so.
+  const deaths: number[] = []
   app.on('render-process-gone', (_e, wc, d) => {
     write('error', ['render-process-gone', d])
-    if (d.reason !== 'clean-exit' && !wc.isDestroyed()) wc.reload()
+    const now = Date.now()
+    while (deaths.length && now - deaths[0] > 5 * 60_000) deaths.shift()
+    deaths.push(now)
+    if (d.reason !== 'clean-exit' && !wc.isDestroyed() && deaths.length <= 3) wc.reload()
   })
   write('info', [`Mayorly ${app.getVersion()} ${process.platform} ${process.arch} electron ${process.versions.electron} packaged=${app.isPackaged}`])
 }

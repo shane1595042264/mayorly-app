@@ -313,7 +313,8 @@ export class AiClerk {
     try {
       if (!existsSync(this.file)) return
       const raw = readFileSync(this.file)
-      const text = safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(raw) : raw.toString('utf8')
+      if (!safeStorage.isEncryptionAvailable()) return
+      const text = safeStorage.decryptString(raw)
       const d = JSON.parse(text) as Partial<Saved>
       this.data = { keys: Array.isArray(d.keys) ? d.keys : [], preferredProvider: d.preferredProvider ?? null, usage: Array.isArray(d.usage) ? d.usage : [] }
     } catch (err) {
@@ -324,7 +325,12 @@ export class AiClerk {
   private save() {
     try {
       const text = JSON.stringify(this.data)
-      writeFileSync(this.file, safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(text) : Buffer.from(text, 'utf8'))
+      if (!safeStorage.isEncryptionAvailable()) {
+        // Keys in the clear on disk would break the promise in Settings; they live for this run only.
+        console.warn('[ai] the keychain is not available; keys are kept for this run only')
+        return
+      }
+      writeFileSync(this.file, safeStorage.encryptString(text))
     } catch (err) {
       console.error('[clerk] could not save the AI keys:', err)
     }

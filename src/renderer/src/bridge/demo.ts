@@ -1,11 +1,11 @@
-import { firstRunState, reduce, type MayorlyState } from '@core/index'
+import { reduce, sampleState, type MayorlyState } from '@core/index'
 
 // Sample data for the browser preview (?demo). Never used by the desktop app.
 
 const MIN = 60_000
 
 export function demoState(now: number, newId: () => string): MayorlyState {
-  let s = firstRunState(now - 7 * 86_400_000, newId)
+  let s = sampleState(now - 7 * 86_400_000, newId)
   let t = now - 7 * 86_400_000
   const run = (a: Parameters<typeof reduce>[1], at = t) => {
     s = reduce(s, a, { now: at, newId, random: () => 0.42 }).state

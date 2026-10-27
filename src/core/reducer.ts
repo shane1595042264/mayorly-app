@@ -5,6 +5,7 @@ import type {
 import { advance, blitzBlock, firstBlock, firstOpenInLedger, initialPlan, nextInFlow, openFlow, type DeployOpts } from './planner'
 import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_BLOCK, tokensForTomato } from './rules'
 import { migrate } from './seed'
+import { mergeStates } from './merge'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
 export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'trayTimer'] as const
@@ -51,6 +52,7 @@ export type Action =
   | { type: 'settings/update'; patch: Partial<Settings> }
   /** The account's state arrived from the sync server and replaces this copy. */
   | { type: 'sync/replace'; state: unknown }
+  | { type: 'sync/merge'; state: unknown; syncedAt: number | null }
 
 export interface Result {
   state: MayorlyState
@@ -60,6 +62,18 @@ export interface Result {
 export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Clerk = prefixClerk): Result {
   // The heartbeat runs every second; only pay for a copy when something is due.
   if (action.type === 'desk/tick' && !tickDue(state, ctx.now)) return { state, events: [] }
+
+  if (action.type === 'sync/merge') {
+    const incoming = migrate(action.state)
+    if (!incoming) return { state, events: [] }
+    const merged = mergeStates(state, incoming, action.syncedAt)
+    merged.settings = sanitiseSettings({ ...merged.settings, ...Object.fromEntries(DEVICE_SETTINGS.map((k) => [k, state.settings[k]])) })
+    // A desk taken from another machine is not running here: pause it where that copy last was.
+    if (merged.desk !== state.desk && merged.desk.status === 'running') {
+      return reduce(merged, { type: 'desk/pause', at: Math.min(ctx.now, merged.desk.runStartedAt ?? ctx.now) }, ctx, clerk)
+    }
+    return { state: merged, events: [] }
+  }
 
   if (action.type === 'sync/replace') {
     const incoming = migrate(action.state)
@@ -264,6 +278,16 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const i = s.supersets.findIndex((x) => x.id === ss.id)
       if (i >= 0) s.supersets[i] = ss
       else s.supersets.push(ss)
+      // Saving the superset that is running: the plan keeps only the slots that still exist.
+      const plan = s.desk.plan
+      if (plan && plan.supersetId === ss.id) {
+        const sequence = plan.sequence.filter((x) => x < ss.slots.length)
+        if (sequence.length === 0) endSitting(s, now, ev, 'stood')
+        else {
+          plan.sequence = sequence
+          plan.step = Math.min(plan.step, sequence.length - 1)
+        }
+      }
       break
     }
     case 'superset/delete':

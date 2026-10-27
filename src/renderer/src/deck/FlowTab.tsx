@@ -114,6 +114,7 @@ export function FlowTab({ s }: { s: MayorlyState }) {
             <p className="empty-title">The flow is empty.</p>
             <p>Capture anything from anywhere with {hotkeyLabel(s.settings.hotkeys.capture)}. It lands here in order, and Blitz runs it top to bottom.</p>
             <p>{hotkeyLabel(s.settings.hotkeys.plus)} deploys the desk, {hotkeyLabel(s.settings.hotkeys.deck)} opens this deck, and ? lists every key.</p>
+            {s.ledgers.length === 0 && <p>No ledgers yet: write one or three on the Shelf (press 2) so the clerk has somewhere to file.</p>}
           </div>
         ) : (
           <Reorder.Group axis="y" values={ids} onReorder={setIds} className="flow-list" as="ol">
@@ -161,8 +162,8 @@ function Row({ e, s, index, live, selected, renameTick, now, onDrop }: { e: Entr
   const est = e.estimateMin
 
   return (
-    <Reorder.Item value={e.id} dragListener={false} dragControls={controls} onDragEnd={onDrop} className={`row ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} data-row={e.id} aria-selected={selected} as="li">
-      <span className="grip" onPointerDown={(ev) => controls.start(ev)} aria-label="Drag to reorder">
+    <Reorder.Item value={e.id} dragListener={false} dragControls={controls} onDragEnd={onDrop} className={`row ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} data-row={e.id} aria-current={selected ? 'true' : undefined} as="li">
+      <span className="grip" role="button" onPointerDown={(ev) => controls.start(ev)} aria-label="Drag to reorder">
         <DotsSixVertical size={16} />
       </span>
       <span className="row-n mono num dim">{String(index + 1).padStart(2, '0')}</span>

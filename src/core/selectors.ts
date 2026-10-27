@@ -131,20 +131,21 @@ export function objectives(s: MayorlyState) {
     name: ss.name,
     round: plan.round,
     rounds: ss.rounds,
-    slots: plan.sequence.map((slotIndex, i) => {
+    slots: plan.sequence.flatMap((slotIndex, i) => {
       const slot = ss.slots[slotIndex]
+      if (!slot) return []
       const ledgerId =
         slot.target.kind === 'ledger'
           ? slot.target.ledgerId
           : s.entries.find((e) => e.id === (slot.target as { entryId: Id }).entryId)?.ledgerId ?? null
       const ledger = s.ledgers.find((l) => l.id === ledgerId) ?? null
-      return {
+      return [{
         key: slot.id,
         letter: String.fromCharCode(65 + i),
         code: ledger?.code ?? '---',
         minutes: slot.minutes,
         state: i < plan.step ? 'done' : i === plan.step ? (resting ? 'next' : 'active') : 'queued',
-      } as const
+      } as const]
     }),
   }
 }

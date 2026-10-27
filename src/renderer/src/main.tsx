@@ -1,8 +1,10 @@
 import { StrictMode } from 'react'
+import { MotionConfig } from 'motion/react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { CaptionApp } from './hud/Caption'
 import { EffectsApp } from './hud/Effects'
+import { ErrorBoundary } from './lib/ErrorBoundary'
 import './styles/base.css'
 import './styles/hud.css'
 import './styles/plus.css'
@@ -18,6 +20,8 @@ if (effects) document.body.classList.add('effects')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {caption ? <CaptionApp /> : effects ? <EffectsApp /> : <App />}
+    <MotionConfig reducedMotion="user">
+      <ErrorBoundary>{caption ? <CaptionApp /> : effects ? <EffectsApp /> : <App />}</ErrorBoundary>
+    </MotionConfig>
   </StrictMode>,
 )

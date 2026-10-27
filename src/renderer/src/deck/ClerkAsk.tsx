@@ -57,7 +57,7 @@ export function ClerkAsk() {
           <div className="clerk-ask-body">
             <p className="clerk-ask-q">{q.question}</p>
             <input
-              autoFocus
+              autoFocus={document.activeElement === null || document.activeElement === document.body}
               value={text}
               placeholder="Care to explain? Optional."
               onChange={(e) => {

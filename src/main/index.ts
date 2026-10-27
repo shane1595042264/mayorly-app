@@ -1,6 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs'
-import { hostname } from 'node:os'
-import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification } from 'electron'
+import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor } from 'electron'
 import { migrate, type Action, type HudEvent, type Settings } from '@core/index'
 import { IPC, type AiProvider, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { AiClerk, KeyCheckError } from './ai/service'
@@ -55,10 +54,11 @@ function boot() {
   }
   // An accessory app has no menu bar, but its menu still gives the panel its key equivalents:
   // Cmd+C, V, X, A, Z in text fields, Cmd+Q to quit, Cmd+W to close what is open.
+  // Not the appMenu role: it would give a menu bar app Cmd+H and Hide Others with no way back.
   Menu.setApplicationMenu(
     process.platform === 'darwin'
       ? Menu.buildFromTemplate([
-          { role: 'appMenu' },
+          { label: 'Mayorly', submenu: [{ label: 'Quit Mayorly', accelerator: 'Command+Q', click: () => app.quit() }] },
           { role: 'editMenu' },
           { label: 'Window', submenu: [{ label: 'Close', accelerator: 'Command+W', click: () => send(IPC.command, 'close') }] },
         ])
@@ -78,6 +78,13 @@ function boot() {
     if (st === 'running') engine.dispatch({ type: 'desk/pause' })
     else if (st === 'paused' || st === 'ready') engine.dispatch({ type: 'desk/resume' })
   }
+  // A locked screen or a sleeping machine is not a desk. The rule that time the app could not
+  // see is not desk time, applied the moment it starts; the user resumes when they are back.
+  const hold = () => {
+    if (engine.state.desk.status === 'running') engine.dispatch({ type: 'desk/pause', at: Date.now() })
+  }
+  powerMonitor.on('suspend', hold)
+  powerMonitor.on('lock-screen', hold)
 
   // The AI clerk: a captured line goes to the user's own model first, when there is
   // one, and arrives at the reducer with its filing. Any failure files by prefix.
@@ -118,7 +125,15 @@ function boot() {
     const action: Action = { type: 'entry/capture', text }
     if (!clerk.enabled()) return engine.dispatch(action)
     say({ phase: 'working', text: `Clerk is filing '${short(text.trim())}'` })
-    const filing = await clerk.fileEntry(text, engine.state.ledgers, engine.state.houseRules.map((r) => r.text))
+    let filing: Awaited<ReturnType<typeof clerk.fileEntry>> = null
+    try {
+      filing = await clerk.fileEntry(text, engine.state.ledgers, engine.state.houseRules.map((r) => r.text))
+    } catch (err) {
+      // The provider is down or the key is bad: the line still lands, in the tray.
+      console.warn('[clerk] could not file:', err instanceof Error ? err.message : String(err))
+      say({ phase: 'done', text: `The clerk could not reach its model. '${short(text.trim())}' is in the tray.` })
+      return engine.dispatch(action)
+    }
     const r = engine.dispatch(filing ? { ...action, filing } : action)
     const ledger = filing?.ledgerId ? engine.state.ledgers.find((l) => l.id === filing.ledgerId) : null
     const title = short(filing?.title ?? text.trim())
@@ -152,7 +167,7 @@ function boot() {
   // Account and sync. The session lives encrypted in userData; the sync loop pushes
   // this machine's state and takes the server's when another machine wrote first.
   const sessions = new SessionStore(dataDir)
-  const sync = new Sync(engine, config.apiUrl, `${hostname()} (${process.platform})`, (st) => send(IPC.sync, st))
+  const sync = new Sync(engine, config.apiUrl, dataDir, (st) => send(IPC.sync, st))
   let session = accountsConfigured() ? sessions.load() : null
   const setSession = (s: typeof session) => {
     session = s
@@ -162,6 +177,11 @@ function boot() {
     send(IPC.account, s?.user ?? null)
   }
   sync.onExpired = () => setSession(null)
+  sync.onRefreshed = (token) => {
+    if (!session) return
+    session = { ...session, token }
+    sessions.save(session)
+  }
   if (session) sync.setSession(session.token)
   overlay.win.webContents.on('did-finish-load', () => {
     send(IPC.account, session?.user ?? null)
@@ -177,6 +197,13 @@ function boot() {
     return s.user
   })
   ipcMain.handle(IPC.signOut, () => setSession(null))
+  ipcMain.handle(IPC.signOutEverywhere, async () => {
+    if (!session) return
+    const res = await fetch(`${config.apiUrl}/auth/signout-all`, { method: 'POST', headers: { Authorization: `Bearer ${session.token}` } })
+    if (!res.ok && res.status !== 401) throw new Error(`The server answered ${res.status}`)
+    setSession(null)
+  })
+  ipcMain.on(IPC.log, (_e, level: string, message: string) => (level === 'error' ? log.error : log.warn)('[renderer]', String(message).slice(0, 2000)))
   ipcMain.handle(IPC.deleteAccount, async () => {
     if (!session) return
     const res = await fetch(`${config.apiUrl}/account`, { method: 'DELETE', headers: { Authorization: `Bearer ${session.token}` } })
@@ -304,8 +331,10 @@ function boot() {
   updates.onReady((v) => say({ phase: 'done', text: `Mayorly ${v} is ready. Restart from the menu bar tomato to update.` }))
   createTray(engine, overlay, { command, togglePause, dataDir, updates })
   overlay.load()
-  // The first launch opens the deck on the flow, which says what the keys are.
+  // The first launch opens the deck, which starts on the shelf and says what the keys are.
   if (engine.fresh) overlay.win.webContents.once('did-finish-load', () => setTimeout(() => command('deck'), 1200))
+  // A save that could not be read: say which backup stood in, where the user will see it.
+  if (engine.restoredFrom) overlay.win.webContents.once('did-finish-load', () => setTimeout(() => say({ phase: 'done', text: `The save could not be read. Restored from ${engine.restoredFrom}; the original is parked beside it.` }), 2500))
   engine.start()
   // The tray is sorted once at every launch, after the window is up.
   setTimeout(() => void sweepTray(), 4000)
@@ -322,11 +351,11 @@ function boot() {
     const what = (u.hostname || u.pathname.replace(/^\/+/, '')).toLowerCase()
     const text = (u.searchParams.get('text') ?? '').trim().slice(0, 500)
     log.info('url', what, text ? `${text.length} chars` : '')
+    // Opening things and capturing are what a link may do; clearing an entry or switching the
+    // desk is not, since any page can open a link.
     if (what === 'capture' && text) void captureLine(text)
     else if (what === 'capture' || what === 'deck' || what === 'plus') command(what)
     else if (what === 'pause') togglePause()
-    else if (what === 'clear') clearDesk()
-    else if (what === 'switch') engine.dispatch({ type: 'desk/switch' })
   }
   if (app.isPackaged) app.setAsDefaultProtocolClient('mayorly')
   onUrl = handleUrl
@@ -349,6 +378,8 @@ function boot() {
     void sync.flush().finally(() => app.quit())
   })
   app.on('will-quit', () => globalShortcut.unregisterAll())
+  // Windows: the user logs out or shuts down; the save is flushed like a quit.
+  ;(app as unknown as NodeJS.EventEmitter).on('session-end', () => engine.stop())
   // The HUD lives in the tray; closing its window is not quitting.
   app.on('window-all-closed', () => {})
 }

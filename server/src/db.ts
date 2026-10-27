@@ -15,6 +15,7 @@ export const pool = new pg.Pool({
   ssl: url.includes('railway.internal') || url.includes('localhost') || url.includes('127.0.0.1') ? undefined : { rejectUnauthorized: false },
 })
 
+/** The schema, created and brought up to date on boot; every statement is safe to run again. */
 export async function migrate() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -33,5 +34,20 @@ export async function migrate() {
       device text,
       updated_at timestamptz NOT NULL DEFAULT now()
     );
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version integer NOT NULL DEFAULT 0;
   `)
+}
+
+/** Postgres may come up after the app does: try for a while before giving up. */
+export async function migrateWithRetry(attempts = 10, waitMs = 3_000) {
+  for (let i = 1; ; i++) {
+    try {
+      await migrate()
+      return
+    } catch (err) {
+      if (i >= attempts) throw err
+      console.error(`[db] not ready (attempt ${i} of ${attempts}):`, err instanceof Error ? err.message : err)
+      await new Promise((r) => setTimeout(r, waitMs))
+    }
+  }
 }

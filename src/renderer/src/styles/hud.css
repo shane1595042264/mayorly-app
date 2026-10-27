@@ -162,7 +162,7 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
 }
 .obj-code { font-size: 11px; color: var(--ink-2); }
 .obj-active .obj-code { color: var(--ink); }
-.obj-min { font-size: 10px; color: var(--ink-3); }
+.obj-min { font-size: 11px; color: var(--ink-3); }
 
 /* ------------------------------------------------------------ feed */
 
@@ -355,3 +355,9 @@ body.effects { background: transparent; }
 .cashin-num { font-size: 30px; font-weight: 600; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
 .cashin-plus { font-size: 14px; color: var(--accent); }
 .cashin-coin { position: absolute; left: 0; top: 0; width: 32px; height: 32px; image-rendering: pixelated; filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.5)); }
+
+/* ------------------------------------------------------------ when the HUD itself breaks */
+.hud-error { position: fixed; right: 16px; bottom: 16px; z-index: var(--z-toast); display: grid; gap: 8px; max-width: 360px; padding: 14px 16px; border: 1px solid var(--line-2); background: var(--glass); color: var(--ink); box-shadow: 0 12px 40px rgb(0 0 0 / 0.45); }
+.hud-error-title { margin: 0; font-size: 15px; }
+.hud-error-text { margin: 0; font-size: 11px; color: var(--ink-3); overflow-wrap: anywhere; }
+.hud-error .btn { justify-self: start; }

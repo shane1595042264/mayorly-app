@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion, useTransform } from 'motion/react'
 import { X } from '@phosphor-icons/react'
 import { balance, type MayorlyState } from '@core/index'
@@ -20,8 +20,11 @@ type Tab = (typeof TABS)[number]
 let remembered: Tab = 'Flow'
 
 export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; kind: 'electron' | 'web' }) {
-  const [tab, setTabState] = useState<Tab>(remembered)
+  // A shelf with no ledgers is where a new install starts.
+  const [tab, setTabState] = useState<Tab>(() => (s.ledgers.length === 0 && remembered === 'Flow' ? 'Shelf' : remembered))
   const [keymap, setKeymap] = useState(false)
+  const panel = useRef<HTMLElement>(null)
+  useEffect(() => panel.current?.focus(), [])
   const reduce = useReducedMotion()
   const lean = useLean(1.4)
   const rotateX = useTransform(lean.rotateX, (r) => 3 + r)
@@ -73,14 +76,18 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
         initial={reduce ? false : { z: -120, opacity: 0 }}
         animate={{ z: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 180, damping: 24 }}
+        role="dialog"
+        aria-modal="true"
         aria-label="Deck"
+        tabIndex={-1}
+        ref={panel}
       >
         <header className="deck-head">
           <span className="deck-mark caps">Mayorly</span>
           <nav className="tabs" role="tablist">
             <span className="key">Q</span>
             {TABS.map((t) => (
-              <button key={t} role="tab" aria-selected={tab === t} className={`tab caps ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>
+              <button key={t} id={`tab-${t}`} role="tab" aria-selected={tab === t} aria-controls="deck-panel" className={`tab caps ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>
                 {t}
                 {tab === t && <motion.i layoutId="tab-bar" className="tab-bar" />}
               </button>
@@ -96,7 +103,7 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
           </button>
         </header>
 
-        <div className="deck-body">
+        <div className="deck-body" role="tabpanel" id="deck-panel" aria-labelledby={`tab-${tab}`}>
           {tab === 'Flow' && <FlowTab s={s} />}
           {tab === 'Shelf' && <ShelfTab s={s} />}
           {tab === 'Supersets' && <SupersetsTab s={s} />}

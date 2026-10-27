@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_HOTKEYS } from './seed'
+import { DEFAULT_HOTKEYS, firstRunState } from './seed'
 import {
   type Action, type HudEvent, type MayorlyState,
-  balance, blockView, clock, dayStats, deriveCode, firstRunState, formatSuperset, objectives,
+  balance, blockView, clock, dayStats, deriveCode, sampleState, formatSuperset, objectives,
   parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
 } from './index'
 
 const MIN = 60_000
 const T0 = new Date('2026-10-09T09:00:00').getTime()
 
-function world(seed?: (s: MayorlyState) => void) {
+function world(seed?: (s: MayorlyState) => void, prefix = '') {
   let n = 0
-  const newId = () => `id${++n}`
+  const newId = () => `${prefix}id${++n}`
   let now = T0
-  let state = firstRunState(now, newId)
+  let state = sampleState(now, newId)
   seed?.(state)
   const events: HudEvent[] = []
   const w = {
@@ -50,7 +50,7 @@ describe('token economy', () => {
 })
 
 describe('clerk', () => {
-  const s = firstRunState(T0, () => Math.random().toString())
+  const s = sampleState(T0, () => Math.random().toString())
   it('files by prefix, by tag, or leaves it in the tray', () => {
     expect(prefixClerk.file('legal: read the lease ~30', s.ledgers)).toMatchObject({
       title: 'read the lease', ledgerId: s.ledgers[0].id, estimateMin: 30,
@@ -234,7 +234,7 @@ describe('swap', () => {
 describe('superset syntax', () => {
   it('parses slots and options', () => {
     let k = 0
-    const s = firstRunState(T0, () => `L${++k}`)
+    const s = sampleState(T0, () => `L${++k}`)
     let n = 0
     const r = parseSuperset('legal 25, dance 20 > career x2 rest 3 rr 10 shuffle', s.ledgers, () => `p${++n}`)
     expect(r.ok).toBe(true)
@@ -245,7 +245,7 @@ describe('superset syntax', () => {
   })
   it('names the ledger it could not find', () => {
     let k = 0
-    const s = firstRunState(T0, () => `L${++k}`)
+    const s = sampleState(T0, () => `L${++k}`)
     expect(parseSuperset('legal 25, cooking 20', s.ledgers, () => 'y')).toEqual({ ok: false, error: 'No ledger called "cooking"' })
   })
 })
@@ -595,5 +595,75 @@ describe('keymap', () => {
     w.do({ type: 'settings/update', patch: { keymap: { 'list.down': ['n', 'ArrowDown'] } } })
     expect(w.s.settings.keymap['list.down']).toEqual(['n', 'ArrowDown'])
     expect(w.s.settings.keymap['list.up']).toBeUndefined()
+  })
+})
+
+describe('first run', () => {
+  it('starts with an empty shelf and nothing in the flow', () => {
+    const s = firstRunState(T0, () => 'x')
+    expect(s.ledgers).toEqual([])
+    expect(s.entries).toEqual([])
+    expect(s.supersets).toEqual([])
+  })
+})
+
+describe('sync merge', () => {
+  const ctx = { now: T0 + 60 * MIN, newId: () => `m${Math.random()}`, random: () => 0.5 }
+  it('keeps work this machine did since its last sync and takes the server\'s version of what both have', () => {
+    const a = world()
+    a.do({ type: 'entry/capture', text: 'legal: shared one' })
+    const synced = structuredClone(a.s)
+    const syncedAt = a.now
+    // This machine, after the sync: a new entry.
+    a.wait(1000)
+    a.do({ type: 'entry/capture', text: 'legal: only here, new' })
+    const shared = a.entry('shared one')
+    // The server, meanwhile: the shared one renamed by another machine, and one more entry.
+    const server = structuredClone(synced)
+    server.entries[0].title = 'shared one, renamed'
+    server.entries.push({ ...server.entries[0], id: 'srv', title: 'from the other machine', createdAt: syncedAt + 1 })
+    const r = reduce(a.s, { type: 'sync/merge', state: server, syncedAt }, ctx)
+    const titles = r.state.entries.map((e) => e.title)
+    expect(titles).toContain('shared one, renamed')
+    expect(titles).toContain('from the other machine')
+    expect(titles).toContain('only here, new')
+    expect(r.state.entries.find((e) => e.id === shared.id)?.title).toBe('shared one, renamed')
+  })
+  it('drops an entry only this machine has when it is older than the last sync: it was deleted elsewhere', () => {
+    const a = world()
+    a.do({ type: 'entry/capture', text: 'legal: deleted on the other machine' })
+    const server = structuredClone(a.s)
+    server.entries = []
+    const r = reduce(a.s, { type: 'sync/merge', state: server, syncedAt: a.now + 1 }, ctx)
+    expect(r.state.entries).toEqual([])
+  })
+  it('unions sittings and coins, so no machine\'s desk time is lost', () => {
+    const a = world()
+    a.do({ type: 'desk/deploy', mode: 'pomodoro' })
+    a.wait(25 * MIN + 1000)
+    a.do({ type: 'desk/standDown' })
+    const b = world(undefined, 'b')
+    b.do({ type: 'desk/deploy', mode: 'pomodoro' })
+    b.wait(50 * MIN + 1000)
+    b.do({ type: 'desk/standDown' })
+    const r = reduce(a.s, { type: 'sync/merge', state: b.s, syncedAt: null }, { ...ctx, now: b.now })
+    expect(r.state.sittings.length).toBe(2)
+    expect(balance(r.state)).toBe(balance(a.s) + balance(b.s))
+  })
+  it('leaves the desk alone on the machine that is running it', () => {
+    const a = world()
+    a.do({ type: 'desk/deploy', mode: 'pomodoro' })
+    a.wait(5 * MIN)
+    const server = structuredClone(a.s)
+    server.desk = { ...server.desk, status: 'paused' }
+    const r = reduce(a.s, { type: 'sync/merge', state: server, syncedAt: a.now - 10 * MIN }, { ...ctx, now: a.now })
+    expect(r.state.desk.status).toBe('running')
+    expect(r.state.desk.sittingId).toBe(a.s.desk.sittingId)
+  })
+  it('refuses a document it cannot read and leaves the state untouched', () => {
+    const a = world()
+    const before = a.s
+    const r = reduce(a.s, { type: 'sync/merge', state: { schema: 99 }, syncedAt: null }, ctx)
+    expect(r.state).toBe(before)
   })
 })

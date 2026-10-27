@@ -61,6 +61,7 @@ export class Overlay {
   private effectsReady = false
   private effectQueue: Effect[] = []
   private effectsHide: NodeJS.Timeout | null = null
+  private effectsClose: NodeJS.Timeout | null = null
   private fitting = false
   private settle: NodeJS.Timeout | null = null
   private readonly anchorFile: string
@@ -117,7 +118,15 @@ export class Overlay {
     this.startHoverPoll()
 
     screen.on('display-metrics-changed', () => this.fit())
-    screen.on('display-removed', () => this.fit())
+    // The pet's display went away: it moves to the primary one, at its default spot there.
+    screen.on('display-removed', (_e, d) => {
+      if (d.id === this.displayId) {
+        this.displayId = screen.getPrimaryDisplay().id
+        this.anchor = null
+        this.saveAnchor()
+      }
+      this.fit()
+    })
   }
 
   load() {
@@ -237,16 +246,23 @@ export class Overlay {
     else this.effectQueue.push(effect)
   }
 
-  /** The effects page says it has finished. */
+  /** The effects page says it has finished. The window goes a minute later: a renderer should not idle all day for one harvest. */
   effectDone() {
     debug('effect done')
     if (this.effectsHide) clearTimeout(this.effectsHide)
     this.effectsHide = null
     this.effects?.hide()
+    if (this.effectsClose) clearTimeout(this.effectsClose)
+    this.effectsClose = setTimeout(() => {
+      this.effectsClose = null
+      if (this.effects && !this.effects.isDestroyed() && !this.effects.isVisible()) this.effects.close()
+    }, 60_000)
   }
 
   private playEffect(e: Effect) {
     if (!this.effects || this.effects.isDestroyed()) return
+    if (this.effectsClose) clearTimeout(this.effectsClose)
+    this.effectsClose = null
     this.effects.setBounds(this.display().workArea)
     debug('effect', e.kind, e.amount, 'from', e.from)
     this.effects.webContents.send(IPC.effect, e)

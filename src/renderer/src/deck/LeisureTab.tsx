@@ -93,7 +93,7 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
               const expanded = open === it.id
               return (
                 <Fragment key={it.id}>
-                <li className={`row leisure-row ${live ? 'live' : ''} ${expanded ? 'expanded' : ''} ${sel === it.id ? 'is-selected' : ''}`} data-row={it.id} aria-selected={sel === it.id}>
+                <li className={`row leisure-row ${live ? 'live' : ''} ${expanded ? 'expanded' : ''} ${sel === it.id ? 'is-selected' : ''}`} data-row={it.id} aria-current={sel === it.id ? 'true' : undefined}>
                   <span className="row-n mono num dim">{String(i + 1).padStart(2, '0')}</span>
                   <button className="icon-btn" aria-expanded={expanded} aria-label={expanded ? 'Hide context switch rules' : 'Show context switch rules'} title="Context switch rules" onClick={() => setOpen(expanded ? null : it.id)}>
                     {expanded ? <CaretDown size={14} /> : <CaretRight size={14} />}

@@ -220,7 +220,7 @@ function LedgerRow({ s, e, index, now, live, selected, renameTick }: { s: Mayorl
   }, [renameTick])
   const spent = entrySpentMs(s, e.id, now)
   return (
-    <li className={`row ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} data-row={e.id} aria-selected={selected}>
+    <li className={`row ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} data-row={e.id} aria-current={selected ? 'true' : undefined}>
       <span className="row-n mono num dim">{String(index + 1).padStart(2, '0')}</span>
       <select
         className="code-select mono"

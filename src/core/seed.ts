@@ -45,7 +45,15 @@ export function emptyState(): MayorlyState {
 }
 
 /** First run: the three ledgers from the founder's brief and one rotation across them. */
-export function firstRunState(now: number, newId: () => string): MayorlyState {
+/** A new install: an empty shelf and a tray. The ledgers are the user's to write. */
+export function firstRunState(now: number, _newId: () => string): MayorlyState {
+  const s = emptyState()
+  s.clerkLog = [{ at: now, text: 'hall opened: shelf empty, tray open' }]
+  return s
+}
+
+/** Three ledgers, a rotation and a log line: the demo and the tests start here. */
+export function sampleState(now: number, newId: () => string): MayorlyState {
   const s = emptyState()
   const legal = newId()
   const dance = newId()

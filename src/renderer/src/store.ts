@@ -25,7 +25,10 @@ export function useMayorly(): MayorlyState | null {
   )
 }
 
-export const dispatch = (a: Action) => bridge.dispatch(a)
+export const dispatch = (a: Action) =>
+  bridge.dispatch(a).catch((e: unknown) => {
+    bridge.log('error', `dispatch ${a.type}: ${e instanceof Error ? e.message : String(e)}`)
+  })
 
 /** Latest snapshot, for event handlers that must not close over a stale render. */
 export const current = () => state

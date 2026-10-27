@@ -86,7 +86,7 @@ export function blitzBlock(s: MayorlyState, entry: Entry, now: number): Block {
 }
 
 export function focusForSlot(s: MayorlyState, ss: Superset, slotIndex: number, round: number): Block {
-  const slot = ss.slots[slotIndex]
+  const slot = ss.slots[slotIndex] ?? ss.slots[ss.slots.length - 1]
   let ledgerId: Id | null = null
   let entry: Entry | null = null
   if (slot.target.kind === 'ledger') {

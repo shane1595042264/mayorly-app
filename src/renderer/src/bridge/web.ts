@@ -72,13 +72,21 @@ export function createWebBridge(): Bridge {
     // By key position: with Option held, macOS reports the composed character, not the letter.
     const k = physicalKey(e)
     const combo = `Alt+${e.shiftKey ? 'Shift+' : ''}${k.length === 1 ? k.toUpperCase() : k}`
-    const map: Record<string, Command | 'pause'> = { [hk.plus]: 'plus', [hk.capture]: 'capture', [hk.deck]: 'deck', [hk.pause]: 'pause', [hk.move]: 'move' }
+    const map: Record<string, Command | 'pause' | 'switch' | 'clear' | 'hide'> = {
+      [hk.plus]: 'plus', [hk.capture]: 'capture', [hk.deck]: 'deck', [hk.pause]: 'pause', [hk.move]: 'move', [hk.switch]: 'switch', [hk.clear]: 'clear', [hk.hide]: 'hide',
+    }
     const cmd = map[combo]
     if (!cmd) return
     e.preventDefault()
     if (cmd === 'pause') {
       const st = state.desk.status
       dispatch(st === 'running' ? { type: 'desk/pause' } : { type: 'desk/resume' })
+    } else if (cmd === 'switch') dispatch({ type: 'desk/switch' })
+    else if (cmd === 'clear') {
+      const id = state.desk.block?.entryId
+      if (id) dispatch({ type: 'entry/complete', id })
+    } else if (cmd === 'hide') {
+      // A browser tab has nothing to hide behind.
     } else cmdSubs.forEach((f) => f(cmd))
   })
 
@@ -90,7 +98,7 @@ export function createWebBridge(): Bridge {
   return {
     kind: 'web',
     getState: async () => state,
-    dispatch,
+    dispatch: async (a: Action) => dispatch(a),
     onState: (fn) => sub(stateSubs, fn),
     onEvents: (fn) => sub(eventSubs, fn),
     onCommand: (fn) => sub(cmdSubs, fn),
@@ -105,6 +113,8 @@ export function createWebBridge(): Bridge {
     signIn: async () => { throw new Error('Sign in from the desktop app') },
     signOut: async () => {},
     deleteAccount: async () => {},
+    signOutEverywhere: async () => {},
+    log: (level, message) => console[level](message),
     getInfo: async () => ({ version: 'web', platform: 'web', arch: '', dataDir: 'this browser', packaged: false }),
     exportState: async () => {
       // A browser can still hand the state over: as a download.

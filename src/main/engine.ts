@@ -11,6 +11,8 @@ export class Engine {
   state: MayorlyState
   /** The first launch on this machine: nothing saved yet. */
   readonly fresh: boolean
+  /** The save could not be read and this backup stood in. */
+  readonly restoredFrom: string | null
   private lastBeat: number | null
   private listeners = new Set<Listener>()
   private beat: NodeJS.Timeout | null = null
@@ -20,6 +22,7 @@ export class Engine {
     const saved = store.load(randomUUID)
     this.state = saved.state
     this.fresh = !!saved.fresh
+    this.restoredFrom = saved.restoredFrom ?? null
     this.lastBeat = saved.lastBeat
     // The app was closed or crashed mid-block. Pause where the last heartbeat
     // landed: time the app could not see is not desk time.

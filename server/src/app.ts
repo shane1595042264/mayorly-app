@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { pool } from './db.js'
-import { requireAuth, signInWithGoogle, userById, type AuthVars } from './auth.js'
+import { issueToken, requireAuth, revokeAll, signInWithGoogle, userById, type AuthVars } from './auth.js'
 
 // Routes. The server keeps no rules of the product: it stores one state document
 // per account and tells a client when its copy is stale. Last writer wins, by
@@ -53,6 +53,17 @@ app.get('/auth/me', requireAuth, async (c) => {
   return c.json({ user })
 })
 
+/** A fresh 30 days for a session that is still good: the app asks before its token runs out. */
+app.post('/auth/refresh', requireAuth, async (c) => {
+  return c.json({ token: await issueToken(c.get('userId'), c.get('tokenVersion')) })
+})
+
+/** Every session of the account, this one included. */
+app.post('/auth/signout-all', requireAuth, async (c) => {
+  await revokeAll(c.get('userId'))
+  return c.json({ ok: true })
+})
+
 /** The account and everything under it (the state document cascades). The token stops working at once. */
 app.delete('/account', requireAuth, async (c) => {
   await pool.query('DELETE FROM users WHERE id = $1', [c.get('userId')])
@@ -79,9 +90,19 @@ app.put('/sync/state', requireAuth, bodyLimit({ maxSize: STATE_LIMIT }), async (
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    // The user row is locked first: a FOR UPDATE on a states row that does not exist yet locks
+    // nothing, and two first writes would both pass the revision check.
+    await client.query('SELECT 1 FROM users WHERE id = $1 FOR UPDATE', [userId])
     const { rows } = await client.query<StateRow>('SELECT revision, state, updated_at, device FROM states WHERE user_id = $1 FOR UPDATE', [userId])
     const cur = rows[0]
     const curRev = cur?.revision ?? 0
+    // A client on an older build must not replace a document a newer one wrote.
+    const curSchema = (cur?.state as { schema?: unknown } | undefined)?.schema
+    const newSchema = (body.state as { schema?: unknown }).schema
+    if (typeof curSchema === 'number' && typeof newSchema === 'number' && newSchema < curSchema) {
+      await client.query('ROLLBACK')
+      return c.json({ error: 'older-schema', revision: curRev, state: cur?.state ?? null, updatedAt: cur?.updated_at ?? null, device: cur?.device ?? null }, 409)
+    }
     if (curRev !== body.baseRevision) {
       await client.query('ROLLBACK')
       // Stale: here is the document that won. The client takes it, then pushes again.
