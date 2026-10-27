@@ -36,7 +36,9 @@ export class Store {
   load(newId: () => string): Saved {
     if (!existsSync(this.file)) return { lastBeat: null, state: firstRunState(Date.now(), newId), fresh: true }
     try {
-      return this.read(this.file)
+      const saved = this.read(this.file)
+      this.daily()
+      return saved
     } catch (err) {
       // Never overwrite something we could not read. Park it beside the new file.
       const parked = join(this.dir, `mayorly.unreadable-${Date.now()}.json`)
@@ -106,7 +108,7 @@ export class Store {
     }
   }
 
-  /** One copy a day, at the first save of the day. */
+  /** One copy a day: at the first load of the day, or the first save when the app ran through midnight. */
   private daily() {
     const d = new Date()
     const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`

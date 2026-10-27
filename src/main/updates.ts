@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { app } from 'electron'
 import { autoUpdater } from 'electron-updater'
 
@@ -25,6 +27,8 @@ export function installUpdates(): Updates {
     install: () => autoUpdater.quitAndInstall(),
   }
   if (!app.isPackaged || process.mas) return updates
+  // A build installed by ship:mac carries no app-update.yml: there is no feed to ask.
+  if (!existsSync(join(process.resourcesPath, 'app-update.yml'))) return updates
   autoUpdater.autoDownload = true
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.logger = null
