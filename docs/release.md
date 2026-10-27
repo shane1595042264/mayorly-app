@@ -35,6 +35,10 @@ What only the founder can do:
 5. Privacy labels, from `docs/privacy.md`: with an account, "Email Address" and "Name" linked to the user for app functionality, and "Other User Content" (the entries) linked to the user; nothing used for tracking. With the clerk, entry titles go to the AI provider the user chose, under that provider's policy.
 6. Screenshots, the listing, and the hand-drawn art. Reviewers open the app with no account and no AI key, so the empty flow has to carry the first minute, which it does.
 
+## The server
+
+mayorly-api deploys from `server/` with the Railway CLI (`RAILWAY_API_TOKEN` in `.env.local`, the folder linked to the `mayorly` project): `railway up --detach`, then `curl https://mayorly-api-production.up.railway.app/health`. Production needs `JWT_SECRET` (32 characters or more), `GOOGLE_CLIENT_IDS` and `DATABASE_URL`; the schema brings itself up to date on boot. A client on an older build cannot overwrite a newer document (the server refuses a lower schema), and Sign out everywhere bumps the account's token version.
+
 ## Checks before a tag
 
 ```
