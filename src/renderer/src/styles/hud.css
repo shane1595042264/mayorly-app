@@ -66,6 +66,7 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
   text-shadow: var(--shadow-text);
 }
 .pet-left .pet-task { text-align: left; }
+.pet-task.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: anywhere; }
 .pet-task.tone-live { color: var(--ink); }
 .pet-task.tone-couch { color: var(--leisure); }
 .pet-sign {

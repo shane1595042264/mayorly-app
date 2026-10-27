@@ -7,6 +7,7 @@ import { Capture } from './capture/Capture'
 import { ClerkAsk } from './deck/ClerkAsk'
 import { Deck } from './deck/Deck'
 import { actionFor, recordUse } from './lib/keymap'
+import { takeOrigin } from './lib/origin'
 import { Callout } from './hud/Callout'
 import { CashIn } from './hud/CashIn'
 import { Feed } from './hud/Feed'
@@ -85,17 +86,20 @@ export function App() {
       window.removeEventListener('blur', done)
     }
   }, [moving])
-  // Windows: the harvest plays inside the overlay, from the tomato to the top right.
+  // The harvest inside this window: on Windows always; on macOS when a panel is open, since the pet
+  // window is then the whole work area. The coins start at whatever cleared the entry, else the tomato.
   const [cashIn, setCashIn] = useState<{ seq: number; amount: number; balance: number; from: { x: number; y: number } } | null>(null)
   const cashSeq = useRef(0)
   useHudEvents(
     useCallback((events: HudEvent[]) => {
-      if (layoutRef.current.compact) return
       for (const e of events) {
         if (e.type !== 'harvest') continue
-        const r = document.querySelector('.pet-sprite')?.getBoundingClientRect()
+        // The pet alone on a Mac screen: the shell plays it in the effects window.
+        if (layoutRef.current.compact && shellMode.current === 'field') continue
+        const sprite = document.querySelector('.pet-sprite')?.getBoundingClientRect()
+        const from = takeOrigin() ?? (sprite ? { x: sprite.left + sprite.width / 2, y: sprite.top + sprite.height / 2 } : { x: window.innerWidth - 80, y: window.innerHeight - 60 })
         const st = current()
-        setCashIn({ seq: ++cashSeq.current, amount: e.tokens, balance: st ? balance(st) : 0, from: r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : { x: window.innerWidth - 80, y: window.innerHeight - 60 } })
+        setCashIn({ seq: ++cashSeq.current, amount: e.tokens, balance: st ? balance(st) : 0, from })
       }
     }, []),
   )

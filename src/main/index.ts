@@ -156,7 +156,7 @@ function boot() {
     for (const ev of events) {
       if (ev.type === 'clerk-wonders') void ask(ev)
       // macOS: the coins fly across the screen in the effects window; Windows draws them in the overlay.
-      if (ev.type === 'harvest' && process.platform === 'darwin') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0))
+      if (ev.type === 'harvest' && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0))
     }
   })
   ipcMain.on(IPC.effectDone, () => overlay.effectDone())
@@ -168,8 +168,12 @@ function boot() {
   // MAYORLY_DEBUG: `kill -USR2 <pid>` previews the cash-in without clearing anything.
   if (process.env.MAYORLY_DEBUG) {
     process.on('SIGUSR2', () => overlay.cashIn(3, engine.state.tokens.reduce((n, t) => n + t.amount, 0)))
-    // `kill -USR1 <pid>` nudges the tomato 40 points right, the keyboard move without the keyboard.
-    process.on('SIGUSR1', () => overlay.nudge(40, 0))
+    // `kill -USR1 <pid>` nudges the tomato 40 points right and shows a caption for a moment.
+    process.on('SIGUSR1', () => {
+      overlay.nudge(40, 0)
+      overlay.setCaption('Caption check: the quick brown fox jumps')
+      setTimeout(() => overlay.setCaption(null), 4000)
+    })
   }
   // After a correction or a confirmation the clerk asks one question; the answer is optional.
   const ask = async (ev: Extract<HudEvent, { type: 'clerk-wonders' }>) => {

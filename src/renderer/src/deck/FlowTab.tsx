@@ -6,6 +6,7 @@ import {
 } from '@core/index'
 import { bridge } from '../bridge'
 import { cycleLedger, useListKeys } from '../lib/listkeys'
+import { noteOrigin } from '../lib/origin'
 import { dispatch, useAi, useNow } from '../store'
 
 export function FlowTab({ s }: { s: MayorlyState }) {
@@ -57,7 +58,10 @@ export function FlowTab({ s }: { s: MayorlyState }) {
     const e = id ? byId.get(id) : undefined
     if (!e) return false
     if (action === 'list.go') dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })
-    else if (action === 'list.clear') dispatch({ type: 'entry/complete', id: e.id })
+    else if (action === 'list.clear') {
+      noteOrigin(document.querySelector(`[data-row="${CSS.escape(e.id)}"] [aria-label^="Clear"]`))
+      dispatch({ type: 'entry/complete', id: e.id })
+    }
     else if (action === 'list.delete') dispatch({ type: 'entry/delete', id: e.id })
     else if (action === 'list.rename') setRename((r) => ({ id: e.id, n: r.n + 1 }))
     else if (action === 'list.ledgerNext' || action === 'list.ledgerPrev') {
@@ -214,7 +218,7 @@ function Row({ e, s, index, live, selected, renameTick, now, onDrop }: { e: Entr
         <button className="icon-btn" aria-label={`Focus on ${e.title}`} title="Pomodoro on this entry" onClick={() => dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })}>
           <Play size={14} />
         </button>
-        <button className="icon-btn" aria-label={`Clear ${e.title}`} title="Clear" onClick={() => dispatch({ type: 'entry/complete', id: e.id })}>
+        <button className="icon-btn" aria-label={`Clear ${e.title}`} title="Clear" onClick={(ev) => { noteOrigin(ev.currentTarget); dispatch({ type: 'entry/complete', id: e.id }) }}>
           <Check size={14} />
         </button>
         <button className="icon-btn" aria-label={`Delete ${e.title}`} title="Delete" onClick={() => dispatch({ type: 'entry/delete', id: e.id })}>

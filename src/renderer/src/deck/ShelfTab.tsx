@@ -6,6 +6,7 @@ import {
 import { Glyph, GLYPHS } from '../lib/glyphs'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { cycleLedger, useListKeys } from '../lib/listkeys'
+import { noteOrigin } from '../lib/origin'
 import { current, dispatch, useNow } from '../store'
 
 // The ledger shelf: nine bays. Every ledger here is hand-written by you, so the
@@ -139,7 +140,10 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
     const e = id ? entries.find((x) => x.id === id) : undefined
     if (!e) return false
     if (action === 'list.go') dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })
-    else if (action === 'list.clear') dispatch({ type: 'entry/complete', id: e.id })
+    else if (action === 'list.clear') {
+      noteOrigin(document.querySelector(`[data-row="${CSS.escape(e.id)}"] [aria-label^="Clear"]`))
+      dispatch({ type: 'entry/complete', id: e.id })
+    }
     else if (action === 'list.delete') dispatch({ type: 'entry/delete', id: e.id })
     else if (action === 'list.rename') setRename((r) => ({ id: e.id, n: r.n + 1 }))
     else if (action === 'list.ledgerNext' || action === 'list.ledgerPrev') {
@@ -263,7 +267,7 @@ function LedgerRow({ s, e, index, now, live, selected, renameTick }: { s: Mayorl
       </span>
       <span className="row-actions">
         <button className="icon-btn" aria-label={`Focus on ${e.title}`} title="Pomodoro on this entry" onClick={() => dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })}><Play size={14} /></button>
-        <button className="icon-btn" aria-label={`Clear ${e.title}`} title="Clear" onClick={() => dispatch({ type: 'entry/complete', id: e.id })}><Check size={14} /></button>
+        <button className="icon-btn" aria-label={`Clear ${e.title}`} title="Clear" onClick={(ev) => { noteOrigin(ev.currentTarget); dispatch({ type: 'entry/complete', id: e.id }) }}><Check size={14} /></button>
         <button className="icon-btn" aria-label={`Delete ${e.title}`} title="Delete" onClick={() => dispatch({ type: 'entry/delete', id: e.id })}><Trash size={14} /></button>
       </span>
     </li>

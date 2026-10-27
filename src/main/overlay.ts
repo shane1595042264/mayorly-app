@@ -24,7 +24,7 @@ const debug = process.env.MAYORLY_DEBUG ? (...a: unknown[]) => console.error('[o
  * The window is exactly this at the HUD scale, so nothing invisible catches a click, and it is
  * never resized on hover: a resize paints one frame of old content at the new position and the
  * tomato jumps. The caption is a separate click-through window. Matches `body.compact` in hud.css. */
-const PET = { width: 140 + 10 + 48, height: 48 + 8 }
+const PET = { width: 140 + 10 + 48, height: 48 + 24 }
 /** The pet's own corner inside the window; matches `body.compact .pet-wrap` in hud.css. */
 const INSET = { x: 4, y: 4 }
 /** The caption window: generous, because it is click-through; the text hugs the tomato's side. */
@@ -259,13 +259,19 @@ export class Overlay {
   }
 
   /** Beside the pet, toward the centre of the screen, level with the sign. */
+  /** Just above the tomato, starting at its outer edge and running over the sign's column; below it when the screen's top is in the way. */
   private placeCaption() {
     if (!this.caption) return
-    const b = this.win.getBounds()
     const wa = this.display().workArea
+    const a = this.anchor ?? this.defaultAnchor(wa)
     const side = this.layout().side
-    const x = side === 'right' ? b.x - CAPTION.width + INSET.x : b.x + b.width - INSET.x
-    const y = b.y + b.height - INSET.y - Math.round((30 + 8) * this.scale) - Math.round((CAPTION.height - 30 * this.scale) / 2)
+    const box = 30
+    const gap = 10
+    const top = a.y - TOMATO * this.scale
+    const x = side === 'left' ? a.x - this.half - 4 : a.x + this.half + 4 - CAPTION.width
+    let y = top - gap - box - (CAPTION.height - box) / 2
+    if (y < wa.y) y = a.y + gap - (CAPTION.height - box) / 2
+    debug('caption', { side, x: Math.round(x), y: Math.round(y), tomatoTop: Math.round(top), anchor: a })
     this.caption.setBounds({
       x: Math.round(Math.min(Math.max(x, wa.x), wa.x + wa.width - CAPTION.width)),
       y: Math.round(Math.min(Math.max(y, wa.y), wa.y + wa.height - CAPTION.height)),

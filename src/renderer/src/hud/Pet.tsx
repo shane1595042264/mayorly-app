@@ -37,7 +37,6 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice }: 
   const [hover, setHover] = useState(false)
   const v = blockView(s, now)
   const right = side === 'right'
-  const showCaption = moving || (hover && !dragging) || !!notice
 
   // A drag ends hover: the pointer is wherever the window was dropped.
   useEffect(() => {
@@ -46,23 +45,23 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice }: 
 
   let sign: string
   let tone: 'idle' | 'live' | 'hold' | 'rest' | 'ready' | 'couch'
-  let caption: string
-  /** The one line above the sign: what the desk is on. Cut to the sign's column; hover shows all of it. */
+  /** The line above the sign: what the desk is on, up to two lines of the column. */
   let task = ''
   if (!v) {
     sign = String(dayStats(s, startOfDay(now), now).tomatoes)
     tone = 'idle'
-    caption = `Desk idle. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.`
   } else {
     task = v.block.kind === 'leisure' ? v.block.label : v.block.kind === 'rest' ? v.block.label : v.entry ? `${v.ledger?.code ?? 'FREE'}  ${v.entry.title}` : v.block.label
     sign = v.remainingMs === null ? clock(v.elapsedMs, false) : v.overtimeMs > 0 ? `+${clock(v.overtimeMs, false)}` : clock(v.remainingMs)
     tone = v.block.kind === 'leisure' ? 'couch' : v.status === 'paused' ? 'hold' : v.status === 'ready' ? 'ready' : v.block.kind === 'focus' ? 'live' : 'rest'
-    const what = v.block.kind === 'leisure' ? `On the couch  ${v.block.label}` : v.block.kind === 'focus' ? `${v.ledger?.code ?? 'FREE'}  ${v.entry?.title ?? `${v.block.label}, no entry`}` : v.block.label
-    caption = v.status === 'paused' ? `Holding  ${what}` : v.status === 'ready' ? `Ready  ${what}` : what
-    if (s.desk.holster) caption += `   ${hotkeyLabel(s.settings.hotkeys.switch)}: ${s.desk.holster.block.label}`
   }
   const breathing = tone === 'live' && !reduce && !dragging
-  const text = moving ? MOVE_HINT : (notice ?? caption)
+  // Hover says only what the pet does not already show: how to start when idle, how to get back to a parked session.
+  const hint = !v
+    ? `Desk idle. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.`
+    : s.desk.holster ? `${hotkeyLabel(s.settings.hotkeys.switch)}: back to ${s.desk.holster.block.label}` : ''
+  const text = moving ? MOVE_HINT : (notice ?? hint)
+  const showCaption = moving || !!notice || (hover && !dragging && hint !== '')
 
   // macOS: the caption is the shell's window. Elsewhere it is drawn above the pet.
   useEffect(() => {
@@ -97,7 +96,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice }: 
 
       <div className="pet" aria-label="Desk status">
         <div className="pet-col">
-          {task && <span className={`pet-task ellipsis tone-${tone}`} aria-label="On the desk">{task}</span>}
+          {task && <span className={`pet-task clamp tone-${tone}`} aria-label="On the desk">{task}</span>}
           <button
             type="button"
             className={`pet-sign num tone-${tone} ${tone === 'hold' ? 'pulse' : ''}`}
