@@ -100,3 +100,9 @@ The HUD always sits on top of another app, so a light theme would be a second se
 
 ### No licence chosen
 The sibling repos carry no licence, so neither does this one. Open source first is the stated intent; which licence is the founder's call.
+
+### The currency is called coins
+Tokens became coins in every piece of user-visible copy on 2026-10-26: the Deck header, the couch tab, the record, the harvest line. **Why:** the founder: "sounds like AI tokens". The app now also holds AI provider keys whose usage is counted in tokens, so the word meant two things in one Settings tab. The code keeps `tokens` and `TokenTx`: a rename there is churn in the sync document for no user gain. The coin on screen is `icon.coin@1x.png` from mayorly-assets at whole-pixel scale.
+
+### The harvest is seen: cashing in
+On a harvest, coins fly from the tomato to a counter in the top right of the screen that counts up to the new balance, a coin ding per landing and a short run-up as it banks, then everything fades. On macOS the pet window is too small for that, so a display-only effects window the size of the work area (`?effects`, the same bundle) appears for the animation, ignores the mouse and hides when the page says it is done; Windows draws it inside the overlay. **Why:** clearing a task with Option+C is the moment the economy pays, and a number changing in a deck nobody has open is no reward. The sound is synthesized like the rest of the HUD, no samples.

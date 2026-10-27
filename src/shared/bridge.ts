@@ -74,6 +74,17 @@ export interface ClerkQuestion {
   question: string
 }
 
+/** A screen effect the shell asks its effects window to play (macOS), or the overlay plays itself (Windows). */
+export interface Effect {
+  kind: 'cashin'
+  /** Coins just paid out. */
+  amount: number
+  /** The balance after. */
+  balance: number
+  /** Where the coins start, in the effect window's CSS pixels: the tomato. */
+  from: { x: number; y: number }
+}
+
 export interface ClerkNotice {
   phase: 'working' | 'done'
   text: string
@@ -126,6 +137,10 @@ export interface Bridge {
   /** What the clerk is doing right now, for the pet to say. */
   onClerk(fn: (n: ClerkNotice) => void): () => void
   onClerkAsk(fn: (q: ClerkQuestion) => void): () => void
+  /** The effects page: play this. */
+  onEffect(fn: (e: Effect) => void): () => void
+  /** The effects page is done; the shell may hide the window. */
+  effectDone(): void
   /** Hotkeys that could not be registered (taken by another app, or refused by the OS). */
   onHotkeyFailures(fn: (failures: HotkeyFailures) => void): () => void
 }
@@ -158,5 +173,7 @@ export const IPC = {
   ai: 'mayorly:ai',
   clerk: 'mayorly:clerk',
   clerkAsk: 'mayorly:clerk-ask',
+  effect: 'mayorly:effect',
+  effectDone: 'mayorly:effect-done',
   hotkeyFailures: 'mayorly:hotkey-failures',
 } as const

@@ -99,12 +99,23 @@ export const sfx = {
     tone(a, 1318, t, 0.12, 0.05)
     tone(a, 1976, t + 0.04, 0.34, 0.045)
   },
-  /** Tomatoes paid out: a short bright coin, one per harvest. */
-  harvest() {
+  /** One coin landing on the counter; each one a little higher than the last. */
+  coin(i: number) {
     const a = ac()
     if (!a) return
     const t = a.currentTime
-    tone(a, 1568, t, 0.09, 0.05, 'triangle')
-    tone(a, 2093, t + 0.07, 0.24, 0.06, 'triangle')
+    const f = 1568 * Math.pow(2, Math.min(i, 7) / 12)
+    tone(a, f, t, 0.07, 0.05, 'triangle')
+    tone(a, f * 1.5, t + 0.03, 0.14, 0.035)
+  },
+  /** The harvest banked: a quick bright run up and a ring, the pocket-full-of-coins sound. */
+  cashIn() {
+    const a = ac()
+    if (!a) return
+    const t = a.currentTime
+    const run = [1046, 1318, 1568, 2093]
+    run.forEach((f, i) => tone(a, f, t + i * 0.055, 0.12, 0.045, 'triangle'))
+    tone(a, 2093, t + 0.24, 0.5, 0.05)
+    tone(a, 3136, t + 0.26, 0.4, 0.02)
   },
 }

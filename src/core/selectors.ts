@@ -159,7 +159,7 @@ export function leisureSpentMs(s: MayorlyState, leisureId: Id, now: number): Ms 
   return ms
 }
 
-/** Tokens paid for one entertainment, net of refunds. */
+/** Coins paid for one entertainment, net of refunds. */
 export function leisureTokensSpent(s: MayorlyState, leisureId: Id): number {
   return -s.tokens.filter((t) => t.leisureId === leisureId).reduce((n, t) => n + t.amount, 0)
 }

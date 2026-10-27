@@ -38,6 +38,8 @@ const bridge: Bridge = {
   onAi: (fn) => sub(IPC.ai, fn),
   onClerk: (fn) => sub(IPC.clerk, fn),
   onClerkAsk: (fn) => sub(IPC.clerkAsk, fn),
+  onEffect: (fn) => sub(IPC.effect, fn),
+  effectDone: () => ipcRenderer.send(IPC.effectDone),
   onHotkeyFailures: (fn) => sub(IPC.hotkeyFailures, fn),
 }
 

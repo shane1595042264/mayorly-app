@@ -35,7 +35,7 @@ Nouns are the spec's, unchanged:
 | desk | `Desk` | the one timer |
 | sitting | `Sitting` | from deploy to stand down; the unit the long-grind bonus is counted over |
 | tomato | minted in the reducer | one per `tomatoMs` of accumulated focus in a sitting |
-| token | `TokenTx` | one per tomato, never from ticking a box; spent one per leisure block |
+| coin | `TokenTx` | one per tomato, never from ticking a box; spent one per leisure block |
 
 New nouns this layer adds:
 
@@ -109,7 +109,7 @@ Sync is one document per account with a revision (`GET`/`PUT /sync/state`). The 
 
 ## Not built yet, on purpose
 
-- Leisure: entertainment tags, buying time with tokens, the couch countdown. The token ledger is ready for debits.
+- Leisure: entertainment tags, buying time with coins, the couch countdown. The coin ledger is ready for debits.
 - The classifier proper: induction and assignment. `Clerk` is the seam.
 - Multi-monitor HUD (one display at a time today, picked from the tray).
 - Code signing and auto-update.

@@ -153,8 +153,13 @@ function boot() {
   engine.on((state, events) => {
     send(IPC.state, state)
     if (events.length) send(IPC.events, events)
-    for (const ev of events) if (ev.type === 'clerk-wonders') void ask(ev)
+    for (const ev of events) {
+      if (ev.type === 'clerk-wonders') void ask(ev)
+      // macOS: the coins fly across the screen in the effects window; Windows draws them in the overlay.
+      if (ev.type === 'harvest' && process.platform === 'darwin') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0))
+    }
   })
+  ipcMain.on(IPC.effectDone, () => overlay.effectDone())
   // After a correction or a confirmation the clerk asks one question; the answer is optional.
   const ask = async (ev: Extract<HudEvent, { type: 'clerk-wonders' }>) => {
     const name = (id: string | null) => engine.state.ledgers.find((l) => l.id === id)?.name ?? null

@@ -19,7 +19,7 @@ export function RecordTab({ s }: { s: MayorlyState }) {
       <section className="tiles" aria-label="Today">
         <Tile big={span(today.focusMs)} label="Focus today" />
         <Tile big={String(today.tomatoes)} label={today.tomatoes === 1 ? 'Tomato' : 'Tomatoes'} />
-        <Tile big={`+${today.tokens}`} label="Tokens earned" />
+        <Tile big={`+${today.tokens}`} label="Coins earned" />
         <Tile big={String(today.cleared)} label="Entries cleared" />
         <Tile big={balance(s).toLocaleString()} label="Balance" />
       </section>

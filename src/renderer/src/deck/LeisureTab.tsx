@@ -5,7 +5,7 @@ import { hotkeyLabel } from '../lib/keys'
 import { dispatch, useNow } from '../store'
 
 // Entertainment lives here, outside the ledgers: games, shows, streams. The couch runs
-// on the same focus and rest cadence as a pomodoro; each leisure block costs one token,
+// on the same focus and rest cadence as a pomodoro; each completed leisure block costs one coin,
 // taken as it starts, rests are free, and nothing is earned.
 
 export function LeisureTab({ s }: { s: MayorlyState }) {
@@ -35,12 +35,12 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
             <button type="submit" className="btn" disabled={!draft.trim()}>Add</button>
           </div>
           <p className="field-help">
-            Games, shows, streams, anything with no productive value. Outside the ledgers, never earns. Runs like a pomodoro: {s.settings.focusMin} minutes on, {s.settings.shortRestMin} off. Each block costs {price} token, taken as it starts; rests are free.
+            Games, shows, streams, anything with no productive value. Outside the ledgers, never earns. Runs like a pomodoro: {s.settings.focusMin} minutes on, {s.settings.shortRestMin} off. Each completed block costs {price} coin; rests are free, and a block left early costs nothing.
           </p>
         </form>
 
         <div className="leisure-buy">
-          <span className={`mono num ${have < price ? 'field-error' : 'dim'}`}>{have} tokens banked: {have} {have === 1 ? 'block' : 'blocks'} on the couch</span>
+          <span className={`mono num ${have < price ? 'field-error' : 'dim'}`}>{have} {have === 1 ? 'coin' : 'coins'} banked: {have} {have === 1 ? 'block' : 'blocks'} on the couch</span>
         </div>
 
         {onCouch && (
@@ -86,13 +86,13 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
                   </span>
                   <span className="row-time mono num">
                     {spent >= 60_000 ? span(spent) : ''}
-                    {tokens > 0 ? `${tokens} tokens` : ''}
+                    {tokens > 0 ? `${tokens} ${tokens === 1 ? 'coin' : 'coins'}` : ''}
                   </span>
                   <span className="row-actions">
                     <button
                       className="icon-btn"
                       aria-label={`Sit down with ${it.title}`}
-                      title={have < price ? 'Needs a token: earn one at the desk' : `${s.settings.focusMin} minutes for ${price} token, then a rest`}
+                      title={have < price ? 'Needs a coin: earn one at the desk' : `${s.settings.focusMin} minutes for ${price} coin, then a rest`}
                       disabled={have < price || live}
                       onClick={() => dispatch({ type: 'desk/deploy', mode: 'couch', leisureId: it.id })}
                     >

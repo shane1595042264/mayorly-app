@@ -448,7 +448,7 @@ describe('the couch', () => {
     w.do({ type: 'leisure/add', title: 'slay the spire 2' })
     const r = w.do({ type: 'desk/deploy', mode: 'couch', leisureId: w.s.leisure[0].id })
     expect(w.s.desk.status).toBe('idle')
-    expect(r.events.some((e) => e.type === 'notice' && e.text.startsWith('No tokens'))).toBe(true)
+    expect(r.events.some((e) => e.type === 'notice' && e.text.startsWith('No coins'))).toBe(true)
   })
 
   it('the clerk sends entertainment to the couch list, not the flow', () => {

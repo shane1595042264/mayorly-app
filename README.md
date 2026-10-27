@@ -2,7 +2,7 @@
 
 The application layer of **Mayorly**, for Windows and macOS. A transparent focus HUD that sits on top of whatever you are doing, runs your day as one continuous flow, and rotates between the things you care about on rules you write.
 
-It is the architecture north star for the whole project: the entries, ledgers, desk, tomatoes and tokens from [mayorly-design](https://github.com/shane1595042264/mayorly-design) live here as a pure domain core, and the HUD is the first client of it. The pixel-art Mayor's Hall from [mayorly-assets](https://github.com/shane1595042264/mayorly-assets) becomes a second client later, on the same core.
+It is the architecture north star for the whole project: the entries, ledgers, desk, tomatoes and coins from [mayorly-design](https://github.com/shane1595042264/mayorly-design) live here as a pure domain core, and the HUD is the first client of it. The pixel-art Mayor's Hall from [mayorly-assets](https://github.com/shane1595042264/mayorly-assets) becomes a second client later, on the same core.
 
 ![The field HUD over a desktop, mid-rotation](docs/screenshots/field.jpg)
 
@@ -14,9 +14,9 @@ It is the architecture north star for the whole project: the entries, ledgers, d
 - **Supersets: your own rotation rules.** Legal 25, Dance 20, Career 25, three rounds, five minutes of rest between, fifteen between rounds. The desk switches on its own. Order can be fixed or shuffled per round, and you choose what happens when you clear an entry mid-block.
 - **Swap in real time.** Hold or tap **Alt+T** for the Plus menu: the loadout floats in 3D with four attachment arms around it. Ledger up, entry left, mode right, orders down. Press **1-9** to jump ledgers, or click. The block timer keeps running through a swap; only the work changes.
 - **Tracks time.** Every second of desk time is a segment against an entry and a ledger. The Record tab shows today by ledger, the last seven days, and the clerk's log.
-- **Tokens, by the spec.** One per tomato, and a tomato grown on an entry pays out when you clear the entry, like a harvest. Ledger time with no entry pays as it goes. Earned only at the desk. No bonus for long sittings, nothing decays, no streaks, an explicit hold.
+- **Coins, by the spec.** One per tomato, and a tomato grown on an entry pays out when you clear the entry, like a harvest. Ledger time with no entry pays as it goes. Earned only at the desk. No bonus for long sittings, nothing decays, no streaks, an explicit hold.
 - **Quick switch.** Alt+Q parks the running session and resumes the previous one, like swapping weapons. Clocks do not reset: a stream at 23 minutes left comes back at 23 minutes left, and the book picks up its own tomato where it stopped. Starting anything new parks what was running. Each leisure item carries **context switch rules**, cues in your words ("rookie dies in game") shown while you are on the couch.
-- **Leisure is bought, not earned.** Games, shows and streams live on the couch list in the deck, outside the ledgers. The couch runs like a pomodoro, the same focus and rest lengths; each completed leisure block costs one token, rests are free, a block you leave early costs nothing, and it is purple because nothing is earned. The clerk sends entertainment it recognises here on its own.
+- **Leisure is bought, not earned.** Games, shows and streams live on the couch list in the deck, outside the ledgers. The couch runs like a pomodoro, the same focus and rest lengths; each completed leisure block costs one coin, rests are free, a block you leave early costs nothing, and it is purple because nothing is earned. The clerk sends entertainment it recognises here on its own.
 
 ![The Plus menu: swap ledger, entry, mode or orders around the 3D loadout](docs/screenshots/plus.jpg)
 
@@ -107,7 +107,7 @@ Pushing a `v*` tag runs the GitHub Actions workflow in `.github/workflows/dist.y
 ## How it is put together
 
 ```
-src/core      the domain: entries, ledgers, desk, planner, tokens, clerk. Pure, tested, no Electron, no DOM.
+src/core      the domain: entries, ledgers, desk, planner, coins, clerk. Pure, tested, no Electron, no DOM.
 src/main      the shell: owns the one true state, heartbeat, persistence, overlay window, hotkeys, tray.
 src/preload   the bridge, nothing else.
 src/renderer  the HUD: field HUD, Plus menu, deck, capture. A client of the bridge.

@@ -76,7 +76,7 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
           </nav>
           <span className="deck-balance">
             <span className="mono num">{balance(s).toLocaleString()}</span>
-            <span className="caps dim">Tokens</span>
+            <span className="caps dim">Coins</span>
           </span>
           <button className="deck-close" onClick={close} aria-label="Close deck">
             <X size={18} />

@@ -237,7 +237,7 @@ function AiSection() {
           {busy === 'add' ? 'Checking' : 'Add key'}
         </button>
       </div>
-      {busy === 'add' && <span className="field-help">Listing the key's models, then one token on the cheapest.</span>}
+      {busy === 'add' && <span className="field-help">Listing the key's models, then one tiny request to the cheapest.</span>}
       {error && <span className="field-error">{error}</span>}
       {ai.usage.calls > 0 && (
         <span className="field-help">Last {ai.usage.days} days: {ai.usage.calls} filed by the clerk, about {dollars(ai.usage.costMicroUsd)}.</span>

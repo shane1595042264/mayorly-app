@@ -1,6 +1,6 @@
 // The Mayorly domain. Nouns follow mayorly-design/docs/01-product-spec.md:
 // entries live in ledgers, work happens at the desk, desk time mints tomatoes,
-// tomatoes pay tokens. Nothing here knows about Electron, the DOM, or pixels.
+// tomatoes pay coins. Nothing here knows about Electron, the DOM, or pixels.
 
 export type Id = string
 export type Ms = number
@@ -35,7 +35,7 @@ export interface Entry {
   doneAt: Epoch | null
   /** Set when the AI clerk chose the ledger; cleared once you move it, which teaches the clerk a house rule. `unsure` shows as a question mark. */
   clerkFiled?: { ledgerId: Id | null; model: string; confidence: 'sure' | 'unsure' }
-  /** Tomatoes grown on this entry and not yet harvested. They pay out as tokens when the entry is cleared. */
+  /** Tomatoes grown on this entry and not yet harvested. They pay out as coins when the entry is cleared. */
   tomatoes: number
   /** When the entry was cleared and its tomatoes paid. */
   harvestedAt?: Epoch
@@ -167,7 +167,7 @@ export interface TokenTx {
 
 /**
  * Entertainment: games, shows, streams, anything with no productive value. Outside
- * the ledgers, never earns, and is bought with tokens by the minute on the couch.
+ * the ledgers, never earns, and is bought with coins by the minute on the couch.
  */
 export interface LeisureItem {
   id: Id
@@ -224,7 +224,7 @@ export interface MayorlyState {
 }
 
 export type HudEvent =
-  /** A tomato ripened. On an entry it is banked there (tokens 0) until the entry is cleared; ledger time pays as it goes. */
+  /** A tomato ripened. On an entry it is banked there (coins 0) until the entry is cleared; ledger time pays as it goes. */
   | { type: 'tomato'; at: Epoch; n: number; tokens: number; entryId: Id | null }
   /** An entry was cleared and its tomatoes paid out. */
   | { type: 'harvest'; at: Epoch; entryId: Id; title: string; tomatoes: number; tokens: number }

@@ -1,6 +1,6 @@
 import type { Block, Entry, Id, MayorlyState, Mode, Plan, Superset } from './model'
 
-// The planner decides what the desk does next. It never touches time or tokens;
+// The planner decides what the desk does next. It never touches time or coins;
 // the reducer owns those. Every function here is pure.
 
 const MIN = 60_000
@@ -119,7 +119,7 @@ export interface DeployOpts {
   leisureId?: Id | null
 }
 
-/** A leisure block: the same length as a focus block, paid with one token. */
+/** A leisure block: the same length as a focus block, paid with one coin. */
 export function leisureBlock(s: MayorlyState, leisureId: Id, round: number): Block {
   const item = s.leisure.find((x) => x.id === leisureId)
   return { kind: 'leisure', ledgerId: null, entryId: null, leisureId, durationMs: s.settings.focusMin * MIN, slotIndex: null, round, label: item?.title ?? 'Leisure' }

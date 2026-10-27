@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BrowserWindow, screen, type Display, type Rectangle } from 'electron'
-import { IPC, type Layout, type UiMode } from '../shared/bridge'
+import { IPC, type Effect, type Layout, type UiMode } from '../shared/bridge'
 
 // One transparent, always-on-top, frameless window.
 //
@@ -54,6 +54,10 @@ export class Overlay {
   private dragging = false
   private caption: BrowserWindow | null = null
   private captionText: string | null = null
+  private effects: BrowserWindow | null = null
+  private effectsReady = false
+  private effectQueue: Effect[] = []
+  private effectsHide: NodeJS.Timeout | null = null
   private fitting = false
   private settle: NodeJS.Timeout | null = null
   private readonly anchorFile: string
@@ -171,6 +175,80 @@ export class Overlay {
     this.placeCaption()
     this.pushCaption()
     if (!this.caption.isVisible()) this.caption.showInactive()
+  }
+
+  /**
+   * macOS: coins paid out fly from the tomato to a counter in the top right of the screen.
+   * The pet window is too small for that, so a display-only window the size of the work
+   * area appears for the animation and ignores the mouse throughout.
+   */
+  cashIn(amount: number, balance: number) {
+    if (!mac || this.win.isDestroyed()) return
+    const wa = this.display().workArea
+    const a = this.anchor ?? this.defaultAnchor(wa)
+    const effect: Effect = { kind: 'cashin', amount, balance, from: { x: a.x - wa.x, y: a.y - (TOMATO / 2) * this.scale - wa.y } }
+    if (!this.effects) {
+      this.effects = new BrowserWindow({
+        ...wa,
+        show: false,
+        frame: false,
+        transparent: true,
+        backgroundColor: '#00000000',
+        hasShadow: false,
+        resizable: false,
+        movable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        skipTaskbar: true,
+        hiddenInMissionControl: true,
+        focusable: false,
+        alwaysOnTop: true,
+        type: 'panel',
+        title: 'Mayorly effects',
+        webPreferences: {
+          preload: join(import.meta.dirname, '../preload/index.cjs'),
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          backgroundThrottling: false,
+          spellcheck: false,
+        },
+      })
+      this.effects.setAlwaysOnTop(true, 'screen-saver')
+      this.effects.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
+      this.effects.setIgnoreMouseEvents(true)
+      const page = process.env.ELECTRON_RENDERER_URL ? `${process.env.ELECTRON_RENDERER_URL}?effects` : null
+      if (page) void this.effects.loadURL(page)
+      else void this.effects.loadFile(join(import.meta.dirname, '../renderer/index.html'), { query: { effects: '1' } })
+      this.effects.webContents.on('did-finish-load', () => {
+        this.effectsReady = true
+        for (const e of this.effectQueue.splice(0)) this.playEffect(e)
+      })
+      this.effects.on('closed', () => {
+        this.effects = null
+        this.effectsReady = false
+      })
+    }
+    if (this.effectsReady) this.playEffect(effect)
+    else this.effectQueue.push(effect)
+  }
+
+  /** The effects page says it has finished. */
+  effectDone() {
+    if (this.effectsHide) clearTimeout(this.effectsHide)
+    this.effectsHide = null
+    this.effects?.hide()
+  }
+
+  private playEffect(e: Effect) {
+    if (!this.effects || this.effects.isDestroyed()) return
+    this.effects.setBounds(this.display().workArea)
+    this.effects.webContents.send(IPC.effect, e)
+    if (!this.effects.isVisible()) this.effects.showInactive()
+    // Whatever happens in the page, the window does not stay.
+    if (this.effectsHide) clearTimeout(this.effectsHide)
+    this.effectsHide = setTimeout(() => this.effectDone(), 6000)
   }
 
   private pushCaption() {

@@ -399,9 +399,9 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
     return
   }
   if (plan.mode === 'couch') {
-    // Each leisure block costs one token, taken as it starts. Nothing is earned on the couch.
+    // Each completed leisure block costs one coin. Nothing is earned on the couch.
     if (balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
-      ev.push({ type: 'notice', at: now, text: 'No tokens: a tomato at the desk buys a block on the couch' })
+      ev.push({ type: 'notice', at: now, text: 'No coins: a tomato at the desk buys a block on the couch' })
       return
     }
     // The couch is its own sitting; whatever was running is parked for the quick switch.
@@ -444,7 +444,7 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
 
 function startBlock(s: MayorlyState, ctx: Ctx, ev: HudEvent[], block: Block, at: number, force: boolean) {
   if (block.kind === 'leisure' && (!s.desk.sittingId || balanceOf(s) < LEISURE_TOKENS_PER_BLOCK)) {
-    // A leisure block needs a token in hand to start; it is charged when the block completes.
+    // A leisure block needs a coin in hand to start; it is charged when the block completes.
     ev.push({ type: 'notice', at, text: 'Out of tokens: back to the desk' })
     endSitting(s, at, ev, 'complete')
     return

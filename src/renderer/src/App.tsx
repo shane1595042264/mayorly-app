@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
+import type { HudEvent } from '@core/index'
 import type { Command, Layout, UiMode } from '../../shared/bridge'
 import { bridge } from './bridge'
 import { Capture } from './capture/Capture'
 import { ClerkAsk } from './deck/ClerkAsk'
 import { Deck } from './deck/Deck'
 import { Callout } from './hud/Callout'
+import { CashIn } from './hud/CashIn'
 import { Feed } from './hud/Feed'
 import { Objectives } from './hud/Objectives'
 import { Pet } from './hud/Pet'
 import { hotkeyLabel, matchesAcceleratorKey, MODIFIER_KEYS } from './lib/keys'
 import { setSoundEnabled, sfx } from './lib/sound'
 import { PlusMenu } from './plus/PlusMenu'
-import { current, useMayorly } from './store'
+import { balance } from '@core/index'
+import { current, useHudEvents, useMayorly } from './store'
 
 /** How long the swap hotkey must be held before releasing it closes the menu (hold to peek). */
 const PEEK_MS = 400
@@ -37,6 +40,20 @@ export function App() {
   const [warning, setWarning] = useState<string | null>(null)
   const [layout, setLayout] = useState<Layout>({ compact: false, side: 'right', dragging: false })
   const [clerk, setClerk] = useState<string | null>(null)
+  // Windows: the harvest plays inside the overlay, from the tomato to the top right.
+  const [cashIn, setCashIn] = useState<{ seq: number; amount: number; balance: number; from: { x: number; y: number } } | null>(null)
+  const cashSeq = useRef(0)
+  useHudEvents(
+    useCallback((events: HudEvent[]) => {
+      if (layoutRef.current.compact) return
+      for (const e of events) {
+        if (e.type !== 'harvest') continue
+        const r = document.querySelector('.pet-sprite')?.getBoundingClientRect()
+        const st = current()
+        setCashIn({ seq: ++cashSeq.current, amount: e.tokens, balance: st ? balance(st) : 0, from: r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : { x: window.innerWidth - 80, y: window.innerHeight - 60 } })
+      }
+    }, []),
+  )
 
   // The clerk narrates on the pet: a working line stays until the result, a result stays a few seconds.
   useEffect(() => {
@@ -229,6 +246,7 @@ export function App() {
       </AnimatePresence>
 
       {shown !== 'field' && <ClerkAsk />}
+      {cashIn && <CashIn key={cashIn.seq} amount={cashIn.amount} balance={cashIn.balance} from={cashIn.from} onDone={() => setCashIn(null)} />}
 
       <AnimatePresence>
         {warning && !layout.compact && (
