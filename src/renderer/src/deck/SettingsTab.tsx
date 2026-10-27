@@ -20,6 +20,7 @@ const HOTKEYS: [HotkeyAction, string][] = [
   ['hide', 'Hide the HUD'],
   ['switch', 'Switch to the parked session'],
   ['clear', 'Clear the entry on the desk'],
+  ['move', 'Move the tomato by keyboard'],
 ]
 
 export function SettingsTab({ s, kind }: { s: MayorlyState; kind: 'electron' | 'web' }) {

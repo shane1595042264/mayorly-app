@@ -62,6 +62,9 @@ export function createWebBridge(): Bridge {
     dispatch({ type: 'desk/tick' })
   }, 1000)
 
+  // ?demo and ?fresh: a handle for driving the HUD from the console or a screenshot script.
+  if (scratch) (window as unknown as { __mayorly?: unknown }).__mayorly = { dispatch, state: () => state }
+
   // Browsers have no global hotkeys, so the same combos work while the tab has focus.
   window.addEventListener('keydown', (e) => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return
@@ -69,7 +72,7 @@ export function createWebBridge(): Bridge {
     // By key position: with Option held, macOS reports the composed character, not the letter.
     const k = physicalKey(e)
     const combo = `Alt+${e.shiftKey ? 'Shift+' : ''}${k.length === 1 ? k.toUpperCase() : k}`
-    const map: Record<string, Command | 'pause'> = { [hk.plus]: 'plus', [hk.capture]: 'capture', [hk.deck]: 'deck', [hk.pause]: 'pause' }
+    const map: Record<string, Command | 'pause'> = { [hk.plus]: 'plus', [hk.capture]: 'capture', [hk.deck]: 'deck', [hk.pause]: 'pause', [hk.move]: 'move' }
     const cmd = map[combo]
     if (!cmd) return
     e.preventDefault()
@@ -115,6 +118,9 @@ export function createWebBridge(): Bridge {
     onAi: () => () => {},
     onClerk: () => () => {},
     onClerkAsk: () => () => {},
+    setMoving: () => {},
+    nudge: () => {},
+    snap: () => {},
     onEffect: () => () => {},
     effectDone: () => {},
     onHotkeyFailures: () => () => {},

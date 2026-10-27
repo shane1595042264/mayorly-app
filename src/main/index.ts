@@ -160,6 +160,17 @@ function boot() {
     }
   })
   ipcMain.on(IPC.effectDone, () => overlay.effectDone())
+  ipcMain.on(IPC.moving, (_e, on: boolean) => overlay.setMoving(!!on))
+  ipcMain.on(IPC.nudge, (_e, dx: number, dy: number) => overlay.nudge(Number(dx) || 0, Number(dy) || 0))
+  ipcMain.on(IPC.snap, (_e, corner: number) => {
+    if (corner === 1 || corner === 2 || corner === 3 || corner === 4) overlay.snap(corner)
+  })
+  // MAYORLY_DEBUG: `kill -USR2 <pid>` previews the cash-in without clearing anything.
+  if (process.env.MAYORLY_DEBUG) {
+    process.on('SIGUSR2', () => overlay.cashIn(3, engine.state.tokens.reduce((n, t) => n + t.amount, 0)))
+    // `kill -USR1 <pid>` nudges the tomato 40 points right, the keyboard move without the keyboard.
+    process.on('SIGUSR1', () => overlay.nudge(40, 0))
+  }
   // After a correction or a confirmation the clerk asks one question; the answer is optional.
   const ask = async (ev: Extract<HudEvent, { type: 'clerk-wonders' }>) => {
     const name = (id: string | null) => engine.state.ledgers.find((l) => l.id === id)?.name ?? null
@@ -181,6 +192,7 @@ function boot() {
         pause: togglePause,
         hide: () => overlay.toggleVisible(),
         switch: () => engine.dispatch({ type: 'desk/switch' }),
+        move: () => command('move'),
         clear: () => {
           const id = engine.state.desk.block?.entryId
           if (id) engine.dispatch({ type: 'entry/complete', id })

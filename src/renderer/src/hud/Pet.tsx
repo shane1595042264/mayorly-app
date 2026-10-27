@@ -18,6 +18,8 @@ interface Props {
   s: MayorlyState
   /** A panel is open or opening: the pet fades where it stands and comes back when the panel is gone. */
   away: boolean
+  /** The keyboard is moving the tomato: a dashed box around it and the keys in the caption. */
+  moving: boolean
   open: (m: UiMode) => void
   side: 'left' | 'right'
   dragging: boolean
@@ -27,13 +29,15 @@ interface Props {
   notice: string | null
 }
 
-export function Pet({ s, away, open, side, dragging, compact, notice }: Props) {
+const MOVE_HINT = 'Arrows or hjkl move it, 1 to 4 pick a corner, Enter when done'
+
+export function Pet({ s, away, moving, open, side, dragging, compact, notice }: Props) {
   const now = useNow(250)
   const reduce = useReducedMotion()
   const [hover, setHover] = useState(false)
   const v = blockView(s, now)
   const right = side === 'right'
-  const showCaption = (hover && !dragging) || !!notice
+  const showCaption = moving || (hover && !dragging) || !!notice
 
   // A drag ends hover: the pointer is wherever the window was dropped.
   useEffect(() => {
@@ -58,7 +62,7 @@ export function Pet({ s, away, open, side, dragging, compact, notice }: Props) {
     if (s.desk.holster) caption += `   ${hotkeyLabel(s.settings.hotkeys.switch)}: ${s.desk.holster.block.label}`
   }
   const breathing = tone === 'live' && !reduce && !dragging
-  const text = notice ?? caption
+  const text = moving ? MOVE_HINT : (notice ?? caption)
 
   // macOS: the caption is the shell's window. Elsewhere it is drawn above the pet.
   useEffect(() => {
@@ -104,7 +108,7 @@ export function Pet({ s, away, open, side, dragging, compact, notice }: Props) {
           </button>
         </div>
         <motion.div
-          className="pet-body"
+          className={`pet-body ${moving ? 'is-moving' : ''}`}
           title="Drag to move"
           animate={
             reduce || dragging ? { y: 0, scale: 1 }

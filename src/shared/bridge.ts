@@ -8,7 +8,7 @@ import type { Action, HudEvent, MayorlyState } from '../core/index'
 export type UiMode = 'field' | 'plus' | 'deck' | 'capture'
 
 /** Hotkey-driven requests from the shell to the HUD. `close` returns to field mode (the window lost focus). */
-export type Command = 'plus' | 'capture' | 'deck' | 'close'
+export type Command = 'plus' | 'capture' | 'deck' | 'close' | 'move'
 
 /** How the shell lays the HUD out. Compact: the window is only the pet and what it unfolds (macOS). */
 export interface Layout {
@@ -137,6 +137,12 @@ export interface Bridge {
   /** What the clerk is doing right now, for the pet to say. */
   onClerk(fn: (n: ClerkNotice) => void): () => void
   onClerkAsk(fn: (q: ClerkQuestion) => void): () => void
+  /** Keyboard move: on, the pet window takes the keyboard; off, it gives it back. */
+  setMoving(on: boolean): void
+  /** Move the tomato by this many points (macOS; the overlay ignores it elsewhere). */
+  nudge(dx: number, dy: number): void
+  /** Put the tomato in a corner of the work area: 1 top left, 2 top right, 3 bottom left, 4 bottom right. */
+  snap(corner: 1 | 2 | 3 | 4): void
   /** The effects page: play this. */
   onEffect(fn: (e: Effect) => void): () => void
   /** The effects page is done; the shell may hide the window. */
@@ -173,6 +179,9 @@ export const IPC = {
   ai: 'mayorly:ai',
   clerk: 'mayorly:clerk',
   clerkAsk: 'mayorly:clerk-ask',
+  moving: 'mayorly:moving',
+  nudge: 'mayorly:nudge',
+  snap: 'mayorly:snap',
   effect: 'mayorly:effect',
   effectDone: 'mayorly:effect-done',
   hotkeyFailures: 'mayorly:hotkey-failures',

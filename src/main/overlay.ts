@@ -236,6 +236,7 @@ export class Overlay {
 
   /** The effects page says it has finished. */
   effectDone() {
+    debug('effect done')
     if (this.effectsHide) clearTimeout(this.effectsHide)
     this.effectsHide = null
     this.effects?.hide()
@@ -244,6 +245,7 @@ export class Overlay {
   private playEffect(e: Effect) {
     if (!this.effects || this.effects.isDestroyed()) return
     this.effects.setBounds(this.display().workArea)
+    debug('effect', e.kind, e.amount, 'from', e.from)
     this.effects.webContents.send(IPC.effect, e)
     if (!this.effects.isVisible()) this.effects.showInactive()
     // Whatever happens in the page, the window does not stay.
@@ -316,6 +318,56 @@ export class Overlay {
     if (next === this.scale) return
     this.scale = next
     if (mac && this.mode === 'field') this.fit()
+  }
+
+  /** Keyboard move: the pet window takes the keyboard while the user nudges it, and gives it back after. */
+  setMoving(on: boolean) {
+    if (this.win.isDestroyed() || this.mode !== 'field') return
+    if (on) {
+      this.win.setFocusable(true)
+      this.win.focus()
+      this.win.webContents.focus()
+    } else {
+      this.win.blur()
+      this.win.setFocusable(false)
+    }
+  }
+
+  /** Move the tomato by this much. */
+  nudge(dx: number, dy: number) {
+    if (!mac) return
+    const wa = this.display().workArea
+    const a = this.anchor ?? this.defaultAnchor(wa)
+    this.place({ x: a.x + dx, y: a.y + dy })
+  }
+
+  /** Put the tomato in a corner of the work area it is on. */
+  snap(corner: 1 | 2 | 3 | 4) {
+    if (!mac) return
+    const wa = this.display().workArea
+    const margin = 24
+    const left = corner === 1 || corner === 3
+    const top = corner === 1 || corner === 2
+    this.place({
+      x: left ? wa.x + margin + this.half : wa.x + wa.width - margin - this.half,
+      y: top ? wa.y + margin + TOMATO * this.scale : wa.y + wa.height - margin,
+    })
+  }
+
+  /** The tomato's new place, by keyboard: hang the window around it, remember it, tell the page. */
+  private place(a: Anchor) {
+    if (this.settle) {
+      clearTimeout(this.settle)
+      this.settle = null
+    }
+    const nearest = screen.getDisplayNearestPoint(a)
+    this.displayId = nearest.id
+    this.anchor = this.clampAnchor(a, nearest.workArea)
+    debug('place', this.anchor)
+    this.fit()
+    this.saveAnchor()
+    this.sendLayout()
+    this.pushCaption()
   }
 
   /** The tomato's half width at the current scale. */

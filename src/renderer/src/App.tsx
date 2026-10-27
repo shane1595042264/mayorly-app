@@ -11,7 +11,7 @@ import { CashIn } from './hud/CashIn'
 import { Feed } from './hud/Feed'
 import { Objectives } from './hud/Objectives'
 import { Pet } from './hud/Pet'
-import { hotkeyLabel, matchesAcceleratorKey, MODIFIER_KEYS } from './lib/keys'
+import { MODIFIER_KEYS, hotkeyLabel, matchesAcceleratorKey, physicalKey } from './lib/keys'
 import { setSoundEnabled, sfx } from './lib/sound'
 import { PlusMenu } from './plus/PlusMenu'
 import { balance } from '@core/index'
@@ -40,6 +40,49 @@ export function App() {
   const [warning, setWarning] = useState<string | null>(null)
   const [layout, setLayout] = useState<Layout>({ compact: false, side: 'right', dragging: false })
   const [clerk, setClerk] = useState<string | null>(null)
+  // Keyboard move: the pet takes the keys until Enter, Escape, a blur, or a key it does not know.
+  const [moving, setMoving] = useState(false)
+  useEffect(() => {
+    bridge.setMoving(moving)
+    if (!moving) return
+    const STEP = 16
+    const FAR = 96
+    const done = () => setMoving(false)
+    let idle = setTimeout(done, 30_000)
+    const DIRS: Record<string, [number, number]> = {
+      h: [-1, 0], arrowleft: [-1, 0], j: [0, 1], arrowdown: [0, 1], k: [0, -1], arrowup: [0, -1], l: [1, 0], arrowright: [1, 0],
+    }
+    const key = (e: KeyboardEvent) => {
+      if (MODIFIER_KEYS.has(e.key)) return
+      clearTimeout(idle)
+      idle = setTimeout(done, 30_000)
+      e.preventDefault()
+      e.stopPropagation()
+      const k = physicalKey(e).toLowerCase()
+      const d = DIRS[k]
+      const compact = layoutRef.current.compact
+      if (d) {
+        const step = e.shiftKey ? FAR : STEP
+        // Windows: the HUD has two places, left or right.
+        if (compact) bridge.nudge(d[0] * step, d[1] * step)
+        else if (d[0]) bridge.dispatch({ type: 'settings/update', patch: { hudSide: d[0] < 0 ? 'left' : 'right' } })
+        return
+      }
+      if (k === '1' || k === '2' || k === '3' || k === '4') {
+        if (compact) bridge.snap(Number(k) as 1 | 2 | 3 | 4)
+        else bridge.dispatch({ type: 'settings/update', patch: { hudSide: k === '1' || k === '3' ? 'left' : 'right' } })
+        return
+      }
+      done()
+    }
+    window.addEventListener('keydown', key, true)
+    window.addEventListener('blur', done)
+    return () => {
+      clearTimeout(idle)
+      window.removeEventListener('keydown', key, true)
+      window.removeEventListener('blur', done)
+    }
+  }, [moving])
   // Windows: the harvest plays inside the overlay, from the tomato to the top right.
   const [cashIn, setCashIn] = useState<{ seq: number; amount: number; balance: number; from: { x: number; y: number } } | null>(null)
   const cashSeq = useRef(0)
@@ -139,6 +182,11 @@ export function App() {
           if (cur !== 'field') setMode('field')
           return
         }
+        if (cmd === 'move') {
+          if (cur !== 'field') setMode('field')
+          setMoving((m) => !m)
+          return
+        }
         if (cmd === 'plus') {
           if (cur === 'plus') {
             if (!held.current) setMode('field')
@@ -235,7 +283,7 @@ export function App() {
       </AnimatePresence>
 
       <Objectives s={s} mode={mode} />
-      <Pet s={s} away={petAway} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} compact={layout.compact} notice={clerk ?? (layout.compact ? warning : null)} />
+      <Pet s={s} away={petAway} moving={moving} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} compact={layout.compact} notice={clerk ?? (layout.compact ? warning : null)} />
       <Feed />
       <Callout quiet={mode !== 'field'} />
 

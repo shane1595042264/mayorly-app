@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_HOTKEYS } from './seed'
 import {
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, firstRunState, formatSuperset, objectives,
@@ -577,5 +578,13 @@ describe('the harvest', () => {
     old.entries = [{ id: 'e1', title: 'old entry', ledgerId: null, estimateMin: null, order: 1, createdAt: T0, doneAt: null }]
     w.do({ type: 'sync/replace', state: old })
     expect(w.s.entries[0].tomatoes).toBe(0)
+  })
+})
+
+describe('hotkeys', () => {
+  it('defaults are distinct combos, so no key does two things', () => {
+    const combos = Object.values(DEFAULT_HOTKEYS)
+    expect(new Set(combos).size).toBe(combos.length)
+    expect(DEFAULT_HOTKEYS.move).toBe('Alt+G')
   })
 })

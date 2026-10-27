@@ -33,6 +33,7 @@ Global, from any app. All of them can be changed in Deck, Settings. On a Mac, Al
 | **Alt+H** | Hide or show the HUD. |
 | **Alt+Q** | Quick switch: park what you are on and pick up the previous session where its clock stopped. Press again to come back. |
 | **Alt+C** | Clear the entry on the desk. Its tomatoes pay out, and the desk moves to the next entry on its own. |
+| **Alt+G** | Move the tomato by keyboard: arrows or hjkl nudge it, Shift goes far, 1 to 4 jump to a corner, Enter when done. |
 
 Inside the Plus menu: arrow keys or WASD pick an arm, **Q / E** cycle, **Enter** applies, **1-9** jump to a ledger, **Tab** opens the deck, **Esc** closes.
 

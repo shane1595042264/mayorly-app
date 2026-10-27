@@ -191,7 +191,7 @@ export interface ClerkLine {
   text: string
 }
 
-export type HotkeyAction = 'plus' | 'capture' | 'deck' | 'pause' | 'hide' | 'switch' | 'clear'
+export type HotkeyAction = 'plus' | 'capture' | 'deck' | 'pause' | 'hide' | 'switch' | 'clear' | 'move'
 
 export interface Settings {
   /** Focus length, and the tomato interval. */

@@ -329,6 +329,9 @@ body.caption { background: transparent; }
 .caption-page.side-left { justify-content: flex-start; }
 .caption-float { margin: 0; }
 
+/* The keyboard is moving the tomato: a dashed selection box, like an object picked up in an editor. */
+.pet-body.is-moving { outline: 2px dashed var(--accent); outline-offset: 3px; }
+
 /* ------------------------------------------------------------ the harvest, cashing in
    Coins fly from the tomato to a counter in the top right. Nothing here takes the pointer. */
 
