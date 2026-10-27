@@ -37,7 +37,10 @@ This is the application layer of Mayorly, a life OS: entries filed into ledgers,
 npm test             core rules
 npm run typecheck    everything
 npm run web          the HUD at localhost:5199 (?demo for sample data, ?fresh for first run)
+npm run ship:mac     build Mayorly.app, install it in /Applications, relaunch it
 ```
+
+There is no staging: the founder runs the installed app, so a change is done when `ship:mac` has run and the new app is up. `npm run dev` is for iterating (hot reload, and with `MAYORLY_DEBUG=1` the `SIGUSR1`/`SIGUSR2` previews); the dev instance and the installed app share one single-instance lock, so only one runs at a time and the ship script quits whichever is up.
 
 To screenshot the browser preview at full resolution:
 

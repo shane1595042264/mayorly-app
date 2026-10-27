@@ -35,6 +35,8 @@ Global, from any app. All of them can be changed in Deck, Settings. On a Mac, Al
 | **Alt+C** | Clear the entry on the desk. Its tomatoes pay out, and the desk moves to the next entry on its own. |
 | **Alt+G** | Move the tomato by keyboard: arrows or hjkl nudge it, Shift goes far, 1 to 4 jump to a corner, Enter when done. |
 
+To run the real thing on this Mac, `npm run ship:mac` builds `Mayorly.app`, puts it in `/Applications` and launches it (ad-hoc signed, so the first launch of a copy from elsewhere needs Open Anyway; a local build opens straight away).
+
 Inside the deck nothing needs a mouse. `q` and `e` or `1` to `6` change tabs, `Esc` closes. On a list, `j` and `k` (or the arrows) pick a row and the keys act on it: `Enter` deploys a pomodoro on it, `c` clears it, `x` deletes it, `r` renames it, `[` and `]` file it to the previous or next ledger, `J` and `K` move it, `n` puts the cursor in the new-entry box, `b` blitzes the flow, `s` sends the tray to the clerk. On the shelf `h j k l` walk the bays, `Enter` opens one, `r` edits it, `n` writes a new one, `Backspace` comes back out. On the couch list `Enter` sits down and `Space` shows the context switch rules. Press `?` in the deck (or the Keymap button in Settings) for the Keymap screen: every key by section, ranked by how often you use it, searchable with `/`, and rebindable by selecting a row, pressing `Enter`, then the new key; `Backspace` puts one back. Changed keys sync with the account; the global hotkeys are per machine.
 
 Inside the Plus menu: arrow keys or WASD pick an arm, **Q / E** cycle, **Enter** applies, **1-9** jump to a ledger, **Tab** opens the deck, **Esc** closes.
