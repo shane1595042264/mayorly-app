@@ -21,13 +21,27 @@ APP=$(ls -d dist/mac*/Mayorly.app 2>/dev/null | head -1)
 [ -n "$APP" ] || { echo "ship-mac: no Mayorly.app under dist/"; exit 1; }
 
 # Quit whatever holds the single-instance lock: the installed app, or a dev instance of this checkout.
+# Wait until it is really gone; a new instance started while the old one is still quitting
+# loses the lock and exits, leaving the old build running from a bundle that no longer exists.
+running() { pgrep -f "Mayorly.app/Contents/MacOS/Mayorly|electron-vite dev|Mayorly/node_modules/electron/dist/Electron.app" >/dev/null 2>&1; }
 osascript -e 'quit app "Mayorly"' 2>/dev/null || true
 pkill -f "Mayorly.app/Contents/MacOS/Mayorly" 2>/dev/null || true
 pkill -f "electron-vite dev" 2>/dev/null || true
 pkill -f "Mayorly/node_modules/electron/dist/Electron.app" 2>/dev/null || true
-sleep 1.5
+for _ in $(seq 1 40); do running || break; sleep 0.25; done
+if running; then
+  echo "ship-mac: the old instance did not quit in 10 s; killing it"
+  pkill -9 -f "Mayorly.app/Contents/MacOS/Mayorly|electron-vite dev|Mayorly/node_modules/electron/dist/Electron.app" 2>/dev/null || true
+  sleep 1
+fi
 
 rm -rf /Applications/Mayorly.app
 ditto "$APP" /Applications/Mayorly.app
 open -a /Applications/Mayorly.app
-echo "ship-mac: /Applications/Mayorly.app installed and launched"
+for _ in $(seq 1 40); do pgrep -f "/Applications/Mayorly.app/Contents/MacOS/Mayorly" >/dev/null 2>&1 && break; sleep 0.25; done
+if pgrep -f "/Applications/Mayorly.app/Contents/MacOS/Mayorly" >/dev/null 2>&1; then
+  echo "ship-mac: /Applications/Mayorly.app installed and launched"
+else
+  echo "ship-mac: installed, but the app is not running; check the log in the data folder" >&2
+  exit 1
+fi
