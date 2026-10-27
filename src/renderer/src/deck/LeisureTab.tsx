@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react'
-import { CaretDown, CaretRight, Play, Plus, Stop, Trash, X } from '@phosphor-icons/react'
+import { CaretDown, CaretRight, Couch, Play, Plus, Stop, Trash, X } from '@phosphor-icons/react'
 import { balance, blockView, clock, leisureList, leisureSpentMs, leisureTokensSpent, LEISURE_TOKENS_PER_BLOCK, span, type LeisureItem, type MayorlyState } from '@core/index'
 import { hotkeyLabel } from '../lib/keys'
 import { dispatch, useNow } from '../store'
