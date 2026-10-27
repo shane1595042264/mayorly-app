@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hudSide: 'right',
   hudScale: 1,
   hotkeys: DEFAULT_HOTKEYS,
+  keymap: {},
   openAtLogin: false,
 }
 

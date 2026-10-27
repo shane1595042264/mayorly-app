@@ -588,3 +588,12 @@ describe('hotkeys', () => {
     expect(DEFAULT_HOTKEYS.move).toBe('Alt+G')
   })
 })
+
+describe('keymap', () => {
+  it('keys the user changed live in settings.keymap and travel with the account', () => {
+    const w = world()
+    w.do({ type: 'settings/update', patch: { keymap: { 'list.down': ['n', 'ArrowDown'] } } })
+    expect(w.s.settings.keymap['list.down']).toEqual(['n', 'ArrowDown'])
+    expect(w.s.settings.keymap['list.up']).toBeUndefined()
+  })
+})

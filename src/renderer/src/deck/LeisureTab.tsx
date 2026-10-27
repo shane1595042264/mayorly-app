@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react'
 import { CaretDown, CaretRight, Couch, Play, Plus, Stop, Trash, X } from '@phosphor-icons/react'
 import { balance, blockView, clock, leisureList, leisureSpentMs, leisureTokensSpent, LEISURE_TOKENS_PER_BLOCK, span, type LeisureItem, type MayorlyState } from '@core/index'
 import { hotkeyLabel } from '../lib/keys'
+import { useListKeys } from '../lib/listkeys'
 import { dispatch, useNow } from '../store'
 
 // Entertainment lives here, outside the ledgers: games, shows, streams. The couch runs
@@ -24,6 +25,23 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
     dispatch({ type: 'leisure/add', title: draft })
     setDraft('')
   }
+
+  // The keyboard: Enter sits down with the selected row, x removes it, Space shows its cues.
+  const { sel } = useListKeys(items.map((it) => it.id), ({ action, id }) => {
+    if (action === 'list.new') {
+      document.getElementById('leisure-add')?.focus()
+      return true
+    }
+    const it = id ? items.find((x) => x.id === id) : undefined
+    if (!it) return false
+    const live = onCouch?.block.leisureId === it.id
+    if (action === 'list.go') {
+      if (have >= price && !live) dispatch({ type: 'desk/deploy', mode: 'couch', leisureId: it.id })
+    } else if (action === 'list.delete') dispatch({ type: 'leisure/delete', id: it.id })
+    else if (action === 'list.cues') setOpen((o) => (o === it.id ? null : it.id))
+    else return false
+    return true
+  })
 
   return (
     <div className="leisure">
@@ -75,7 +93,7 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
               const expanded = open === it.id
               return (
                 <Fragment key={it.id}>
-                <li className={`row leisure-row ${live ? 'live' : ''} ${expanded ? 'expanded' : ''}`}>
+                <li className={`row leisure-row ${live ? 'live' : ''} ${expanded ? 'expanded' : ''} ${sel === it.id ? 'is-selected' : ''}`} data-row={it.id} aria-selected={sel === it.id}>
                   <span className="row-n mono num dim">{String(i + 1).padStart(2, '0')}</span>
                   <button className="icon-btn" aria-expanded={expanded} aria-label={expanded ? 'Hide context switch rules' : 'Show context switch rules'} title="Context switch rules" onClick={() => setOpen(expanded ? null : it.id)}>
                     {expanded ? <CaretDown size={14} /> : <CaretRight size={14} />}

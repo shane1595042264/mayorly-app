@@ -5,6 +5,7 @@ import {
   entrySpentMs, openFlow, prefixClerk, span, startOfDay, type Entry, type MayorlyState,
 } from '@core/index'
 import { bridge } from '../bridge'
+import { cycleLedger, useListKeys } from '../lib/listkeys'
 import { dispatch, useAi, useNow } from '../store'
 
 export function FlowTab({ s }: { s: MayorlyState }) {
@@ -37,6 +38,37 @@ export function FlowTab({ s }: { s: MayorlyState }) {
       setSorting(false)
     }
   }
+
+  // The keyboard: j and k pick a row, the list keys act on it.
+  const [rename, setRename] = useState({ id: '', n: 0 })
+  const { sel } = useListKeys(ids, ({ action, id, index }) => {
+    if (action === 'list.new') {
+      document.getElementById('flow-add')?.focus()
+      return true
+    }
+    if (action === 'list.blitz') {
+      if (flow.length) dispatch({ type: 'desk/deploy', mode: 'blitz' })
+      return true
+    }
+    if (action === 'list.sort') {
+      if (clerkOn && trayCount > 0 && !sorting) void autoClassify()
+      return true
+    }
+    const e = id ? byId.get(id) : undefined
+    if (!e) return false
+    if (action === 'list.go') dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })
+    else if (action === 'list.clear') dispatch({ type: 'entry/complete', id: e.id })
+    else if (action === 'list.delete') dispatch({ type: 'entry/delete', id: e.id })
+    else if (action === 'list.rename') setRename((r) => ({ id: e.id, n: r.n + 1 }))
+    else if (action === 'list.ledgerNext' || action === 'list.ledgerPrev') {
+      dispatch({ type: 'entry/update', id: e.id, patch: { ledgerId: cycleLedger(s, e.ledgerId, action === 'list.ledgerNext' ? 1 : -1) } })
+    } else if (action === 'list.moveDown') {
+      if (index < ids.length - 1) dispatch({ type: 'entry/move', id: e.id, toIndex: index + 1 })
+    } else if (action === 'list.moveUp') {
+      if (index > 0) dispatch({ type: 'entry/move', id: e.id, toIndex: index - 1 })
+    } else return false
+    return true
+  })
 
   return (
     <div className="flow">
@@ -82,7 +114,7 @@ export function FlowTab({ s }: { s: MayorlyState }) {
             {ids.map((id, i) => {
               const e = byId.get(id)
               return e ? (
-                <Row key={id} e={e} s={s} index={i} live={live === id} now={now} onDrop={() => dispatch({ type: 'entry/move', id, toIndex: ids.indexOf(id) })} />
+                <Row key={id} e={e} s={s} index={i} live={live === id} selected={sel === id} renameTick={rename.id === id ? rename.n : 0} now={now} onDrop={() => dispatch({ type: 'entry/move', id, toIndex: ids.indexOf(id) })} />
               ) : null
             })}
           </Reorder.Group>
@@ -111,15 +143,19 @@ export function FlowTab({ s }: { s: MayorlyState }) {
   )
 }
 
-function Row({ e, s, index, live, now, onDrop }: { e: Entry; s: MayorlyState; index: number; live: boolean; now: number; onDrop: () => void }) {
+function Row({ e, s, index, live, selected, renameTick, now, onDrop }: { e: Entry; s: MayorlyState; index: number; live: boolean; selected: boolean; renameTick: number; now: number; onDrop: () => void }) {
   const controls = useDragControls()
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(e.title)
+  // The rename key: each press opens the title for editing.
+  useEffect(() => {
+    if (renameTick) setEditing(true)
+  }, [renameTick])
   const spent = entrySpentMs(s, e.id, now)
   const est = e.estimateMin
 
   return (
-    <Reorder.Item value={e.id} dragListener={false} dragControls={controls} onDragEnd={onDrop} className={`row ${live ? 'live' : ''}`} as="li">
+    <Reorder.Item value={e.id} dragListener={false} dragControls={controls} onDragEnd={onDrop} className={`row ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} data-row={e.id} aria-selected={selected} as="li">
       <span className="grip" onPointerDown={(ev) => controls.start(ev)} aria-label="Drag to reorder">
         <DotsSixVertical size={16} />
       </span>

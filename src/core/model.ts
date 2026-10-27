@@ -205,6 +205,8 @@ export interface Settings {
   hudSide: 'right' | 'left'
   hudScale: number
   hotkeys: Record<HotkeyAction, string>
+  /** In-app keys the user changed, by action id, up to two keys each. Missing ids use the HUD's defaults; syncs with the account. */
+  keymap: Record<string, string[]>
   openAtLogin: boolean
 }
 

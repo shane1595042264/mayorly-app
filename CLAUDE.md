@@ -23,6 +23,8 @@ This is the application layer of Mayorly, a life OS: entries filed into ledgers,
 | `src/main/overlay.ts` | the window: on Windows the click-through overlay, on macOS the pet-sized panel that follows the tomato |
 | `src/renderer/src/hud/Pet.tsx` | the resting HUD: the tomato, its number, the hover caption |
 | `src/renderer/src/lib/keys.ts` | keys matched by position, hotkeys shown as Option on a Mac |
+| `src/renderer/src/lib/keymap.ts` | every in-app key by scope with its default; `settings.keymap` holds what the user changed; `deck/Keymap.tsx` is the screen |
+| `src/renderer/src/lib/listkeys.ts` | j and k on a list, and what the other list keys do, per tab |
 | `src/main/auth.ts`, `session.ts`, `sync.ts` | Google sign-in through the system browser, the encrypted session, the sync loop |
 | `server/` | mayorly-api: Google sign-in, one state document per account, last writer wins |
 | `src/main/ai/` | the AI clerk: provider from the key's shape, cheapest model that answers, sealed keys, filing and the tray sweep |
@@ -43,7 +45,7 @@ To screenshot the browser preview at full resolution:
 SHOT_URL="http://localhost:5199/?demo" SHOT_OUT=shot.png SHOT_JS='...' npx electron scripts/shot.cjs
 ```
 
-Parameters go in the environment, which works the same on both platforms; Electron on Windows exits before running the script when a file path is passed as a positional argument. The capture window is offscreen with throttling off; a plain hidden window never runs `requestAnimationFrame`, so Motion animations would stay at their initial frame.
+`?demo` and `?fresh` put `window.__mayorly = { dispatch, state }` on the page, so `SHOT_JS` (or the console) can drive the HUD: dispatch a harvest, open the deck with a synthetic keydown, and so on. Parameters go in the environment, which works the same on both platforms; Electron on Windows exits before running the script when a file path is passed as a positional argument. The capture window is offscreen with throttling off; a plain hidden window never runs `requestAnimationFrame`, so Motion animations would stay at their initial frame.
 
 ## Things that look like bugs and are not
 
@@ -57,6 +59,7 @@ Parameters go in the environment, which works the same on both platforms; Electr
 - **`npm run web` with no query loads from localStorage**; `?demo` and `?fresh` never write to it.
 - **On a Mac the window is the pet, not the screen.** Field mode is a 220 by 64 point panel around the tomato (a little taller while the caption shows), movable by dragging the tomato, and it takes clicks like any small window. Nothing is click-through on macOS; the `data-hit` path is Windows only. Plus, deck and capture grow the window to the work area and shrink it back. The position is saved in `hud.json` beside the state file.
 - **On a Mac the field HUD polls the cursor for hover.** AppKit only sends mouse-moved events to the key window, and the pet never is one, so `overlay.ts` samples the pointer and feeds the page the same mousemove.
+- **Two kinds of keys.** `settings.hotkeys` are global Electron accelerators, registered by the shell and kept per machine (`DEVICE_SETTINGS`). `settings.keymap` are in-app keys read by the renderer alone, named like `list.down`, and they sync. A key the user did not change is not in `keymap` at all; `keysFor` falls back to the default in `lib/keymap.ts`.
 - **Hotkeys are stored as `Alt+T` on a Mac too.** Alt is Electron's cross-platform spelling for Option. The HUD labels them Option, the Settings field accepts Option, Cmd and Control and stores Alt.
 - **Clicking the menu bar icon on a Mac opens the menu, not the Deck.** That is the macOS convention; Deck is in the menu.
 - **The AI clerk never writes state itself.** It returns a `Filing`; `entry/capture` and `entry/file` in the reducer check it (real ledger, real title) and file by prefix otherwise. Keys live in `ai.bin`, sealed with the OS keychain, never in state and never synced.

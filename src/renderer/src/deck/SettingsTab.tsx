@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowsClockwise, GoogleLogo, Plus, Trash } from '@phosphor-icons/react'
+import { ArrowsClockwise, GoogleLogo, Keyboard, Plus, Trash } from '@phosphor-icons/react'
 import type { HotkeyAction, MayorlyState, Settings } from '@core/index'
 import type { AiProvider } from '../../../shared/bridge'
 import { bridge } from '../bridge'
@@ -23,7 +23,7 @@ const HOTKEYS: [HotkeyAction, string][] = [
   ['move', 'Move the tomato by keyboard'],
 ]
 
-export function SettingsTab({ s, kind }: { s: MayorlyState; kind: 'electron' | 'web' }) {
+export function SettingsTab({ s, kind, openKeymap }: { s: MayorlyState; kind: 'electron' | 'web'; openKeymap: () => void }) {
   const st = s.settings
   const set = (patch: Partial<Settings>) => dispatch({ type: 'settings/update', patch })
 
@@ -71,7 +71,12 @@ export function SettingsTab({ s, kind }: { s: MayorlyState; kind: 'electron' | '
       <HouseRulesSection s={s} />
 
       <section>
-        <h3 className="side-title caps">Hotkeys</h3>
+        <div className="section-head">
+          <h3 className="side-title caps">Hotkeys</h3>
+          <button type="button" className="btn" onClick={openKeymap} title="Every key in the app, and the ones you changed (? in the deck)">
+            <Keyboard size={14} /> Keymap
+          </button>
+        </div>
         <p className="field-help">
           Global, they work from any app. Use a modifier combo such as {EXAMPLE} or Ctrl+Shift+Space.
           {IS_MAC && ' Option combos replace the characters they would type while Mayorly runs.'}

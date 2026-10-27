@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ArrowLeft, Check, LockSimple, PencilSimple, Play, Plus, Trash } from '@phosphor-icons/react'
 import {
   dayStats, entrySpentMs, LEDGER_CAP, ledgerEntries, span, startOfDay, type Entry, type GlyphName, type Ledger, type MayorlyState,
 } from '@core/index'
 import { Glyph, GLYPHS } from '../lib/glyphs'
-import { dispatch, useNow } from '../store'
+import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
+import { cycleLedger, useListKeys } from '../lib/listkeys'
+import { current, dispatch, useNow } from '../store'
 
 // The ledger shelf: nine bays. Every ledger here is hand-written by you, so the
 // clerk may file into it but never rename, merge or remove it. A bay opens the
@@ -17,6 +19,56 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
   const [open, setOpen] = useState<string | null>(null)
   const slots = Array.from({ length: LEDGER_CAP }, (_, i) => s.ledgers[i] ?? null)
   const firstEmpty = slots.findIndex((l) => l === null)
+
+  // The keyboard on the grid: h j k l between bays, Enter opens, r edits, n writes a new one.
+  const [cell, setCell] = useState(0)
+  const slotKey = slots.map((l) => l?.id ?? '').join()
+  useEffect(() => {
+    if (open || editing) return
+    const onKey = (e: KeyboardEvent) => {
+      if (keymapOpen() || e.altKey || e.ctrlKey || e.metaKey) return
+      if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select')) return
+      const st = current()
+      const a = st ? actionFor(e, 'shelf', st.settings) : null
+      if (!a) return
+      const l = slots[cell]
+      const reach = slots.map((x, i) => !!x || i === firstEmpty)
+      // Step towards the target; when it is a void bay, the nearest meaningful one short of it, or stay.
+      const step = (c: number, d: number) => {
+        const t = c + d
+        if (t < 0 || t >= slots.length) return c
+        if (Math.abs(d) === 1 && Math.floor(t / 3) !== Math.floor(c / 3)) return c
+        if (reach[t]) return t
+        const between = d > 0 ? [...Array(t - c).keys()].map((k) => t - k) : [...Array(c - t).keys()].map((k) => t + k)
+        return between.find((i) => i !== c && reach[i] && (d > 0 ? i > c : i < c)) ?? c
+      }
+      let handled = true
+      if (a === 'shelf.left') setCell((c) => step(c, -1))
+      else if (a === 'shelf.right') setCell((c) => step(c, 1))
+      else if (a === 'shelf.up') setCell((c) => step(c, -3))
+      else if (a === 'shelf.down') setCell((c) => step(c, 3))
+      else if (a === 'shelf.open') {
+        if (l) setOpen(l.id)
+        else if (cell === firstEmpty) setEditing(`new-${cell}`)
+        else handled = false
+      } else if (a === 'shelf.edit') {
+        if (l) setEditing(l.id)
+        else handled = false
+      } else if (a === 'shelf.new') {
+        if (firstEmpty >= 0) {
+          setCell(firstEmpty)
+          setEditing(`new-${firstEmpty}`)
+        } else handled = false
+      } else handled = false
+      if (handled) {
+        e.preventDefault()
+        recordUse(a)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing, cell, slotKey, firstEmpty])
 
   const opened = open ? s.ledgers.find((l) => l.id === open) : null
   if (opened) {
@@ -34,7 +86,7 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
           if (!l && editing === `new-${i}`) return <LedgerForm key={`new-${i}`} s={s} ledger={null} done={() => setEditing(null)} />
           if (!l) {
             return i === firstEmpty ? (
-              <button key={`e${i}`} className="bay bay-empty" onClick={() => setEditing(`new-${i}`)}>
+              <button key={`e${i}`} className={`bay bay-empty ${cell === i ? 'is-selected' : ''}`} onClick={() => setEditing(`new-${i}`)}>
                 <Plus size={18} />
                 <span className="caps">Write a ledger</span>
               </button>
@@ -45,7 +97,7 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
           const openCount = ledgerEntries(s, l.id).length
           const ms = today.byLedger.find((b) => b.ledgerId === l.id)?.focusMs ?? 0
           return (
-            <div key={l.id} className="bay bay-open" role="button" tabIndex={0} onClick={() => setOpen(l.id)} onKeyDown={(e) => e.key === 'Enter' && setOpen(l.id)} aria-label={`Open ${l.name}`}>
+            <div key={l.id} className={`bay bay-open ${cell === i ? 'is-selected' : ''}`} role="button" tabIndex={0} onClick={() => setOpen(l.id)} onKeyDown={(e) => e.key === 'Enter' && setOpen(l.id)} aria-label={`Open ${l.name}`}>
               <span className="bay-n mono dim">{i + 1}</span>
               <button
                 type="button"
@@ -81,6 +133,36 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
   const ms = dayStats(s, today, now).byLedger.find((b) => b.ledgerId === ledger.id)?.focusMs ?? 0
   const live = s.desk.block?.entryId
 
+  // The keyboard: the list keys on the rows; Backspace back to the shelf, f focuses here.
+  const [rename, setRename] = useState({ id: '', n: 0 })
+  const { sel } = useListKeys(entries.map((e) => e.id), ({ action, id }) => {
+    const e = id ? entries.find((x) => x.id === id) : undefined
+    if (!e) return false
+    if (action === 'list.go') dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })
+    else if (action === 'list.clear') dispatch({ type: 'entry/complete', id: e.id })
+    else if (action === 'list.delete') dispatch({ type: 'entry/delete', id: e.id })
+    else if (action === 'list.rename') setRename((r) => ({ id: e.id, n: r.n + 1 }))
+    else if (action === 'list.ledgerNext' || action === 'list.ledgerPrev') {
+      dispatch({ type: 'entry/update', id: e.id, patch: { ledgerId: cycleLedger(s, e.ledgerId, action === 'list.ledgerNext' ? 1 : -1) } })
+    } else return false
+    return true
+  })
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (keymapOpen() || e.altKey || e.ctrlKey || e.metaKey) return
+      if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select')) return
+      const st = current()
+      const a = st ? actionFor(e, 'shelf', st.settings) : null
+      if (a === 'shelf.back') back()
+      else if (a === 'shelf.focus') dispatch({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: ledger.id })
+      else return
+      e.preventDefault()
+      recordUse(a)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [back, ledger.id])
+
   return (
     <div className="ledger-view">
       <div className="ledger-head">
@@ -105,7 +187,7 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
         </div>
       ) : (
         <ol className="flow-list">
-          {entries.map((e, i) => <LedgerRow key={e.id} s={s} e={e} index={i} now={now} live={live === e.id} />)}
+          {entries.map((e, i) => <LedgerRow key={e.id} s={s} e={e} index={i} now={now} live={live === e.id} selected={sel === e.id} renameTick={rename.id === e.id ? rename.n : 0} />)}
         </ol>
       )}
 
@@ -126,12 +208,15 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
   )
 }
 
-function LedgerRow({ s, e, index, now, live }: { s: MayorlyState; e: Entry; index: number; now: number; live: boolean }) {
+function LedgerRow({ s, e, index, now, live, selected, renameTick }: { s: MayorlyState; e: Entry; index: number; now: number; live: boolean; selected: boolean; renameTick: number }) {
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(e.title)
+  useEffect(() => {
+    if (renameTick) setEditing(true)
+  }, [renameTick])
   const spent = entrySpentMs(s, e.id, now)
   return (
-    <li className={`row ${live ? 'live' : ''}`}>
+    <li className={`row ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} data-row={e.id} aria-selected={selected}>
       <span className="row-n mono num dim">{String(index + 1).padStart(2, '0')}</span>
       <select
         className="code-select mono"

@@ -4,7 +4,10 @@ import { X } from '@phosphor-icons/react'
 import { balance, type MayorlyState } from '@core/index'
 import { useLean } from '../lib/parallax'
 import { sfx } from '../lib/sound'
+import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
+import { current } from '../store'
 import { FlowTab } from './FlowTab'
+import { Keymap } from './Keymap'
 import { LeisureTab } from './LeisureTab'
 import { RecordTab } from './RecordTab'
 import { SettingsTab } from './SettingsTab'
@@ -18,6 +21,7 @@ let remembered: Tab = 'Flow'
 
 export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; kind: 'electron' | 'web' }) {
   const [tab, setTabState] = useState<Tab>(remembered)
+  const [keymap, setKeymap] = useState(false)
   const reduce = useReducedMotion()
   const lean = useLean(1.4)
   const rotateX = useTransform(lean.rotateX, (r) => 3 + r)
@@ -29,18 +33,27 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
     sfx.tick()
   }
 
+  // The deck's own keys, from the keymap: close, the tabs, and the Keymap screen itself.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const typing = (e.target as HTMLElement)?.closest?.('input, textarea, select')
-      if (e.key === 'Escape') {
-        if (typing) (typing as HTMLElement).blur()
-        else close()
+      if (keymapOpen()) return
+      const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select')
+      if (typing) {
+        if (e.key === 'Escape') (typing as HTMLElement).blur()
         return
       }
-      if (typing || e.altKey || e.ctrlKey || e.metaKey) return
+      if (e.altKey || e.ctrlKey || e.metaKey) return
+      const st = current()
+      const a = st ? actionFor(e, 'deck', st.settings) : null
       const i = TABS.indexOf(remembered)
-      if (e.key === 'q' || e.key === 'Q') setTab(TABS[(i + TABS.length - 1) % TABS.length])
-      if (e.key === 'e' || e.key === 'E') setTab(TABS[(i + 1) % TABS.length])
+      if (a === 'deck.close') close()
+      else if (a === 'deck.prevTab') setTab(TABS[(i + TABS.length - 1) % TABS.length])
+      else if (a === 'deck.nextTab') setTab(TABS[(i + 1) % TABS.length])
+      else if (a === 'deck.keymap') setKeymap(true)
+      else if (!a && !e.shiftKey && /^[1-6]$/.test(e.key)) setTab(TABS[Number(e.key) - 1])
+      else return
+      e.preventDefault()
+      recordUse(a ?? 'deck.tab')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -89,8 +102,9 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
           {tab === 'Supersets' && <SupersetsTab s={s} />}
           {tab === 'Leisure' && <LeisureTab s={s} />}
           {tab === 'Record' && <RecordTab s={s} />}
-          {tab === 'Settings' && <SettingsTab s={s} kind={kind} />}
+          {tab === 'Settings' && <SettingsTab s={s} kind={kind} openKeymap={() => setKeymap(true)} />}
         </div>
+        {keymap && <Keymap s={s} close={() => setKeymap(false)} />}
       </motion.section>
     </motion.div>
   )

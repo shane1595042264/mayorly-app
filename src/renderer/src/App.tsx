@@ -6,6 +6,7 @@ import { bridge } from './bridge'
 import { Capture } from './capture/Capture'
 import { ClerkAsk } from './deck/ClerkAsk'
 import { Deck } from './deck/Deck'
+import { actionFor, recordUse } from './lib/keymap'
 import { Callout } from './hud/Callout'
 import { CashIn } from './hud/CashIn'
 import { Feed } from './hud/Feed'
@@ -49,17 +50,18 @@ export function App() {
     const FAR = 96
     const done = () => setMoving(false)
     let idle = setTimeout(done, 30_000)
-    const DIRS: Record<string, [number, number]> = {
-      h: [-1, 0], arrowleft: [-1, 0], j: [0, 1], arrowdown: [0, 1], k: [0, -1], arrowup: [0, -1], l: [1, 0], arrowright: [1, 0],
-    }
+    const DIRS: Record<string, [number, number]> = { 'move.left': [-1, 0], 'move.down': [0, 1], 'move.up': [0, -1], 'move.right': [1, 0] }
     const key = (e: KeyboardEvent) => {
       if (MODIFIER_KEYS.has(e.key)) return
       clearTimeout(idle)
       idle = setTimeout(done, 30_000)
       e.preventDefault()
       e.stopPropagation()
+      const st = current()
+      const a = st ? actionFor(e, 'move', st.settings, { ignoreShift: true }) : null
+      if (a) recordUse(a)
       const k = physicalKey(e).toLowerCase()
-      const d = DIRS[k]
+      const d = a ? DIRS[a] : undefined
       const compact = layoutRef.current.compact
       if (d) {
         const step = e.shiftKey ? FAR : STEP
@@ -182,6 +184,7 @@ export function App() {
           if (cur !== 'field') setMode('field')
           return
         }
+        recordUse(`global.${cmd}`)
         if (cmd === 'move') {
           if (cur !== 'field') setMode('field')
           setMoving((m) => !m)
