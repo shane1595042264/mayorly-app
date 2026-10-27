@@ -7,7 +7,7 @@ import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_BLOCK, tokensForTomato } 
 import { migrate } from './seed'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
-export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound'] as const
+export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'trayTimer'] as const
 
 export type Action =
   /** `filing` is the AI clerk's answer, when there is one; the reducer checks it and otherwise files by prefix. */

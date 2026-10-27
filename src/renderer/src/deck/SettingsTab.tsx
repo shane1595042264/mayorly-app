@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowsClockwise, GoogleLogo, Keyboard, Plus, Trash } from '@phosphor-icons/react'
 import type { HotkeyAction, MayorlyState, Settings } from '@core/index'
-import type { AiProvider } from '../../../shared/bridge'
+import type { AiProvider, AppInfo } from '../../../shared/bridge'
 import { bridge } from '../bridge'
 import { hotkeyLabel, IS_MAC } from '../lib/keys'
 import { dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
@@ -42,6 +42,7 @@ export function SettingsTab({ s, kind, openKeymap }: { s: MayorlyState; kind: 'e
           <Check label="Start rests on their own" value={st.autoStartRest} onChange={(autoStartRest) => set({ autoStartRest })} />
           <Check label="Sound cues" value={st.sound} onChange={(sound) => set({ sound })} />
           {kind === 'electron' && <Check label="Open at login" value={st.openAtLogin} onChange={(openAtLogin) => set({ openAtLogin })} />}
+          {kind === 'electron' && IS_MAC && <Check label="Timer beside the menu bar tomato" value={st.trayTimer} onChange={(trayTimer) => set({ trayTimer })} />}
         </div>
       </section>
 
@@ -68,6 +69,7 @@ export function SettingsTab({ s, kind, openKeymap }: { s: MayorlyState; kind: 'e
 
       {kind === 'electron' && <AccountSection />}
       {kind === 'electron' && <AiSection />}
+      <DataSection kind={kind} />
       <HouseRulesSection s={s} />
 
       <section>
@@ -98,7 +100,21 @@ function AccountSection() {
   const [available, setAvailable] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState(false)
   useEffect(() => void bridge.accountsAvailable().then(setAvailable), [])
+  const remove = async () => {
+    if (!confirm) {
+      setConfirm(true)
+      return
+    }
+    setConfirm(false)
+    setError(null)
+    try {
+      await bridge.deleteAccount()
+    } catch (e) {
+      setError(e instanceof Error ? e.message.replace(/^Error: /, '') : String(e))
+    }
+  }
 
   const signIn = async () => {
     setBusy(true)
@@ -132,7 +148,14 @@ function AccountSection() {
             {account.name && <span className="field-help">{account.email}</span>}
           </div>
           <span className={`field-help ${sync.phase === 'error' ? 'field-error' : ''}`}>{line}</span>
-          <button className="btn ghost" onClick={() => void bridge.signOut()}>Sign out</button>
+          <div className="form-actions">
+            <button className="btn ghost" onClick={() => void bridge.signOut()}>Sign out</button>
+            <button className={`btn ghost ${confirm ? 'warn' : ''}`} onClick={() => void remove()} onBlur={() => setConfirm(false)}>
+              {confirm ? 'Confirm: delete the account and its copy on the server' : 'Delete account'}
+            </button>
+          </div>
+          {error && <span className="field-error">{error}</span>}
+          <p className="field-help">Deleting removes the account and the synced document from the server. This machine keeps its own copy.</p>
         </div>
       ) : (
         <div className="account">
@@ -144,6 +167,29 @@ function AccountSection() {
           {error && <span className="field-error">{error}</span>}
         </div>
       )}
+    </section>
+  )
+}
+
+/** Where the data is, a way out and a way back in, and which build this is. */
+function DataSection({ kind }: { kind: 'electron' | 'web' }) {
+  const [info, setInfo] = useState<AppInfo | null>(null)
+  const [msg, setMsg] = useState<string | null>(null)
+  useEffect(() => void bridge.getInfo().then(setInfo), [])
+  return (
+    <section>
+      <h3 className="side-title caps">Your data</h3>
+      <p className="field-help">
+        {kind === 'electron'
+          ? `One file on this machine${info ? `, in ${info.dataDir}` : ''}, with a copy a day in backups beside it. Export writes the same JSON anywhere; import replaces what is here, after another copy to backups.`
+          : 'In this browser. Export downloads it as JSON.'}
+      </p>
+      <div className="form-actions">
+        <button className="btn" onClick={() => void bridge.exportState().then((p) => setMsg(p ? `Exported to ${p}` : null))}>Export</button>
+        {kind === 'electron' && <button className="btn ghost" onClick={() => void bridge.importState().then((r) => setMsg(r.message || null))}>Import</button>}
+        {info && <span className="field-help">Mayorly {info.version}{info.arch ? `  ${info.arch}` : ''}</span>}
+      </div>
+      {msg && <p className="field-help">{msg}</p>}
     </section>
   )
 }

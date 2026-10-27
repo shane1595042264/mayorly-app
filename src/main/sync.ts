@@ -19,6 +19,8 @@ export class Sync {
   private token: string | null = null
   private revision = 0
   private synced = ''
+  /** The state object last pushed or taken, so a heartbeat's new state is told apart by reference, not by serialising it. */
+  private syncedState: MayorlyState | null = null
   private pushTimer: NodeJS.Timeout | null = null
   private pollTimer: NodeJS.Timeout | null = null
   private lastPush = 0
@@ -43,6 +45,7 @@ export class Sync {
     this.token = token
     this.revision = 0
     this.synced = ''
+    this.syncedState = null
     if (this.pollTimer) clearInterval(this.pollTimer)
     this.pollTimer = null
     if (!token) {
@@ -68,8 +71,7 @@ export class Sync {
   }
 
   private changed(state: MayorlyState) {
-    if (!this.token || JSON.stringify(state) === this.synced) return
-    if (this.pushTimer) return
+    if (!this.token || state === this.syncedState || this.pushTimer) return
     const wait = Math.max(PUSH_DEBOUNCE_MS, this.lastPush + PUSH_MIN_MS - Date.now())
     this.pushTimer = setTimeout(() => {
       this.pushTimer = null
@@ -131,6 +133,7 @@ export class Sync {
       const data = (await res.json()) as { revision: number }
       this.revision = data.revision
       this.synced = body
+      this.syncedState = this.engine.state
       this.lastPush = Date.now()
       this.ok()
     } catch (err) {
@@ -143,8 +146,11 @@ export class Sync {
   /** The server's document wins: through the reducer, so this machine's settings stay. */
   private take(revision: number, state: unknown) {
     this.revision = revision
+    // Whatever this machine had is kept beside the save before the server's copy replaces it.
+    this.engine.snapshot('before-sync')
     this.engine.dispatch({ type: 'sync/replace', state })
     this.synced = JSON.stringify(this.engine.state)
+    this.syncedState = this.engine.state
   }
 
   private ok() {

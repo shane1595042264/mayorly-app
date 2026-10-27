@@ -79,6 +79,9 @@ export const requireAuth = createMiddleware<{ Variables: AuthVars }>(async (c, n
     const { payload } = await jwtVerify(header.slice(7).trim(), JWT_SECRET)
     const userId = payload.userId as string | undefined
     if (!userId) return c.json({ error: 'Authentication required' }, 401)
+    // A deleted account's token is still a valid signature; the row is what counts.
+    const { rows } = await pool.query('SELECT 1 FROM users WHERE id = $1', [userId])
+    if (!rows[0]) return c.json({ error: 'Authentication required' }, 401)
     c.set('userId', userId)
   } catch {
     return c.json({ error: 'Authentication required' }, 401)

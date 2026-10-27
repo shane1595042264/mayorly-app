@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: true,
   hudSide: 'right',
   hudScale: 1,
+  trayTimer: false,
   hotkeys: DEFAULT_HOTKEYS,
   keymap: {},
   openAtLogin: false,

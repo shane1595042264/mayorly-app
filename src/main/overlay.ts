@@ -33,6 +33,9 @@ const CAPTION = { width: 360, height: 40 }
 const TOMATO = 48
 /** How often the cursor is sampled for hover on macOS. */
 const HOVER_POLL_MS = 40
+/** The poll rate while the pointer is far from the pet: enough to notice it coming. */
+const HOVER_IDLE_MS = 250
+const HOVER_NEAR_PX = 160
 /** A window move with no further movement for this long has settled. */
 const MOVE_SETTLE_MS = 180
 
@@ -529,21 +532,31 @@ export class Overlay {
 
   private startHoverPoll() {
     if (!mac || this.hoverTimer) return
-    this.hoverTimer = setInterval(() => this.pollCursor(), HOVER_POLL_MS)
+    this.scheduleHoverPoll(HOVER_POLL_MS)
+  }
+  /** Fast while the pointer is near the pet, slow while it is across the screen: an all-day app should cost nothing idle. */
+  private scheduleHoverPoll(ms: number) {
+    this.hoverTimer = setTimeout(() => {
+      this.hoverTimer = null
+      const near = this.pollCursor()
+      this.scheduleHoverPoll(near ? HOVER_POLL_MS : HOVER_IDLE_MS)
+    }, ms)
   }
 
   private stopHoverPoll() {
     if (!this.hoverTimer) return
-    clearInterval(this.hoverTimer)
+    clearTimeout(this.hoverTimer)
     this.hoverTimer = null
     this.cursor = { x: NaN, y: NaN, inside: false }
   }
 
-  private pollCursor() {
-    if (this.win.isDestroyed() || this.mode !== 'field' || !this.win.isVisible()) return
+  /** Feeds the page the pointer; true when the pointer is near enough to keep polling fast. */
+  private pollCursor(): boolean {
+    if (this.win.isDestroyed() || this.mode !== 'field' || !this.win.isVisible()) return false
     const p = screen.getCursorScreenPoint()
-    if (p.x === this.cursor.x && p.y === this.cursor.y) return
     const b = this.win.getBounds()
+    const near = p.x >= b.x - HOVER_NEAR_PX && p.x < b.x + b.width + HOVER_NEAR_PX && p.y >= b.y - HOVER_NEAR_PX && p.y < b.y + b.height + HOVER_NEAR_PX
+    if (p.x === this.cursor.x && p.y === this.cursor.y) return near
     const x = p.x - b.x
     const y = p.y - b.y
     const inside = x >= 0 && y >= 0 && x < b.width && y < b.height
@@ -552,5 +565,6 @@ export class Overlay {
     const wc = this.win.webContents
     if (inside) wc.sendInputEvent({ type: 'mouseMove', x, y })
     else if (wasInside) wc.sendInputEvent({ type: 'mouseLeave', x: 0, y: 0 })
+    return near
   }
 }

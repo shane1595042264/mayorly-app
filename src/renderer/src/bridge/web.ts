@@ -104,6 +104,19 @@ export function createWebBridge(): Bridge {
     getAccount: async () => null,
     signIn: async () => { throw new Error('Sign in from the desktop app') },
     signOut: async () => {},
+    deleteAccount: async () => {},
+    getInfo: async () => ({ version: 'web', platform: 'web', arch: '', dataDir: 'this browser', packaged: false }),
+    exportState: async () => {
+      // A browser can still hand the state over: as a download.
+      const blob = new Blob([JSON.stringify({ app: 'mayorly', exportedAt: new Date().toISOString(), state }, null, 2)], { type: 'application/json' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `Mayorly-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
+      return a.download
+    },
+    importState: async () => ({ ok: false, message: 'Import from the desktop app.' }),
     onAccount: () => () => {},
     onSync: () => () => {},
     ai: {

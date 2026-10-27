@@ -204,6 +204,8 @@ export interface Settings {
   sound: boolean
   hudSide: 'right' | 'left'
   hudScale: number
+  /** macOS: the running block's clock beside the menu bar tomato. */
+  trayTimer: boolean
   hotkeys: Record<HotkeyAction, string>
   /** In-app keys the user changed, by action id, up to two keys each. Missing ids use the HUD's defaults; syncs with the account. */
   keymap: Record<string, string[]>

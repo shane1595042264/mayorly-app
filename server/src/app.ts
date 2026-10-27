@@ -1,6 +1,5 @@
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
-import { cors } from 'hono/cors'
 import { pool } from './db.js'
 import { requireAuth, signInWithGoogle, userById, type AuthVars } from './auth.js'
 
@@ -13,7 +12,26 @@ const STATE_LIMIT = 8 * 1024 * 1024
 
 export const app = new Hono<{ Variables: AuthVars }>()
 
-app.use('*', cors({ origin: '*', allowHeaders: ['Authorization', 'Content-Type'], allowMethods: ['GET', 'PUT', 'POST', 'OPTIONS'] }))
+// No CORS on purpose: the clients are desktop apps calling from their main process. A browser
+// page cannot use this API until an origin is allowed here by name.
+
+// Sign-in attempts per address. Every credential is verified against Google anyway; this keeps
+// a flood off that key set and off the users table.
+const RATE_WINDOW_MS = 10 * 60_000
+const RATE_MAX = 30
+const attempts = new Map<string, { n: number; at: number }>()
+function limited(ip: string): boolean {
+  const now = Date.now()
+  if (attempts.size > 10_000) for (const [k, v] of attempts) if (now - v.at > RATE_WINDOW_MS) attempts.delete(k)
+  const a = attempts.get(ip)
+  if (!a || now - a.at > RATE_WINDOW_MS) {
+    attempts.set(ip, { n: 1, at: now })
+    return false
+  }
+  a.n++
+  return a.n > RATE_MAX
+}
+const addressOf = (c: { req: { header: (n: string) => string | undefined } }) => c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'local'
 
 app.get('/health', async (c) => {
   await pool.query('SELECT 1')
@@ -21,6 +39,7 @@ app.get('/health', async (c) => {
 })
 
 app.post('/auth/google', bodyLimit({ maxSize: 16 * 1024 }), async (c) => {
+  if (limited(addressOf(c))) return c.json({ error: 'Too many sign-in attempts. Try again in a few minutes.' }, 429)
   const body = await c.req.json().catch(() => null) as { credential?: unknown } | null
   const credential = body?.credential
   if (typeof credential !== 'string' || credential.length > 8192) return c.json({ error: 'credential required' }, 400)
@@ -32,6 +51,12 @@ app.post('/auth/google', bodyLimit({ maxSize: 16 * 1024 }), async (c) => {
 app.get('/auth/me', requireAuth, async (c) => {
   const user = await userById(c.get('userId'))
   return c.json({ user })
+})
+
+/** The account and everything under it (the state document cascades). The token stops working at once. */
+app.delete('/account', requireAuth, async (c) => {
+  await pool.query('DELETE FROM users WHERE id = $1', [c.get('userId')])
+  return c.json({ ok: true })
 })
 
 interface StateRow { revision: number; state: unknown; updated_at: Date; device: string | null }

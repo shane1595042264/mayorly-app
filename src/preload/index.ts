@@ -24,6 +24,10 @@ const bridge: Bridge = {
   getAccount: () => ipcRenderer.invoke(IPC.getAccount),
   signIn: () => ipcRenderer.invoke(IPC.signIn),
   signOut: () => ipcRenderer.invoke(IPC.signOut),
+  deleteAccount: () => ipcRenderer.invoke(IPC.deleteAccount),
+  getInfo: () => ipcRenderer.invoke(IPC.getInfo),
+  exportState: () => ipcRenderer.invoke(IPC.exportState),
+  importState: () => ipcRenderer.invoke(IPC.importState),
   onAccount: (fn) => sub(IPC.account, fn),
   onSync: (fn) => sub(IPC.sync, fn),
   ai: {

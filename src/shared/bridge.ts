@@ -85,6 +85,14 @@ export interface Effect {
   from: { x: number; y: number }
 }
 
+export interface AppInfo {
+  version: string
+  platform: string
+  arch: string
+  dataDir: string
+  packaged: boolean
+}
+
 export interface ClerkNotice {
   phase: 'working' | 'done'
   text: string
@@ -120,6 +128,14 @@ export interface Bridge {
   getAccount(): Promise<Account | null>
   signIn(): Promise<Account>
   signOut(): Promise<void>
+  /** Removes the account and its document from the server, then signs out here. */
+  deleteAccount(): Promise<void>
+  /** Version, platform and where the data lives. */
+  getInfo(): Promise<AppInfo>
+  /** Writes the whole state as JSON where the user says; the path, or null when cancelled. */
+  exportState(): Promise<string | null>
+  /** Replaces the state with a JSON export the user picks, after a backup. */
+  importState(): Promise<{ ok: boolean; message: string }>
   onAccount(fn: (account: Account | null) => void): () => void
   onSync(fn: (status: SyncStatus) => void): () => void
   /** The AI clerk's keys and settings. Every call returns the whole public state. */
@@ -167,6 +183,10 @@ export const IPC = {
   getAccount: 'mayorly:get-account',
   signIn: 'mayorly:sign-in',
   signOut: 'mayorly:sign-out',
+  deleteAccount: 'mayorly:delete-account',
+  getInfo: 'mayorly:get-info',
+  exportState: 'mayorly:export-state',
+  importState: 'mayorly:import-state',
   account: 'mayorly:account',
   sync: 'mayorly:sync',
   aiGet: 'mayorly:ai-get',

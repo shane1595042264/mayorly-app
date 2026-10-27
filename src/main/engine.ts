@@ -35,6 +35,12 @@ export class Engine {
     this.store.flush()
   }
 
+  /** A backup of the save as it is, named for why: before a sync or an import replaces the state. */
+  snapshot(reason: string) {
+    this.store.save(this.state, this.lastBeat)
+    this.store.backup(reason)
+  }
+
   on(fn: Listener): () => void {
     this.listeners.add(fn)
     return () => this.listeners.delete(fn)

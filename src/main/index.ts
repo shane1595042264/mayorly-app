@@ -1,17 +1,28 @@
+import { readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
-import { app, globalShortcut, ipcMain, nativeTheme } from 'electron'
-import type { Action, HudEvent, Settings } from '@core/index'
+import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification } from 'electron'
+import { migrate, type Action, type HudEvent, type Settings } from '@core/index'
 import { IPC, type AiProvider, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { AiClerk, KeyCheckError } from './ai/service'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
 import { Engine } from './engine'
+import { installLog } from './log'
 import { SessionStore } from './session'
 import { Sync } from './sync'
 import { refusedAsOptionOnly, registerHotkeys } from './hotkeys'
 import { Overlay } from './overlay'
 import { Store } from './store'
 import { createTray } from './tray'
+
+// mayorly:// links (Shortcuts, Raycast, a browser) arrive here on macOS, sometimes before boot.
+let onUrl: ((url: string) => void) | null = null
+const queuedUrls: string[] = []
+app.on('open-url', (e, url) => {
+  e.preventDefault()
+  if (onUrl) onUrl(url)
+  else queuedUrls.push(url)
+})
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -29,6 +40,7 @@ function boot() {
     nativeTheme.themeSource = 'dark'
   }
   const dataDir = app.getPath('userData')
+  installLog(dataDir)
   const store = new Store(dataDir)
   const engine = new Engine(store)
   const overlay = new Overlay(dataDir)
@@ -40,12 +52,25 @@ function boot() {
     if (!overlay.win.isVisible()) overlay.toggleVisible()
     send(IPC.command, cmd)
   }
+  // An accessory app has no menu bar, but its menu still gives the panel its key equivalents:
+  // Cmd+C, V, X, A, Z in text fields, Cmd+Q to quit, Cmd+W to close what is open.
+  Menu.setApplicationMenu(
+    process.platform === 'darwin'
+      ? Menu.buildFromTemplate([
+          { role: 'appMenu' },
+          { role: 'editMenu' },
+          { label: 'Window', submenu: [{ label: 'Close', accelerator: 'Command+W', click: () => send(IPC.command, 'close') }] },
+        ])
+      : null,
+  )
   // Losing focus (Cmd-Tab, a click into another app's window) closes whatever is open.
   // The first moments after opening are ignored: making the window key can bounce once.
+  // A file dialog of our own takes focus too; it is not a reason to close.
   let opened = 0
+  let dialogOpen = false
   ipcMain.on(IPC.setMode, (_e, mode: UiMode) => { if (mode !== 'field') opened = Date.now() })
   overlay.win.on('blur', () => {
-    if (overlay.mode !== 'field' && Date.now() - opened > 400) send(IPC.command, 'close')
+    if (!dialogOpen && overlay.mode !== 'field' && Date.now() - opened > 400) send(IPC.command, 'close')
   })
   const togglePause = () => {
     const st = engine.state.desk.status
@@ -86,19 +111,21 @@ function boot() {
     }
   }
   ipcMain.handle(IPC.getState, () => engine.state)
-  ipcMain.handle(IPC.dispatch, async (_e, action: Action) => {
-    if (action.type === 'entry/capture' && clerk.enabled()) {
-      say({ phase: 'working', text: `Clerk is filing '${short(action.text.trim())}'` })
-      const filing = await clerk.fileEntry(action.text, engine.state.ledgers, engine.state.houseRules.map((r) => r.text))
-      const r = engine.dispatch(filing ? { ...action, filing } : action)
-      const ledger = filing?.ledgerId ? engine.state.ledgers.find((l) => l.id === filing.ledgerId) : null
-      const title = short(filing?.title ?? action.text.trim())
-      say({ phase: 'done', text: filing?.leisure ? `'${title}' is entertainment: on the couch list` : ledger ? `'${title}' went to ${ledger.name}${filing?.confidence === 'unsure' ? ', best guess' : ''}` : `'${title}' stays in the tray` })
-      void sweepTray()
-      return r
-    }
-    return engine.dispatch(action)
-  })
+  // A captured line goes to the clerk first, when there is one, then to the reducer with its
+  // filing. The capture window, a mayorly:// link and anything else that captures come through here.
+  const captureLine = async (text: string) => {
+    const action: Action = { type: 'entry/capture', text }
+    if (!clerk.enabled()) return engine.dispatch(action)
+    say({ phase: 'working', text: `Clerk is filing '${short(text.trim())}'` })
+    const filing = await clerk.fileEntry(text, engine.state.ledgers, engine.state.houseRules.map((r) => r.text))
+    const r = engine.dispatch(filing ? { ...action, filing } : action)
+    const ledger = filing?.ledgerId ? engine.state.ledgers.find((l) => l.id === filing.ledgerId) : null
+    const title = short(filing?.title ?? text.trim())
+    say({ phase: 'done', text: filing?.leisure ? `'${title}' is entertainment: on the couch list` : ledger ? `'${title}' went to ${ledger.name}${filing?.confidence === 'unsure' ? ', best guess' : ''}` : `'${title}' stays in the tray` })
+    void sweepTray()
+    return r
+  }
+  ipcMain.handle(IPC.dispatch, (_e, action: Action) => (action.type === 'entry/capture' ? captureLine(action.text) : engine.dispatch(action)))
   const aiCall = async (fn: () => Promise<unknown> | unknown) => {
     try {
       return await fn()
@@ -149,12 +176,50 @@ function boot() {
     return s.user
   })
   ipcMain.handle(IPC.signOut, () => setSession(null))
+  ipcMain.handle(IPC.deleteAccount, async () => {
+    if (!session) return
+    const res = await fetch(`${config.apiUrl}/account`, { method: 'DELETE', headers: { Authorization: `Bearer ${session.token}` } })
+    if (!res.ok && res.status !== 401) throw new Error(`The server answered ${res.status}`)
+    setSession(null)
+  })
+  ipcMain.handle(IPC.getInfo, () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, dataDir, packaged: app.isPackaged }))
+  ipcMain.handle(IPC.exportState, async () => {
+    dialogOpen = true
+    try {
+      const r = await dialog.showSaveDialog({ title: 'Export Mayorly data', defaultPath: `Mayorly-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] })
+      if (r.canceled || !r.filePath) return null
+      writeFileSync(r.filePath, JSON.stringify({ app: 'mayorly', exportedAt: new Date().toISOString(), state: engine.state }, null, 2))
+      return r.filePath
+    } finally {
+      dialogOpen = false
+    }
+  })
+  ipcMain.handle(IPC.importState, async () => {
+    dialogOpen = true
+    try {
+      const r = await dialog.showOpenDialog({ title: 'Import Mayorly data', filters: [{ name: 'JSON', extensions: ['json'] }], properties: ['openFile'] })
+      if (r.canceled || !r.filePaths[0]) return { ok: false, message: '' }
+      const raw = JSON.parse(readFileSync(r.filePaths[0], 'utf8')) as unknown
+      const inner = raw && typeof raw === 'object' && 'state' in (raw as object) ? (raw as { state: unknown }).state : raw
+      const state = migrate(inner)
+      if (!state) return { ok: false, message: 'That file is not a Mayorly export.' }
+      engine.snapshot('before-import')
+      engine.dispatch({ type: 'sync/replace', state })
+      return { ok: true, message: `Imported ${state.entries.length} entries and ${state.ledgers.length} ledgers. The copy from before is in backups.` }
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : String(err) }
+    } finally {
+      dialogOpen = false
+    }
+  })
 
   engine.on((state, events) => {
     send(IPC.state, state)
     if (events.length) send(IPC.events, events)
     for (const ev of events) {
       if (ev.type === 'clerk-wonders') void ask(ev)
+      // The HUD is hidden: the desk still speaks, through the system.
+      if ((ev.type === 'block' || ev.type === 'sitting-end') && !overlay.win.isVisible()) notify(ev)
       // macOS: the coins fly across the screen in the effects window; Windows draws them in the overlay.
       if (ev.type === 'harvest' && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0))
     }
@@ -184,6 +249,23 @@ function boot() {
     send(IPC.clerkAsk, { entryId: ev.entryId, ruleId: ev.ruleId, title: ev.title, question })
   }
 
+  const clearDesk = () => {
+    const id = engine.state.desk.block?.entryId
+    if (id) engine.dispatch({ type: 'entry/complete', id })
+    else say({ phase: 'done', text: 'Nothing on the desk to clear' })
+  }
+  const notify = (ev: HudEvent) => {
+    if (!Notification.isSupported()) return
+    const hk = engine.state.settings.hotkeys
+    const key = (a: string) => (process.platform === 'darwin' ? a.replace('Alt', 'Option') : a)
+    const body =
+      ev.type === 'block'
+        ? ev.started ? `${ev.block.label} is on` : `${ev.block.label} is ready. ${key(hk.pause)} starts it.`
+        : ev.type === 'sitting-end' ? `Sitting over: ${ev.tomatoes} ${ev.tomatoes === 1 ? 'tomato' : 'tomatoes'}` : ''
+    if (!body) return
+    new Notification({ title: 'Mayorly', body, silent: true }).show()
+  }
+
   let applied: Settings | null = null
   const applySettings = (s: Settings) => {
     overlay.setScale(s.hudScale)
@@ -197,11 +279,7 @@ function boot() {
         hide: () => overlay.toggleVisible(),
         switch: () => engine.dispatch({ type: 'desk/switch' }),
         move: () => command('move'),
-        clear: () => {
-          const id = engine.state.desk.block?.entryId
-          if (id) engine.dispatch({ type: 'entry/complete', id })
-          else say({ phase: 'done', text: 'Nothing on the desk to clear' })
-        },
+        clear: clearDesk,
       })
       if (failed.length) {
         const failures = { keys: failed, reason: refusedAsOptionOnly(failed) ? ('option-only' as const) : undefined }
@@ -227,7 +305,32 @@ function boot() {
   // The tray is sorted once at every launch, after the window is up.
   setTimeout(() => void sweepTray(), 4000)
 
-  app.on('second-instance', () => command('deck'))
+  // mayorly://capture?text=..., mayorly://deck, plus, capture, pause, clear, switch.
+  const handleUrl = (raw: string) => {
+    let u: URL
+    try {
+      u = new URL(raw)
+    } catch {
+      return
+    }
+    if (u.protocol !== 'mayorly:') return
+    const what = (u.hostname || u.pathname.replace(/^\/+/, '')).toLowerCase()
+    const text = (u.searchParams.get('text') ?? '').trim().slice(0, 500)
+    if (what === 'capture' && text) void captureLine(text)
+    else if (what === 'capture' || what === 'deck' || what === 'plus') command(what)
+    else if (what === 'pause') togglePause()
+    else if (what === 'clear') clearDesk()
+    else if (what === 'switch') engine.dispatch({ type: 'desk/switch' })
+  }
+  if (app.isPackaged) app.setAsDefaultProtocolClient('mayorly')
+  onUrl = handleUrl
+  for (const u of queuedUrls.splice(0)) handleUrl(u)
+  for (const a of process.argv) if (a.startsWith('mayorly://')) handleUrl(a)
+  app.on('second-instance', (_e, argv) => {
+    const u = argv.find((a) => a.startsWith('mayorly://'))
+    if (u) handleUrl(u)
+    else command('deck')
+  })
   // macOS: opening the app again from Finder or Launchpad arrives here, not as a second instance.
   app.on('activate', () => command('deck'))
   let flushed = false

@@ -79,8 +79,22 @@ export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): 
   }
 
   rebuild(engine.state)
+  // macOS: the running block's clock beside the tomato, when asked for. The heartbeat only
+  // pushes state when something is due, so the title keeps its own second.
+  let lastTitle = ''
+  const title = () => {
+    if (process.platform !== 'darwin') return
+    const s = engine.state
+    const v = s.settings.trayTimer ? blockView(s, Date.now()) : null
+    const next = v && v.status === 'running' && v.remainingMs !== null ? ` ${clock(v.remainingMs)}` : v && v.status === 'paused' ? ' held' : ''
+    if (next === lastTitle) return
+    lastTitle = next
+    tray.setTitle(next, { fontType: 'monospacedDigit' })
+  }
+  if (process.platform === 'darwin') setInterval(title, 1000)
   let last = ''
   engine.on((s) => {
+    title()
     // Only rebuild when something the menu shows has changed, not on every tick.
     const key = JSON.stringify([s.desk.status, s.desk.block?.label, s.desk.block?.entryId, s.desk.holster?.block.label ?? null, s.settings.hotkeys, s.settings.openAtLogin])
     if (key !== last) {
