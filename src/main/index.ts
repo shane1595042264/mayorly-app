@@ -14,6 +14,7 @@ import { refusedAsOptionOnly, registerHotkeys } from './hotkeys'
 import { Overlay } from './overlay'
 import { Store } from './store'
 import { createTray } from './tray'
+import { installUpdates } from './updates'
 
 // mayorly:// links (Shortcuts, Raycast, a browser) arrive here on macOS, sometimes before boot.
 let onUrl: ((url: string) => void) | null = null
@@ -299,8 +300,12 @@ function boot() {
   applySettings(engine.state.settings)
   engine.on((state) => applySettings(state.settings))
 
-  createTray(engine, overlay, { command, togglePause, dataDir })
+  const updates = installUpdates()
+  updates.onReady((v) => say({ phase: 'done', text: `Mayorly ${v} is ready. Restart from the menu bar tomato to update.` }))
+  createTray(engine, overlay, { command, togglePause, dataDir, updates })
   overlay.load()
+  // The first launch opens the deck on the flow, which says what the keys are.
+  if (engine.fresh) overlay.win.webContents.once('did-finish-load', () => setTimeout(() => command('deck'), 1200))
   engine.start()
   // The tray is sorted once at every launch, after the window is up.
   setTimeout(() => void sweepTray(), 4000)

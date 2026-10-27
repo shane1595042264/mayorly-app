@@ -20,6 +20,7 @@
     "dist": "electron-vite build && electron-builder --publish never",
     "dist:win": "electron-vite build && electron-builder --win --publish never",
     "dist:mac": "electron-vite build && electron-builder --mac --publish never",
+    "dist:mas": "electron-vite build && electron-builder --mac mas --publish never",
     "ship:mac": "sh scripts/ship-mac.sh",
     "shot": "electron scripts/shot.cjs"
   },
@@ -41,5 +42,8 @@
     "typescript": "5.9.3",
     "vite": "7.3.7",
     "vitest": "5.0.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

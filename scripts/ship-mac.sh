@@ -10,9 +10,13 @@ case "$(uname -m)" in
   *) FLAG=--x64 ;;
 esac
 
+# A Developer ID certificate (CSC_NAME or CSC_LINK) signs for real; without one the build is ad-hoc
+# signed so it runs here. See docs/release.md.
+if [ -n "${CSC_NAME:-}${CSC_LINK:-}" ]; then SIGN="-c.mac.hardenedRuntime=true"; else SIGN="-c.mac.identity=-"; fi
+
 rm -rf dist/mac dist/mac-arm64
 npm run build
-npx electron-builder --mac dir "$FLAG" --publish never
+npx electron-builder --mac dir "$FLAG" "$SIGN" --publish never
 APP=$(ls -d dist/mac*/Mayorly.app 2>/dev/null | head -1)
 [ -n "$APP" ] || { echo "ship-mac: no Mayorly.app under dist/"; exit 1; }
 

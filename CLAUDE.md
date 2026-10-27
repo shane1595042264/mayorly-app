@@ -20,6 +20,8 @@ This is the application layer of Mayorly, a life OS: entries filed into ledgers,
 | `src/core/superset-syntax.ts` | the one-line `/ss legal 25, dance 20 x3` grammar |
 | `src/core/core.test.ts` | rules tested against a fake clock |
 | `src/main/engine.ts` | heartbeat, sleep detection, broadcast |
+| `src/main/store.ts`, `log.ts`, `updates.ts` | the save and its backups, the log file and crash handling, GitHub-release updates |
+| `docs/release.md`, `docs/privacy.md` | the release checklist (signing, notarization, App Store) and the privacy policy text |
 | `src/main/overlay.ts` | the window: on Windows the click-through overlay, on macOS the pet-sized panel that follows the tomato |
 | `src/renderer/src/hud/Pet.tsx` | the resting HUD: the tomato, its number, the hover caption |
 | `src/renderer/src/lib/keys.ts` | keys matched by position, hotkeys shown as Option on a Mac |
@@ -65,6 +67,11 @@ SHOT_URL="http://localhost:5199/?demo" SHOT_OUT=shot.png SHOT_JS='...' npx elect
 - **Two kinds of keys.** `settings.hotkeys` are global Electron accelerators, registered by the shell and kept per machine (`DEVICE_SETTINGS`). `settings.keymap` are in-app keys read by the renderer alone, named like `list.down`, and they sync. A key the user did not change is not in `keymap` at all; `keysFor` falls back to the default in `lib/keymap.ts`.
 - **Hotkeys are stored as `Alt+T` on a Mac too.** Alt is Electron's cross-platform spelling for Option. The HUD labels them Option, the Settings field accepts Option, Cmd and Control and stores Alt.
 - **Clicking the menu bar icon on a Mac opens the menu, not the Deck.** That is the macOS convention; Deck is in the menu.
+- **The app has an application menu but no menu bar.** An accessory app shows none; the menu exists so Cmd+C, V, X, A and Z work in text fields and Cmd+Q quits. Cmd+W closes the open panel.
+- **`backups/` fills up on its own.** One copy a day, one before a sync or an import replaces the state; `Store.load` falls back to them when the save cannot be read. A file dialog of our own sets `dialogOpen`, so the blur that would close the deck is ignored while it is up.
+- **`mayorly://` is registered only in a packaged build**, and `open-url` can arrive before boot, so it is queued at module level.
+- **The updater is silent.** Errors go to the log; a Mac build without a Developer ID signature logs one every check, which is expected until the certificate exists.
+- **A deleted account's token still verifies.** `requireAuth` on the server looks the user row up on every request; the missing row is what answers 401.
 - **The AI clerk never writes state itself.** It returns a `Filing`; `entry/capture` and `entry/file` in the reducer check it (real ledger, real title) and file by prefix otherwise. Keys live in `ai.bin`, sealed with the OS keychain, never in state and never synced.
 - **A correction is a house rule.** Entries the clerk filed carry `clerkFiled`; moving one writes a `HouseRule` in the reducer, in words, naming the ledger chosen and the ledger wanted. Rules are state, sync with the account, and go into every clerk prompt ahead of the criteria.
 - **Interfaces close on a click outside and when the window loses focus.** The shell sends `close` on blur; the renderer closes on a pointer down outside the open panel.

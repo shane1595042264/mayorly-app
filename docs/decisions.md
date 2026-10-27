@@ -118,3 +118,13 @@ The hover caption on a Mac was hung beside the pet window, which is wider than t
 
 ### The harvest starts where the entry was cleared
 With a panel open the overlay window is the whole work area on both platforms, so the coins play inside it and start at the control that cleared the entry, noted just before the dispatch because the row is gone by the time the event comes back; the shell's effects window plays only while the pet is alone on screen. **Why:** clearing from the Flow tab showed nothing on a Mac, since the effects window sat behind the deck, and coins should come from the thing you cleared.
+
+
+### What a release needs, before anyone but the founder runs it
+The app now carries what a user in the wild needs and a reviewer looks for: a log file with uncaught errors written down and dead renderers reloaded; daily backups and one before a sync or an import replaces the state, with a read that falls back to them; export and import; account deletion that removes the server document; a sign-in rate limit and no open CORS on the API; an application menu so Cmd+C, V, A and Q work in a menu bar app; notifications while the HUD is hidden; the `mayorly://` scheme; a cursor poll that slows to four a second when the pointer is far; an auto-updater reading GitHub releases; hardened-runtime and App Sandbox entitlements, a `mas` target, a CI that runs the rules on every push, and a release workflow that signs and notarizes when the secrets exist. **Why:** the founder asked whether the app was ready for the App Store and to build whatever was missing short of the art and Apple's paperwork. **Reverses when:** never; these are the floor.
+
+### Direct download first, the App Store after Sign in with Apple
+A Mac build goes out signed with a Developer ID and notarized, with updates from GitHub releases. The Mac App Store build waits on one thing the code cannot give itself: an app that offers Google sign-in must offer Sign in with Apple (guideline 4.8), which needs the developer account to exist before the server can verify Apple's tokens. Until then a store build ships with the Account section hidden, which the build does on its own when no API URL is configured. **Why:** everything else the store asks for is in place, and gating the first public build on paperwork helps nobody.
+
+### Updates are quiet, and a Mac without a certificate has none
+The updater checks after launch and every six hours, downloads on its own, and asks for a restart from the menu bar; its errors go to the log, never the HUD. Squirrel.Mac refuses an unsigned app, so until the certificate exists Mac users update by downloading again. **Why:** an update prompt is the one piece of nagging a desk timer could do, and a menu item is enough.

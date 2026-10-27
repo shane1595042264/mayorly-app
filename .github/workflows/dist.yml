@@ -1,10 +1,14 @@
-# Builds the Windows installer and the macOS disk images. A Mac can only be built on
-# macOS, so each platform gets its own runner. Both builds are unsigned (see README).
+# Builds the Windows installer and the macOS disk images, and on a tag attaches them to the
+# GitHub release the auto-updater reads. A Mac can only be built on macOS, so each platform
+# gets its own runner. Signing happens when the secrets exist (docs/release.md); without them
+# the Mac build is ad-hoc signed and the Windows build unsigned.
 name: dist
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   dist:
     strategy:
@@ -21,6 +25,14 @@ jobs:
       MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL }}
       MAIN_VITE_GOOGLE_CLIENT_ID: ${{ vars.MAIN_VITE_GOOGLE_CLIENT_ID }}
       MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.MAIN_VITE_GOOGLE_CLIENT_SECRET }}
+      # Mac signing and notarization: a base64 .p12 of the Developer ID Application certificate,
+      # its password, and an App Store Connect app-specific password for the Apple ID.
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      MAC_SIGNED: ${{ secrets.CSC_LINK != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,7 +42,16 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
-      - run: npm run ${{ matrix.script }}
+      - run: npm run build
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: npx electron-builder --win --publish never -c.buildVersion=${{ github.run_number }}
+      - name: Package (macOS, signed and notarized)
+        if: runner.os == 'macOS' && env.MAC_SIGNED == 'true'
+        run: npx electron-builder --mac --publish never -c.mac.hardenedRuntime=true -c.mac.notarize=true -c.buildVersion=${{ github.run_number }}
+      - name: Package (macOS, ad-hoc)
+        if: runner.os == 'macOS' && env.MAC_SIGNED != 'true'
+        run: npx electron-builder --mac --publish never -c.mac.identity=- -c.buildVersion=${{ github.run_number }}
       - uses: actions/upload-artifact@v4
         with:
           name: mayorly-${{ matrix.os }}
@@ -38,3 +59,15 @@ jobs:
             dist/*.exe
             dist/*.dmg
             dist/*.zip
+            dist/*.blockmap
+            dist/latest*.yml
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest*.yml

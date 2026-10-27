@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The Mac App Store build runs in the App Sandbox. Replace TEAMID with the team's identifier. -->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+  <!-- The sync server and the AI providers. -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+  <!-- Google sign-in: a one-shot loopback server receives the browser's redirect. -->
+  <key>com.apple.security.network.server</key>
+  <true/>
+  <!-- Export and import go through the open and save panels. -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+  <key>com.apple.security.application-groups</key>
+  <array>
+    <string>TEAMID.app.mayorly</string>
+  </array>
+</dict>
+</plist>

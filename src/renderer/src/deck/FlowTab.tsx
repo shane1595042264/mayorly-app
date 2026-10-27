@@ -5,6 +5,7 @@ import {
   entrySpentMs, openFlow, prefixClerk, span, startOfDay, type Entry, type MayorlyState,
 } from '@core/index'
 import { bridge } from '../bridge'
+import { hotkeyLabel } from '../lib/keys'
 import { cycleLedger, useListKeys } from '../lib/listkeys'
 import { noteOrigin } from '../lib/origin'
 import { dispatch, useAi, useNow } from '../store'
@@ -111,7 +112,8 @@ export function FlowTab({ s }: { s: MayorlyState }) {
         {flow.length === 0 ? (
           <div className="empty">
             <p className="empty-title">The flow is empty.</p>
-            <p>Capture anything from anywhere with {s.settings.hotkeys.capture}. It lands here in order, and Blitz runs it top to bottom.</p>
+            <p>Capture anything from anywhere with {hotkeyLabel(s.settings.hotkeys.capture)}. It lands here in order, and Blitz runs it top to bottom.</p>
+            <p>{hotkeyLabel(s.settings.hotkeys.plus)} deploys the desk, {hotkeyLabel(s.settings.hotkeys.deck)} opens this deck, and ? lists every key.</p>
           </div>
         ) : (
           <Reorder.Group axis="y" values={ids} onReorder={setIds} className="flow-list" as="ol">

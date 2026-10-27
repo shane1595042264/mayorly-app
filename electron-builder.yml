@@ -31,16 +31,18 @@ portable:
 mac:
   icon: build/icon.icns
   category: public.app-category.productivity
-  # No Apple Developer ID yet. "-" is an ad-hoc signature: without it electron-builder
-  # ships only Electron's own linker signature, and a downloaded copy is refused as
-  # "damaged". Ad-hoc signed, Gatekeeper offers Open Anyway in Privacy & Security.
-  # Hardened runtime is for notarization, which needs the paid certificate; with an
-  # ad-hoc identity it only breaks library validation, so it stays off until then.
-  identity: "-"
+  # Signing: with a Developer ID certificate in the keychain (or CSC_LINK in CI) the app is
+  # signed with it; `npm run ship:mac` and the dist workflow add `-c.mac.identity=-` (ad-hoc)
+  # when there is none, so a local build still runs and a downloaded one is not "damaged".
+  # Hardened runtime and notarization come with the certificate: see docs/release.md.
   hardenedRuntime: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     # Menu bar app: no Dock icon, no app switcher entry. Same idea as skipTaskbar on Windows.
     LSUIElement: true
+    # HTTPS only: exempt from export compliance, so App Store Connect does not ask each build.
+    ITSAppUsesNonExemptEncryption: false
   target:
     - target: dmg
       arch: [arm64, x64]
@@ -49,4 +51,17 @@ mac:
   artifactName: Mayorly-${version}-${arch}.${ext}
 dmg:
   artifactName: Mayorly-${version}-${arch}.${ext}
-publish: null
+# The Mac App Store build (`npm run dist:mas`): sandboxed, with the profile from App Store Connect.
+mas:
+  type: distribution
+  hardenedRuntime: false
+  entitlements: build/entitlements.mas.plist
+  entitlementsInherit: build/entitlements.mas.inherit.plist
+  provisioningProfile: build/embedded.provisionprofile
+  artifactName: Mayorly-${version}-mas.${ext}
+# Where the direct-download build looks for updates. Nothing is uploaded unless a build is run
+# with --publish always; the dist workflow attaches artifacts to the GitHub release of the tag.
+publish:
+  provider: github
+  owner: shane1595042264
+  repo: mayorly-app

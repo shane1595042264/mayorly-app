@@ -9,6 +9,8 @@ type Listener = (state: MayorlyState, events: HudEvent[]) => void
 
 export class Engine {
   state: MayorlyState
+  /** The first launch on this machine: nothing saved yet. */
+  readonly fresh: boolean
   private lastBeat: number | null
   private listeners = new Set<Listener>()
   private beat: NodeJS.Timeout | null = null
@@ -17,6 +19,7 @@ export class Engine {
   constructor(private store: Store) {
     const saved = store.load(randomUUID)
     this.state = saved.state
+    this.fresh = !!saved.fresh
     this.lastBeat = saved.lastBeat
     // The app was closed or crashed mid-block. Pause where the last heartbeat
     // landed: time the app could not see is not desk time.

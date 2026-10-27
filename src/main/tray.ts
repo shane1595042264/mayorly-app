@@ -4,11 +4,13 @@ import tray1x from '../../build/tomato@1x.png?asset'
 import tray2x from '../../build/tray.png?asset'
 import type { Engine } from './engine'
 import type { Overlay } from './overlay'
+import type { Updates } from './updates'
 
 export interface TrayActions {
   command: (cmd: 'plus' | 'capture' | 'deck') => void
   togglePause: () => void
   dataDir: string
+  updates: Updates
 }
 
 /**
@@ -73,12 +75,14 @@ export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): 
       },
       { label: 'Open data folder', click: () => void shell.openPath(act.dataDir) },
       { type: 'separator' },
+      ...(act.updates.ready() ? [{ label: `Restart to update to ${act.updates.ready()}`, click: () => act.updates.install() }] : []),
       { label: 'Quit Mayorly', click: () => app.quit() },
     ])
     tray.setContextMenu(menu)
   }
 
   rebuild(engine.state)
+  act.updates.onReady(() => rebuild(engine.state))
   // macOS: the running block's clock beside the tomato, when asked for. The heartbeat only
   // pushes state when something is due, so the title keeps its own second.
   let lastTitle = ''

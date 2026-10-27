@@ -14,6 +14,8 @@ interface Saved {
   state: MayorlyState
   /** Set when the save could not be read and this came from a backup. */
   restoredFrom?: string
+  /** No save existed: the first launch on this machine. */
+  fresh?: boolean
 }
 
 const DAILY_KEEP = 14
@@ -32,7 +34,7 @@ export class Store {
   }
 
   load(newId: () => string): Saved {
-    if (!existsSync(this.file)) return { lastBeat: null, state: firstRunState(Date.now(), newId) }
+    if (!existsSync(this.file)) return { lastBeat: null, state: firstRunState(Date.now(), newId), fresh: true }
     try {
       return this.read(this.file)
     } catch (err) {
