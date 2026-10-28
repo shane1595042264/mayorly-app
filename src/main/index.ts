@@ -54,6 +54,35 @@ function boot() {
     if (!overlay.win.isVisible()) overlay.toggleVisible()
     send(IPC.command, cmd)
   }
+  // While the Plus menu is open, the swap key's modifiers with an arrow point at an arm:
+  // Option+T then Option+Left in the same breath. Taken as global shortcuts so the press
+  // lands even before the window has the keyboard; registered as the menu opens, released
+  // as it closes, so Option+arrows are the system's again the rest of the time.
+  const ARM_COMMANDS: Record<string, Command> = { Up: 'arm-up', Down: 'arm-down', Left: 'arm-left', Right: 'arm-right' }
+  let armAccels: string[] = []
+  const armsOff = () => {
+    for (const a of armAccels) {
+      try {
+        globalShortcut.unregister(a)
+      } catch {
+        // Already gone.
+      }
+    }
+    armAccels = []
+  }
+  const armsOn = () => {
+    armsOff()
+    const mods = engine.state.settings.hotkeys.plus.split('+').slice(0, -1).join('+')
+    if (!mods) return
+    for (const [dir, cmd] of Object.entries(ARM_COMMANDS)) {
+      const accel = `${mods}+${dir}`
+      try {
+        if (globalShortcut.register(accel, () => send(IPC.command, cmd))) armAccels.push(accel)
+      } catch {
+        // Taken by another app: the arrow still works once the menu has the keyboard.
+      }
+    }
+  }
   // An accessory app has no menu bar, but its menu still gives the panel its key equivalents:
   // Cmd+C, V, X, A, Z in text fields, Cmd+Q to quit, Cmd+W to close what is open.
   // Not the appMenu role: it would give a menu bar app Cmd+H and Hide Others with no way back.
@@ -163,7 +192,11 @@ function boot() {
   ipcMain.handle(IPC.aiRecheckKey, (_e, id: string) => clerk.recheckKey(String(id)))
   ipcMain.handle(IPC.aiPreferredModel, (_e, id: string, model: string | null) => clerk.setPreferredModel(String(id), model))
   ipcMain.handle(IPC.aiPreferredProvider, (_e, provider: AiProvider | null) => clerk.setPreferredProvider(provider))
-  ipcMain.on(IPC.setMode, (_e, mode: UiMode) => overlay.setMode(mode))
+  ipcMain.on(IPC.setMode, (_e, mode: UiMode) => {
+    overlay.setMode(mode)
+    if (mode === 'plus') armsOn()
+    else armsOff()
+  })
   ipcMain.on(IPC.setHit, (_e, hit: boolean) => overlay.setHit(hit))
 
   // Account and sync. The session lives encrypted in userData; the sync loop pushes
@@ -323,7 +356,10 @@ function boot() {
     if (applied && JSON.stringify(applied.hotkeys) === JSON.stringify(s.hotkeys) && applied.openAtLogin === s.openAtLogin) return
     if (!applied || JSON.stringify(applied.hotkeys) !== JSON.stringify(s.hotkeys)) {
       const failed = registerHotkeys(s.hotkeys, {
-        plus: () => command('plus'),
+        plus: () => {
+          command('plus')
+          if (overlay.mode !== 'plus') armsOn()
+        },
         capture: () => command('capture'),
         deck: () => command('deck'),
         pause: togglePause,

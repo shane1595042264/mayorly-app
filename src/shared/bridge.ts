@@ -8,7 +8,8 @@ import type { Action, HudEvent, MayorlyState } from '../core/index'
 export type UiMode = 'field' | 'plus' | 'deck' | 'capture'
 
 /** Hotkey-driven requests from the shell to the HUD. `close` returns to field mode (the window lost focus). */
-export type Command = 'plus' | 'capture' | 'deck' | 'close' | 'move'
+/** arm-*: Option+arrow while the Plus menu is open, taken by the shell so it lands even before the window has the keyboard. */
+export type Command = 'plus' | 'capture' | 'deck' | 'close' | 'move' | 'arm-up' | 'arm-down' | 'arm-left' | 'arm-right'
 
 /** How the shell lays the HUD out. Compact: the window is only the pet and what it unfolds (macOS). */
 export interface Layout {

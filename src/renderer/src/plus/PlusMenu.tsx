@@ -13,8 +13,7 @@ import { Scramble } from '../lib/Scramble'
 import { useLean } from '../lib/parallax'
 import { sfx } from '../lib/sound'
 import { dispatch, useHudEvents, useNow } from '../store'
-
-type Arm = 'ledger' | 'entry' | 'mode' | 'orders'
+import { ARM_KEYS, onArm, pointArm, takeArmHint, type Arm } from './arms'
 
 interface Opt {
   key: string
@@ -30,10 +29,6 @@ interface Props {
   s: MayorlyState
   close: () => void
   open: (m: UiMode) => void
-}
-
-const ARM_KEYS: Record<string, Arm> = {
-  ArrowUp: 'ledger', w: 'ledger', ArrowLeft: 'entry', a: 'entry', ArrowRight: 'mode', d: 'mode', ArrowDown: 'orders', s: 'orders',
 }
 
 export function PlusMenu({ s, close, open }: Props) {
@@ -139,7 +134,17 @@ export function PlusMenu({ s, close, open }: Props) {
     }
   }, [s, ledgerId, entryId, live])
 
-  const [arm, setArm] = useState<Arm>(live || s.ledgers.length ? 'ledger' : 'mode')
+  // An arrow pressed with the swap key, before this mounted, already chose the arm.
+  const [arm, setArm] = useState<Arm>(() => takeArmHint() ?? (live || s.ledgers.length ? 'ledger' : 'mode'))
+  useEffect(() => {
+    const late = takeArmHint()
+    if (late) setArm(late)
+    return onArm((a) => {
+      takeArmHint()
+      setArm(a)
+      sfx.tick()
+    })
+  }, [])
   const [cursor, setCursor] = useState<Record<Arm, number>>(() => ({ ledger: 0, entry: 0, mode: 0, orders: 0 }))
 
   // Keep each arm's cursor on its current option when the menu opens or the current changes.
@@ -184,8 +189,7 @@ export function PlusMenu({ s, close, open }: Props) {
       }
       if (ARM_KEYS[k]) {
         e.preventDefault()
-        setArm(ARM_KEYS[k])
-        sfx.tick()
+        pointArm(ARM_KEYS[k])
         return
       }
       if (k === 'q') return move(-1)

@@ -5,6 +5,7 @@ The top section is what the app shows once per build, the first time that build 
 ## The Plus menu shows where you are
 
 - The tile under the cursor fills solid amber with dark text, the arm under the keys tints faintly, and the line from the slab to that arm lights up. What the desk is on stays white.
+- Option+T with an arrow in the same breath opens the menu on that arm: Option+Left for entries, Up for ledgers, Right for modes, Down for orders. Steering an arm while holding the key keeps the menu open when you let go.
 
 ## Switching, counting, and a quieter clerk
 

@@ -57,7 +57,8 @@ SHOT_URL="http://localhost:5199/?demo" SHOT_OUT=shot.png SHOT_JS='...' npx elect
 
 - **The resting HUD is only the tomato and a number.** Hover gives one line of text and a hop, nothing more. Hold, skip, clear and stand down live in the Plus menu and the command line; there is no control strip.
 - **The overlay window is never focusable in field mode.** That is how it avoids stealing keystrokes. Plus, deck and capture flip it on and hand focus back with `blur()`.
-- **A held Alt+T fires the command repeatedly.** The renderer ignores repeats until the key is released; releasing after 400 ms closes the menu (hold to peek).
+- **A held Alt+T fires the command repeatedly.** The renderer ignores repeats until the key is released; releasing after 400 ms closes the menu (hold to peek), unless an arm was steered meanwhile, which commits the open.
+- **Alt+arrow while the Plus menu is open is a global shortcut.** The swap key's modifiers plus Up, Down, Left or Right are registered as the menu opens and released as it closes, so Alt+T and Alt+Left in the same breath land before the window has the keyboard. They arrive as `arm-*` commands; `plus/arms.ts` is the one path that points at an arm, and a point made before the menu mounts waits as a hint.
 - **A swap does not reset the block clock** except in blitz, where the timer belongs to the entry. A swap you ask for (the Plus menu, Alt+Q) also resumes a desk on hold or waiting, so switching tasks is one act; a swap the desk makes on its own, such as the next entry after a clear, leaves a hold alone.
 - **Superset slots with nothing open still run**, as ledger time.
 - **Deploying anything parks the running session.** The desk holds one parked session in `desk.holster`, with its own sitting and the time already spent on its block. `desk/switch` (Alt+Q) swaps the two; a stand down brings the parked one back paused. Nothing is minted while parked.

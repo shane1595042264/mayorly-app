@@ -15,6 +15,7 @@ import { Objectives } from './hud/Objectives'
 import { Pet } from './hud/Pet'
 import { MODIFIER_KEYS, hotkeyLabel, matchesAcceleratorKey, physicalKey } from './lib/keys'
 import { setSoundEnabled, sfx } from './lib/sound'
+import { ARM_KEYS, ARM_OF_COMMAND, onArm, pointArm } from './plus/arms'
 import { PlusMenu } from './plus/PlusMenu'
 import { balance } from '@core/index'
 import { current, useHudEvents, useMayorly } from './store'
@@ -223,6 +224,12 @@ export function App() {
           if (cur !== 'field') setMode('field')
           return
         }
+        // Option+arrow with the menu open, taken by the shell: point at that arm.
+        if (cmd === 'arm-up' || cmd === 'arm-down' || cmd === 'arm-left' || cmd === 'arm-right') {
+          const arm = ARM_OF_COMMAND[cmd]
+          if (arm && cur === 'plus') pointArm(arm)
+          return
+        }
         recordUse(`global.${cmd}`)
         if (cmd === 'move') {
           if (cur !== 'field') setMode('field')
@@ -242,6 +249,22 @@ export function App() {
       }),
     [setMode],
   )
+
+  // Steering an arm while the swap key is held commits the open: releasing no longer closes it.
+  // A plain hold with no steering is still a peek.
+  useEffect(() => onArm(() => void (held.current = null)), [])
+  // An arrow in the same breath as the swap key can land before the menu has mounted; keep it as the hint it takes on mount.
+  useEffect(() => {
+    const early = (e: KeyboardEvent) => {
+      if (modeRef.current !== 'plus' || e.metaKey || e.ctrlKey || document.querySelector('.plus')) return
+      const arm = ARM_KEYS[physicalKey(e)]
+      if (!arm) return
+      e.preventDefault()
+      pointArm(arm)
+    }
+    window.addEventListener('keydown', early, true)
+    return () => window.removeEventListener('keydown', early, true)
+  }, [])
 
   useEffect(() => {
     const up = (e: KeyboardEvent) => {
