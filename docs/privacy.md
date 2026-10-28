@@ -21,7 +21,7 @@ The server keeps the latest copy and a revision number, nothing else. It does no
 
 ## If you add an AI key
 
-The clerk is optional and brings its own key: you paste a key from Anthropic, OpenAI, Google or another provider. The key is sealed with your operating system's keychain and never leaves your computer except to that provider. When the clerk files an entry, the entry's text, the names and criteria of your ledgers, and your house rules are sent to the provider you chose, under that provider's terms. Nothing is sent to us.
+The clerk is optional and brings its own key: you paste a key from Anthropic, OpenAI, Google or another provider. The key is sealed on your computer (with the operating system's store on Windows and Linux, with a key kept beside Mayorly's data on a Mac) and never leaves it except to that provider. When the clerk files an entry, the entry's text, the names and criteria of your ledgers, and your house rules are sent to the provider you chose, under that provider's terms. Nothing is sent to us.
 
 ## Children
 

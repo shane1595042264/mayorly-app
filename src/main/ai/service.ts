@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import type { Seal } from '../seal'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { safeStorage } from 'electron'
 import type { Filing, Ledger } from '@core/index'
 import type { AiKeyPublic, AiPublic } from '../../shared/bridge'
 import { costMicroUsd, rankModels } from './catalog'
@@ -49,7 +49,7 @@ export class AiClerk {
   private readonly file: string
   private data: Saved = { keys: [], preferredProvider: null, usage: [] }
 
-  constructor(dir: string, private readonly onChange: (pub: AiPublic) => void) {
+  constructor(dir: string, private readonly seal: Seal, private readonly onChange: (pub: AiPublic) => void) {
     this.file = join(dir, 'ai.bin')
     this.load()
   }
@@ -314,11 +314,12 @@ export class AiClerk {
   private load() {
     try {
       if (!existsSync(this.file)) return
-      const raw = readFileSync(this.file)
-      if (!safeStorage.isEncryptionAvailable()) return
-      const text = safeStorage.decryptString(raw)
-      const d = JSON.parse(text) as Partial<Saved>
+      const opened = this.seal.open(readFileSync(this.file))
+      if (!opened) return
+      const d = JSON.parse(opened.text) as Partial<Saved>
       this.data = { keys: Array.isArray(d.keys) ? d.keys : [], preferredProvider: d.preferredProvider ?? null, usage: Array.isArray(d.usage) ? d.usage : [] }
+      // Sealed by the keychain before: move it to the local seal so it never asks again.
+      if (opened.reseal) writeFileSync(this.file, this.seal.seal(JSON.stringify(this.data)))
     } catch (err) {
       console.error('[clerk] could not read the AI keys:', err)
     }
@@ -327,12 +328,12 @@ export class AiClerk {
   private save() {
     try {
       const text = JSON.stringify(this.data)
-      if (!safeStorage.isEncryptionAvailable()) {
+      if (!this.seal.available()) {
         // Keys in the clear on disk would break the promise in Settings; they live for this run only.
-        console.warn('[ai] the keychain is not available; keys are kept for this run only')
+        console.warn('[ai] nothing to seal with; keys are kept for this run only')
         return
       }
-      writeFileSync(this.file, safeStorage.encryptString(text))
+      writeFileSync(this.file, this.seal.seal(text))
     } catch (err) {
       console.error('[clerk] could not save the AI keys:', err)
     }

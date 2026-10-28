@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## No more keychain prompts
+
+- On a Mac the sign-in and the AI key are sealed with a key kept beside Mayorly's data instead of the keychain, so no build will ask for your login password again. This launch opens the old files one last time, which may ask once.
+
 ## Numbers in the Plus menu
 
 - Every item in the Plus menu carries a number; the digit picks it in the arm you are on. Option+T, Left, 2 is the second entry, no cycling.

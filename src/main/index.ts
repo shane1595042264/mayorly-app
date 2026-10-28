@@ -9,6 +9,7 @@ import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
 import { Engine } from './engine'
 import { installLog, log } from './log'
+import { Seal } from './seal'
 import { SessionStore } from './session'
 import { Sync } from './sync'
 import { refusedAsOptionOnly, registerHotkeys } from './hotkeys'
@@ -119,7 +120,8 @@ function boot() {
 
   // The AI clerk: a captured line goes to the user's own model first, when there is
   // one, and arrives at the reducer with its filing. Any failure files by prefix.
-  const clerk = new AiClerk(dataDir, (pub) => send(IPC.ai, pub))
+  const seal = new Seal(dataDir)
+  const clerk = new AiClerk(dataDir, seal, (pub) => send(IPC.ai, pub))
   const say = (n: ClerkNotice) => send(IPC.clerk, n)
   const short = (t: string) => (t.length > 36 ? `${t.slice(0, 35)}…` : t)
   // Everything still in the tray goes to the clerk in one call; what fits a ledger moves.
@@ -201,7 +203,7 @@ function boot() {
 
   // Account and sync. The session lives encrypted in userData; the sync loop pushes
   // this machine's state and takes the server's when another machine wrote first.
-  const sessions = new SessionStore(dataDir)
+  const sessions = new SessionStore(dataDir, seal)
   const sync = new Sync(engine, config.apiUrl, dataDir, (st) => send(IPC.sync, st))
   let session = accountsConfigured() ? sessions.load() : null
   const setSession = (s: typeof session) => {
