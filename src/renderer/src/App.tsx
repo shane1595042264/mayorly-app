@@ -25,6 +25,8 @@ const PEEK_MS = 400
 const PET_FADE_MS = 140
 /** And a panel finishes its exit in the full window before the window shrinks back to the pet. */
 const PANEL_EXIT_MS = 200
+/** A tomato ripened: the entry's count stays above the pet this long. */
+const POP_MS = 3000
 
 export function App() {
   const s = useMayorly()
@@ -100,6 +102,32 @@ export function App() {
         const from = takeOrigin() ?? (sprite ? { x: sprite.left + sprite.width / 2, y: sprite.top + sprite.height / 2 } : { x: window.innerWidth - 80, y: window.innerHeight - 60 })
         const st = current()
         setCashIn({ seq: ++cashSeq.current, amount: e.tokens, balance: st ? balance(st) : 0, from })
+      }
+    }, []),
+  )
+
+  // A tomato ripened: the entry's count, or the coin for ledger time, shows above the pet for a moment.
+  const [pop, setPop] = useState<string | null>(null)
+  const popTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useHudEvents(
+    useCallback((events: HudEvent[]) => {
+      for (const e of events) {
+        if (e.type !== 'tomato') continue
+        const st = current()
+        if (!st) continue
+        let text: string
+        if (e.entryId) {
+          const entry = st.entries.find((x) => x.id === e.entryId)
+          if (!entry) continue
+          const n = entry.tomatoes ?? 0
+          const title = entry.title.length > 40 ? `${entry.title.slice(0, 39)}…` : entry.title
+          text = `${title}: ${n} ${n === 1 ? 'tomato' : 'tomatoes'} grown`
+        } else {
+          text = `${st.desk.block?.label ?? 'Ledger time'}: ${e.tokens} ${e.tokens === 1 ? 'coin' : 'coins'}`
+        }
+        if (popTimer.current) clearTimeout(popTimer.current)
+        setPop(text)
+        popTimer.current = setTimeout(() => setPop(null), POP_MS)
       }
     }, []),
   )
@@ -290,7 +318,7 @@ export function App() {
       </AnimatePresence>
 
       <Objectives s={s} mode={mode} />
-      <Pet s={s} away={petAway} moving={moving} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} compact={layout.compact} notice={clerk ?? (layout.compact ? warning : null)} />
+      <Pet s={s} away={petAway} moving={moving} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} compact={layout.compact} notice={clerk ?? pop ?? (layout.compact ? warning : null)} />
       <Feed />
       <Callout quiet={mode !== 'field'} />
 
