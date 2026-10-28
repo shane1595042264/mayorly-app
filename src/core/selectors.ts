@@ -62,6 +62,29 @@ export function tomatoProgress(s: MayorlyState, now: number): number {
   return (sittingFocus(s, now) % sitting.tomatoMs) / sitting.tomatoMs
 }
 
+/**
+ * Tomatoes grown on an entry so far, with the one ripening under the desk as a fraction:
+ * 2.2 is two banked and a fifth of the way to the third. They pay as coins when the entry is cleared.
+ */
+export function entryTomatoes(s: MayorlyState, entryId: Id, now: number): number {
+  const e = s.entries.find((x) => x.id === entryId)
+  if (!e) return 0
+  const d = s.desk
+  const live = d.block?.entryId === entryId && d.block.kind === 'focus' && d.status !== 'idle'
+  return (e.tomatoes ?? 0) + (live ? tomatoProgress(s, now) : 0)
+}
+
+/** What the quick switch brings back: the parked session, else the entry before the last swap. Null when nothing. */
+export function switchTarget(s: MayorlyState): string | null {
+  const d = s.desk
+  if (d.holster) return d.holster.block.label
+  const p = d.previous
+  if (!p || !d.block || d.block.kind !== 'focus') return null
+  const e = p.entryId ? s.entries.find((x) => x.id === p.entryId && x.doneAt === null) : null
+  if (e) return e.title
+  return s.ledgers.find((l) => l.id === p.ledgerId)?.name ?? null
+}
+
 export function tray(s: MayorlyState): Entry[] {
   return openFlow(s).filter((e) => e.ledgerId === null)
 }

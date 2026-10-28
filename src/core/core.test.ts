@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_HOTKEYS, firstRunState } from './seed'
 import {
   type Action, type HudEvent, type MayorlyState,
-  balance, blockView, clock, dayStats, deriveCode, sampleState, formatSuperset, objectives,
+  balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
   parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
 } from './index'
 
@@ -512,6 +512,57 @@ describe('the quick switch', () => {
     const w = world()
     const r = w.do({ type: 'desk/switch' })
     expect(r.events.some((e) => e.type === 'notice')).toBe(true)
+  })
+
+  it('with nothing parked, goes back to the entry before the last swap, and only the last two count', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'entry/capture', text: 'dance: b' })
+    w.do({ type: 'entry/capture', text: 'career: c' })
+    const [a, b, c] = [w.entry('a'), w.entry('b'), w.entry('c')]
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: a.id })
+    w.wait(2 * MIN)
+    w.do({ type: 'desk/swap', entryId: b.id })
+    w.wait(MIN)
+    w.do({ type: 'desk/swap', entryId: c.id })
+    expect(switchTarget(w.s)).toBe('b')
+    // a dropped out: the switch goes to b, then back to c, never to a, all in one sitting.
+    const r = w.do({ type: 'desk/switch' })
+    expect(r.events.some((e) => e.type === 'switch')).toBe(true)
+    expect(w.s.desk.block?.entryId).toBe(b.id)
+    expect(switchTarget(w.s)).toBe('c')
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block?.entryId).toBe(c.id)
+    expect(w.s.sittings).toHaveLength(1)
+    expect(w.s.desk.holster).toBeNull()
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(22 * MIN)
+  })
+
+  it('a cleared entry on the other side of the switch gives way to its ledger', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'entry/capture', text: 'dance: b' })
+    const [a, b] = [w.entry('a'), w.entry('b')]
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: a.id })
+    w.do({ type: 'desk/swap', entryId: b.id })
+    w.do({ type: 'entry/complete', id: a.id })
+    expect(switchTarget(w.s)).toBe('Legal')
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block?.ledgerId).toBe(w.ledger('LGL').id)
+    expect(w.s.desk.block?.entryId).toBe(null)
+  })
+
+  it('counts the tomatoes grown on an entry, the one ripening as a fraction', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    const a = w.entry('a')
+    expect(entryTomatoes(w.s, a.id, w.now)).toBe(0)
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: a.id })
+    w.wait(5 * MIN)
+    expect(entryTomatoes(w.s, a.id, w.now)).toBeCloseTo(0.2, 5)
+    w.wait(20 * MIN)
+    expect(Math.floor(entryTomatoes(w.s, a.id, w.now))).toBe(1)
+    expect(w.entry('a').tomatoes).toBe(1)
   })
 
   it('cues are plain words on a leisure item', () => {

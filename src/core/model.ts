@@ -152,6 +152,8 @@ export interface Desk {
   bankMs: Ms
   /** The previous session, parked by the quick switch, its clock stopped where it was. */
   holster: HeldSession | null
+  /** The entry the desk was on before the last swap: the other half of the quick switch when nothing is parked. */
+  previous: { entryId: Id | null; ledgerId: Id | null } | null
 }
 
 export interface TokenTx {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { blockView, clock, dayStats, startOfDay, type MayorlyState } from '@core/index'
+import { blockView, clock, dayStats, startOfDay, switchTarget, type MayorlyState } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
 import tomato from '../assets/tomato@1x.png'
 import { bridge } from '../bridge'
@@ -57,10 +57,11 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice }: 
     tone = v.block.kind === 'leisure' ? 'couch' : v.status === 'paused' ? 'hold' : v.status === 'ready' ? 'ready' : v.block.kind === 'focus' ? 'live' : 'rest'
   }
   const breathing = tone === 'live' && !reduce && !dragging
-  // Hover says only what the pet does not already show: how to start when idle, how to get back to a parked session.
+  // Hover says only what the pet does not already show: how to start when idle, how to get back to the other session.
+  const back = v ? switchTarget(s) : null
   const hint = !v
     ? `Desk idle. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.`
-    : s.desk.holster ? `${hotkeyLabel(s.settings.hotkeys.switch)}: back to ${s.desk.holster.block.label}` : ''
+    : back ? `${hotkeyLabel(s.settings.hotkeys.switch)}: back to ${back}` : ''
   const text = moving ? MOVE_HINT : (notice ?? hint)
   const showCaption = moving || !!notice || (hover && !dragging && hint !== '')
 

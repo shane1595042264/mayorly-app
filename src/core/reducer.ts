@@ -318,14 +318,39 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     }
     case 'desk/switch': {
       const d = s.desk
-      if (!d.holster) {
-        ev.push({ type: 'notice', at: now, text: 'Nothing parked to switch to' })
+      if (d.holster) {
+        const held = d.holster
+        const parked = park(s, now)
+        restore(s, ctx, held, now, true)
+        ev.push({ type: 'switch', at: now, label: s.desk.block?.label ?? '', parked: parked?.block.label ?? null })
         break
       }
-      const held = d.holster
-      const parked = park(s, now)
-      restore(s, ctx, held, now, true)
-      ev.push({ type: 'switch', at: now, label: s.desk.block?.label ?? '', parked: parked?.block.label ?? null })
+      // Nothing parked: the switch is between the last two entries of this sitting, a primary
+      // and a secondary weapon. Swapping to a third drops the oldest.
+      const p = d.previous ?? null
+      const block = d.block
+      if (!p || !block || block.kind !== 'focus') {
+        ev.push({ type: 'notice', at: now, text: 'Nothing to switch back to' })
+        break
+      }
+      let entryId: Id | null = null
+      let ledgerId: Id | null = null
+      const e = p.entryId ? s.entries.find((x) => x.id === p.entryId && x.doneAt === null) : undefined
+      if (e) {
+        entryId = e.id
+        ledgerId = e.ledgerId
+      } else if (p.ledgerId && s.ledgers.some((l) => l.id === p.ledgerId)) {
+        // The entry is gone: its ledger, on the next open entry there if that is not where we are.
+        ledgerId = p.ledgerId
+        const next = firstOpenInLedger(s, p.ledgerId)
+        entryId = next && next.id !== block.entryId ? next.id : null
+      }
+      if ((!entryId && !ledgerId) || (entryId === block.entryId && ledgerId === block.ledgerId)) {
+        ev.push({ type: 'notice', at: now, text: 'Nothing to switch back to' })
+        break
+      }
+      swapTo(s, ctx, ev, entryId, ledgerId)
+      ev.push({ type: 'switch', at: now, label: s.desk.block?.label ?? '', parked: null })
       break
     }
     case 'leisure/update': {
@@ -494,6 +519,10 @@ function swapTo(s: MayorlyState, ctx: Ctx, ev: HudEvent[], entryId: Id | null, l
   const now = ctx.now
   const running = d.status === 'running'
   if (running) closeSegment(s, now)
+  // What the desk leaves is what the quick switch brings back.
+  if (block.entryId !== entryId || block.ledgerId !== ledgerId) {
+    d.previous = block.entryId || block.ledgerId ? { entryId: block.entryId, ledgerId: block.ledgerId } : null
+  }
   block.entryId = entryId
   block.ledgerId = ledgerId
   block.label = ledgerLabel(s, ledgerId)
@@ -574,7 +603,7 @@ function endSitting(s: MayorlyState, at: number, ev: HudEvent[], reason: 'stood'
     ev.push({ type: 'sitting-end', at, reason, focusMs: sitting.focusMs, tomatoes: sitting.tomatoes, tokens: sitting.tokens })
   }
   const held = d.holster
-  s.desk = { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null }
+  s.desk = { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null }
   // The parked session comes back, paused where it was.
   if (held) restore(s, null, held, at, false)
 }
@@ -598,6 +627,7 @@ function park(s: MayorlyState, at: number): HeldSession | null {
   const bankMs = d.bankMs + (d.status === 'running' && d.runStartedAt !== null ? Math.max(0, at - d.runStartedAt) : 0)
   const held: HeldSession = { sittingId: d.sittingId, plan: d.plan, block: d.block, bankMs }
   d.holster = held
+  d.previous = null
   d.status = 'idle'
   d.sittingId = null
   d.plan = null

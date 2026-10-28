@@ -39,7 +39,7 @@ export function emptyState(): MayorlyState {
     clerkLog: [],
     houseRules: [],
     leisure: [],
-    desk: { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null },
+    desk: { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null },
     settings: { ...DEFAULT_SETTINGS, hotkeys: { ...DEFAULT_HOTKEYS } },
   }
 }
