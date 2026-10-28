@@ -219,6 +219,28 @@ describe('swap', () => {
     const byCode = Object.fromEntries(today.byLedger.map((b) => [w.s.ledgers.find((l) => l.id === b.ledgerId)?.code, b.focusMs]))
     expect(byCode).toEqual({ LGL: 7 * MIN, DNC: 3 * MIN })
   })
+  it('a swap you ask for resumes a desk on hold, the clock where it was; an automatic one does not', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'entry/capture', text: 'dance: b' })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('a').id })
+    w.wait(15 * MIN)
+    w.do({ type: 'desk/pause' })
+    w.wait(3 * MIN)
+    w.do({ type: 'desk/swap', entryId: w.entry('b').id })
+    expect(w.s.desk.status).toBe('running')
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(10 * MIN)
+    // Option+Q back while on hold resumes too.
+    w.do({ type: 'desk/pause' })
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.status).toBe('running')
+    expect(w.s.desk.block?.entryId).toBe(w.entry('a').id)
+    // Clearing the entry while on hold moves the desk on but leaves the hold.
+    w.do({ type: 'desk/pause' })
+    w.do({ type: 'entry/complete', id: w.entry('a').id })
+    expect(w.s.desk.status).toBe('paused')
+  })
+
   it('redeploying parks the running session for the quick switch; its tomato is kept', () => {
     const w = world()
     w.do({ type: 'desk/deploy', mode: 'pomodoro' })

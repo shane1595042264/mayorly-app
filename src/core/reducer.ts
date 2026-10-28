@@ -323,7 +323,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const d = s.desk
       const back = switchBack(s)
       if (back) {
-        swapTo(s, ctx, ev, back.entryId, back.ledgerId)
+        swapTo(s, ctx, ev, back.entryId, back.ledgerId, true)
         ev.push({ type: 'switch', at: now, label: s.desk.block?.label ?? '', parked: null })
         break
       }
@@ -409,7 +409,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
         if (!s.ledgers.some((l) => l.id === ledgerId)) break
         entryId = firstOpenInLedger(s, ledgerId)?.id ?? null
       } else break
-      swapTo(s, ctx, ev, entryId, ledgerId)
+      swapTo(s, ctx, ev, entryId, ledgerId, true)
       break
     }
     case 'desk/tick':
@@ -496,12 +496,19 @@ function startBlock(s: MayorlyState, ctx: Ctx, ev: HudEvent[], block: Block, at:
   ev.push({ type: 'block', at, block, started: auto })
 }
 
-function swapTo(s: MayorlyState, ctx: Ctx, ev: HudEvent[], entryId: Id | null, ledgerId: Id | null) {
+/**
+ * Moves the running block to another entry or ledger, the clock where it is. `resume` is for
+ * a swap you asked for: a desk on hold or waiting comes back running on the new task, one
+ * act instead of two. Swaps the desk makes on its own (the next entry after a clear) leave
+ * a hold alone.
+ */
+function swapTo(s: MayorlyState, ctx: Ctx, ev: HudEvent[], entryId: Id | null, ledgerId: Id | null, resume = false) {
   const d = s.desk
   const block = d.block
   if (!block) return
   const now = ctx.now
   const running = d.status === 'running'
+  const starting = !running && resume && (d.status === 'paused' || d.status === 'ready')
   if (running) closeSegment(s, now)
   // What the desk leaves is what the quick switch brings back.
   if (block.entryId !== entryId || block.ledgerId !== ledgerId) {
@@ -522,7 +529,11 @@ function swapTo(s: MayorlyState, ctx: Ctx, ev: HudEvent[], entryId: Id | null, l
     d.bankMs = 0
     if (running) d.runStartedAt = now
   }
-  if (running) openSegment(s, ctx, now)
+  if (starting) {
+    d.status = 'running'
+    d.runStartedAt = now
+  }
+  if (running || starting) openSegment(s, ctx, now)
   ev.push({ type: 'swap', at: now, ledgerId, entryId })
 }
 
