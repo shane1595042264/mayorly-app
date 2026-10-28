@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The task line on the pet is readable
+
+- The task above the clock sits on its own dark plate in bold, full ink, in every state, so it reads over any app behind the pet.
+
 ## No more keychain prompts
 
 - On a Mac the sign-in and the AI key are sealed with a key kept beside Mayorly's data instead of the keychain, so no build will ask for your login password again. This launch opens the old files one last time, which may ask once.
