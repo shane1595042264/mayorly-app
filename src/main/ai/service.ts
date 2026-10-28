@@ -143,10 +143,11 @@ export class AiClerk {
     const system = [
       'You are the clerk of Mayorly, a personal ledger system. The user typed one line into the capture tray.',
       'Decide which ledger it belongs to from the list, by each ledger\'s criterion. Never invent a ledger.',
-      'Always pick the best-fitting ledger, even when the fit is poor; say so with the confidence field instead of leaving it out.',
+      'Always pick the best-fitting ledger, even when the fit is poor; say how sure you are with the confidence field instead of leaving it out.',
       'Entertainment is not a ledger: games, shows, streams, films, scrolling, anything with no productive value gets ledgerCode LEISURE. Exercise, study and work are not entertainment.',
       'The house rules are the user\'s own corrections and come before the criteria.',
-      `Reply with JSON only, no prose: {"ledgerCode": one of ${ledgers.map((l) => l.code).join(', ')}, LEISURE, "confidence": "sure" or "unsure", "title": string, "estimateMin": number or null}. ledgerCode is never null.`,
+      `Reply with JSON only, no prose: {"ledgerCode": one of ${ledgers.map((l) => l.code).join(', ')}, LEISURE, "confidence": number from 0 to 1, "title": string, "estimateMin": number or null}. ledgerCode is never null.`,
+      CONFIDENCE_RULE,
       'title: the entry as a short line in the user\'s own words, without the ledger name, tags such as #dance, or the time estimate.',
       'estimateMin: the minutes if the line states a duration (~20, 20 min, 1h), otherwise null.',
     ].join(' ')
@@ -162,12 +163,12 @@ export class AiClerk {
       const title = parsed.title.trim() || text.trim()
       const quoted = `'${title.length > 40 ? title.slice(0, 39) + '…' : title}'`
       if (parsed.ledgerCode?.toUpperCase() === 'LEISURE') {
-        return { title, ledgerId: null, estimateMin: parsed.estimateMin, log: `couch ${quoted}: entertainment (clerk, ${model})`, model, confidence: parsed.confidence, leisure: true }
+        return { title, ledgerId: null, estimateMin: parsed.estimateMin, log: `couch ${quoted}: entertainment (clerk, ${model})`, model, confidence: confidenceOf(parsed.confidence), leisure: true }
       }
       const named = parsed.ledgerCode ? ledgers.find((l) => l.code.toLowerCase() === parsed.ledgerCode!.toLowerCase()) ?? null : null
       const ledger = named ?? bestGuess(text, ledgers)
       const est = parsed.estimateMin ? ` est ${parsed.estimateMin}m` : ''
-      const confidence = named ? parsed.confidence : 'unsure'
+      const confidence = named ? confidenceOf(parsed.confidence) : 'unsure'
       return {
         title,
         ledgerId: ledger?.id ?? null,
@@ -199,11 +200,12 @@ export class AiClerk {
     const system = [
       'You are the clerk of Mayorly, a personal ledger system. Here are entries waiting in the tray, each with a number.',
       'For each, decide which ledger it belongs to by each ledger\'s criterion. Never invent a ledger.',
-      'Always pick the best-fitting ledger, even when the fit is poor; say so with the confidence field instead of leaving it out.',
+      'Always pick the best-fitting ledger, even when the fit is poor; say how sure you are with the confidence field instead of leaving it out.',
       'Entertainment is not a ledger: games, shows, streams, films, scrolling, anything with no productive value gets ledgerCode LEISURE. Exercise, study and work are not entertainment.',
       'The house rules are the user\'s own corrections and come before the criteria.',
-      `Reply with JSON only, no prose and no wrapper object: an array of {"n": number, "ledgerCode": one of ${ledgers.map((l) => l.code).join(', ')}, LEISURE, "confidence": "sure" or "unsure", "estimateMin": number or null}, one per entry. ledgerCode is never null.`,
-      'estimateMin: the minutes if the entry states a duration, otherwise null. ledgerCode: null when no ledger fits.',
+      `Reply with JSON only, no prose and no wrapper object: an array of {"n": number, "ledgerCode": one of ${ledgers.map((l) => l.code).join(', ')}, LEISURE, "confidence": number from 0 to 1, "estimateMin": number or null}, one per entry. ledgerCode is never null.`,
+      CONFIDENCE_RULE,
+      'estimateMin: the minutes if the entry states a duration, otherwise null.',
     ].join(' ')
     const prompt = `${ledgerList(ledgers)}${houseRules(rules)}\nEntries:\n${entries.map((e, i) => `- ${i + 1}: ${e.title}`).join('\n')}`
     try {
@@ -231,7 +233,7 @@ export class AiClerk {
         const ledger = named ?? bestGuess(entry.title, ledgers)
         if (!ledger) continue
         const est = typeof row.estimateMin === 'number' && row.estimateMin > 0 ? Math.round(row.estimateMin) : null
-        const confidence = named && String(row.confidence).toLowerCase() !== 'unsure' ? 'sure' : 'unsure'
+        const confidence = named ? confidenceOf(row.confidence) : 'unsure'
         const quoted = `'${entry.title.length > 40 ? entry.title.slice(0, 39) + '…' : entry.title}'`
         out.set(entry.id, { ledgerId: ledger.id, estimateMin: est, log: `filed ${quoted} -> ${ledger.code} (clerk, ${model}, from the tray${confidence === 'unsure' ? ', unsure' : ''})${est ? ` est ${est}m` : ''}`, model, confidence })
       }
@@ -380,14 +382,30 @@ function parseRows(text: string): { n?: unknown; ledgerCode?: unknown; estimateM
   return null
 }
 
-function parseFiling(text: string): { ledgerCode: string | null; title: string; estimateMin: number | null; confidence: 'sure' | 'unsure' } | null {
+/**
+ * The clerk says how sure it is, 0 to 1. A question mark is for a line it is nearly guessing
+ * at, not for every loose fit: below this it shows, above it the filing stands.
+ */
+const UNSURE_BELOW = 0.2
+const CONFIDENCE_RULE =
+  'confidence: how sure you are of the ledger. A line that plainly belongs somewhere is 0.7 or more, even when the fit is loose. Below 0.2 only when it could belong to any ledger and you are guessing.'
+
+/** A number from the model, or the old "sure"/"unsure" words from one that ignored the format. */
+function confidenceOf(v: unknown): 'sure' | 'unsure' {
+  const t = typeof v === 'number' ? v : String(v ?? '').trim().toLowerCase()
+  if (t === 'unsure') return 'unsure'
+  const n = typeof t === 'number' ? t : t === '' ? NaN : Number(t)
+  return Number.isFinite(n) && n < UNSURE_BELOW ? 'unsure' : 'sure'
+}
+
+function parseFiling(text: string): { ledgerCode: string | null; title: string; estimateMin: number | null; confidence: unknown } | null {
   const m = text.match(/\{[\s\S]*\}/)
   if (!m) return null
   try {
     const j = JSON.parse(m[0]) as { ledgerCode?: unknown; title?: unknown; estimateMin?: unknown; confidence?: unknown }
     if (typeof j.title !== 'string') return null
     const est = typeof j.estimateMin === 'number' && j.estimateMin > 0 ? Math.round(j.estimateMin) : null
-    return { ledgerCode: typeof j.ledgerCode === 'string' ? j.ledgerCode : null, title: j.title, estimateMin: est, confidence: String(j.confidence).toLowerCase() === 'unsure' ? 'unsure' : 'sure' }
+    return { ledgerCode: typeof j.ledgerCode === 'string' ? j.ledgerCode : null, title: j.title, estimateMin: est, confidence: j.confidence }
   } catch {
     return null
   }
