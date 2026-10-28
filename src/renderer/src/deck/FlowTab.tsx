@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { Reorder, useDragControls } from 'motion/react'
 import { ArrowCounterClockwise, Check, DotsSixVertical, Lightning, Play, Sparkle, Trash } from '@phosphor-icons/react'
 import {
-  entrySpentMs, openFlow, prefixClerk, span, startOfDay, type Entry, type MayorlyState,
+  entrySpentMs, entryTomatoes, openFlow, prefixClerk, span, startOfDay, type Entry, type MayorlyState,
 } from '@core/index'
 import { bridge } from '../bridge'
 import { hotkeyLabel } from '../lib/keys'
 import { cycleLedger, useListKeys } from '../lib/listkeys'
 import { noteOrigin } from '../lib/origin'
 import { dispatch, useAi, useNow } from '../store'
+import { Tomatoes } from './Tomatoes'
 
 export function FlowTab({ s }: { s: MayorlyState }) {
   const now = useNow(5000)
@@ -205,6 +206,7 @@ function Row({ e, s, index, live, selected, renameTick, now, onDrop }: { e: Entr
         </span>
       )}
       <span className="row-time mono num">
+        <Tomatoes n={entryTomatoes(s, e.id, now)} />
         {spent >= 60_000 ? span(spent) : ''}
         <input
           className="est"

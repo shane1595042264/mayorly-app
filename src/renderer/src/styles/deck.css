@@ -172,6 +172,8 @@
 .row-title { font-size: 16px; }
 .deck .row-edit { height: 32px; }
 .row-time { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-2); }
+.row-tomatoes { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
+.mini-tomato { width: 16px; height: 16px; image-rendering: pixelated; }
 .deck .est { width: 64px; height: 30px; font-size: 12px; text-align: right; }
 .row-actions { display: flex; gap: 2px; opacity: 0.8; transition: opacity 0.15s; }
 .row:hover .row-actions, .row:focus-within .row-actions { opacity: 1; }

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Check, LockSimple, PencilSimple, Play, Plus, Trash } from '@phosphor-icons/react'
 import {
-  dayStats, entrySpentMs, LEDGER_CAP, ledgerEntries, span, startOfDay, type Entry, type GlyphName, type Ledger, type MayorlyState,
+  dayStats, entrySpentMs, entryTomatoes, LEDGER_CAP, ledgerEntries, span, startOfDay, type Entry, type GlyphName, type Ledger, type MayorlyState,
 } from '@core/index'
 import { Glyph, GLYPHS } from '../lib/glyphs'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { cycleLedger, useListKeys } from '../lib/listkeys'
 import { noteOrigin } from '../lib/origin'
 import { current, dispatch, useNow } from '../store'
+import { Tomatoes } from './Tomatoes'
 
 // The ledger shelf: nine bays. Every ledger here is hand-written by you, so the
 // clerk may file into it but never rename, merge or remove it. A bay opens the
@@ -253,6 +254,7 @@ function LedgerRow({ s, e, index, now, live, selected, renameTick }: { s: Mayorl
         <span className="row-title ellipsis" onDoubleClick={() => setEditing(true)} title="Double-click to rename">{e.title}</span>
       )}
       <span className="row-time mono num">
+        <Tomatoes n={entryTomatoes(s, e.id, now)} />
         {spent >= 60_000 ? span(spent) : ''}
         <input
           className="est"
