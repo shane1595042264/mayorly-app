@@ -33,7 +33,8 @@ export function parseNotes(md: string): BuildNotes | null {
 
 export function buildInfo(): BuildInfo {
   const version = (JSON.parse(readFileSync('package.json', 'utf8')) as { version: string }).version
-  const commit = (git('rev-parse --short HEAD') || 'local') + (git('status --porcelain') ? '+' : '')
+  // Tracked changes only: Vite drops a temporary copy of the config beside it while loading, which must not count.
+  const commit = (git('rev-parse --short HEAD') || 'local') + (git('status --porcelain --untracked-files=no') ? '+' : '')
   let notes: BuildNotes | null = null
   try {
     notes = parseNotes(readFileSync('NOTES.md', 'utf8'))
