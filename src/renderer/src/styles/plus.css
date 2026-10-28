@@ -176,15 +176,26 @@
   text-shadow: none;
   transition: border-color 0.12s, background 0.12s, color 0.12s;
 }
-.opt:hover, .opt.cursor {
-  border-color: var(--accent-2);
-  color: var(--ink);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
+/* Selection, loud to quiet: the cursor tile in the arm under the keys fills solid with the
+   accent and its text inverts; that arm tints faintly so the eye finds it before the tile;
+   the other arms keep their remembered cursor as an outline only. What the desk is on
+   stays white, and the cursor on it keeps a white ring. */
+.opt.cursor { border-color: var(--accent-2); color: var(--ink); box-shadow: inset 2px 0 0 var(--accent); }
 .opt.current { background: var(--ink); border-color: var(--ink); color: var(--void); }
-.opt.current.cursor, .opt.current:hover { box-shadow: inset 0 -3px 0 var(--accent); }
+.arm.active .opt { border-color: rgb(240 174 60 / 0.32); background: rgb(240 174 60 / 0.09); color: var(--ink); }
+.arm.active .opt.current { background: var(--ink); border-color: var(--ink); color: var(--void); }
+.arm.active .opt.cursor, .arm.active .opt:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--void);
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
+}
+.arm.active .opt.current.cursor, .arm.active .opt.current:hover { box-shadow: 0 0 0 2px var(--ink), 0 6px 18px rgb(0 0 0 / 0.35); }
+.arm.active .opt .opt-meta { opacity: 0.85; }
 .opt:active { translate: 0 1px; }
-.opt:disabled { color: var(--ink-4); cursor: default; box-shadow: none; border-color: var(--line); }
+.opt:disabled, .arm.active .opt:disabled { background: rgb(14 16 18 / 0.92); color: var(--ink-4); cursor: default; box-shadow: none; border-color: var(--line); font-weight: 400; }
+.arm.active .opt.cursor:disabled { background: rgb(240 174 60 / 0.16); border-color: var(--accent-2); color: var(--ink-3); }
 .opt-icon { display: grid; place-items: center; flex: none; }
 .opt-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .opt-meta { flex: none; font-size: 11px; opacity: 0.75; }
@@ -199,7 +210,7 @@
 }
 .arm-ledger .opt-label { flex: none; font-family: var(--font-data); font-size: 12px; }
 .arm-ledger .opt-meta { position: absolute; top: 4px; left: 6px; font-size: 10px; }
-.arm-ledger .opt:hover, .arm-ledger .opt.cursor { box-shadow: inset 0 -2px 0 var(--accent); }
+.arm-ledger .opt.cursor { box-shadow: inset 0 -2px 0 var(--accent); }
 
 .arm-orders .opt {
   flex-direction: column;
@@ -214,11 +225,20 @@
   font-weight: 600;
 }
 .arm-orders .opt-label { flex: none; }
-.arm-orders .opt:hover, .arm-orders .opt.cursor { box-shadow: inset 0 -2px 0 var(--accent); }
+.arm-orders .opt.cursor { box-shadow: inset 0 -2px 0 var(--accent); }
 
 .arm-entry .opt { flex-direction: row-reverse; text-align: right; }
-.arm-entry .opt:hover, .arm-entry .opt.cursor { box-shadow: inset -2px 0 0 var(--accent); }
-.arm-entry .opt.current.cursor, .arm-entry .opt.current:hover { box-shadow: inset 0 -3px 0 var(--accent); }
+.arm-entry .opt.cursor { box-shadow: inset -2px 0 0 var(--accent); }
+.arm.active .opt.cursor { box-shadow: 0 6px 18px rgb(0 0 0 / 0.35); }
+.arm.active .opt.current.cursor { box-shadow: 0 0 0 2px var(--ink), 0 6px 18px rgb(0 0 0 / 0.35); }
+
+/* the leader line and attachment node of the arm under the keys light up with it */
+.plus-rig[data-arm='ledger'] .lead-top, .plus-rig[data-arm='orders'] .lead-bottom,
+.plus-rig[data-arm='entry'] .lead-left, .plus-rig[data-arm='mode'] .lead-right { background: var(--accent); }
+.plus-rig[data-arm='ledger'] .lead-top::after, .plus-rig[data-arm='orders'] .lead-bottom::after,
+.plus-rig[data-arm='entry'] .lead-left::after, .plus-rig[data-arm='mode'] .lead-right::after { border-color: var(--accent); background: var(--accent); }
+.plus-rig[data-arm='ledger'] .n-top, .plus-rig[data-arm='orders'] .n-bottom,
+.plus-rig[data-arm='entry'] .n-left, .plus-rig[data-arm='mode'] .n-right { background: var(--accent); }
 
 .plus-hints {
   position: absolute;

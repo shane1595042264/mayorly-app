@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The Plus menu shows where you are
+
+- The tile under the cursor fills solid amber with dark text, the arm under the keys tints faintly, and the line from the slab to that arm lights up. What the desk is on stays white.
+
 ## Switching, counting, and a quieter clerk
 
 - Option+Q swaps between the last two entries you worked on, like a primary and a secondary weapon. A third entry drops the oldest.

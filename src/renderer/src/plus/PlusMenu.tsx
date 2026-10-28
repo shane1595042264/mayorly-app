@@ -240,6 +240,7 @@ export function PlusMenu({ s, close, open }: Props) {
     >
       <motion.div
         className="plus-rig"
+        data-arm={arm}
         style={{ rotateX, rotateY, scale: fit }}
         initial={reduce ? false : { z: -160, opacity: 0 }}
         animate={{ z: 0, opacity: 1 }}
