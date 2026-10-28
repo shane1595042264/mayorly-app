@@ -392,7 +392,13 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .clerk-ask-sprite { width: 48px; height: 48px; image-rendering: pixelated; flex: none; }
 .clerk-ask-body { flex: 1; min-width: 0; display: grid; gap: 6px; }
 .clerk-ask-q { margin: 0; font-size: 16px; color: var(--ink); }
-.clerk-ask input { width: 100%; }
+.clerk-ask input {
+  width: 100%; min-width: 0; height: 36px; padding: 0 11px;
+  border: 1px solid var(--line-2); background: rgb(237 240 241 / 0.06); color: var(--ink);
+  font-size: 15px; transition: border-color 0.15s;
+}
+.clerk-ask input:focus { border-color: var(--accent); }
+.clerk-ask input::placeholder { color: rgb(237 240 241 / 0.48); }
 
 /* ------------------------------------------------------------ leisure */
 
