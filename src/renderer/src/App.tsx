@@ -323,6 +323,12 @@ export function App() {
   )
 
   useEffect(() => setSoundEnabled(s?.settings.sound ?? true), [s?.settings.sound])
+  // Text size per area, as variables the stylesheets read.
+  useEffect(() => {
+    const t = s?.settings.text
+    document.documentElement.style.setProperty('--text-pet', String(t?.pet ?? 1))
+    document.documentElement.style.setProperty('--text-deck', String(t?.deck ?? 1))
+  }, [s?.settings.text])
 
   if (!s) return null
   const close = () => setMode('field')

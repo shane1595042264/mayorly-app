@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sound: true,
   hudSide: 'right',
   hudScale: 1,
+  text: { pet: 1, deck: 1, plus: 1 },
   trayTimer: false,
   hotkeys: DEFAULT_HOTKEYS,
   keymap: {},

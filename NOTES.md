@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Text size, and numbered tabs
+
+- Settings, under HUD: a text size per area, for the pet's task line, the deck and the swap menu, 80 to 160 percent. The pet's window grows with its task line.
+- Every deck tab shows its number, since the digit jumps to it.
+
 ## The task line on the pet is readable
 
 - The task above the clock sits on its own dark plate in bold, full ink, in every state, so it reads over any app behind the pet.

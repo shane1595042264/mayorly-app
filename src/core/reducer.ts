@@ -8,7 +8,7 @@ import { migrate } from './seed'
 import { mergeStates } from './merge'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
-export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'trayTimer'] as const
+export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'trayTimer', 'text'] as const
 
 export type Action =
   /** `filing` is the AI clerk's answer, when there is one; the reducer checks it and otherwise files by prefix. */
@@ -866,5 +866,10 @@ export function sanitiseSettings(x: Settings): Settings {
     longRestEvery: clampInt(x.longRestEvery, 1, 12, 4),
     hudScale: Math.min(1.6, Math.max(0.7, Number(x.hudScale) || 1)),
     hudSide: x.hudSide === 'left' ? 'left' : 'right',
+    text: { pet: textSize(x.text?.pet), deck: textSize(x.text?.deck), plus: textSize(x.text?.plus) },
   }
 }
+
+export const TEXT_MIN = 0.8
+export const TEXT_MAX = 1.6
+const textSize = (v: unknown) => Math.min(TEXT_MAX, Math.max(TEXT_MIN, Number(v) || 1))

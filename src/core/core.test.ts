@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_HOTKEYS, firstRunState } from './seed'
+import { DEVICE_SETTINGS } from './reducer'
 import {
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
@@ -269,6 +270,15 @@ describe('superset syntax', () => {
     let k = 0
     const s = sampleState(T0, () => `L${++k}`)
     expect(parseSuperset('legal 25, cooking 20', s.ledgers, () => 'y')).toEqual({ ok: false, error: 'No ledger called "cooking"' })
+  })
+})
+
+describe('text size', () => {
+  it('is per area, clamped, and stays with the machine', () => {
+    const w = world()
+    w.do({ type: 'settings/update', patch: { text: { pet: 1.3, deck: 9, plus: 0.1 } } })
+    expect(w.s.settings.text).toEqual({ pet: 1.3, deck: 1.6, plus: 0.8 })
+    expect(DEVICE_SETTINGS).toContain('text')
   })
 })
 

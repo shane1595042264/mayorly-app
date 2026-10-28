@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowsClockwise, GoogleLogo, Keyboard, Plus, Trash } from '@phosphor-icons/react'
-import type { MayorlyState, Settings } from '@core/index'
+import { TEXT_MAX, TEXT_MIN, type MayorlyState, type Settings } from '@core/index'
 import type { AiProvider, AppInfo } from '../../../shared/bridge'
 import { builtOn } from '../../../shared/build'
 import { bridge } from '../bridge'
@@ -56,6 +56,13 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
             <input type="range" min={0.7} max={1.6} step={0.05} value={st.hudScale} onChange={(e) => set({ hudScale: Number(e.target.value) })} />
             <span className="field-help mono num">{Math.round(st.hudScale * 100)}%</span>
           </label>
+        </div>
+        <h4 className="field-label caps" style={{ marginTop: 18 }}>Text size</h4>
+        <p className="field-help">Per area, on this machine. The pet grows with its task line.</p>
+        <div className="rules">
+          <TextSize label="Pet" value={st.text.pet} onChange={(pet) => set({ text: { ...st.text, pet } })} />
+          <TextSize label="Deck" value={st.text.deck} onChange={(deck) => set({ text: { ...st.text, deck } })} />
+          <TextSize label="Swap menu" value={st.text.plus} onChange={(plus) => set({ text: { ...st.text, plus } })} />
         </div>
       </section>
 
@@ -379,6 +386,16 @@ function HotkeyField({ label, value, onCommit }: { label: string; value: string;
  * Typed freely, clamped on commit. Clamping on every keystroke turned "1" then "4"
  * into "14" then the maximum, so a value could never be replaced by typing.
  */
+function TextSize({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
+  return (
+    <label className="field">
+      <span className="field-label caps">{label}</span>
+      <input type="range" min={TEXT_MIN} max={TEXT_MAX} step={0.05} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <span className="field-help mono num">{Math.round(value * 100)}%</span>
+    </label>
+  )
+}
+
 function Num({ label, help, value, min, max, onChange }: { label: string; help: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
   const [text, setText] = useState(String(value))
   const [editing, setEditing] = useState(false)

@@ -355,6 +355,7 @@ function boot() {
   let applied: Settings | null = null
   const applySettings = (s: Settings) => {
     overlay.setScale(s.hudScale)
+    overlay.setTextSize(s.text.pet)
     if (applied && JSON.stringify(applied.hotkeys) === JSON.stringify(s.hotkeys) && applied.openAtLogin === s.openAtLogin) return
     if (!applied || JSON.stringify(applied.hotkeys) !== JSON.stringify(s.hotkeys)) {
       const failed = registerHotkeys(s.hotkeys, {

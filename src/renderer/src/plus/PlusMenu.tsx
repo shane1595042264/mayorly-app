@@ -40,7 +40,9 @@ export function PlusMenu({ s, close, open }: Props) {
   const rotateX = useTransform(lean.rotateX, (r) => 8 + r)
   const rotateY = useTransform(lean.rotateY, (r) => -11 + r)
   const [slabScope, animateSlab] = useAnimate()
-  const fit = useFit(1180, 720)
+  // The menu's text size scales the whole rig; the fit then keeps the bigger rig on screen.
+  const textSize = s.settings.text.plus
+  const fit = useFit(1180 * textSize, 720 * textSize) * textSize
 
   const live = v !== null && v.block.kind === 'focus'
   // When the desk is idle, picks build a loadout that the next deploy uses.

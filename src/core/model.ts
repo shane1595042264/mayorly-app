@@ -206,6 +206,8 @@ export interface Settings {
   sound: boolean
   hudSide: 'right' | 'left'
   hudScale: number
+  /** Text size per area, 1 is the design size: the pet's task line, the deck, the swap menu. Per machine. */
+  text: { pet: number; deck: number; plus: number }
   /** macOS: the running block's clock beside the menu bar tomato. */
   trayTimer: boolean
   hotkeys: Record<HotkeyAction, string>

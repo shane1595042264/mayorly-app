@@ -103,9 +103,10 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
           <span className="deck-mark caps">Mayorly</span>
           <nav className="tabs" role="tablist">
             <span className="key">Q</span>
-            {TABS.map((t) => (
+            {TABS.map((t, i) => (
               <button key={t} id={`tab-${t}`} role="tab" aria-selected={tab === t} aria-controls="deck-panel" className={`tab caps ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>
                 {t}
+                <span className="tab-n mono num" aria-hidden="true">{i + 1}</span>
                 {tab === t && <motion.i layoutId="tab-bar" className="tab-bar" />}
               </button>
             ))}

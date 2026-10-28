@@ -25,6 +25,8 @@ const debug = process.env.MAYORLY_DEBUG ? (...a: unknown[]) => console.error('[o
  * never resized on hover: a resize paints one frame of old content at the new position and the
  * tomato jumps. The caption is a separate click-through window. Matches `body.compact` in hud.css. */
 const PET = { width: 140 + 10 + 48, height: 48 + 24 }
+/** Two task lines at the design size (12px, line height 1.15): what grows when the pet's text setting does. */
+const TASK_LINES = 2 * 12 * 1.15
 /** The pet's own corner inside the window; matches `body.compact .pet-wrap` in hud.css. */
 const INSET = { x: 4, y: 4 }
 /** The caption window: generous, because it is click-through; the text hugs the tomato's side. */
@@ -54,6 +56,7 @@ export class Overlay {
   private cursor = { x: NaN, y: NaN, inside: false }
   private anchor: Anchor | null = null
   private scale = 1
+  private text = 1
   private dragging = false
   private caption: BrowserWindow | null = null
   private captionText: string | null = null
@@ -345,6 +348,18 @@ export class Overlay {
     if (mac && this.mode === 'field') this.fit()
   }
 
+  /** The pet's text size (settings.text.pet): the window gets the extra height two bigger task lines need. */
+  setTextSize(factor: number) {
+    const next = Math.min(1.6, Math.max(0.8, Number(factor) || 1))
+    if (next === this.text) return
+    this.text = next
+    if (mac && this.mode === 'field') this.fit()
+  }
+
+  private petHeight(): number {
+    return PET.height + Math.ceil(TASK_LINES * (this.text - 1))
+  }
+
   /** Keyboard move: the pet window takes the keyboard while the user nudges it, and gives it back after. */
   setMoving(on: boolean) {
     if (this.win.isDestroyed() || this.mode !== 'field') return
@@ -500,7 +515,7 @@ export class Overlay {
   private fieldBounds(display: Display): Rectangle {
     const wa = display.workArea
     const a = this.anchor ?? (this.anchor = this.defaultAnchor(wa))
-    const size = { width: Math.ceil(PET.width * this.scale) + INSET.x * 2, height: Math.ceil(PET.height * this.scale) + INSET.y * 2 }
+    const size = { width: Math.ceil(PET.width * this.scale) + INSET.x * 2, height: Math.ceil(this.petHeight() * this.scale) + INSET.y * 2 }
     const x = this.side(wa, a) === 'right' ? a.x + this.half + INSET.x - size.width : a.x - this.half - INSET.x
     const y = a.y + INSET.y - size.height
     return {
