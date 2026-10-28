@@ -140,7 +140,18 @@ export function createWebBridge(): Bridge {
     },
     onAi: () => () => {},
     onClerk: () => () => {},
-    onClerkAsk: () => () => {},
+    // The preview has no AI clerk; the question after a correction is the shell's own fallback line.
+    onClerkAsk: (fn) => {
+      const h = (evs: HudEvent[]) => {
+        for (const e of evs) {
+          if (e.type !== 'clerk-wonders') continue
+          const to = state.ledgers.find((l) => l.id === e.ledgerId)?.name ?? 'the tray'
+          fn({ entryId: e.entryId, ruleId: e.ruleId, title: e.title, question: e.reason === 'moved' ? `What makes "${e.title}" ${to}?` : `Noted. What is "${e.title}" about?` })
+        }
+      }
+      eventSubs.add(h)
+      return () => void eventSubs.delete(h)
+    },
     setMoving: () => {},
     nudge: () => {},
     snap: () => {},
