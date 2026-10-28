@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import type { Plugin } from 'vite'
+import { buildInfo } from './build-info'
 
 /** The browser preview has a photo behind it and a dev websocket; the shipped page has neither. */
 const webCsp = (): Plugin => ({
@@ -17,6 +18,7 @@ const webCsp = (): Plugin => ({
 export default defineConfig({
   root: 'src/renderer',
   resolve: { alias: { '@core': resolve('src/core') } },
+  define: { __MAYORLY_BUILD__: JSON.stringify(buildInfo()) },
   plugins: [react(), webCsp()],
   server: { port: 5199, strictPort: true },
 })

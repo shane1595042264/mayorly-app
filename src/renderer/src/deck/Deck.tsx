@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion, useTransform } from 'motion/react'
 import { X } from '@phosphor-icons/react'
 import { balance, type MayorlyState } from '@core/index'
+import type { BuildInfo } from '../../../shared/bridge'
+import { bridge } from '../bridge'
 import { useLean } from '../lib/parallax'
 import { sfx } from '../lib/sound'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
@@ -13,6 +15,7 @@ import { RecordTab } from './RecordTab'
 import { SettingsTab } from './SettingsTab'
 import { ShelfTab } from './ShelfTab'
 import { SupersetsTab } from './SupersetsTab'
+import { WhatsNew } from './WhatsNew'
 
 const TABS = ['Flow', 'Shelf', 'Supersets', 'Leisure', 'Record', 'Settings'] as const
 type Tab = (typeof TABS)[number]
@@ -23,6 +26,20 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
   // A shelf with no ledgers is where a new install starts.
   const [tab, setTabState] = useState<Tab>(() => (s.ledgers.length === 0 && remembered === 'Flow' ? 'Shelf' : remembered))
   const [keymap, setKeymap] = useState(false)
+  // What changed: the first time a build launches on this machine the deck opens on the card.
+  const [news, setNews] = useState<BuildInfo | null>(null)
+  useEffect(() => {
+    let on = true
+    void bridge.whatsNew().then(async (fresh) => {
+      if (fresh && on) setNews(await bridge.getBuild())
+    })
+    return () => void (on = false)
+  }, [])
+  const openNotes = () => void bridge.getBuild().then(setNews)
+  const closeNotes = () => {
+    bridge.seenBuild()
+    setNews(null)
+  }
   const panel = useRef<HTMLElement>(null)
   useEffect(() => panel.current?.focus(), [])
   const reduce = useReducedMotion()
@@ -39,7 +56,7 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
   // The deck's own keys, from the keymap: close, the tabs, and the Keymap screen itself.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (keymapOpen()) return
+      if (keymapOpen() || news) return
       const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select')
       if (typing) {
         if (e.key === 'Escape') (typing as HTMLElement).blur()
@@ -109,9 +126,10 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
           {tab === 'Supersets' && <SupersetsTab s={s} />}
           {tab === 'Leisure' && <LeisureTab s={s} />}
           {tab === 'Record' && <RecordTab s={s} />}
-          {tab === 'Settings' && <SettingsTab s={s} kind={kind} openKeymap={() => setKeymap(true)} />}
+          {tab === 'Settings' && <SettingsTab s={s} kind={kind} openKeymap={() => setKeymap(true)} openNotes={openNotes} />}
         </div>
         {keymap && <Keymap s={s} close={() => setKeymap(false)} />}
+        {news && <WhatsNew build={news} close={closeNotes} />}
       </motion.section>
     </motion.div>
   )

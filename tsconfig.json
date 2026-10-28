@@ -16,5 +16,5 @@
     "baseUrl": ".",
     "paths": { "@core/*": ["src/core/*"] }
   },
-  "include": ["src", "electron.vite.config.ts", "vite.web.config.ts", "vitest.config.ts"]
+  "include": ["src", "build-info.ts", "electron.vite.config.ts", "vite.web.config.ts", "vitest.config.ts"]
 }

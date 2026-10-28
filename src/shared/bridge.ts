@@ -91,6 +91,24 @@ export interface AppInfo {
   arch: string
   dataDir: string
   packaged: boolean
+  /** The commit this build came from, and when it was built. */
+  commit: string
+  builtAt: number
+}
+
+/** The top section of NOTES.md, stamped into the build. */
+export interface BuildNotes {
+  title: string
+  lines: string[]
+}
+
+export interface BuildInfo {
+  version: string
+  /** Short commit hash, with a trailing + when the tree was dirty. */
+  commit: string
+  /** Epoch ms of the build; 0 when unstamped. */
+  builtAt: number
+  notes: BuildNotes | null
 }
 
 export interface ClerkNotice {
@@ -137,6 +155,12 @@ export interface Bridge {
   log(level: 'warn' | 'error', message: string): void
   /** Version, platform and where the data lives. */
   getInfo(): Promise<AppInfo>
+  /** This build: version, commit, build time and its notes. */
+  getBuild(): Promise<BuildInfo>
+  /** True the first time this build runs on this machine, until seenBuild. */
+  whatsNew(): Promise<boolean>
+  /** The notes were shown; do not show them again for this build. */
+  seenBuild(): void
   /** Writes the whole state as JSON where the user says; the path, or null when cancelled. */
   exportState(): Promise<string | null>
   /** Replaces the state with a JSON export the user picks, after a backup. */
@@ -192,6 +216,9 @@ export const IPC = {
   signOutEverywhere: 'mayorly:sign-out-everywhere',
   log: 'mayorly:log',
   getInfo: 'mayorly:get-info',
+  getBuild: 'mayorly:get-build',
+  whatsNew: 'mayorly:whats-new',
+  seenBuild: 'mayorly:seen-build',
   exportState: 'mayorly:export-state',
   importState: 'mayorly:import-state',
   account: 'mayorly:account',

@@ -472,6 +472,25 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
   box-shadow: inset 2px 2px 0 #5b6166, inset -2px -2px 0 #15181a, 0 24px 80px rgb(0 0 0 / 0.6);
 }
 .keymap-head { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 2px solid #26292c; }
+
+/* What changed: the same frame as the Controls screen, sized to a note. */
+.whatsnew {
+  width: min(600px, 92%);
+  max-height: 88%;
+  overflow: auto;
+  padding: 22px 28px 20px;
+  background: var(--void);
+  border: 2px solid #3d4246;
+  box-shadow: inset 2px 2px 0 #5b6166, inset -2px -2px 0 #15181a, 0 24px 80px rgb(0 0 0 / 0.6);
+}
+.whatsnew-head { display: flex; align-items: center; gap: 12px; color: var(--accent); }
+.whatsnew-head .keymap-title { color: var(--ink); }
+.whatsnew-when { margin: 8px 0 0; font-size: 12px; color: var(--ink-2); white-space: pre-wrap; }
+.whatsnew-title { margin: 22px 0 10px; font-size: 18px; font-weight: 600; }
+.whatsnew-list { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 15px; line-height: 1.45; color: var(--ink); }
+.whatsnew-list li::marker { color: var(--accent); }
+.whatsnew-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px; }
+.build-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; white-space: pre-wrap; }
 .keymap-title { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; text-shadow: 2px 2px 0 rgb(0 0 0 / 0.8); }
 .keymap-search { display: flex; align-items: center; gap: 8px; flex: 1; max-width: 300px; padding: 6px 10px; border: 2px solid #3d4246; background: #000; color: var(--ink-3); box-shadow: inset 2px 2px 0 #15181a; }
 .keymap-search:focus-within { border-color: var(--accent); }

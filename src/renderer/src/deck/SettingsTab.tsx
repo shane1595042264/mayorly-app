@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ArrowsClockwise, GoogleLogo, Keyboard, Plus, Trash } from '@phosphor-icons/react'
 import type { MayorlyState, Settings } from '@core/index'
 import type { AiProvider, AppInfo } from '../../../shared/bridge'
+import { builtOn } from '../../../shared/build'
 import { bridge } from '../bridge'
 import { hotkeyLabel, IS_MAC } from '../lib/keys'
 import { GLOBAL_ACTIONS } from '../lib/keymap'
@@ -14,7 +15,7 @@ const ACCELERATOR = /^((Ctrl|Control|Alt|Option|AltGr|Shift|Super|Meta|Cmd|Comma
 const normalise = (v: string) => v.trim().replace(/\bOption\b/gi, 'Alt')
 
 
-export function SettingsTab({ s, kind, openKeymap }: { s: MayorlyState; kind: 'electron' | 'web'; openKeymap: () => void }) {
+export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyState; kind: 'electron' | 'web'; openKeymap: () => void; openNotes: () => void }) {
   const st = s.settings
   const set = (patch: Partial<Settings>) => dispatch({ type: 'settings/update', patch })
 
@@ -60,7 +61,7 @@ export function SettingsTab({ s, kind, openKeymap }: { s: MayorlyState; kind: 'e
 
       {kind === 'electron' && <AccountSection />}
       {kind === 'electron' && <AiSection />}
-      <DataSection kind={kind} />
+      <DataSection kind={kind} openNotes={openNotes} />
       <HouseRulesSection s={s} />
 
       <section>
@@ -164,7 +165,7 @@ function AccountSection() {
 }
 
 /** Where the data is, a way out and a way back in, and which build this is. */
-function DataSection({ kind }: { kind: 'electron' | 'web' }) {
+function DataSection({ kind, openNotes }: { kind: 'electron' | 'web'; openNotes: () => void }) {
   const [info, setInfo] = useState<AppInfo | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   useEffect(() => void bridge.getInfo().then(setInfo), [])
@@ -179,9 +180,14 @@ function DataSection({ kind }: { kind: 'electron' | 'web' }) {
       <div className="form-actions">
         <button className="btn" onClick={() => void bridge.exportState().then((p) => setMsg(p ? `Exported to ${p}` : null))}>Export</button>
         {kind === 'electron' && <button className="btn ghost" onClick={() => void bridge.importState().then((r) => setMsg(r.message || null))}>Import</button>}
-        {info && <span className="field-help">Mayorly {info.version}{info.arch ? `  ${info.arch}` : ''}</span>}
       </div>
       {msg && <p className="field-help">{msg}</p>}
+      {info && (
+        <p className="field-help build-line">
+          <span className="mono num">Mayorly {info.version}{info.arch ? `  ${info.arch}` : ''}  build {info.commit}  built {builtOn(info)}</span>
+          <button type="button" className="btn ghost" onClick={openNotes}>What changed</button>
+        </p>
+      )}
     </section>
   )
 }

@@ -1,7 +1,9 @@
 import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor } from 'electron'
 import { migrate, type Action, type HudEvent, type Settings } from '@core/index'
 import { IPC, type AiProvider, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
+import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from './ai/service'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
@@ -210,7 +212,28 @@ function boot() {
     if (!res.ok && res.status !== 401) throw new Error(`The server answered ${res.status}`)
     setSession(null)
   })
-  ipcMain.handle(IPC.getInfo, () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, dataDir, packaged: app.isPackaged }))
+  ipcMain.handle(IPC.getInfo, () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, dataDir, packaged: app.isPackaged, commit: BUILD.commit, builtAt: BUILD.builtAt }))
+  // What changed: once per build on this machine. notes.json beside the save remembers the
+  // build last seen. A first run has nothing to compare with and is not an update.
+  const notesFile = join(dataDir, 'notes.json')
+  const seenBuild = (): string | null => {
+    try {
+      return (JSON.parse(readFileSync(notesFile, 'utf8')) as { seen?: string }).seen ?? null
+    } catch {
+      return null
+    }
+  }
+  const markSeen = () => {
+    try {
+      writeFileSync(notesFile, JSON.stringify({ seen: BUILD.commit, at: new Date().toISOString() }))
+    } catch (err) {
+      console.warn('[notes] could not write notes.json:', err)
+    }
+  }
+  if (engine.fresh) markSeen()
+  ipcMain.handle(IPC.getBuild, () => BUILD)
+  ipcMain.handle(IPC.whatsNew, () => app.isPackaged && seenBuild() !== BUILD.commit)
+  ipcMain.on(IPC.seenBuild, markSeen)
   ipcMain.handle(IPC.exportState, async () => {
     dialogOpen = true
     try {

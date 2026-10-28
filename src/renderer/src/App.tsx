@@ -193,6 +193,13 @@ export function App() {
     document.body.classList.toggle('web', bridge.kind === 'web')
   }, [])
 
+  // The first launch of a new build opens the deck, which shows what changed.
+  useEffect(() => {
+    void bridge.whatsNew().then((fresh) => {
+      if (fresh && modeRef.current === 'field') setMode('deck')
+    })
+  }, [setMode])
+
   // The shell says whether the window is the pet alone (macOS) and which side it hangs on.
   // Asked for on mount as well as subscribed to: the first push can land before this effect runs.
   useEffect(() => {

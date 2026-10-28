@@ -3,6 +3,7 @@ import {
   type Action, type HudEvent, type MayorlyState,
 } from '@core/index'
 import type { Bridge, Command, UiMode } from '../../../shared/bridge'
+import { BUILD } from '../../../shared/build'
 import { physicalKey } from '../lib/keys'
 import { demoState } from './demo'
 
@@ -10,6 +11,14 @@ import { demoState } from './demo'
 // plain browser for development and screenshots. Persists to localStorage.
 
 const KEY = 'mayorly.web.v1'
+const SEEN = 'mayorly.web.seen'
+function readSeen(): string | null {
+  try {
+    return localStorage.getItem(SEEN)
+  } catch {
+    return null
+  }
+}
 const NO_AI = { keys: [], preferredProvider: null, providers: { gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Anthropic Claude', xai: 'xAI Grok' }, usage: { days: 30, calls: 0, costMicroUsd: 0 } }
 
 export function createWebBridge(): Bridge {
@@ -115,7 +124,18 @@ export function createWebBridge(): Bridge {
     deleteAccount: async () => {},
     signOutEverywhere: async () => {},
     log: (level, message) => console[level](message),
-    getInfo: async () => ({ version: 'web', platform: 'web', arch: '', dataDir: 'this browser', packaged: false }),
+    getInfo: async () => ({ version: BUILD.version, platform: 'web', arch: '', dataDir: 'this browser', packaged: false, commit: BUILD.commit, builtAt: BUILD.builtAt }),
+    getBuild: async () => BUILD,
+    // ?demo&notes or ?fresh&notes shows the card; a real preview shows it once per build like the app.
+    whatsNew: async () => (scratch ? params.has('notes') : readSeen() !== BUILD.commit),
+    seenBuild: () => {
+      if (scratch) return
+      try {
+        localStorage.setItem(SEEN, BUILD.commit)
+      } catch {
+        /* storage unavailable */
+      }
+    },
     exportState: async () => {
       // A browser can still hand the state over: as a download.
       const blob = new Blob([JSON.stringify({ app: 'mayorly', exportedAt: new Date().toISOString(), state }, null, 2)], { type: 'application/json' })
