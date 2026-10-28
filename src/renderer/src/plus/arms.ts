@@ -7,10 +7,8 @@ import type { Command } from '../../../shared/bridge'
 
 export type Arm = 'ledger' | 'entry' | 'mode' | 'orders'
 
-/** Keys in the menu, by position: arrows or WASD. */
-export const ARM_KEYS: Record<string, Arm> = {
-  ArrowUp: 'ledger', w: 'ledger', ArrowLeft: 'entry', a: 'entry', ArrowRight: 'mode', d: 'mode', ArrowDown: 'orders', s: 'orders',
-}
+/** The keymap actions that point at an arm (plus.* in lib/keymap.ts). */
+export const ARM_OF_ACTION: Record<string, Arm> = { 'plus.ledger': 'ledger', 'plus.entry': 'entry', 'plus.mode': 'mode', 'plus.orders': 'orders' }
 
 export const ARM_OF_COMMAND: Partial<Record<Command, Arm>> = { 'arm-up': 'ledger', 'arm-left': 'entry', 'arm-right': 'mode', 'arm-down': 'orders' }
 

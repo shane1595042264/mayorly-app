@@ -196,6 +196,10 @@
 .opt:active { translate: 0 1px; }
 .opt:disabled, .arm.active .opt:disabled { background: rgb(14 16 18 / 0.92); color: var(--ink-4); cursor: default; box-shadow: none; border-color: var(--line); font-weight: 400; }
 .arm.active .opt.cursor:disabled { background: rgb(240 174 60 / 0.16); border-color: var(--accent-2); color: var(--ink-3); }
+/* every item carries its number: the digit picks it in the arm you are on */
+.opt-n { flex: none; font-size: 10px; opacity: 0.6; }
+.arm-ledger .opt-n, .arm-orders .opt-n { position: absolute; top: 4px; left: 6px; }
+.arm.active .opt-n { opacity: 0.85; }
 .opt-icon { display: grid; place-items: center; flex: none; }
 .opt-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .opt-meta { flex: none; font-size: 11px; opacity: 0.75; }
@@ -209,7 +213,7 @@
   padding: 0;
 }
 .arm-ledger .opt-label { flex: none; font-family: var(--font-data); font-size: 12px; }
-.arm-ledger .opt-meta { position: absolute; top: 4px; left: 6px; font-size: 10px; }
+.arm-ledger .opt-meta { position: absolute; top: 4px; right: 6px; font-size: 10px; }
 .arm-ledger .opt.cursor { box-shadow: inset 0 -2px 0 var(--accent); }
 
 .arm-orders .opt {

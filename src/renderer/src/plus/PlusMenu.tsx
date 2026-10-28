@@ -9,11 +9,12 @@ import {
 import type { UiMode } from '../../../shared/bridge'
 import { Glyph } from '../lib/glyphs'
 import { hotkeyLabel, matchesAcceleratorKey, physicalKey } from '../lib/keys'
+import { actionFor, keyLabel, keysFor, recordUse } from '../lib/keymap'
 import { Scramble } from '../lib/Scramble'
 import { useLean } from '../lib/parallax'
 import { sfx } from '../lib/sound'
 import { dispatch, useHudEvents, useNow } from '../store'
-import { ARM_KEYS, onArm, pointArm, takeArmHint, type Arm } from './arms'
+import { ARM_OF_ACTION, onArm, pointArm, takeArmHint, type Arm } from './arms'
 
 interface Opt {
   key: string
@@ -61,10 +62,9 @@ export function PlusMenu({ s, close, open }: Props) {
     const inLedger = ledgerId ? flow.filter((e) => e.ledgerId === ledgerId) : flow
     const desk = s.desk.status
     return {
-      ledger: s.ledgers.map((l, i) => ({
+      ledger: s.ledgers.map((l) => ({
         key: l.id,
         label: l.code,
-        meta: String(i + 1),
         icon: <Glyph name={l.glyph} size={22} />,
         current: l.id === ledgerId,
         apply: () => {
@@ -180,29 +180,44 @@ export function PlusMenu({ s, close, open }: Props) {
       // The swap hotkey itself (held to peek) is the shell's; app menu chords are not ours.
       if (e.altKey && matchesAcceleratorKey(e, s.settings.hotkeys.plus)) return
       if (e.metaKey || e.ctrlKey) return
-      // By key position, so WASD, Q, E and 1-9 work while Option is held on a Mac.
-      const k = physicalKey(e)
-      if (k === 'Escape') return close()
-      if (k === 'Tab') {
+      // The plus scope of the keymap, by key position and with Option ignored, so everything
+      // works while the swap key is still held on a Mac.
+      const a = actionFor(e, 'plus', s.settings, { ignoreShift: true, ignoreAlt: true })
+      const pointed = a ? ARM_OF_ACTION[a] : undefined
+      if (pointed) {
         e.preventDefault()
-        return open('deck')
-      }
-      if (ARM_KEYS[k]) {
-        e.preventDefault()
-        pointArm(ARM_KEYS[k])
+        recordUse(a!)
+        pointArm(pointed)
         return
       }
-      if (k === 'q') return move(-1)
-      if (k === 'e') return move(1)
-      if (k === 'Enter' || k === ' ') {
+      if (a === 'plus.close') return close()
+      if (a === 'plus.deck') {
         e.preventDefault()
+        recordUse(a)
+        return open('deck')
+      }
+      if (a === 'plus.prev') return move(-1)
+      if (a === 'plus.next') return move(1)
+      if (a === 'plus.apply') {
+        e.preventDefault()
+        recordUse(a)
         return applyOpt(arms[arm][cursor[arm]])
       }
-      if (/^[1-9]$/.test(k)) applyOpt(arms.ledger[Number(k) - 1])
+      // A number picks that item in the arm you are on: no cycling.
+      const k = physicalKey(e)
+      if (/^[1-9]$/.test(k)) {
+        const i = Number(k) - 1
+        const o = arms[arm][i]
+        if (!o) return
+        e.preventDefault()
+        recordUse('plus.pick')
+        setCursor((c) => ({ ...c, [arm]: i }))
+        applyOpt(o)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [arm, arms, cursor, close, open, move, applyOpt, s.settings.hotkeys.plus])
+  }, [arm, arms, cursor, close, open, move, applyOpt, s.settings])
 
   // Snap the slab when the loadout changes, like an attachment seating.
   useHudEvents(
@@ -291,27 +306,27 @@ export function PlusMenu({ s, close, open }: Props) {
           <div className="slab-edge e-left" />
         </div>
 
-        <ArmView id="ledger" title="Ledger" keyHint="↑" active={arm === 'ledger'} opts={arms.ledger} cursor={cursor.ledger}
+        <ArmView id="ledger" title="Ledger" keyHint={keyLabel(keysFor('plus.ledger', s.settings)[0] ?? '')} active={arm === 'ledger'} opts={arms.ledger} cursor={cursor.ledger}
           empty="No ledgers yet. Write one in the deck."
           onHover={(i) => { setArm('ledger'); setCursor((c) => ({ ...c, ledger: i })) }} onApply={applyOpt} />
-        <ArmView id="entry" title="Entry" keyHint="←" active={arm === 'entry'} opts={arms.entry} cursor={cursor.entry}
+        <ArmView id="entry" title="Entry" keyHint={keyLabel(keysFor('plus.entry', s.settings)[0] ?? '')} active={arm === 'entry'} opts={arms.entry} cursor={cursor.entry}
           empty={ledger ? `Nothing open in ${ledger.code}. Capture with ${hotkeyLabel(s.settings.hotkeys.capture)}.` : 'Flow is empty.'}
           onHover={(i) => { setArm('entry'); setCursor((c) => ({ ...c, entry: i })) }} onApply={applyOpt} />
-        <ArmView id="mode" title="Mode" keyHint="→" active={arm === 'mode'} opts={arms.mode} cursor={cursor.mode}
+        <ArmView id="mode" title="Mode" keyHint={keyLabel(keysFor('plus.mode', s.settings)[0] ?? '')} active={arm === 'mode'} opts={arms.mode} cursor={cursor.mode}
           empty=""
           onHover={(i) => { setArm('mode'); setCursor((c) => ({ ...c, mode: i })) }} onApply={applyOpt} />
-        <ArmView id="orders" title="Orders" keyHint="↓" active={arm === 'orders'} opts={arms.orders} cursor={cursor.orders}
+        <ArmView id="orders" title="Orders" keyHint={keyLabel(keysFor('plus.orders', s.settings)[0] ?? '')} active={arm === 'orders'} opts={arms.orders} cursor={cursor.orders}
           empty=""
           onHover={(i) => { setArm('orders'); setCursor((c) => ({ ...c, orders: i })) }} onApply={applyOpt} />
       </motion.div>
 
       <footer className="plus-hints hint-row">
-        <span><i className="key">↑</i><i className="key">←</i><i className="key">→</i><i className="key">↓</i> Arm</span>
-        <span><i className="key">Q</i><i className="key">E</i> Cycle</span>
-        <span><i className="key">Enter</i> Apply</span>
-        <span><i className="key">1-9</i> Ledger</span>
-        <span><i className="key">Tab</i> Deck</span>
-        <span><i className="key">Esc</i> Close</span>
+        <span>{(['plus.ledger', 'plus.entry', 'plus.mode', 'plus.orders'] as const).map((id) => <i key={id} className="key">{keyLabel(keysFor(id, s.settings)[0] ?? '')}</i>)} Arm</span>
+        <span><i className="key">1-9</i> Pick</span>
+        <span><i className="key">{keyLabel(keysFor('plus.prev', s.settings)[0] ?? '')}</i><i className="key">{keyLabel(keysFor('plus.next', s.settings)[0] ?? '')}</i> Cycle</span>
+        <span><i className="key">{keyLabel(keysFor('plus.apply', s.settings)[0] ?? '')}</i> Apply</span>
+        <span><i className="key">{keyLabel(keysFor('plus.deck', s.settings)[0] ?? '')}</i> Deck</span>
+        <span><i className="key">{keyLabel(keysFor('plus.close', s.settings)[0] ?? '')}</i> Close</span>
       </footer>
     </motion.div>
   )
@@ -347,6 +362,7 @@ function ArmView(props: {
             onMouseEnter={() => onHover(i)}
             onClick={() => onApply(o)}
           >
+            {i < 9 && <span className="opt-n mono num" aria-hidden="true">{i + 1}</span>}
             {o.icon && <span className="opt-icon">{o.icon}</span>}
             <span className="opt-label">{o.label}</span>
             {o.meta && <span className="opt-meta mono">{o.meta}</span>}
@@ -357,14 +373,33 @@ function ArmView(props: {
   )
 }
 
-/** Uniform scale so the rig fits small screens without reflowing. */
+/**
+ * Uniform scale so the rig fits small screens without reflowing. On a Mac the menu mounts
+ * while the window is still the pet's size and grows a moment later, so the measure is taken
+ * again on every resize, from an observer on the document, and on a few timers after mount:
+ * one missed resize event left the rig tiny at the centre until the menu was reopened.
+ */
 function useFit(w: number, h: number): number {
-  const calc = () => Math.min(1, (window.innerWidth - 32) / w, (window.innerHeight - 90) / h)
+  const calc = () => {
+    const el = document.documentElement
+    const vw = Math.max(window.innerWidth, el.clientWidth)
+    const vh = Math.max(window.innerHeight, el.clientHeight)
+    return Math.min(1, (vw - 32) / w, (vh - 90) / h)
+  }
   const [k, setK] = useState(calc)
   useEffect(() => {
     const on = () => setK(calc())
     window.addEventListener('resize', on)
-    return () => window.removeEventListener('resize', on)
+    window.visualViewport?.addEventListener('resize', on)
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(on) : null
+    ro?.observe(document.documentElement)
+    const timers = [80, 200, 400, 800, 1500].map((ms) => setTimeout(on, ms))
+    return () => {
+      window.removeEventListener('resize', on)
+      window.visualViewport?.removeEventListener('resize', on)
+      ro?.disconnect()
+      for (const t of timers) clearTimeout(t)
+    }
   }, [])
   return k
 }

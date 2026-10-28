@@ -4,7 +4,7 @@
 import type { HotkeyAction, Settings } from '@core/index'
 import { MODIFIER_KEYS, physicalKey } from './keys'
 
-export type Scope = 'global' | 'deck' | 'list' | 'shelf' | 'move' | 'keymap'
+export type Scope = 'global' | 'plus' | 'deck' | 'list' | 'shelf' | 'move' | 'keymap'
 
 export interface KeyDef {
   id: string
@@ -22,6 +22,7 @@ export interface KeyDef {
 
 export const SCOPES: { id: Scope; title: string; blurb: string }[] = [
   { id: 'global', title: 'Anywhere', blurb: 'System-wide, with a modifier, so no other app sees them.' },
+  { id: 'plus', title: 'Swap menu', blurb: 'While the swap menu is open, with the swap key\'s modifier still held or not. Keys by position.' },
   { id: 'deck', title: 'Deck', blurb: 'While the deck is open.' },
   { id: 'list', title: 'Lists', blurb: 'The flow, a ledger, the supersets, the couch list. Keys act on the selected row.' },
   { id: 'shelf', title: 'Shelf', blurb: 'The nine bays.' },
@@ -41,6 +42,17 @@ export const GLOBAL_ACTIONS: [HotkeyAction, string][] = [
 ]
 
 export const KEYS: KeyDef[] = [
+  { id: 'plus.ledger', scope: 'plus', label: 'Ledger arm', keys: ['ArrowUp', 'w'], note: 'Also with the swap key, in the same breath' },
+  { id: 'plus.entry', scope: 'plus', label: 'Entry arm', keys: ['ArrowLeft', 'a'], note: 'Also with the swap key, in the same breath' },
+  { id: 'plus.mode', scope: 'plus', label: 'Mode arm', keys: ['ArrowRight', 'd'], note: 'Also with the swap key, in the same breath' },
+  { id: 'plus.orders', scope: 'plus', label: 'Orders arm', keys: ['ArrowDown', 's'], note: 'Also with the swap key, in the same breath' },
+  { id: 'plus.prev', scope: 'plus', label: 'Cycle to the previous item', keys: ['q'] },
+  { id: 'plus.next', scope: 'plus', label: 'Cycle to the next item', keys: ['e'] },
+  { id: 'plus.pick', scope: 'plus', label: 'Pick an item by number', keys: ['1', '9'], fixed: true, range: true, note: 'In the arm you are on; every item shows its number' },
+  { id: 'plus.apply', scope: 'plus', label: 'Apply the item', keys: ['Enter', 'Space'] },
+  { id: 'plus.deck', scope: 'plus', label: 'Open the deck', keys: ['Tab'] },
+  { id: 'plus.close', scope: 'plus', label: 'Close the menu', keys: ['Escape'] },
+
   { id: 'deck.close', scope: 'deck', label: 'Close the deck', keys: ['Escape'] },
   { id: 'deck.prevTab', scope: 'deck', label: 'Previous tab', keys: ['q'] },
   { id: 'deck.nextTab', scope: 'deck', label: 'Next tab', keys: ['e'] },
@@ -101,11 +113,12 @@ const SHIFTED: Record<string, string> = {
  * 'Ctrl+k'. Shift is in the character for printable keys and spelled out for the rest.
  * With Option held, macOS reports the composed character, so the key position is used.
  */
-export function keyOf(e: KeyboardEvent): string | null {
+export function keyOf(e: KeyboardEvent, opts?: { ignoreAlt?: boolean }): string | null {
   if (MODIFIER_KEYS.has(e.key)) return null
   const mods: string[] = []
   if (e.ctrlKey) mods.push('Ctrl')
-  if (e.altKey) mods.push('Alt')
+  // The swap menu: the swap key's Option may still be down, and must not change what the key is.
+  if (e.altKey && !opts?.ignoreAlt) mods.push('Alt')
   if (e.metaKey) mods.push('Cmd')
   let k: string
   if (e.key === ' ' || e.code === 'Space') k = 'Space'
@@ -150,8 +163,8 @@ export function keysFor(id: string, settings: Settings): string[] {
 }
 
 /** The action in this scope that the event's key is bound to, or null. Ranges (tabs, corners) are the caller's. */
-export function actionFor(e: KeyboardEvent, scope: Scope, settings: Settings, opts?: { ignoreShift?: boolean }): string | null {
-  const k = keyOf(e)
+export function actionFor(e: KeyboardEvent, scope: Scope, settings: Settings, opts?: { ignoreShift?: boolean; ignoreAlt?: boolean }): string | null {
+  const k = keyOf(e, opts)
   if (!k) return null
   const alt = opts?.ignoreShift ? unshift(k) : null
   for (const d of KEYS) {

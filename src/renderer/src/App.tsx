@@ -15,7 +15,7 @@ import { Objectives } from './hud/Objectives'
 import { Pet } from './hud/Pet'
 import { MODIFIER_KEYS, hotkeyLabel, matchesAcceleratorKey, physicalKey } from './lib/keys'
 import { setSoundEnabled, sfx } from './lib/sound'
-import { ARM_KEYS, ARM_OF_COMMAND, onArm, pointArm } from './plus/arms'
+import { ARM_OF_ACTION, ARM_OF_COMMAND, onArm, pointArm } from './plus/arms'
 import { PlusMenu } from './plus/PlusMenu'
 import { balance } from '@core/index'
 import { current, useHudEvents, useMayorly } from './store'
@@ -257,7 +257,9 @@ export function App() {
   useEffect(() => {
     const early = (e: KeyboardEvent) => {
       if (modeRef.current !== 'plus' || e.metaKey || e.ctrlKey || document.querySelector('.plus')) return
-      const arm = ARM_KEYS[physicalKey(e)]
+      const st = current()
+      const a = st ? actionFor(e, 'plus', st.settings, { ignoreShift: true, ignoreAlt: true }) : null
+      const arm = a ? ARM_OF_ACTION[a] : undefined
       if (!arm) return
       e.preventDefault()
       pointArm(arm)
