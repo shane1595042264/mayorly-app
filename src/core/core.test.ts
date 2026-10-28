@@ -538,6 +538,29 @@ describe('the quick switch', () => {
     expect(blockView(w.s, w.now)?.remainingMs).toBe(22 * MIN)
   })
 
+  it('a swap after a redeploy beats the parked session: only the last two places count', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'entry/capture', text: 'dance: b' })
+    const [a, b] = [w.entry('a'), w.entry('b')]
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: w.ledger('CAR').id })
+    w.wait(4 * MIN)
+    // Deploying on a parks the Career session: the switch would bring it back.
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: a.id })
+    expect(switchTarget(w.s)).toBe('Career')
+    // A swap to b makes a the other half; Career is still parked but out of the switch.
+    w.do({ type: 'desk/swap', entryId: b.id })
+    expect(switchTarget(w.s)).toBe('a')
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block?.entryId).toBe(a.id)
+    expect(w.s.desk.holster?.block.label).toBe('Career')
+    // Standing down still returns the parked session, paused.
+    w.do({ type: 'desk/standDown' })
+    expect(w.s.desk.status).toBe('paused')
+    expect(w.s.desk.block?.label).toBe('Career')
+    expect(w.s.desk.bankMs).toBe(4 * MIN)
+  })
+
   it('a cleared entry on the other side of the switch gives way to its ledger', () => {
     const w = world()
     w.do({ type: 'entry/capture', text: 'legal: a' })

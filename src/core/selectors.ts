@@ -1,5 +1,6 @@
 import type { Block, Entry, Id, Ledger, MayorlyState, Ms } from './model'
 import { openFlow, supersetOf } from './planner'
+import { switchBack } from './reducer'
 
 
 export interface BlockView {
@@ -74,15 +75,14 @@ export function entryTomatoes(s: MayorlyState, entryId: Id, now: number): number
   return (e.tomatoes ?? 0) + (live ? tomatoProgress(s, now) : 0)
 }
 
-/** What the quick switch brings back: the parked session, else the entry before the last swap. Null when nothing. */
+/** What the quick switch brings back: the entry before the last swap, else the parked session. Null when nothing. */
 export function switchTarget(s: MayorlyState): string | null {
-  const d = s.desk
-  if (d.holster) return d.holster.block.label
-  const p = d.previous
-  if (!p || !d.block || d.block.kind !== 'focus') return null
-  const e = p.entryId ? s.entries.find((x) => x.id === p.entryId && x.doneAt === null) : null
-  if (e) return e.title
-  return s.ledgers.find((l) => l.id === p.ledgerId)?.name ?? null
+  const back = switchBack(s)
+  if (back) {
+    const e = back.entryId ? s.entries.find((x) => x.id === back.entryId) : null
+    return e?.title ?? s.ledgers.find((l) => l.id === back.ledgerId)?.name ?? null
+  }
+  return s.desk.holster?.block.label ?? null
 }
 
 export function tray(s: MayorlyState): Entry[] {
