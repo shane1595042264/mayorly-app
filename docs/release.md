@@ -20,6 +20,7 @@ Needs an Apple Developer Program membership (99 USD a year) and, from it, a **De
 
 1. Export the certificate and key as a `.p12`. In the repository secrets set `CSC_LINK` (the file, base64), `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` (from appleid.apple.com) and `APPLE_TEAM_ID`. With these present the workflow signs with the hardened runtime (`build/entitlements.mac.plist`) and notarizes; without them it ad-hoc signs, which Gatekeeper refuses on first launch until Open Anyway.
 2. Locally, a certificate in the keychain is found on its own: `CSC_NAME="Developer ID Application: Name (TEAMID)" npm run ship:mac` signs the installed copy too.
+3. Without a Developer ID, `sh scripts/local-cert.sh` once per machine puts a self-signed "Mayorly Local" certificate in the login keychain and `ship:mac` signs with it. macOS ties a keychain Always Allow (the safeStorage prompt) to the app's designated requirement; ad-hoc signatures change every build, one certificate does not, so the prompt is answered once.
 3. Windows: SmartScreen warns about unsigned installers until the publisher has reputation or a certificate. Azure Trusted Signing is the cheap route; set `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD` the same way, or sign with the `signtool` step electron-builder documents.
 
 ## Mac App Store (after)

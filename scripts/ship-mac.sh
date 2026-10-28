@@ -10,9 +10,14 @@ case "$(uname -m)" in
   *) FLAG=--x64 ;;
 esac
 
-# A Developer ID certificate (CSC_NAME or CSC_LINK) signs for real; without one the build is ad-hoc
-# signed so it runs here. See docs/release.md.
-if [ -n "${CSC_NAME:-}${CSC_LINK:-}" ]; then SIGN="-c.mac.hardenedRuntime=true"; else SIGN="-c.mac.identity=-"; fi
+# A Developer ID certificate (CSC_NAME or CSC_LINK) signs for real. Without one, the local
+# certificate from scripts/local-cert.sh gives every build the same identity, so the keychain's
+# Always Allow for safeStorage holds across ships; without that too, the build is ad-hoc signed
+# and the prompt returns after every ship. See docs/release.md.
+if [ -n "${CSC_NAME:-}${CSC_LINK:-}" ]; then SIGN="-c.mac.hardenedRuntime=true"
+elif security find-identity -v -p codesigning | grep -q '"Mayorly Local"'; then SIGN="-c.mac.identity=Mayorly Local"
+else SIGN="-c.mac.identity=-"; fi
+echo "ship-mac: signing with ${SIGN#-c.mac.}"
 
 rm -rf dist/mac dist/mac-arm64
 npm run build
