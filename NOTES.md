@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Ledger rows line up
+
+- Inside a ledger, each row sat one column to the left: the ledger box was squeezed to a caret and the title cut short. They line up now, and a title too long for its room wraps to a second line instead of being cut.
+
 ## Capture and start
 
 - In the capture box, Cmd+Enter files the line and puts it on the desk at once: a running focus block swaps to it with the clock where it is, a hold comes off, and from idle a pomodoro starts on it. The clerk reads the line afterwards and moves it, desk and all, if it belongs elsewhere.
