@@ -54,7 +54,8 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice }: 
   } else {
     task = v.block.kind === 'leisure' ? v.block.label : v.block.kind === 'rest' ? v.block.label : v.entry ? `${v.ledger?.code ?? 'FREE'}  ${v.entry.title}` : v.block.label
     sign = v.remainingMs === null ? clock(v.elapsedMs, false) : v.overtimeMs > 0 ? `+${clock(v.overtimeMs, false)}` : clock(v.remainingMs)
-    tone = v.block.kind === 'leisure' ? 'couch' : v.status === 'paused' ? 'hold' : v.status === 'ready' ? 'ready' : v.block.kind === 'focus' ? 'live' : 'rest'
+    // A hold shows as a hold wherever the desk is, the couch included: the colour is the state.
+    tone = v.status === 'paused' ? 'hold' : v.status === 'ready' ? 'ready' : v.block.kind === 'leisure' ? 'couch' : v.block.kind === 'focus' ? 'live' : 'rest'
   }
   const breathing = tone === 'live' && !reduce && !dragging
   // Hover says only what the pet does not already show: how to start when idle, how to get back to the other session.

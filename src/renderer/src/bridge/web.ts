@@ -82,7 +82,7 @@ export function createWebBridge(): Bridge {
     const k = physicalKey(e)
     const combo = `Alt+${e.shiftKey ? 'Shift+' : ''}${k.length === 1 ? k.toUpperCase() : k}`
     const map: Record<string, Command | 'pause' | 'switch' | 'clear' | 'hide'> = {
-      [hk.plus]: 'plus', [hk.capture]: 'capture', [hk.deck]: 'deck', [hk.pause]: 'pause', [hk.move]: 'move', [hk.switch]: 'switch', [hk.clear]: 'clear', [hk.hide]: 'hide',
+      [hk.plus]: 'plus', [hk.capture]: 'capture', [hk.deck]: 'deck', [hk.drawer]: 'drawer', [hk.pause]: 'pause', [hk.move]: 'move', [hk.switch]: 'switch', [hk.clear]: 'clear', [hk.hide]: 'hide',
     }
     const cmd = map[combo]
     if (!cmd) return
@@ -115,7 +115,7 @@ export function createWebBridge(): Bridge {
     setHit: () => {},
     setCaption: () => {},
     onCaption: () => () => {},
-    getLayout: async () => ({ compact: false, side: 'right' as const, dragging: false }),
+    getLayout: async () => ({ compact: false, side: 'right' as const, dragging: false, drawer: 'below' as const }),
     onLayout: () => () => {},
     accountsAvailable: async () => false,
     getAccount: async () => null,

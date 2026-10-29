@@ -40,6 +40,7 @@ export const GLOBAL_ACTIONS: [HotkeyAction, string][] = [
   ['switch', 'Switch to the other session'],
   ['clear', 'Clear the entry on the desk'],
   ['move', 'Move the tomato by keyboard'],
+  ['drawer', 'Quick drawer for what is on the desk'],
 ]
 
 export const KEYS: KeyDef[] = [

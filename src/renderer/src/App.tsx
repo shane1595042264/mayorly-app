@@ -6,6 +6,7 @@ import { bridge } from './bridge'
 import { Capture } from './capture/Capture'
 import { ClerkAsk } from './deck/ClerkAsk'
 import { Deck } from './deck/Deck'
+import { Drawer } from './hud/Drawer'
 import { actionFor, recordUse } from './lib/keymap'
 import { takeOrigin } from './lib/origin'
 import { Callout } from './hud/Callout'
@@ -40,10 +41,10 @@ export function App() {
   /** The mode the shell was last told; its window size follows it. */
   const shellMode = useRef<UiMode>('field')
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const layoutRef = useRef<Layout>({ compact: false, side: 'right', dragging: false })
+  const layoutRef = useRef<Layout>({ compact: false, side: 'right', dragging: false, drawer: 'below' })
   const held = useRef<{ since: number } | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
-  const [layout, setLayout] = useState<Layout>({ compact: false, side: 'right', dragging: false })
+  const [layout, setLayout] = useState<Layout>({ compact: false, side: 'right', dragging: false, drawer: 'below' })
   const [clerk, setClerk] = useState<string | null>(null)
   // Keyboard move: the pet takes the keys until Enter, Escape, a blur, or a key it does not know.
   const [moving, setMoving] = useState(false)
@@ -162,10 +163,32 @@ export function App() {
       clearTimeout(pending.current)
       pending.current = null
     }
+    // The drawer keeps the pet in view: the window grows from the pet, the pet stays put.
+    const away = m !== 'field' && m !== 'drawer'
+    const drawerInvolved = m === 'drawer' || shellMode.current === 'drawer'
+    if (layoutRef.current.compact && drawerInvolved) {
+      setPetAway(away)
+      if (m === 'field') {
+        // Closing: the drawer plays its exit, then the window shrinks back to the pet.
+        setShown('field')
+        pending.current = setTimeout(() => {
+          pending.current = null
+          tellShell('field')
+        }, 130)
+      } else {
+        // Opening, or leaving the drawer for a full panel: the window changes first, then the panel draws.
+        tellShell(m)
+        pending.current = setTimeout(() => {
+          pending.current = null
+          setShown(m)
+        }, 60)
+      }
+      return
+    }
     const windowIsBig = shellMode.current !== 'field'
     if (!layoutRef.current.compact || (m !== 'field' && windowIsBig)) {
       // Windows, or moving between panels: the window does not change size, nothing to wait for.
-      setPetAway(m !== 'field')
+      setPetAway(away)
       setShown(m)
       tellShell(m)
       return
@@ -212,7 +235,12 @@ export function App() {
     document.body.classList.toggle('compact', layout.compact)
     document.body.classList.toggle('side-left', layout.side === 'left')
     document.body.classList.toggle('side-right', layout.side === 'right')
+    document.body.classList.toggle('drawer-above', layout.drawer === 'above')
+    document.body.classList.toggle('drawer-below', layout.drawer !== 'above')
   }, [layout])
+  useEffect(() => {
+    document.body.classList.toggle('mode-drawer', shown === 'drawer')
+  }, [shown])
 
   // Hotkeys from the shell. Holding the swap key auto-repeats, so ignore repeats until it is released.
   useEffect(
@@ -346,7 +374,7 @@ export function App() {
   // A click outside the open interface closes it, like clicking away from a menu.
   const onStageDown = (e: React.PointerEvent) => {
     if (modeRef.current === 'field') return
-    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .capture, .toast, .clerk-ask')
+    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .capture, .toast, .clerk-ask, .drawer, .pet')
     if (!inside) close()
   }
 
@@ -374,6 +402,7 @@ export function App() {
         {shown === 'plus' && <PlusMenu key="plus" s={s} close={close} open={setMode} />}
         {shown === 'deck' && <Deck key="deck" s={s} close={close} kind={bridge.kind} />}
         {shown === 'capture' && <Capture key="capture" s={s} close={close} />}
+        {shown === 'drawer' && <Drawer key="drawer" s={s} close={close} />}
       </AnimatePresence>
 
       {shown !== 'field' && <ClerkAsk />}

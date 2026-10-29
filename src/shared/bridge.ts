@@ -5,13 +5,14 @@ import type { Action, HudEvent, MayorlyState } from '../core/index'
 // in-page engine. A future local sync API would implement the same shape.
 
 /** field: the passive HUD, clicks fall through to your apps. The rest take focus. */
-export type UiMode = 'field' | 'plus' | 'deck' | 'capture'
+/** drawer: the quick drawer under the pet, for what is on the desk; on a Mac the window grows just enough for it. */
+export type UiMode = 'field' | 'plus' | 'deck' | 'capture' | 'drawer'
 
 /** Hotkey-driven requests from the shell to the HUD. `close` returns to field mode (the window lost focus). */
 /** Option+digit while the Plus menu is open: pick that number in the arm you are on; 0 is the couch. */
 export type PickCommand = `pick-${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
 /** arm-* and pick-*: Option+arrow or digit while the Plus menu is open, taken by the shell so they land even before the window has the keyboard. */
-export type Command = 'plus' | 'capture' | 'deck' | 'close' | 'move' | 'arm-up' | 'arm-down' | 'arm-left' | 'arm-right' | PickCommand
+export type Command = 'plus' | 'capture' | 'deck' | 'drawer' | 'close' | 'move' | 'arm-up' | 'arm-down' | 'arm-left' | 'arm-right' | PickCommand
 
 /** How the shell lays the HUD out. Compact: the window is only the pet and what it unfolds (macOS). */
 export interface Layout {
@@ -20,6 +21,8 @@ export interface Layout {
   side: 'left' | 'right'
   /** The window is being dragged by its tomato; nothing unfolds until it settles. */
   dragging: boolean
+  /** macOS, drawer mode: which way the window grew from the pet, so the drawer draws on that side. */
+  drawer: 'below' | 'above'
 }
 
 export interface DisplayInfo {

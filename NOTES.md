@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The quick drawer, and a hold on the couch
+
+- Option+Shift+R drops a small drawer from the pet for what is on the desk: notes and a checklist under an entry, the switch-when rules under a leisure item. Click a line to edit it, Enter adds one, Esc closes. On a Mac the pet's window grows just enough for it; the deck stays closed.
+- The couch on hold now looks held, like the desk: the colour is the state.
+
 ## The couch in the swap menu
 
 - The ledger arm ends with the couch, on 0, from any arm. Pick it and the entry arm lists your couch list; an item there sits you down. Ledgers keep 1 to 9.

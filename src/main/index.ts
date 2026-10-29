@@ -396,6 +396,7 @@ function boot() {
         hide: () => overlay.toggleVisible(),
         switch: () => engine.dispatch({ type: 'desk/switch' }),
         move: () => command('move'),
+        drawer: () => command('drawer'),
         clear: clearDesk,
       })
       if (failed.length) {

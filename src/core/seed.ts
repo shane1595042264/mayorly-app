@@ -9,6 +9,7 @@ export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   switch: 'Alt+Q',
   clear: 'Alt+C',
   move: 'Alt+G',
+  drawer: 'Alt+Shift+R',
 }
 
 export const DEFAULT_SETTINGS: Settings = {

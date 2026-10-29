@@ -303,6 +303,32 @@ describe('capture and start', () => {
   })
 })
 
+describe('the quick drawer', () => {
+  it('keeps notes and a checklist under an entry, and edits a rule under a leisure item', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    const a = w.entry('a')
+    w.do({ type: 'entry/note', id: a.id, text: '  call before noon  ' })
+    w.do({ type: 'entry/subtask-add', id: a.id, text: 'find the lease' })
+    w.do({ type: 'entry/subtask-add', id: a.id, text: 'draft the letter' })
+    const first = w.entry('a').subtasks![0]
+    w.do({ type: 'entry/subtask-toggle', id: a.id, subId: first.id })
+    w.do({ type: 'entry/subtask-edit', id: a.id, subId: first.id, text: 'find the lease (box 2)' })
+    expect(w.entry('a').notes).toBe('call before noon')
+    expect(w.entry('a').subtasks!.map((t) => [t.text, t.done])).toEqual([['find the lease (box 2)', true], ['draft the letter', false]])
+    w.do({ type: 'entry/subtask-delete', id: a.id, subId: first.id })
+    expect(w.entry('a').subtasks).toHaveLength(1)
+    w.do({ type: 'entry/note', id: a.id, text: '   ' })
+    expect(w.entry('a').notes).toBeUndefined()
+    w.do({ type: 'leisure/add', title: 'twitch stream' })
+    const it = w.s.leisure[0]
+    w.do({ type: 'leisure/cue-add', id: it.id, text: 'one game' })
+    w.do({ type: 'leisure/cue-edit', id: it.id, index: 0, text: 'one game, then the desk' })
+    expect(w.s.leisure[0].cues).toEqual(['one game, then the desk'])
+    expect(DEFAULT_HOTKEYS.drawer).toBe('Alt+Shift+R')
+  })
+})
+
 describe('text size', () => {
   it('is per area, clamped, and stays with the machine', () => {
     const w = world()

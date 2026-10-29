@@ -125,6 +125,56 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
 }
 .pet-sign.is-notice { color: var(--ink); border-color: var(--accent-2); }
 
+/* ------------------------------------------------------------ the quick drawer
+   Under the pet (or above it, when the pet sits low): what is on the desk, with room to write.
+   On a Mac the window is the pet plus this box; elsewhere it floats beside the pet. */
+.drawer {
+  position: absolute;
+  z-index: var(--z-hud);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 332px;
+  height: 352px;
+  padding: 14px 16px 10px;
+  background: var(--glass);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.45);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+.side-right .drawer { right: 28px; }
+.side-left .drawer { left: 28px; }
+.drawer { bottom: 118px; }
+body.compact .drawer { left: 4px; right: 4px; width: auto; }
+body.compact.drawer-below .drawer { top: auto; bottom: 4px; }
+body.compact.drawer-above .drawer { top: 4px; bottom: auto; }
+/* while the drawer is down the pet sits at the top of the grown window, and is not a drag handle */
+body.compact.mode-drawer.drawer-below .pet-wrap { top: 4px; bottom: auto; }
+body.compact.mode-drawer .pet-body { -webkit-app-region: no-drag; cursor: default; }
+.drawer-head { display: grid; gap: 2px; }
+.drawer-kicker { font-size: 11px; color: var(--accent); }
+.drawer-title { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.drawer-label { margin: 4px 0 0; font-size: 11px; color: var(--ink-3); }
+.drawer-notes {
+  width: 100%; min-height: 54px; max-height: 96px; padding: 6px 8px; resize: vertical;
+  border: 1px solid var(--line); background: rgb(237 240 241 / 0.04); color: var(--ink); font: inherit; font-size: 13px; line-height: 1.35;
+}
+.drawer-notes::placeholder, .drawer-add input::placeholder { color: rgb(237 240 241 / 0.4); }
+.drawer-notes:focus, .drawer-text:focus, .drawer-add input:focus { outline: none; border-color: var(--accent-2); }
+.drawer-lines { list-style: none; margin: 0; padding: 0; display: grid; align-content: start; gap: 2px; overflow: auto; min-height: 0; flex: 1; }
+.drawer-line { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+.drawer-line.done .drawer-text { color: var(--ink-3); text-decoration: line-through; }
+.drawer-tick { flex: none; width: 16px; height: 16px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line-2); background: transparent; color: var(--void); cursor: pointer; }
+.drawer-tick.on { background: var(--accent); border-color: var(--accent); }
+.drawer-text, .drawer-add input { flex: 1; min-width: 0; height: 26px; padding: 0 6px; border: 1px solid transparent; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
+.drawer-text:hover { border-color: var(--line); }
+.drawer-add input { border-color: var(--line); }
+.drawer-plus { flex: none; color: var(--ink-3); margin-left: 2px; }
+.drawer-x { flex: none; opacity: 0.5; }
+.drawer-line:hover .drawer-x { opacity: 1; }
+.drawer-empty { margin: 6px 0 0; font-size: 13px; color: var(--ink-2); }
+.drawer-foot { margin-top: auto; padding-top: 6px; }
+
 /* ------------------------------------------------------------ objectives */
 
 .objectives {

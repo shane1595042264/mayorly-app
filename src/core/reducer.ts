@@ -18,6 +18,13 @@ export type Action =
    */
   | { type: 'entry/capture'; text: string; filing?: Filing; start?: boolean }
   | { type: 'entry/add'; title: string; ledgerId: Id | null; estimateMin: number | null }
+  /** The quick drawer: notes and a checklist under an entry; the rules under a leisure item are leisure/cue-*. */
+  | { type: 'entry/note'; id: Id; text: string }
+  | { type: 'entry/subtask-add'; id: Id; text: string }
+  | { type: 'entry/subtask-edit'; id: Id; subId: Id; text: string }
+  | { type: 'entry/subtask-toggle'; id: Id; subId: Id }
+  | { type: 'entry/subtask-delete'; id: Id; subId: Id }
+  | { type: 'leisure/cue-edit'; id: Id; index: number; text: string }
   /** The clerk filed an existing entry (a tray sweep): ledger, an estimate if it had none, and its log line. */
   | { type: 'entry/file'; id: Id; ledgerId: Id | null; estimateMin: number | null; log: string; model?: string; confidence?: 'sure' | 'unsure' }
   /** You looked at an unsure filing and left it: the question mark goes, no rule is learned. */
@@ -124,6 +131,47 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const title = action.title.trim()
       if (!title) break
       addEntry(s, ctx, title, validLedger(s, action.ledgerId), clampEstimate(action.estimateMin))
+      break
+    }
+    case 'entry/note': {
+      const e = s.entries.find((x) => x.id === action.id)
+      if (!e) break
+      const text = action.text.trim().slice(0, 2000)
+      if (text) e.notes = text
+      else delete e.notes
+      break
+    }
+    case 'entry/subtask-add': {
+      const e = s.entries.find((x) => x.id === action.id)
+      const text = action.text.trim().slice(0, 160)
+      if (!e || !text) break
+      e.subtasks = [...(e.subtasks ?? []), { id: ctx.newId(), text, done: false }]
+      break
+    }
+    case 'entry/subtask-edit': {
+      const e = s.entries.find((x) => x.id === action.id)
+      const text = action.text.trim().slice(0, 160)
+      if (!e || !text) break
+      e.subtasks = (e.subtasks ?? []).map((t) => (t.id === action.subId ? { ...t, text } : t))
+      break
+    }
+    case 'entry/subtask-toggle': {
+      const e = s.entries.find((x) => x.id === action.id)
+      if (!e) break
+      e.subtasks = (e.subtasks ?? []).map((t) => (t.id === action.subId ? { ...t, done: !t.done } : t))
+      break
+    }
+    case 'entry/subtask-delete': {
+      const e = s.entries.find((x) => x.id === action.id)
+      if (!e) break
+      e.subtasks = (e.subtasks ?? []).filter((t) => t.id !== action.subId)
+      break
+    }
+    case 'leisure/cue-edit': {
+      const it = s.leisure.find((x) => x.id === action.id)
+      const text = action.text.trim().slice(0, 160)
+      if (!it || !text || !(it.cues ?? [])[action.index]) break
+      it.cues = (it.cues ?? []).map((c, i) => (i === action.index ? text : c))
       break
     }
     case 'entry/file': {

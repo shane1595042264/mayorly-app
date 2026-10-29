@@ -29,6 +29,8 @@ const PET = { width: 140 + 10 + 48, height: 48 + 24 }
 const TASK_LINES = 2 * 12 * 1.15
 /** The pet's own corner inside the window; matches `body.compact .pet-wrap` in hud.css. */
 const INSET = { x: 4, y: 4 }
+/** The quick drawer under the pet: the window grows this much from the pet, down when there is room, else up. */
+const DRAWER = { width: 340, height: 360 }
 /** The caption window: generous, because it is click-through; the text hugs the tomato's side. */
 const CAPTION = { width: 360, height: 40 }
 /** The tomato sprite at scale 1, so the window can be placed around its centre. */
@@ -57,6 +59,7 @@ export class Overlay {
   private anchor: Anchor | null = null
   private scale = 1
   private text = 1
+  private drawerSide: Layout['drawer'] = 'below'
   private dragging = false
   private caption: BrowserWindow | null = null
   private captionText: string | null = null
@@ -490,7 +493,7 @@ export class Overlay {
     const target = this.display()
     this.displayId = target.id
     this.fitting = true
-    this.win.setBounds(mac && this.mode === 'field' ? this.fieldBounds(target) : target.workArea)
+    this.win.setBounds(mac && this.mode === 'field' ? this.fieldBounds(target) : mac && this.mode === 'drawer' ? this.drawerBounds(target) : target.workArea)
     this.fitting = false
     this.pin()
   }
@@ -528,7 +531,25 @@ export class Overlay {
 
   layout(): Layout {
     const wa = this.display().workArea
-    return { compact: mac, side: this.side(wa, this.anchor ?? this.defaultAnchor(wa)), dragging: this.dragging }
+    return { compact: mac, side: this.side(wa, this.anchor ?? this.defaultAnchor(wa)), dragging: this.dragging, drawer: this.drawerSide }
+  }
+
+  /** The pet's window plus the drawer: below the pet when it fits, above it otherwise, hung on the pet's side. */
+  private drawerBounds(display: Display): Rectangle {
+    const wa = display.workArea
+    const pet = this.fieldBounds(display)
+    const width = Math.max(pet.width, DRAWER.width)
+    const height = pet.height + DRAWER.height
+    const below = pet.y + height <= wa.y + wa.height
+    this.drawerSide = below ? 'below' : 'above'
+    const x = this.side(wa, this.anchor ?? this.defaultAnchor(wa)) === 'right' ? pet.x + pet.width - width : pet.x
+    const y = below ? pet.y : pet.y + pet.height - height
+    return {
+      x: Math.round(Math.min(Math.max(x, wa.x), wa.x + wa.width - width)),
+      y: Math.round(Math.min(Math.max(y, wa.y), wa.y + wa.height - height)),
+      width,
+      height,
+    }
   }
 
   private sendLayout() {
