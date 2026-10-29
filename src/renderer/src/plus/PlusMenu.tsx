@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useAnimate, useReducedMotion, useTransform } from 'motion/react'
 import {
-  Check, Lightning, Pause, Play, Repeat, SkipForward, SquaresFour, Stop, Timer, Tray,
+  Check, Couch, Lightning, Pause, Play, Repeat, SkipForward, SquaresFour, Stop, Timer, Tray,
 } from '@phosphor-icons/react'
 import {
-  blockView, clock, openFlow, type HudEvent, type Id, type MayorlyState, type Mode,
+  balance, blockView, clock, leisureList, LEISURE_TOKENS_PER_BLOCK, openFlow, type HudEvent, type Id, type MayorlyState, type Mode,
 } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
 import { Glyph } from '../lib/glyphs'
@@ -14,11 +14,13 @@ import { Scramble } from '../lib/Scramble'
 import { useLean } from '../lib/parallax'
 import { sfx } from '../lib/sound'
 import { dispatch, useHudEvents, useNow } from '../store'
-import { ARM_OF_ACTION, onArm, pointArm, takeArmHint, type Arm } from './arms'
+import { ARM_OF_ACTION, onArm, onPick, pointArm, takeArmHint, takePickHint, type Arm } from './arms'
 
 interface Opt {
   key: string
   label: string
+  /** The digit that picks it; 0 is the couch. Defaults to its place in the arm. */
+  n?: number
   meta?: string
   icon?: React.ReactNode
   current?: boolean
@@ -45,13 +47,17 @@ export function PlusMenu({ s, close, open }: Props) {
   const fit = useFit(1180 * textSize, 720 * textSize) * textSize
 
   const live = v !== null && v.block.kind === 'focus'
-  // When the desk is idle, picks build a loadout that the next deploy uses.
-  const [pick, setPick] = useState<{ ledgerId: Id | null; entryId: Id | null }>(() => {
+  const couchNow = v !== null && v.block.kind === 'leisure'
+  // When the desk is idle, picks build a loadout that the next deploy uses. The couch is a
+  // pick too: the entry arm then lists the couch list, and an item there sits you down.
+  const [pick, setPick] = useState<{ ledgerId: Id | null; entryId: Id | null; couch: boolean }>(() => {
     const first = openFlow(s)[0]
-    return { ledgerId: s.desk.block?.ledgerId ?? first?.ledgerId ?? s.ledgers[0]?.id ?? null, entryId: s.desk.block?.entryId ?? null }
+    return { ledgerId: s.desk.block?.ledgerId ?? first?.ledgerId ?? s.ledgers[0]?.id ?? null, entryId: s.desk.block?.entryId ?? null, couch: s.desk.block?.kind === 'leisure' }
   })
-  const ledgerId = live ? v!.block.ledgerId : pick.ledgerId
-  const entryId = live ? v!.block.entryId : pick.entryId
+  // Picked the couch, live or not: the entry arm shows the couch list, and an item there parks the desk.
+  const onCouch = couchNow || pick.couch
+  const ledgerId = onCouch ? null : live ? v!.block.ledgerId : pick.ledgerId
+  const entryId = onCouch ? null : live ? v!.block.entryId : pick.entryId
   const ledger = s.ledgers.find((l) => l.id === ledgerId) ?? null
   const entry = s.entries.find((e) => e.id === entryId) ?? null
 
@@ -63,33 +69,66 @@ export function PlusMenu({ s, close, open }: Props) {
     const flow = openFlow(s)
     const inLedger = ledgerId ? flow.filter((e) => e.ledgerId === ledgerId) : flow
     const desk = s.desk.status
+    const coins = balance(s)
+    const ledgerArm: Opt[] = s.ledgers.map((l, i) => ({
+      key: l.id,
+      label: l.code,
+      n: i + 1,
+      icon: <Glyph name={l.glyph} size={22} />,
+      current: l.id === ledgerId,
+      apply: () => {
+        if (live) {
+          setPick((p) => ({ ...p, couch: false }))
+          dispatch({ type: 'desk/swap', ledgerId: l.id })
+        } else if (couchNow) dispatch({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: l.id })
+        else {
+          setPick({ ledgerId: l.id, entryId: flow.find((e) => e.ledgerId === l.id)?.id ?? null, couch: false })
+          sfx.swap()
+        }
+      },
+    }))
+    // The couch, on 0: picking it turns the entry arm into the couch list.
+    ledgerArm.push({
+      key: 'couch',
+      label: 'COUCH',
+      n: 0,
+      icon: <Couch size={22} weight="light" />,
+      current: onCouch,
+      apply: () => {
+        if (couchNow) return
+        setPick((p) => ({ ...p, couch: true }))
+        sfx.swap()
+        pointArm('entry')
+      },
+    })
+    const entryArm: Opt[] = onCouch
+      ? leisureList(s).slice(0, 7).map((it, i) => ({
+          key: it.id,
+          label: it.title,
+          n: i + 1,
+          meta: coins < LEISURE_TOKENS_PER_BLOCK ? 'no coin' : undefined,
+          current: couchNow && v!.block.leisureId === it.id,
+          disabled: coins < LEISURE_TOKENS_PER_BLOCK && !(couchNow && v!.block.leisureId === it.id),
+          apply: () => dispatch({ type: 'desk/deploy', mode: 'couch', leisureId: it.id }),
+        }))
+      : inLedger.slice(0, 7).map((e, i) => ({
+          key: e.id,
+          label: e.title,
+          n: i + 1,
+          meta: e.estimateMin ? `${e.estimateMin}m` : undefined,
+          current: e.id === entryId,
+          apply: () => {
+            if (live) dispatch({ type: 'desk/swap', entryId: e.id })
+            else if (couchNow) dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id, ledgerId: e.ledgerId })
+            else {
+              setPick({ ledgerId: e.ledgerId, entryId: e.id, couch: false })
+              sfx.swap()
+            }
+          },
+        }))
     return {
-      ledger: s.ledgers.map((l) => ({
-        key: l.id,
-        label: l.code,
-        icon: <Glyph name={l.glyph} size={22} />,
-        current: l.id === ledgerId,
-        apply: () => {
-          if (live) dispatch({ type: 'desk/swap', ledgerId: l.id })
-          else {
-            setPick({ ledgerId: l.id, entryId: flow.find((e) => e.ledgerId === l.id)?.id ?? null })
-            sfx.swap()
-          }
-        },
-      })),
-      entry: inLedger.slice(0, 7).map((e) => ({
-        key: e.id,
-        label: e.title,
-        meta: e.estimateMin ? `${e.estimateMin}m` : undefined,
-        current: e.id === entryId,
-        apply: () => {
-          if (live) dispatch({ type: 'desk/swap', entryId: e.id })
-          else {
-            setPick({ ledgerId: e.ledgerId, entryId: e.id })
-            sfx.swap()
-          }
-        },
-      })),
+      ledger: ledgerArm,
+      entry: entryArm,
       mode: [
         {
           key: 'pomodoro',
@@ -134,7 +173,7 @@ export function PlusMenu({ s, close, open }: Props) {
               { key: 'deck', label: 'Deck', icon: <SquaresFour size={18} weight="light" />, apply: () => open('deck') },
             ],
     }
-  }, [s, ledgerId, entryId, live])
+  }, [s, ledgerId, entryId, live, couchNow, onCouch, v])
 
   // An arrow pressed with the swap key, before this mounted, already chose the arm.
   const [arm, setArm] = useState<Arm>(() => takeArmHint() ?? (live || s.ledgers.length ? 'ledger' : 'mode'))
@@ -166,6 +205,28 @@ export function PlusMenu({ s, close, open }: Props) {
     if (!o || o.disabled) return
     o.apply()
   }, [])
+
+  // A digit: that item in the arm you are on; 0 is always the couch.
+  const pickDigit = useCallback(
+    (n: number) => {
+      const a: Arm = n === 0 ? 'ledger' : arm
+      const i = arms[a].findIndex((o) => o.n === n)
+      if (i < 0) return
+      setCursor((c) => ({ ...c, [a]: i }))
+      applyOpt(arms[a][i])
+      recordUse('plus.pick')
+    },
+    [arm, arms, applyOpt],
+  )
+  useEffect(() => onPick(pickDigit), [pickDigit])
+  // A digit pressed with the swap key, before this mounted.
+  const firstPickDone = useRef(false)
+  useEffect(() => {
+    if (firstPickDone.current) return
+    firstPickDone.current = true
+    const h = takePickHint()
+    if (h !== null) pickDigit(h)
+  }, [pickDigit])
 
   const move = useCallback(
     (d: number) => {
@@ -205,21 +266,16 @@ export function PlusMenu({ s, close, open }: Props) {
         recordUse(a)
         return applyOpt(arms[arm][cursor[arm]])
       }
-      // A number picks that item in the arm you are on: no cycling.
+      // A number picks that item in the arm you are on, 0 the couch: no cycling.
       const k = physicalKey(e)
-      if (/^[1-9]$/.test(k)) {
-        const i = Number(k) - 1
-        const o = arms[arm][i]
-        if (!o) return
+      if (/^[0-9]$/.test(k)) {
         e.preventDefault()
-        recordUse('plus.pick')
-        setCursor((c) => ({ ...c, [arm]: i }))
-        applyOpt(o)
+        pickDigit(Number(k))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [arm, arms, cursor, close, open, move, applyOpt, s.settings])
+  }, [arm, arms, cursor, close, open, move, applyOpt, pickDigit, s.settings])
 
   // Snap the slab when the loadout changes, like an attachment seating.
   useHudEvents(
@@ -280,11 +336,12 @@ export function PlusMenu({ s, close, open }: Props) {
             <div className="slab-top">
               <div className="slab-code">
                 {ledger && <Glyph name={ledger.glyph} size={30} />}
-                <Scramble text={v?.block.kind === 'rest' ? 'REST' : ledger?.code ?? 'FREE'} />
+                {!ledger && onCouch && <Couch size={30} weight="light" />}
+                <Scramble text={v?.block.kind === 'rest' ? 'REST' : onCouch ? 'COUCH' : ledger?.code ?? 'FREE'} />
               </div>
               <span className={`slab-status caps ${status === 'Live' ? 'live' : ''}`}>{status}</span>
             </div>
-            <div className="slab-ledger caps">{ledger?.name ?? 'No ledger'}</div>
+            <div className="slab-ledger caps">{onCouch ? 'Leisure' : ledger?.name ?? 'No ledger'}</div>
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={entry?.id ?? 'none'}
@@ -294,7 +351,7 @@ export function PlusMenu({ s, close, open }: Props) {
                 exit={{ opacity: 0, x: -12 }}
                 transition={{ duration: 0.22 }}
               >
-                {entry?.title ?? (ledger ? `${ledger.name} time, no entry` : 'Nothing picked')}
+                {onCouch ? (couchNow ? v!.block.label : 'Pick something from the couch list') : entry?.title ?? (ledger ? `${ledger.name} time, no entry` : 'Nothing picked')}
               </motion.div>
             </AnimatePresence>
             <div className="slab-foot">
@@ -312,7 +369,7 @@ export function PlusMenu({ s, close, open }: Props) {
           empty="No ledgers yet. Write one in the deck."
           onHover={(i) => { setArm('ledger'); setCursor((c) => ({ ...c, ledger: i })) }} onApply={applyOpt} />
         <ArmView id="entry" title="Entry" keyHint={keyLabel(keysFor('plus.entry', s.settings)[0] ?? '')} active={arm === 'entry'} opts={arms.entry} cursor={cursor.entry}
-          empty={ledger ? `Nothing open in ${ledger.code}. Capture with ${hotkeyLabel(s.settings.hotkeys.capture)}.` : 'Flow is empty.'}
+          empty={onCouch ? 'The couch list is empty. Add something in the deck.' : ledger ? `Nothing open in ${ledger.code}. Capture with ${hotkeyLabel(s.settings.hotkeys.capture)}.` : 'Flow is empty.'}
           onHover={(i) => { setArm('entry'); setCursor((c) => ({ ...c, entry: i })) }} onApply={applyOpt} />
         <ArmView id="mode" title="Mode" keyHint={keyLabel(keysFor('plus.mode', s.settings)[0] ?? '')} active={arm === 'mode'} opts={arms.mode} cursor={cursor.mode}
           empty=""
@@ -325,6 +382,7 @@ export function PlusMenu({ s, close, open }: Props) {
       <footer className="plus-hints hint-row">
         <span>{(['plus.ledger', 'plus.entry', 'plus.mode', 'plus.orders'] as const).map((id) => <i key={id} className="key">{keyLabel(keysFor(id, s.settings)[0] ?? '')}</i>)} Arm</span>
         <span><i className="key">1-9</i> Pick</span>
+        <span><i className="key">0</i> Couch</span>
         <span><i className="key">{keyLabel(keysFor('plus.prev', s.settings)[0] ?? '')}</i><i className="key">{keyLabel(keysFor('plus.next', s.settings)[0] ?? '')}</i> Cycle</span>
         <span><i className="key">{keyLabel(keysFor('plus.apply', s.settings)[0] ?? '')}</i> Apply</span>
         <span><i className="key">{keyLabel(keysFor('plus.deck', s.settings)[0] ?? '')}</i> Deck</span>
@@ -364,7 +422,7 @@ function ArmView(props: {
             onMouseEnter={() => onHover(i)}
             onClick={() => onApply(o)}
           >
-            {i < 9 && <span className="opt-n mono num" aria-hidden="true">{i + 1}</span>}
+            {(o.n ?? i + 1) <= 9 && <span className="opt-n mono num" aria-hidden="true">{o.n ?? i + 1}</span>}
             {o.icon && <span className="opt-icon">{o.icon}</span>}
             <span className="opt-label">{o.label}</span>
             {o.meta && <span className="opt-meta mono">{o.meta}</span>}

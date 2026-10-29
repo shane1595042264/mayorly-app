@@ -15,7 +15,7 @@ import { Objectives } from './hud/Objectives'
 import { Pet } from './hud/Pet'
 import { MODIFIER_KEYS, hotkeyLabel, matchesAcceleratorKey, physicalKey } from './lib/keys'
 import { setSoundEnabled, sfx } from './lib/sound'
-import { ARM_OF_ACTION, ARM_OF_COMMAND, onArm, pointArm } from './plus/arms'
+import { ARM_OF_ACTION, ARM_OF_COMMAND, isPick, onArm, pointArm, pointPick } from './plus/arms'
 import { PlusMenu } from './plus/PlusMenu'
 import { balance } from '@core/index'
 import { current, useHudEvents, useMayorly } from './store'
@@ -230,6 +230,10 @@ export function App() {
           if (arm && cur === 'plus') pointArm(arm)
           return
         }
+        if (isPick(cmd)) {
+          if (cur === 'plus') pointPick(Number(cmd.slice(5)))
+          return
+        }
         recordUse(`global.${cmd}`)
         if (cmd === 'move') {
           if (cur !== 'field') setMode('field')
@@ -257,6 +261,12 @@ export function App() {
   useEffect(() => {
     const early = (e: KeyboardEvent) => {
       if (modeRef.current !== 'plus' || e.metaKey || e.ctrlKey || document.querySelector('.plus')) return
+      const k = physicalKey(e)
+      if (/^[0-9]$/.test(k)) {
+        e.preventDefault()
+        pointPick(Number(k))
+        return
+      }
       const st = current()
       const a = st ? actionFor(e, 'plus', st.settings, { ignoreShift: true, ignoreAlt: true }) : null
       const arm = a ? ARM_OF_ACTION[a] : undefined

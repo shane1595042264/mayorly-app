@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The couch in the swap menu
+
+- The ledger arm ends with the couch, on 0, from any arm. Pick it and the entry arm lists your couch list; an item there sits you down. Ledgers keep 1 to 9.
+- Digits work in the same breath as Option+T, like the arrows: Option+T, 1 is the first ledger before the menu has even drawn.
+
 ## Ledger rows line up
 
 - Inside a ledger, each row sat one column to the left: the ledger box was squeezed to a caret and the title cut short. They line up now, and a title too long for its room wraps to a second line instead of being cut.

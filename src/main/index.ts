@@ -60,6 +60,7 @@ function boot() {
   // lands even before the window has the keyboard; registered as the menu opens, released
   // as it closes, so Option+arrows are the system's again the rest of the time.
   const ARM_COMMANDS: Record<string, Command> = { Up: 'arm-up', Down: 'arm-down', Left: 'arm-left', Right: 'arm-right' }
+  for (let n = 0; n <= 9; n++) ARM_COMMANDS[String(n)] = `pick-${n}` as Command
   let armAccels: string[] = []
   const armsOff = () => {
     for (const a of armAccels) {
