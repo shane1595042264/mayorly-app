@@ -11,8 +11,12 @@ import { mergeStates } from './merge'
 export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'trayTimer', 'text'] as const
 
 export type Action =
-  /** `filing` is the AI clerk's answer, when there is one; the reducer checks it and otherwise files by prefix. */
-  | { type: 'entry/capture'; text: string; filing?: Filing }
+  /**
+   * `filing` is the AI clerk's answer, when there is one; the reducer checks it and otherwise files by prefix.
+   * `start` puts the new entry on the desk at once: a focus block swaps to it with the clock where it is
+   * (and comes off hold), anything else deploys a pomodoro on it.
+   */
+  | { type: 'entry/capture'; text: string; filing?: Filing; start?: boolean }
   | { type: 'entry/add'; title: string; ledgerId: Id | null; estimateMin: number | null }
   /** The clerk filed an existing entry (a tray sweep): ledger, an estimate if it had none, and its log line. */
   | { type: 'entry/file'; id: Id; ledgerId: Id | null; estimateMin: number | null; log: string; model?: string; confidence?: 'sure' | 'unsure' }
@@ -109,6 +113,11 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const e = addEntry(s, ctx, filing.title, filing.ledgerId, filing.estimateMin)
       if (byClerk) e.clerkFiled = { ledgerId: filing.ledgerId, model: filing.model ?? 'clerk', confidence: filing.confidence ?? 'sure' }
       log(s, now, filing.log)
+      if (action.start) {
+        const d = s.desk
+        if (d.block && d.block.kind === 'focus' && d.status !== 'idle') swapTo(s, ctx, ev, e.id, e.ledgerId, true)
+        else deploy(s, ctx, ev, { mode: 'pomodoro', supersetId: null, entryId: e.id, ledgerId: e.ledgerId, leisureId: null })
+      }
       break
     }
     case 'entry/add': {
@@ -125,6 +134,12 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       e.ledgerId = action.ledgerId
       e.clerkFiled = { ledgerId: action.ledgerId, model: action.model ?? 'clerk', confidence: action.confidence ?? 'sure' }
       if (e.estimateMin === null && action.estimateMin !== null) e.estimateMin = clampEstimate(action.estimateMin)
+      // Filed while on the desk (captured and started): the block follows it to its ledger.
+      if (s.desk.block?.entryId === e.id) {
+        s.desk.block.ledgerId = e.ledgerId
+        s.desk.block.label = ledgerLabel(s, e.ledgerId)
+        if (s.desk.plan?.mode === 'pomodoro') s.desk.plan.anchorLedgerId = e.ledgerId
+      }
       if (typeof action.log === 'string' && action.log.trim()) log(s, now, action.log)
       break
     }

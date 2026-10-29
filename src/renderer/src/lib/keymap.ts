@@ -2,9 +2,9 @@
 // settings.keymap and syncs with the account. The global hotkeys (settings.hotkeys) stay
 // Electron accelerators owned by the shell; the Keymap screen shows them under Anywhere.
 import type { HotkeyAction, Settings } from '@core/index'
-import { MODIFIER_KEYS, physicalKey } from './keys'
+import { IS_MAC, MODIFIER_KEYS, physicalKey } from './keys'
 
-export type Scope = 'global' | 'plus' | 'deck' | 'list' | 'shelf' | 'move' | 'keymap'
+export type Scope = 'global' | 'plus' | 'capture' | 'deck' | 'list' | 'shelf' | 'move' | 'keymap'
 
 export interface KeyDef {
   id: string
@@ -23,6 +23,7 @@ export interface KeyDef {
 export const SCOPES: { id: Scope; title: string; blurb: string }[] = [
   { id: 'global', title: 'Anywhere', blurb: 'System-wide, with a modifier, so no other app sees them.' },
   { id: 'plus', title: 'Swap menu', blurb: 'While the swap menu is open, with the swap key\'s modifier still held or not. Keys by position.' },
+  { id: 'capture', title: 'Capture box', blurb: 'While typing a line.' },
   { id: 'deck', title: 'Deck', blurb: 'While the deck is open.' },
   { id: 'list', title: 'Lists', blurb: 'The flow, a ledger, the supersets, the couch list. Keys act on the selected row.' },
   { id: 'shelf', title: 'Shelf', blurb: 'The nine bays.' },
@@ -52,6 +53,10 @@ export const KEYS: KeyDef[] = [
   { id: 'plus.apply', scope: 'plus', label: 'Apply the item', keys: ['Enter', 'Space'] },
   { id: 'plus.deck', scope: 'plus', label: 'Open the deck', keys: ['Tab'] },
   { id: 'plus.close', scope: 'plus', label: 'Close the menu', keys: ['Escape'] },
+
+  { id: 'capture.file', scope: 'capture', label: 'File the line', keys: ['Enter'], fixed: true, note: 'To its ledger by prefix, else the clerk, else the tray' },
+  { id: 'capture.start', scope: 'capture', label: 'File it and start it now', keys: [IS_MAC ? 'Cmd+Enter' : 'Ctrl+Enter'], fixed: true, note: 'A running focus block swaps to it, the clock where it is; otherwise a pomodoro starts on it. The clerk files it after.' },
+  { id: 'capture.keep', scope: 'capture', label: 'File and keep the box open', keys: ['Shift+Enter'], fixed: true },
 
   { id: 'deck.close', scope: 'deck', label: 'Close the deck', keys: ['Escape'] },
   { id: 'deck.prevTab', scope: 'deck', label: 'Previous tab', keys: ['q'] },

@@ -273,6 +273,36 @@ describe('superset syntax', () => {
   })
 })
 
+describe('capture and start', () => {
+  it('puts the new entry on the desk: a pomodoro when idle, a swap with the clock kept while a block runs, a resume on hold', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a', start: true })
+    expect(w.s.desk.status).toBe('running')
+    expect(w.s.desk.plan?.mode).toBe('pomodoro')
+    expect(w.s.desk.block?.entryId).toBe(w.entry('a').id)
+    w.wait(7 * MIN)
+    w.do({ type: 'entry/capture', text: 'dance: b', start: true })
+    expect(w.s.desk.block?.entryId).toBe(w.entry('b').id)
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(18 * MIN)
+    expect(w.s.sittings).toHaveLength(1)
+    w.do({ type: 'desk/pause' })
+    w.do({ type: 'entry/capture', text: 'career: c', start: true })
+    expect(w.s.desk.status).toBe('running')
+    expect(w.s.desk.block?.entryId).toBe(w.entry('c').id)
+  })
+
+  it('the clerk filing it afterwards takes the desk along to the ledger', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'a plain line', start: true })
+    const e = w.entry('a plain line')
+    expect(e.ledgerId).toBeNull()
+    expect(w.s.desk.block?.entryId).toBe(e.id)
+    w.do({ type: 'entry/file', id: e.id, ledgerId: w.ledger('LGL').id, estimateMin: null, log: 'filed by the clerk' })
+    expect(w.s.desk.block?.ledgerId).toBe(w.ledger('LGL').id)
+    expect(w.s.desk.block?.label).toBe('Legal')
+  })
+})
+
 describe('text size', () => {
   it('is per area, clamped, and stays with the machine', () => {
     const w = world()

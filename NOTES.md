@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Capture and start
+
+- In the capture box, Cmd+Enter files the line and puts it on the desk at once: a running focus block swaps to it with the clock where it is, a hold comes off, and from idle a pomodoro starts on it. The clerk reads the line afterwards and moves it, desk and all, if it belongs elsewhere.
+
 ## Text size, and numbered tabs
 
 - Settings, under HUD: a text size per area, for the pet's task line, the deck and the swap menu, 80 to 160 percent. The pet's window grows with its task line.

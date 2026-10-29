@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor } from 'electron'
-import { migrate, type Action, type HudEvent, type Settings } from '@core/index'
+import { migrate, type Action, type Entry, type HudEvent, type Settings } from '@core/index'
 import { IPC, type AiProvider, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from './ai/service'
@@ -154,9 +154,35 @@ function boot() {
   ipcMain.handle(IPC.getState, () => engine.state)
   // A captured line goes to the clerk first, when there is one, then to the reducer with its
   // filing. The capture window, a mayorly:// link and anything else that captures come through here.
-  const captureLine = async (text: string) => {
-    const action: Action = { type: 'entry/capture', text }
+  // Captured and started (Cmd+Enter): the line lands by prefix and goes on the desk at once; the
+  // clerk reads it afterwards and, if it names another ledger, the entry and the desk move there.
+  const fileLater = async (e: Entry, text: string) => {
+    say({ phase: 'working', text: `Clerk is filing '${short(e.title)}'` })
+    let filing: Awaited<ReturnType<typeof clerk.fileEntry>> = null
+    try {
+      filing = await clerk.fileEntry(text, engine.state.ledgers, engine.state.houseRules.map((r) => r.text))
+    } catch (err) {
+      console.warn('[clerk] could not file:', err instanceof Error ? err.message : String(err))
+      say({ phase: 'done', text: `The clerk could not reach its model. '${short(e.title)}' stays where it is.` })
+      return
+    }
+    if (filing && !filing.leisure && filing.ledgerId && filing.ledgerId !== e.ledgerId) {
+      engine.dispatch({ type: 'entry/file', id: e.id, ledgerId: filing.ledgerId, estimateMin: filing.estimateMin, log: filing.log, model: filing.model, confidence: filing.confidence })
+    }
+    const now = engine.state.entries.find((x) => x.id === e.id)
+    const ledger = engine.state.ledgers.find((l) => l.id === now?.ledgerId)
+    say({ phase: 'done', text: ledger ? `'${short(e.title)}' went to ${ledger.name}${filing?.confidence === 'unsure' ? ', best guess' : ''}` : `'${short(e.title)}' stays in the tray` })
+  }
+  const captureLine = async (text: string, start = false) => {
+    const action: Action = { type: 'entry/capture', text, start }
     if (!clerk.enabled()) return engine.dispatch(action)
+    if (start) {
+      const before = new Set(engine.state.entries.map((x) => x.id))
+      const r = engine.dispatch(action)
+      const added = engine.state.entries.find((x) => !before.has(x.id))
+      if (added) void fileLater(added, text)
+      return r
+    }
     say({ phase: 'working', text: `Clerk is filing '${short(text.trim())}'` })
     let filing: Awaited<ReturnType<typeof clerk.fileEntry>> = null
     try {
@@ -174,7 +200,7 @@ function boot() {
     void sweepTray()
     return r
   }
-  ipcMain.handle(IPC.dispatch, (_e, action: Action) => (action.type === 'entry/capture' ? captureLine(action.text) : engine.dispatch(action)))
+  ipcMain.handle(IPC.dispatch, (_e, action: Action) => (action.type === 'entry/capture' ? captureLine(action.text, !!action.start) : engine.dispatch(action)))
   const aiCall = async (fn: () => Promise<unknown> | unknown) => {
     try {
       return await fn()

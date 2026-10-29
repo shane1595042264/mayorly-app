@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import { CaretRight } from '@phosphor-icons/react'
 import { matchLedger, parseSuperset, prefixClerk, type Action, type MayorlyState } from '@core/index'
+import { IS_MAC } from '../lib/keys'
 import { aiOn, dispatch } from '../store'
 
 // The command line. Plain text is an entry for the clerk to file. A leading slash
@@ -11,6 +12,8 @@ interface Plan {
   tone: 'file' | 'tray' | 'order' | 'error' | 'idle'
   text: string
   run?: () => void
+  /** Cmd+Enter: file the line and put it on the desk now, the clock where it is. */
+  start?: () => void
 }
 
 function plan(raw: string, s: MayorlyState): Plan {
@@ -72,6 +75,7 @@ function plan(raw: string, s: MayorlyState): Plan {
     tone: ledger ? 'file' : clerk ? 'file' : 'tray',
     text: ledger ? `${ledger.code}  ${ledger.name}   ${f.title}${est}` : clerk ? `Clerk files   ${f.title}${est}` : `Tray   ${f.title}${est}`,
     run: () => dispatch({ type: 'entry/capture', text }),
+    start: () => dispatch({ type: 'entry/capture', text, start: true }),
   }
 }
 
@@ -80,9 +84,10 @@ export function Capture({ s, close }: { s: MayorlyState; close: () => void }) {
   const p = useMemo(() => plan(text, s), [text, s])
   const [flash, setFlash] = useState(0)
 
-  const submit = (keepOpen: boolean) => {
-    if (!p.run) return
-    p.run()
+  const submit = (keepOpen: boolean, startNow = false) => {
+    const go = startNow && p.start ? p.start : p.run
+    if (!go) return
+    go()
     setText('')
     setFlash((n) => n + 1)
     if (!keepOpen) close()
@@ -110,7 +115,7 @@ export function Capture({ s, close }: { s: MayorlyState; close: () => void }) {
             if (e.key === 'Escape') close()
             else if (e.key === 'Enter') {
               e.preventDefault()
-              submit(e.shiftKey)
+              submit(e.shiftKey, e.metaKey || e.ctrlKey)
             }
           }}
           placeholder="legal: reply to the landlord ~20"
@@ -120,6 +125,7 @@ export function Capture({ s, close }: { s: MayorlyState; close: () => void }) {
         <p className={`capture-preview tone-${p.tone}`} aria-live="polite">{p.text}</p>
         <footer className="hint-row">
           <span><i className="key">Enter</i> File</span>
+          <span><i className="key">{IS_MAC ? 'Cmd' : 'Ctrl'}</i><i className="key">Enter</i> Start now</span>
           <span><i className="key">Shift</i><i className="key">Enter</i> Keep open</span>
           <span><i className="key">Esc</i> Close</span>
         </footer>
