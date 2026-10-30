@@ -41,10 +41,10 @@ export function App() {
   /** The mode the shell was last told; its window size follows it. */
   const shellMode = useRef<UiMode>('field')
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const layoutRef = useRef<Layout>({ compact: false, side: 'right', dragging: false, drawer: 'below' })
+  const layoutRef = useRef<Layout>({ compact: false, side: 'right', dragging: false, drawer: 'below', mode: 'field' })
   const held = useRef<{ since: number } | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
-  const [layout, setLayout] = useState<Layout>({ compact: false, side: 'right', dragging: false, drawer: 'below' })
+  const [layout, setLayout] = useState<Layout>({ compact: false, side: 'right', dragging: false, drawer: 'below', mode: 'field' })
   const [clerk, setClerk] = useState<string | null>(null)
   // Keyboard move: the pet takes the keys until Enter, Escape, a blur, or a key it does not know.
   const [moving, setMoving] = useState(false)
@@ -237,10 +237,9 @@ export function App() {
     document.body.classList.toggle('side-right', layout.side === 'right')
     document.body.classList.toggle('drawer-above', layout.drawer === 'above')
     document.body.classList.toggle('drawer-below', layout.drawer !== 'above')
+    // By the window the shell has made, not by this page's own timers: the pet must not move.
+    document.body.classList.toggle('mode-drawer', layout.mode === 'drawer')
   }, [layout])
-  useEffect(() => {
-    document.body.classList.toggle('mode-drawer', shown === 'drawer')
-  }, [shown])
 
   // Hotkeys from the shell. Holding the swap key auto-repeats, so ignore repeats until it is released.
   useEffect(

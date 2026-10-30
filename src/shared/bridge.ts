@@ -23,6 +23,8 @@ export interface Layout {
   dragging: boolean
   /** macOS, drawer mode: which way the window grew from the pet, so the drawer draws on that side. */
   drawer: 'below' | 'above'
+  /** The mode the shell has sized the window for; pushed with every resize so the page places the pet by the window, not by its own timers. */
+  mode: UiMode
 }
 
 export interface DisplayInfo {

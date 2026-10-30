@@ -496,6 +496,8 @@ export class Overlay {
     this.win.setBounds(mac && this.mode === 'field' ? this.fieldBounds(target) : mac && this.mode === 'drawer' ? this.drawerBounds(target) : target.workArea)
     this.fitting = false
     this.pin()
+    // The page places the pet by the window it is in; tell it in the same step the window changes.
+    this.sendLayout()
   }
 
   private side(wa: Rectangle, a: Anchor): Layout['side'] {
@@ -531,7 +533,7 @@ export class Overlay {
 
   layout(): Layout {
     const wa = this.display().workArea
-    return { compact: mac, side: this.side(wa, this.anchor ?? this.defaultAnchor(wa)), dragging: this.dragging, drawer: this.drawerSide }
+    return { compact: mac, side: this.side(wa, this.anchor ?? this.defaultAnchor(wa)), dragging: this.dragging, drawer: this.drawerSide, mode: this.mode }
   }
 
   /** The pet's window plus the drawer: below the pet when it fits, above it otherwise, hung on the pet's side. */
