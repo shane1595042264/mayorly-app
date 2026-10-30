@@ -40,6 +40,13 @@ export function blockView(s: MayorlyState, now: number): BlockView | null {
 }
 
 
+/** Planned block time inside [from, to): what the plan still holds for today, say. */
+export function plannedMs(s: MayorlyState, from: number, to: number): Ms {
+  let ms = 0
+  for (const b of s.calendar.blocks) ms += Math.max(0, Math.min(b.end, to) - Math.max(b.start, from))
+  return ms
+}
+
 /** The next planned block that has not ended, or null. */
 export function nextBlock(s: MayorlyState, now: number) {
   let best: MayorlyState['calendar']['blocks'][number] | null = null

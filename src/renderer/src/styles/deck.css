@@ -263,6 +263,9 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .cal-planned { margin-left: auto; font-size: 12px; }
 .cal-overflow { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; border: 1px solid var(--accent-2); color: var(--ink); font-size: 13px; }
 .cal-overflow svg { color: var(--accent); flex: none; }
+.cal-overflow-text { flex: 1; min-width: 0; }
+.cal-overflow .btn.small { flex: none; padding: 4px 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 6px; }
+.cal-overflow .btn.small svg { color: inherit; }
 .cal-grid {
   display: grid;
   grid-template-columns: 48px repeat(7, minmax(0, 1fr));
@@ -304,6 +307,13 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .cal-external { background: repeating-linear-gradient(135deg, rgb(237 240 241 / 0.06) 0 4px, transparent 4px 8px); color: var(--ink-2); border-color: var(--line); }
 .cal-external.free { opacity: 0.6; border-style: dashed; }
 .cal-item.is-selected { border-color: var(--accent); outline: 1px solid var(--accent); z-index: 4; }
+.cal-grid { user-select: none; touch-action: none; }
+.cal-block, .cal-event { cursor: grab; }
+.cal-grid.is-dragging, .cal-grid.is-dragging .cal-item { cursor: grabbing; }
+.cal-item.lifted { opacity: 0.35; }
+.cal-ghost { z-index: 5; border-style: dashed; border-color: var(--accent); background: rgb(240 174 60 / 0.14); box-shadow: none; pointer-events: none; }
+.cal-ghost .cal-item-t { color: var(--ink); }
+.cal-resize { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; cursor: ns-resize; }
 .cal-side { min-width: 0; padding-left: 24px; border-left: 1px solid var(--line); display: grid; align-content: start; gap: 20px; }
 .cal-sel-title { margin: 6px 0 4px; font-size: 16px; font-weight: 600; }
 .cal-list ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; }
@@ -377,7 +387,7 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
   grid-template-areas: 'tiles tiles' 'ledgers week' 'log log';
   gap: 30px 40px;
 }
-.tiles { grid-area: tiles; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.tiles { grid-area: tiles; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .tile { display: grid; gap: 6px; padding: 2px 20px; }
 .tile:first-child { padding-left: 0; }
 .tile + .tile { border-left: 1px solid var(--line); }

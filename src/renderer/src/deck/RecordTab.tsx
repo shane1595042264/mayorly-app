@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { balance, dayStats, lastDays, span, startOfDay, type MayorlyState } from '@core/index'
+import { balance, dayStats, lastDays, plannedMs, span, startOfDay, type MayorlyState } from '@core/index'
 import { useNow } from '../store'
 
 // What the desk recorded. One measure (focus time), so one colour: neutral ink,
@@ -13,11 +13,13 @@ export function RecordTab({ s }: { s: MayorlyState }) {
   const ledgerMax = Math.max(1, ...today.byLedger.map((b) => b.focusMs))
   const [hover, setHover] = useState<number | null>(null)
   const weekTotal = week.reduce((n, d) => n + d.focusMs, 0)
+  const planned = plannedMs(s, now, startOfDay(now) + 86_400_000)
 
   return (
     <div className="record">
       <section className="tiles" aria-label="Today">
         <Tile big={span(today.focusMs)} label="Focus today" />
+        <Tile big={planned ? span(planned) : 'none'} label="Still planned today" />
         <Tile big={String(today.tomatoes)} label={today.tomatoes === 1 ? 'Tomato' : 'Tomatoes'} />
         <Tile big={`+${today.tokens}`} label="Coins earned" />
         <Tile big={String(today.cleared)} label="Entries cleared" />

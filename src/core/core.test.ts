@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_HOTKEYS, firstRunState, migrate } from './seed'
 import { DEVICE_SETTINGS } from './reducer'
 import {
+  plannedMs,
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
   parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
@@ -365,6 +366,19 @@ describe('the calendar', () => {
     expect(w.s.calendar.events[0]).toMatchObject({ entryId: a.id, start: b.start, end: b.end, origin: 'user' })
     replan(w)
     expect(w.s.calendar.blocks).toEqual([])
+  })
+
+  it('a block dragged to another time pins there, never before now, and planned time is summed', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a ~60' })
+    replan(w)
+    const b = w.s.calendar.blocks[0]
+    expect(plannedMs(w.s, w.now, w.now + 24 * 60 * MIN)).toBe(60 * MIN)
+    w.do({ type: 'calendar/pin', blockId: b.id, start: w.now - 30 * MIN, end: w.now + 30 * MIN })
+    expect(w.s.calendar.events[0]).toMatchObject({ entryId: w.entry('a').id, start: w.now, end: w.now + 30 * MIN })
+    w.do({ type: 'calendar/event-delete', id: w.s.calendar.events[0].id })
+    w.do({ type: 'calendar/pin', blockId: b.id, start: w.now + 5 * 60 * MIN, end: w.now + 4 * 60 * MIN })
+    expect(w.s.calendar.events[0]).toMatchObject({ start: Math.max(b.start, w.now), end: b.end })
   })
 
   it('outside events are busy unless free or all-day, and a feed keeps titles out when told to', () => {

@@ -11,7 +11,7 @@ The top section is what the app shows once per build, the first time that build 
 - The clerk listens: the ask box at the bottom of the Calendar tab, or /cal in the capture line. "move leetcode to tomorrow 9am", "give the resume two hours", "block Friday afternoon for dance". It answers with a proposal, every change in words, and nothing happens until you press Apply. It cannot touch your own events; that is not a rule it follows but a thing it cannot say.
 - Google comes in as busy time: in Settings, under Calendar, paste a calendar's secret address in iCal format. Its events show on the grid, hatched, and the planner routes around them; all-day and free ones are drawn, not busy. Read every fifteen minutes. The address never leaves this machine.
 - Your plan goes out too: with an account, Settings under Calendar makes a secret address Google can subscribe to (Other calendars, From URL). The planned blocks and the events made here appear in Google; a moved block updates in place. Google reads a subscribed calendar on its own clock, often hours apart. New address and Stop sharing are there when you need them.
-- Next up: drag a block to pin it, drag your own events, and the overflow banner.
+- Drag a block to another time and it is pinned there; drag an event to move it, or its bottom edge to resize it. A click selects. The banner about what does not fit has an Ask the clerk button. The Record tab says how much the plan still holds for today.
 
 ## More icons, more colours, and a pick by the clerk
 

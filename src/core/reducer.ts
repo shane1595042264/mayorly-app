@@ -43,7 +43,8 @@ export type Action =
   | { type: 'calendar/event-update'; id: Id; patch: Partial<Pick<CalEvent, 'title' | 'start' | 'end' | 'note' | 'entryId'>> }
   | { type: 'calendar/event-delete'; id: Id }
   /** Copy a planned block into a user event on its entry: a pin the planner will keep. */
-  | { type: 'calendar/pin'; blockId: Id }
+  /** Pins the block where it is, or at `start` to `end` when given (a drag). */
+  | { type: 'calendar/pin'; blockId: Id; start?: Epoch; end?: Epoch }
   /** Outside calendars: a feed and what was last read from it. The address stays on the machine. */
   | { type: 'calendar/feed-add'; id: Id; label: string; titles: boolean }
   | { type: 'calendar/feed-update'; id: Id; patch: Partial<Pick<CalFeed, 'label' | 'titles'>> }
@@ -558,7 +559,13 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       if (!b || b.end <= now) break
       const e = s.entries.find((x) => x.id === b.entryId && x.doneAt === null)
       if (!e) break
-      s.calendar.events.push({ id: ctx.newId(), title: e.title, origin: 'user', entryId: e.id, start: Math.max(b.start, now), end: b.end, createdAt: now, seq: 0 })
+      let start = Math.max(b.start, now)
+      let end = b.end
+      if (action.start !== undefined && action.end !== undefined && action.end > action.start && action.end > now) {
+        start = Math.max(action.start, now)
+        end = action.end
+      }
+      s.calendar.events.push({ id: ctx.newId(), title: e.title, origin: 'user', entryId: e.id, start, end, createdAt: now, seq: 0 })
       break
     }
     case 'calendar/feed-add': {

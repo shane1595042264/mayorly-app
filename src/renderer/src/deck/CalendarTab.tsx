@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarBlank, CaretLeft, CaretRight, Lock, Play, PushPin, Sparkle, Warning } from '@phosphor-icons/react'
 import { openFlow, span, type Action, type CalBlock, type CalEvent, type ExternalEvent, type MayorlyState } from '@core/index'
 import { startOfDayIn, wallClock, zonedEpoch } from '../../../shared/windows'
+import { askCalendar } from '../lib/calendarAsk'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { useListKeys } from '../lib/listkeys'
 import { ledgerVars } from '../lib/themes'
@@ -11,9 +12,13 @@ import { AskClerk } from './AskClerk'
 // The calendar: a week of the plan. Blocks are what the planner placed (derived, redrawn on
 // every replan), events are yours and never move, outside events are busy time from Google.
 // Read with j and k, deploy with Enter; [ and ] turn the week, t comes back to today. The
-// planner's own doing shows in the banner: what does not fit, and why.
+// planner's own doing shows in the banner: what does not fit, and why. A block dragged to
+// another time becomes a pin there; an event drags whole, or by its bottom edge to resize.
 
 const MIN = 60_000
+const SNAP = 15 * MIN
+/** A press that moves less than this is a click. */
+const DRAG_PX = 4
 const DAY = 24 * 60 * MIN
 const HOUR_PX = 44
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -68,7 +73,7 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
   const ledgerOf = (id: string | null) => (id ? s.ledgers.find((l) => l.id === id) ?? null : null)
 
   const [adding, setAdding] = useState(false)
-  const { sel } = useListKeys(items.map((i) => i.id), ({ action, id }) => {
+  const { sel, setSel } = useListKeys(items.map((i) => i.id), ({ action, id }) => {
     const it = items.find((i) => i.id === id)
     if (action === 'list.go') {
       const entryId = it?.kind === 'block' ? it.block.entryId : it?.kind === 'event' ? it.event.entryId : null
@@ -112,6 +117,61 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [items, sel])
 
+  // Dragging. The pointer is captured by the item; the grid reads the moves. A column under
+  // the pointer and the minute within it, snapped to the quarter hour, give the new times.
+  const gridRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ item: Item; mode: 'move' | 'resize'; grab: number; cols: DOMRect[]; x0: number; y0: number; moved: boolean } | null>(null)
+  const [drag, setDrag] = useState<{ id: string; kind: 'block' | 'event'; start: number; end: number } | null>(null)
+  const timeAt = (x: number, y: number, cols: DOMRect[]): number | null => {
+    if (!cols.length) return null
+    let i = cols.findIndex((r) => x >= r.left && x < r.right)
+    if (i < 0) i = x < cols[0].left ? 0 : cols.length - 1
+    const r = cols[i]
+    const minutes = ((y - r.top) / HOUR_PX + firstHour) * 60
+    return days[i] + Math.round(minutes / 15) * SNAP
+  }
+  const grabItem = (e: React.PointerEvent, it: Item, mode: 'move' | 'resize') => {
+    if (e.button !== 0 || it.kind === 'external') return
+    setSel(it.id)
+    const cols = gridRef.current ? Array.from(gridRef.current.querySelectorAll<HTMLElement>('.cal-day')).map((el) => el.getBoundingClientRect()) : []
+    const at = timeAt(e.clientX, e.clientY, cols)
+    dragRef.current = { item: it, mode, grab: at === null ? 0 : at - it.start, cols, x0: e.clientX, y0: e.clientY, moved: false }
+    try {
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    } catch {
+      // A pointer the browser no longer tracks: the grid still reads the moves that bubble.
+    }
+    e.stopPropagation()
+  }
+  const onGridMove = (e: React.PointerEvent) => {
+    const d = dragRef.current
+    if (!d) return
+    if (!d.moved && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) < DRAG_PX) return
+    d.moved = true
+    const at = timeAt(e.clientX, e.clientY, d.cols)
+    if (at === null) return
+    const dur = d.item.end - d.item.start
+    let start = d.item.start
+    let end = d.item.end
+    if (d.mode === 'move') {
+      start = at - Math.round(d.grab / SNAP) * SNAP
+      end = start + dur
+    } else end = Math.max(start + SNAP, at)
+    setDrag({ id: d.item.id, kind: d.item.kind as 'block' | 'event', start, end })
+  }
+  const onGridUp = () => {
+    const d = dragRef.current
+    dragRef.current = null
+    if (!d) return
+    setDrag((cur) => {
+      if (d.moved && cur && (cur.start !== d.item.start || cur.end !== d.item.end)) {
+        if (d.item.kind === 'block') dispatch({ type: 'calendar/pin', blockId: d.item.block.id, start: cur.start, end: cur.end })
+        else if (d.item.kind === 'event') dispatch({ type: 'calendar/event-update', id: d.item.event.id, patch: { start: cur.start, end: cur.end } })
+      }
+      return null
+    })
+  }
+
   const fmt = (t: number) => new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: tz || undefined }).format(t)
   const fmtDay = (t: number) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: tz || undefined }).format(t)
   const todayStart = startOfDayIn(now, tz)
@@ -140,10 +200,11 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
           <p className="cal-overflow" role="status">
             <Warning size={14} weight="fill" />
             {overflow.length === 1 ? 'One entry does not fit: ' : `${overflow.length} entries do not fit: `}
-            {overflow.map((o, i) => `${i ? ', ' : ''}${o.entry!.title} (${o.kind === 'past-due' ? `${span(o.minutes * MIN)} past its due` : `${span(o.minutes * MIN)} with no room before ${cal.horizonEnd ? fmtDay(cal.horizonEnd) : 'the horizon'}`})`)}
+            <span className="cal-overflow-text">{overflow.map((o, i) => `${i ? ', ' : ''}${o.entry!.title} (${o.kind === 'past-due' ? `${span(o.minutes * MIN)} past its due` : `${span(o.minutes * MIN)} with no room before ${cal.horizonEnd ? fmtDay(cal.horizonEnd) : 'the horizon'}`})`)}</span>
+            <button type="button" className="btn ghost small" onClick={() => askCalendar(`Find room for ${overflow.map((o) => `"${o.entry!.title}"`).join(' and ')}`)}><Sparkle size={12} /> Ask the clerk</button>
           </p>
         )}
-        <div className="cal-grid" style={{ ['--rows' as string]: rows, ['--hour' as string]: `${HOUR_PX}px` }}>
+        <div className={`cal-grid ${drag ? 'is-dragging' : ''}`} ref={gridRef} onPointerMove={onGridMove} onPointerUp={onGridUp} onPointerCancel={onGridUp} style={{ ['--rows' as string]: rows, ['--hour' as string]: `${HOUR_PX}px` }}>
           <div className="cal-corner" />
           {days.map((d, i) => (
             <div key={d} className={`cal-dayhead ${d === todayStart ? 'today' : ''} ${d < todayStart ? 'past' : ''}`}>
@@ -170,15 +231,22 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
                 {windows.map((h, i) => (
                   <div key={i} className="cal-window" style={{ top: (h.start / 60 - firstHour) * HOUR_PX, height: ((h.end - h.start) / 60) * HOUR_PX }} />
                 ))}
+                {drag && drag.end > d && drag.start < dayEnd && (
+                  <div className={`cal-item cal-ghost ${drag.kind === 'block' ? 'cal-block' : 'cal-event'}`} style={{ top: top(drag.start), height: height(drag.start, drag.end) }}>
+                    <span className="cal-item-t mono num">{fmt(drag.start)} to {fmt(drag.end)}</span>
+                    <span className="cal-item-title">{drag.kind === 'block' ? 'Pin here' : 'Move here'}</span>
+                  </div>
+                )}
                 {items.filter((it) => it.end > d && it.start < dayEnd).map((it) => {
                   const style = { top: top(it.start), height: height(it.start, it.end) }
                   const isSel = it.id === sel
+                  const lifted = drag?.id === it.id ? 'lifted' : ''
                   if (it.kind === 'block') {
                     const e = entryOf(it.block.entryId)
                     const l = ledgerOf(e?.ledgerId ?? null)
                     const live = s.desk.block?.entryId === it.block.entryId && s.desk.status !== 'idle'
                     return (
-                      <div key={it.id} className={`cal-item cal-block ${isSel ? 'is-selected' : ''} ${it.block.late ? 'late' : ''} ${live ? 'live' : ''}`} style={{ ...style, ...ledgerVars(l) }} data-row={it.id} title={`${e?.title ?? ''} ${fmt(it.start)} to ${fmt(it.end)}`}>
+                      <div key={it.id} className={`cal-item cal-block ${isSel ? 'is-selected' : ''} ${it.block.late ? 'late' : ''} ${live ? 'live' : ''} ${lifted}`} style={{ ...style, ...ledgerVars(l) }} data-row={it.id} title={`${e?.title ?? ''} ${fmt(it.start)} to ${fmt(it.end)}. Drag to pin it elsewhere.`} onPointerDown={(ev) => grabItem(ev, it, 'move')}>
                         <span className="cal-item-t mono num">{fmt(it.start)}</span>
                         <span className="cal-item-title">{l && <b className="mono">{l.code} </b>}{e?.title ?? '(gone)'}</span>
                         {it.block.of > 1 && <span className="cal-item-n mono num">{it.block.chunk}/{it.block.of}</span>}
@@ -188,15 +256,16 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
                   }
                   if (it.kind === 'event') {
                     return (
-                      <div key={it.id} className={`cal-item cal-event ${isSel ? 'is-selected' : ''} ${it.event.entryId ? 'pinned' : ''}`} style={style} data-row={it.id} title={`${it.event.title} ${fmt(it.start)} to ${fmt(it.end)}`}>
+                      <div key={it.id} className={`cal-item cal-event ${isSel ? 'is-selected' : ''} ${it.event.entryId ? 'pinned' : ''} ${lifted}`} style={style} data-row={it.id} title={`${it.event.title} ${fmt(it.start)} to ${fmt(it.end)}. Drag to move it, the bottom edge to resize it.`} onPointerDown={(ev) => grabItem(ev, it, 'move')}>
                         <span className="cal-item-t mono num">{fmt(it.start)}</span>
                         <span className="cal-item-title">{it.event.title}</span>
                         {it.event.origin === 'clerk' ? <Sparkle size={12} className="cal-item-icon" /> : it.event.entryId ? <PushPin size={12} className="cal-item-icon" /> : <Lock size={12} className="cal-item-icon" />}
+                        <span className="cal-resize" aria-hidden onPointerDown={(ev) => grabItem(ev, it, 'resize')} />
                       </div>
                     )
                   }
                   return (
-                    <div key={it.id} className={`cal-item cal-external ${it.external.free ? 'free' : ''} ${isSel ? 'is-selected' : ''}`} style={style} data-row={it.id} title={it.external.title}>
+                    <div key={it.id} className={`cal-item cal-external ${it.external.free ? 'free' : ''} ${isSel ? 'is-selected' : ''}`} style={style} data-row={it.id} title={it.external.title} onPointerDown={() => setSel(it.id)}>
                       <span className="cal-item-t mono num">{fmt(it.start)}</span>
                       <span className="cal-item-title">{it.external.title}</span>
                     </div>
@@ -216,7 +285,7 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
         ) : (
           <>
             <h3 className="side-title caps">The plan</h3>
-            <p className="field-help">Entries with an estimate are placed into your hours, earliest due first, in the order of the flow. Your own events are never moved. Select a block with j and k; Enter starts it, p pins it where it is.</p>
+            <p className="field-help">Entries with an estimate are placed into your hours, earliest due first, in the order of the flow. Your own events are never moved. Select a block with j and k; Enter starts it, p pins it where it is. Drag a block to pin it elsewhere; drag an event to move it, its bottom edge to resize it.</p>
           </>
         )}
         {unestimated.length > 0 && (
