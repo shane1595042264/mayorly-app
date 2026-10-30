@@ -52,8 +52,10 @@ function boot() {
   const engine = new Engine(store)
   const overlay = new Overlay(dataDir)
 
+  // Every page of ours gets the broadcast: the drawer is its own window on a Mac and is
+  // kept, hidden, between uses, so it must see the desk move while it is away.
   const send = (channel: string, payload: unknown) => {
-    if (!overlay.win.isDestroyed()) overlay.win.webContents.send(channel, payload)
+    for (const wc of overlay.pages()) wc.send(channel, payload)
   }
   const command = (cmd: Command) => {
     if (!overlay.win.isVisible()) overlay.toggleVisible()

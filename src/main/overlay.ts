@@ -602,6 +602,14 @@ export class Overlay {
     if (this.drawer && !this.drawer.isDestroyed() && this.drawer.isVisible()) this.drawer.hide()
   }
 
+  /** Every page of ours that renders state: the pet's window, and the drawer while it exists (hidden or not, since it is reused). */
+  pages(): Electron.WebContents[] {
+    const out: Electron.WebContents[] = []
+    if (!this.win.isDestroyed()) out.push(this.win.webContents)
+    if (this.drawer && !this.drawer.isDestroyed()) out.push(this.drawer.webContents)
+    return out
+  }
+
   /** Under the pet when there is room, over it otherwise, flush with the pet's outer side. */
   private drawerPlace(display: Display): Rectangle {
     const wa = display.workArea
