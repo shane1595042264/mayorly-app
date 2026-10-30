@@ -40,6 +40,13 @@ export function blockView(s: MayorlyState, now: number): BlockView | null {
 }
 
 
+/** The next planned block that has not ended, or null. */
+export function nextBlock(s: MayorlyState, now: number) {
+  let best: MayorlyState['calendar']['blocks'][number] | null = null
+  for (const b of s.calendar.blocks) if (b.end > now && (!best || b.start < best.start)) best = b
+  return best
+}
+
 /** Tomatoes a coin record stands for. Older records say nothing, so a harvest's coins are its crop and a tomato is one. */
 export function tomatoesOf(t: TokenTx): number {
   if (t.tomatoes !== undefined) return t.tomatoes

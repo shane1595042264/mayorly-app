@@ -42,6 +42,12 @@ describe('the planner', () => {
     expect(whole.placements.map(span)).toEqual([[at(0, 11), at(0, 13)]])
   })
 
+  it('places a need shorter than the smallest chunk whole', () => {
+    const r = plan(input([task('a', 15), task('b', 5, { order: 1 })]))
+    expect(r.placements.map(span)).toEqual([[at(0, 9), at(0, 9, 15)], [at(0, 9, 15), at(0, 9, 20)]])
+    expect(r.overflow).toEqual([])
+  })
+
   it('never leaves a tail shorter than one chunk', () => {
     const busy = [{ start: at(0, 9, 45), end: at(0, 10) }]
     const r = plan(input([task('a', 60)], { busy }))

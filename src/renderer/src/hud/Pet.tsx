@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { blockView, clock, dayStats, startOfDay, switchTarget, type MayorlyState } from '@core/index'
+import { blockView, clock, dayStats, nextBlock, startOfDay, switchTarget, type MayorlyState } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
 import tomato from '../assets/tomato@1x.png'
 import { bridge } from '../bridge'
@@ -61,8 +61,12 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice }: 
   const breathing = tone === 'live' && !reduce && !dragging
   // Hover says only what the pet does not already show: how to start when idle, how to get back to the other session.
   const back = v ? switchTarget(s) : null
+  // Idle with a block coming up within two hours: the plan's next step, not the deploy hint.
+  const next = !v ? nextBlock(s, now) : null
+  const nextEntry = next && next.start - now < 2 * 3_600_000 ? s.entries.find((e) => e.id === next.entryId) : null
+  const nextAt = next ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: s.settings.calendar.tz || undefined }).format(Math.max(next.start, now)) : ''
   const hint = !v
-    ? `Desk idle. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.`
+    ? nextEntry ? `Next: ${nextEntry.title}, ${nextAt}. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.` : `Desk idle. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.`
     : back ? `${hotkeyLabel(s.settings.hotkeys.switch)}: back to ${back}` : ''
   const text = moving ? MOVE_HINT : (notice ?? hint)
   const showCaption = moving || !!notice || (hover && !dragging && hint !== '')

@@ -215,7 +215,8 @@ function run(input: PlanInput, previous: Placement[]): PlanResult {
     let rem = remaining.get(t.id) ?? 0
     if (rem <= 0) continue
     const from = Math.max(now, t.notBefore ?? 0)
-    const minChunk = Math.max(t.minChunkMin ?? input.minChunkMin, input.gridMin)
+    // A need smaller than the smallest chunk is placed whole: the minimum is a floor on splitting, not on the task.
+    const minChunk = Math.min(Math.max(t.minChunkMin ?? input.minChunkMin, input.gridMin), rem)
     const maxChunk = t.maxChunkMin ?? Infinity
     let stoppedAtDue = false
     for (let i = 0; i < free.length && rem > 0; i++) {

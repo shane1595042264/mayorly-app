@@ -4,7 +4,7 @@
 import type { HotkeyAction, Settings } from '@core/index'
 import { IS_MAC, MODIFIER_KEYS, physicalKey } from './keys'
 
-export type Scope = 'global' | 'plus' | 'capture' | 'deck' | 'list' | 'shelf' | 'move' | 'keymap'
+export type Scope = 'global' | 'plus' | 'capture' | 'deck' | 'list' | 'shelf' | 'cal' | 'move' | 'keymap'
 
 export interface KeyDef {
   id: string
@@ -27,6 +27,7 @@ export const SCOPES: { id: Scope; title: string; blurb: string }[] = [
   { id: 'deck', title: 'Deck', blurb: 'While the deck is open.' },
   { id: 'list', title: 'Lists', blurb: 'The flow, a ledger, the supersets, the couch list. Keys act on the selected row.' },
   { id: 'shelf', title: 'Shelf', blurb: 'The nine bays.' },
+  { id: 'cal', title: 'Calendar', blurb: 'The week. j and k walk the blocks and events; Enter starts one.' },
   { id: 'move', title: 'Moving the tomato', blurb: 'After the move hotkey, until Enter.' },
   { id: 'keymap', title: 'This screen', blurb: '' },
 ]
@@ -63,7 +64,7 @@ export const KEYS: KeyDef[] = [
   { id: 'deck.close', scope: 'deck', label: 'Close the deck', keys: ['Escape'] },
   { id: 'deck.prevTab', scope: 'deck', label: 'Previous tab', keys: ['q'] },
   { id: 'deck.nextTab', scope: 'deck', label: 'Next tab', keys: ['e'] },
-  { id: 'deck.tab', scope: 'deck', label: 'Jump to a tab', keys: ['1', '6'], fixed: true, range: true, note: 'In tab order' },
+  { id: 'deck.tab', scope: 'deck', label: 'Jump to a tab', keys: ['1', '7'], fixed: true, range: true, note: 'In tab order' },
   { id: 'deck.keymap', scope: 'deck', label: 'Keymap', keys: ['?'] },
 
   { id: 'list.down', scope: 'list', label: 'Next row', keys: ['j', 'ArrowDown'] },
@@ -92,6 +93,11 @@ export const KEYS: KeyDef[] = [
   { id: 'shelf.new', scope: 'shelf', label: 'Write a ledger', keys: ['n'] },
   { id: 'shelf.back', scope: 'shelf', label: 'Back to the shelf', keys: ['Backspace'], note: 'From inside a ledger' },
   { id: 'shelf.focus', scope: 'shelf', label: 'Focus here, no entry', keys: ['f'], note: 'From inside a ledger' },
+
+  { id: 'cal.prevWeek', scope: 'cal', label: 'Previous week', keys: ['['] },
+  { id: 'cal.nextWeek', scope: 'cal', label: 'Next week', keys: [']'] },
+  { id: 'cal.today', scope: 'cal', label: 'This week', keys: ['t'] },
+  { id: 'cal.pin', scope: 'cal', label: 'Pin the block where it is, or unpin', keys: ['p'], note: 'A pin is yours: the planner keeps it and counts it' },
 
   { id: 'move.left', scope: 'move', label: 'Left', keys: ['h', 'ArrowLeft'], note: 'Shift goes far' },
   { id: 'move.down', scope: 'move', label: 'Down', keys: ['j', 'ArrowDown'], note: 'Shift goes far' },
@@ -185,7 +191,7 @@ export function actionFor(e: KeyboardEvent, scope: Scope, settings: Settings, op
 /** Scopes whose keys can be live at the same time, so a shared key is a real clash. */
 export function scopesOverlap(a: Scope, b: Scope): boolean {
   if (a === b) return true
-  const inDeck = new Set<Scope>(['deck', 'list', 'shelf'])
+  const inDeck = new Set<Scope>(['deck', 'list', 'shelf', 'cal'])
   return inDeck.has(a) && inDeck.has(b)
 }
 

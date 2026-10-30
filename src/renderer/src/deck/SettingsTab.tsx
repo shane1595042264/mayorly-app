@@ -66,6 +66,8 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
         </div>
       </section>
 
+      <CalendarSection s={s} />
+
       {kind === 'electron' && <AccountSection />}
       {kind === 'electron' && <AiSection />}
       <DataSection kind={kind} openNotes={openNotes} />
@@ -386,6 +388,64 @@ function HotkeyField({ label, value, onCommit }: { label: string; value: string;
  * Typed freely, clamped on commit. Clamping on every keystroke turned "1" then "4"
  * into "14" then the maximum, so a value could never be replaced by typing.
  */
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`
+const minutesOf = (t: string) => {
+  const [h, m] = t.split(':').map(Number)
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : NaN
+}
+
+/** Work hours and the planner's knobs. One window a day here; the reducer keeps any extra ones a request added. */
+function CalendarSection({ s }: { s: MayorlyState }) {
+  const c = s.settings.calendar
+  const set = (patch: Partial<typeof c>) => dispatch({ type: 'settings/update', patch: { calendar: { ...c, ...patch } } })
+  const setDay = (d: number, w: { start: number; end: number } | null) => {
+    const hours = c.hours.map((list, i) => (i === d ? (w ? [w, ...list.slice(1)] : []) : list))
+    set({ hours })
+  }
+  return (
+    <section>
+      <h3 className="side-title caps">Calendar</h3>
+      <p className="field-help">The planner places entries with an estimate into these hours, earliest due first, in the order of the flow. Hours are kept in {c.tz || 'this machine\'s zone'} and sync with the account.</p>
+      <div className="hours-grid">
+        {DAY_NAMES.map((name, d) => {
+          const w = c.hours[d]?.[0]
+          return (
+            <div key={name} className="hours-row">
+              <label className="check">
+                <input type="checkbox" checked={!!w} onChange={(e) => setDay(d, e.target.checked ? { start: 9 * 60, end: 17 * 60 } : null)} />
+                <span className="check-box" aria-hidden />
+                <span className="hours-day caps">{name}</span>
+              </label>
+              {w ? (
+                <>
+                  <input type="time" value={hhmm(w.start)} onChange={(e) => { const m = minutesOf(e.target.value); if (Number.isFinite(m)) setDay(d, { start: m, end: Math.max(m + 15, w.end) }) }} aria-label={`${name} start`} />
+                  <span className="dim">to</span>
+                  <input type="time" value={hhmm(w.end)} onChange={(e) => { const m = minutesOf(e.target.value); if (Number.isFinite(m)) setDay(d, { start: Math.min(w.start, m - 15), end: m }) }} aria-label={`${name} end`} />
+                </>
+              ) : (
+                <span className="dim">off</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <div className="rules" style={{ marginTop: 14 }}>
+        <Num label="Break" help="minutes after each block" value={c.breakMin} min={0} max={60} onChange={(breakMin) => set({ breakMin })} />
+        <Num label="Smallest chunk" help="minutes; a tomato is 25" value={c.minChunkMin} min={5} max={240} onChange={(minChunkMin) => set({ minChunkMin })} />
+        <Num label="Horizon" help="days ahead the planner looks" value={c.horizonDays} min={7} max={28} onChange={(horizonDays) => set({ horizonDays })} />
+      </div>
+      <div className="rules">
+        <label className="check" title="On, work keeps being placed past its due and is marked late. Off, nothing is placed past a due and the rest is reported as no room.">
+          <input type="checkbox" checked={c.spill} onChange={(e) => set({ spill: e.target.checked })} />
+          <span className="check-box" aria-hidden />
+          <span>Keep placing past a due, marked late</span>
+        </label>
+      </div>
+    </section>
+  )
+}
+
 function TextSize({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
   return (
     <label className="field">

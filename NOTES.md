@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The calendar
+
+- A Calendar tab, second in the deck: the week, with every entry that has an estimate placed into your work hours, earliest due first, in the order of the flow. What does not fit is said at the top, not hidden.
+- Your own events never move. Select a block with j and k, Enter starts it, p pins it where it is. [ and ] turn the week, t comes back.
+- Settings has the hours per day, the break, the smallest chunk and the horizon. The hours are kept in your zone and sync.
+- Next up: the clerk takes requests, Google comes in as busy time and your plan goes out as a feed Google can subscribe to.
+
 ## More icons, more colours, and a pick by the clerk
 
 - A ledger can wear any of 174 icons, searchable by name, and one of twelve colours. Icons another ledger already wears are dimmed.

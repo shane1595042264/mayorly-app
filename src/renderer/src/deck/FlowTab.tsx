@@ -116,7 +116,7 @@ export function FlowTab({ s }: { s: MayorlyState }) {
             <p className="empty-title">The flow is empty.</p>
             <p>Capture anything from anywhere with {hotkeyLabel(s.settings.hotkeys.capture)}. It lands here in order, and Blitz runs it top to bottom.</p>
             <p>{hotkeyLabel(s.settings.hotkeys.plus)} deploys the desk, {hotkeyLabel(s.settings.hotkeys.deck)} opens this deck, and ? lists every key.</p>
-            {s.ledgers.length === 0 && <p>No ledgers yet: write one or three on the Shelf (press 2) so the clerk has somewhere to file.</p>}
+            {s.ledgers.length === 0 && <p>No ledgers yet: write one or three on the Shelf (press 3) so the clerk has somewhere to file.</p>}
           </div>
         ) : (
           <Reorder.Group axis="y" values={ids} onReorder={setIds} className="flow-list" as="ol">

@@ -8,6 +8,7 @@ import { useLean } from '../lib/parallax'
 import { sfx } from '../lib/sound'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { current } from '../store'
+import { CalendarTab } from './CalendarTab'
 import { FlowTab } from './FlowTab'
 import { Keymap } from './Keymap'
 import { LeisureTab } from './LeisureTab'
@@ -17,7 +18,7 @@ import { ShelfTab } from './ShelfTab'
 import { SupersetsTab } from './SupersetsTab'
 import { WhatsNew } from './WhatsNew'
 
-const TABS = ['Flow', 'Shelf', 'Supersets', 'Leisure', 'Record', 'Settings'] as const
+const TABS = ['Flow', 'Calendar', 'Shelf', 'Supersets', 'Leisure', 'Record', 'Settings'] as const
 type Tab = (typeof TABS)[number]
 
 let remembered: Tab = 'Flow'
@@ -70,7 +71,7 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
       else if (a === 'deck.prevTab') setTab(TABS[(i + TABS.length - 1) % TABS.length])
       else if (a === 'deck.nextTab') setTab(TABS[(i + 1) % TABS.length])
       else if (a === 'deck.keymap') setKeymap(true)
-      else if (!a && !e.shiftKey && /^[1-6]$/.test(e.key)) setTab(TABS[Number(e.key) - 1])
+      else if (!a && !e.shiftKey && /^[1-7]$/.test(e.key)) setTab(TABS[Number(e.key) - 1])
       else return
       e.preventDefault()
       recordUse(a ?? 'deck.tab')
@@ -123,6 +124,7 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
 
         <div className="deck-body" role="tabpanel" id="deck-panel" aria-labelledby={`tab-${tab}`}>
           {tab === 'Flow' && <FlowTab s={s} />}
+          {tab === 'Calendar' && <CalendarTab s={s} />}
           {tab === 'Shelf' && <ShelfTab s={s} />}
           {tab === 'Supersets' && <SupersetsTab s={s} />}
           {tab === 'Leisure' && <LeisureTab s={s} />}
