@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { CalendarBlank, CaretLeft, CaretRight, Lock, Play, PushPin, Sparkle, Warning } from '@phosphor-icons/react'
-import { openFlow, span, type CalBlock, type CalEvent, type ExternalEvent, type MayorlyState } from '@core/index'
+import { openFlow, span, type Action, type CalBlock, type CalEvent, type ExternalEvent, type MayorlyState } from '@core/index'
 import { startOfDayIn, wallClock, zonedEpoch } from '../../../shared/windows'
-import { actionFor, recordUse } from '../lib/keymap'
+import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { useListKeys } from '../lib/listkeys'
 import { ledgerVars } from '../lib/themes'
 import { current, dispatch, useNow } from '../store'
@@ -66,6 +66,7 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
   const entryOf = (id: string | null) => (id ? s.entries.find((e) => e.id === id) ?? null : null)
   const ledgerOf = (id: string | null) => (id ? s.ledgers.find((l) => l.id === id) ?? null : null)
 
+  const [adding, setAdding] = useState(false)
   const { sel } = useListKeys(items.map((i) => i.id), ({ action, id }) => {
     const it = items.find((i) => i.id === id)
     if (action === 'list.go') {
@@ -85,23 +86,29 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
     return false
   })
 
-  // The week keys, from the keymap's cal scope.
-  const onKey = (e: React.KeyboardEvent) => {
-    const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select')
-    if (typing) return
-    const st = current()
-    const a = st ? actionFor(e.nativeEvent, 'cal', st.settings) : null
-    if (a === 'cal.prevWeek') setWeekOffset((w) => w - 1)
-    else if (a === 'cal.nextWeek') setWeekOffset((w) => w + 1)
-    else if (a === 'cal.today') setWeekOffset(0)
-    else if (a === 'cal.pin') {
-      const it = items.find((i) => i.id === sel)
-      if (it?.kind === 'block') dispatch({ type: 'calendar/pin', blockId: it.block.id })
-      else if (it?.kind === 'event' && it.event.entryId) dispatch({ type: 'calendar/event-delete', id: it.event.id })
-    } else return
-    e.preventDefault()
-    recordUse(a)
-  }
+  // The week keys, from the keymap's cal scope, on the window like every other tab's.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (keymapOpen()) return
+      const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select')
+      if (typing || e.altKey || e.ctrlKey || e.metaKey) return
+      const st = current()
+      const a = st ? actionFor(e, 'cal', st.settings) : null
+      if (a === 'cal.prevWeek') setWeekOffset((w) => w - 1)
+      else if (a === 'cal.nextWeek') setWeekOffset((w) => w + 1)
+      else if (a === 'cal.today') setWeekOffset(0)
+      else if (a === 'cal.pin') {
+        const it = items.find((i) => i.id === sel)
+        if (it?.kind === 'block') dispatch({ type: 'calendar/pin', blockId: it.block.id })
+        else if (it?.kind === 'event' && it.event.entryId) dispatch({ type: 'calendar/event-delete', id: it.event.id })
+      } else if (a === 'cal.new') setAdding(true)
+      else return
+      e.preventDefault()
+      recordUse(a)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [items, sel])
 
   const fmt = (t: number) => new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: tz || undefined }).format(t)
   const fmtDay = (t: number) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: tz || undefined }).format(t)
@@ -114,13 +121,14 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
   const selected = items.find((i) => i.id === sel) ?? null
 
   return (
-    <div className="cal" onKeyDown={onKey} tabIndex={-1}>
+    <div className="cal">
       <div className="cal-main">
         <header className="cal-head">
           <button type="button" className="icon-btn" aria-label="Previous week" onClick={() => setWeekOffset((w) => w - 1)}><CaretLeft size={16} /></button>
           <h2 className="cal-week">{fmtDay(days[0])} to {fmtDay(days[6])}</h2>
           <button type="button" className="icon-btn" aria-label="Next week" onClick={() => setWeekOffset((w) => w + 1)}><CaretRight size={16} /></button>
           {weekOffset !== 0 && <button type="button" className="btn ghost" onClick={() => setWeekOffset(0)}>Today</button>}
+          <button type="button" className="btn ghost" onClick={() => setAdding(true)}>New event</button>
           <span className="cal-planned dim">
             {cal.horizonEnd ? `Planned to ${fmtDay(cal.horizonEnd)}` : 'Not planned yet'}
             {!tz && '  (no zone yet; it is set on the first launch)'}
@@ -199,8 +207,10 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
         </div>
       </div>
       <aside className="cal-side">
-        {selected ? (
-          <Selected s={s} item={selected} fmt={fmt} fmtDay={fmtDay} />
+        {adding ? (
+          <EventForm tz={tz} now={now} done={() => setAdding(false)} />
+        ) : selected ? (
+          <Selected s={s} item={selected} fmt={fmt} fmtDay={fmtDay} tz={tz} />
         ) : (
           <>
             <h3 className="side-title caps">The plan</h3>
@@ -230,8 +240,84 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
   )
 }
 
-function Selected({ s, item, fmt, fmtDay }: { s: MayorlyState; item: Item; fmt: (t: number) => string; fmtDay: (t: number) => string }) {
+/** Wall clock in the calendar's zone, as the value a datetime-local input wants, and back. */
+function toLocal(t: number, tz: string): string {
+  const w = wallClock(t, tz)
+  return `${w.y}-${String(w.m).padStart(2, '0')}-${String(w.d).padStart(2, '0')}T${String(Math.floor(w.minutes / 60)).padStart(2, '0')}:${String(w.minutes % 60).padStart(2, '0')}`
+}
+function fromLocal(v: string, tz: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(v)
+  if (!m) return null
+  return zonedEpoch(tz, Number(m[1]), Number(m[2]), Number(m[3]), Number(m[4]) * 60 + Number(m[5]))
+}
+
+/** The knobs the planner reads on an entry, as fields that dispatch entry/update. */
+function Knobs({ s, entryId, tz }: { s: MayorlyState; entryId: string; tz: string }) {
+  const e = s.entries.find((x) => x.id === entryId)
+  if (!e) return null
+  const up = (patch: Extract<Action, { type: 'entry/update' }>['patch']) => dispatch({ type: 'entry/update', id: e.id, patch })
+  return (
+    <div className="cal-knobs">
+      <label className="field">
+        <span className="field-label caps">Estimate</span>
+        <input type="number" min={5} max={1440} step={5} value={e.estimateMin ?? ''} placeholder="min" onChange={(ev) => up({ estimateMin: ev.target.value === '' ? null : Number(ev.target.value) })} />
+      </label>
+      <label className="field">
+        <span className="field-label caps">Due</span>
+        <input type="datetime-local" value={e.due ? toLocal(e.due, tz) : ''} onChange={(ev) => up({ due: ev.target.value ? fromLocal(ev.target.value, tz) : null })} />
+      </label>
+      <label className="field">
+        <span className="field-label caps">Not before</span>
+        <input type="datetime-local" value={e.notBefore ? toLocal(e.notBefore, tz) : ''} onChange={(ev) => up({ notBefore: ev.target.value ? fromLocal(ev.target.value, tz) : null })} />
+      </label>
+      <label className="check"><input type="checkbox" checked={!!e.rush} onChange={(ev) => up({ rush: ev.target.checked })} /><span className="check-box" aria-hidden /><span>Up next, ahead of every due</span></label>
+      <label className="check"><input type="checkbox" checked={e.splittable !== false} onChange={(ev) => up({ splittable: ev.target.checked })} /><span className="check-box" aria-hidden /><span>May be split into chunks</span></label>
+      {e.splittable !== false && (
+        <div className="form-row">
+          <label className="field"><span className="field-label caps">Chunk min</span><input type="number" min={5} max={1440} step={5} value={e.minChunkMin ?? ''} placeholder={String(s.settings.calendar.minChunkMin)} onChange={(ev) => up({ minChunkMin: ev.target.value === '' ? undefined : Number(ev.target.value) })} /></label>
+          <label className="field"><span className="field-label caps">Chunk max</span><input type="number" min={5} max={1440} step={5} value={e.maxChunkMin ?? ''} placeholder="none" onChange={(ev) => up({ maxChunkMin: ev.target.value === '' ? undefined : Number(ev.target.value) })} /></label>
+        </div>
+      )}
+      <label className="check"><input type="checkbox" checked={!!e.offCalendar} onChange={(ev) => up({ offCalendar: ev.target.checked })} /><span className="check-box" aria-hidden /><span>Keep off the calendar</span></label>
+    </div>
+  )
+}
+
+/** A new event of your own: the planner routes around it from the moment it is saved. */
+function EventForm({ tz, now, done }: { tz: string; now: number; done: () => void }) {
+  const startDefault = Math.ceil(now / (30 * MIN)) * 30 * MIN
+  const [title, setTitle] = useState('')
+  const [start, setStart] = useState(toLocal(startDefault, tz))
+  const [end, setEnd] = useState(toLocal(startDefault + 60 * MIN, tz))
+  const [note, setNote] = useState('')
+  const a = fromLocal(start, tz)
+  const b = fromLocal(end, tz)
+  const ok = title.trim() && a !== null && b !== null && b > a
+  const save = () => {
+    if (!ok || a === null || b === null) return
+    dispatch({ type: 'calendar/event-add', title, start: a, end: b, note: note || undefined })
+    done()
+  }
+  return (
+    <form className="cal-sel" onSubmit={(ev) => { ev.preventDefault(); save() }} onKeyDown={(ev) => { if (ev.key === 'Escape') done(); ev.stopPropagation() }}>
+      <h3 className="side-title caps">New event</h3>
+      <p className="field-help">Yours: the planner routes around it and never moves it.</p>
+      <label className="field"><span className="field-label caps">Title</span><input autoFocus value={title} onChange={(ev) => setTitle(ev.target.value)} placeholder="Dentist" maxLength={160} /></label>
+      <label className="field"><span className="field-label caps">From</span><input type="datetime-local" value={start} onChange={(ev) => setStart(ev.target.value)} /></label>
+      <label className="field"><span className="field-label caps">To</span><input type="datetime-local" value={end} onChange={(ev) => setEnd(ev.target.value)} /></label>
+      <label className="field"><span className="field-label caps">Note</span><input value={note} onChange={(ev) => setNote(ev.target.value)} placeholder="optional" maxLength={400} /></label>
+      <div className="form-actions">
+        <button type="submit" className="btn primary" disabled={!ok}>Save</button>
+        <button type="button" className="btn ghost" onClick={done}>Cancel</button>
+      </div>
+    </form>
+  )
+}
+
+function Selected({ s, item, fmt, fmtDay, tz }: { s: MayorlyState; item: Item; fmt: (t: number) => string; fmtDay: (t: number) => string; tz: string }) {
   const when = `${fmtDay(item.start)}, ${fmt(item.start)} to ${fmt(item.end)}`
+  const [editing, setEditing] = useState(false)
+  useEffect(() => setEditing(false), [item.id])
   if (item.kind === 'block') {
     const e = s.entries.find((x) => x.id === item.block.entryId)
     if (!e) return null
@@ -241,16 +327,19 @@ function Selected({ s, item, fmt, fmtDay }: { s: MayorlyState; item: Item; fmt: 
         <h3 className="side-title caps">{l?.code ?? 'Tray'}  block {item.block.chunk} of {item.block.of}</h3>
         <p className="cal-sel-title">{e.title}</p>
         <p className="field-help">{when}{item.block.late ? '. Past its due.' : ''}</p>
-        <p className="field-help">{e.estimateMin ? `${e.estimateMin}m estimated` : ''}{e.due ? `, due ${fmtDay(e.due)} ${fmt(e.due)}` : ''}</p>
         <div className="form-actions">
           <button type="button" className="btn" onClick={() => dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })}><Play size={14} /> Start now</button>
           <button type="button" className="btn ghost" onClick={() => dispatch({ type: 'calendar/pin', blockId: item.block.id })}><PushPin size={14} /> Pin here</button>
         </div>
+        <Knobs s={s} entryId={e.id} tz={tz} />
       </section>
     )
   }
   if (item.kind === 'event') {
     const e = item.event.entryId ? s.entries.find((x) => x.id === item.event.entryId) : null
+    if (editing) {
+      return <EventEdit event={item.event} tz={tz} done={() => setEditing(false)} />
+    }
     return (
       <section className="cal-sel">
         <h3 className="side-title caps">{item.event.origin === 'clerk' ? 'Placed by the clerk' : e ? 'Pinned' : 'Your event'}</h3>
@@ -259,8 +348,10 @@ function Selected({ s, item, fmt, fmtDay }: { s: MayorlyState; item: Item; fmt: 
         {item.event.note && <p className="field-help">{item.event.note}</p>}
         <div className="form-actions">
           {e && <button type="button" className="btn" onClick={() => dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })}><Play size={14} /> Start now</button>}
+          <button type="button" className="btn ghost" onClick={() => setEditing(true)}>Edit</button>
           <button type="button" className="btn ghost" onClick={() => dispatch({ type: 'calendar/event-delete', id: item.event.id })}>{e ? 'Unpin' : 'Delete'}</button>
         </div>
+        {e && <Knobs s={s} entryId={e.id} tz={tz} />}
       </section>
     )
   }
@@ -273,4 +364,25 @@ function Selected({ s, item, fmt, fmtDay }: { s: MayorlyState; item: Item; fmt: 
   )
 }
 
-export { zonedEpoch }
+function EventEdit({ event, tz, done }: { event: CalEvent; tz: string; done: () => void }) {
+  const [title, setTitle] = useState(event.title)
+  const [start, setStart] = useState(toLocal(event.start, tz))
+  const [end, setEnd] = useState(toLocal(event.end, tz))
+  const [note, setNote] = useState(event.note ?? '')
+  const a = fromLocal(start, tz)
+  const b = fromLocal(end, tz)
+  const ok = title.trim() && a !== null && b !== null && b > a
+  return (
+    <form className="cal-sel" onSubmit={(ev) => { ev.preventDefault(); if (ok && a !== null && b !== null) { dispatch({ type: 'calendar/event-update', id: event.id, patch: { title, start: a, end: b, note } }); done() } }} onKeyDown={(ev) => { if (ev.key === 'Escape') done(); ev.stopPropagation() }}>
+      <h3 className="side-title caps">Edit event</h3>
+      <label className="field"><span className="field-label caps">Title</span><input autoFocus value={title} onChange={(ev) => setTitle(ev.target.value)} maxLength={160} /></label>
+      <label className="field"><span className="field-label caps">From</span><input type="datetime-local" value={start} onChange={(ev) => setStart(ev.target.value)} /></label>
+      <label className="field"><span className="field-label caps">To</span><input type="datetime-local" value={end} onChange={(ev) => setEnd(ev.target.value)} /></label>
+      <label className="field"><span className="field-label caps">Note</span><input value={note} onChange={(ev) => setNote(ev.target.value)} maxLength={400} /></label>
+      <div className="form-actions">
+        <button type="submit" className="btn primary" disabled={!ok}>Save</button>
+        <button type="button" className="btn ghost" onClick={done}>Cancel</button>
+      </div>
+    </form>
+  )
+}

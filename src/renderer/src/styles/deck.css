@@ -307,6 +307,9 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .cal-side { padding-left: 24px; border-left: 1px solid var(--line); display: grid; align-content: start; gap: 20px; }
 .cal-sel-title { margin: 6px 0 4px; font-size: 16px; font-weight: 600; }
 .cal-list ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; }
+.cal-sel { display: grid; gap: 10px; align-content: start; }
+.cal-knobs { display: grid; gap: 10px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.deck .cal-sel input[type='datetime-local'] { font-size: 13px; height: 34px; }
 .cal-empty { display: flex; align-items: center; gap: 8px; }
 .hours-grid { display: grid; gap: 6px; margin-top: 10px; }
 .hours-row { display: flex; align-items: center; gap: 10px; font-size: 14px; }

@@ -98,6 +98,7 @@ export const KEYS: KeyDef[] = [
   { id: 'cal.nextWeek', scope: 'cal', label: 'Next week', keys: [']'] },
   { id: 'cal.today', scope: 'cal', label: 'This week', keys: ['t'] },
   { id: 'cal.pin', scope: 'cal', label: 'Pin the block where it is, or unpin', keys: ['p'], note: 'A pin is yours: the planner keeps it and counts it' },
+  { id: 'cal.new', scope: 'cal', label: 'New event of your own', keys: ['n'] },
 
   { id: 'move.left', scope: 'move', label: 'Left', keys: ['h', 'ArrowLeft'], note: 'Shift goes far' },
   { id: 'move.down', scope: 'move', label: 'Down', keys: ['j', 'ArrowDown'], note: 'Shift goes far' },
