@@ -12,6 +12,7 @@ import { hotkeyLabel, matchesAcceleratorKey, physicalKey } from '../lib/keys'
 import { actionFor, keyLabel, keysFor, recordUse } from '../lib/keymap'
 import { Scramble } from '../lib/Scramble'
 import { useLean } from '../lib/parallax'
+import { ledgerVars } from '../lib/themes'
 import { sfx } from '../lib/sound'
 import { dispatch, useHudEvents, useNow } from '../store'
 import { ARM_OF_ACTION, onArm, onPick, pointArm, takeArmHint, takePickHint, type Arm } from './arms'
@@ -74,7 +75,7 @@ export function PlusMenu({ s, close, open }: Props) {
       key: l.id,
       label: l.code,
       n: i + 1,
-      icon: <Glyph name={l.glyph} size={22} />,
+      icon: <span style={{ ...ledgerVars(l), color: 'var(--ledger)' }}><Glyph name={l.glyph} size={22} /></span>,
       current: l.id === ledgerId,
       apply: () => {
         if (live) {
@@ -329,7 +330,7 @@ export function PlusMenu({ s, close, open }: Props) {
         <i className="lead lead-right" />
         <i className="lead lead-bottom" />
 
-        <div className="slab" ref={slabScope}>
+        <div className="slab" ref={slabScope} style={ledgerVars(ledger)}>
           <div className="slab-face">
             <span className="corner tl" /><span className="corner tr" /><span className="corner bl" /><span className="corner br" />
             <i className="node n-top" /><i className="node n-left" /><i className="node n-right" /><i className="node n-bottom" />

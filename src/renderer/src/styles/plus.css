@@ -79,14 +79,14 @@
   line-height: 0.85;
   letter-spacing: 0.04em;
 }
-.slab-code svg { color: var(--ink-2); }
+.slab-code svg { color: var(--ledger, var(--ink-2)); }
 .slab-status {
   padding: 3px 8px 2px;
   border: 1px solid var(--line-2);
   font-size: 12px;
   color: var(--ink-2);
 }
-.slab-status.live { color: var(--accent); border-color: var(--accent-2); }
+.slab-status.live { color: var(--ledger, var(--accent)); border-color: var(--ledger-2, var(--accent-2)); }
 .slab-ledger { margin-top: 6px; font-size: 13px; color: var(--ink-2); }
 .slab-entry {
   align-self: end;

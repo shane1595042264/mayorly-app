@@ -5,6 +5,7 @@ import type { UiMode } from '../../../shared/bridge'
 import tomato from '../assets/tomato@1x.png'
 import { bridge } from '../bridge'
 import { hotkeyLabel } from '../lib/keys'
+import { ledgerVars } from '../lib/themes'
 import { useNow } from '../store'
 
 // The resting HUD is the founder's tomato holding one sign: the clock while a block
@@ -74,7 +75,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice }: 
   return (
     <motion.div
       className={`pet-wrap ${right ? 'pet-right' : 'pet-left'}`}
-      style={{ scale: s.settings.hudScale }}
+      style={{ scale: s.settings.hudScale, ...ledgerVars(v?.ledger) }}
       animate={{ opacity: away ? 0 : 1, y: away ? 4 : 0 }}
       transition={away ? { duration: 0.14, ease: 'easeOut' } : { type: 'spring', stiffness: 220, damping: 26 }}
       onMouseEnter={() => setHover(true)}

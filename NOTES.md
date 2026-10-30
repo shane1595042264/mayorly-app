@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Paid work, and ledger colours
+
+- A ledger can be set to pay no coins, for work you are paid for in money: tomatoes still ripen and count, nothing is minted and nothing is charged. Edit the ledger on the shelf and untick Pays coins.
+- Each ledger can wear a colour. The pet's sign, the shelf bay, the live row and the swap menu show it.
+- The day's tomato count now counts every tomato in a harvest, not one per entry.
+
 ## The quick drawer, and a hold on the couch
 
 - Option+Shift+R drops a small drawer from the pet for what is on the desk: notes and a checklist under an entry, the switch-when rules under a leisure item. Click a line to edit it, Enter adds one, Esc closes. On a Mac the pet's window grows just enough for it; the deck stays closed.

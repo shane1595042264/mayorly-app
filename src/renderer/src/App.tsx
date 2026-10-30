@@ -97,7 +97,7 @@ export function App() {
   useHudEvents(
     useCallback((events: HudEvent[]) => {
       for (const e of events) {
-        if (e.type !== 'harvest') continue
+        if (e.type !== 'harvest' || e.tokens <= 0) continue
         // The pet alone on a Mac screen: the shell plays it in the effects window.
         if (layoutRef.current.compact && shellMode.current === 'field') continue
         const sprite = document.querySelector('.pet-sprite')?.getBoundingClientRect()

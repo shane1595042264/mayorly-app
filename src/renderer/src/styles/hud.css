@@ -74,7 +74,7 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
 }
 .pet-left .pet-task { text-align: left; }
 .pet-task.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: anywhere; }
-.pet-task.tone-live { border-color: var(--accent-2); }
+.pet-task.tone-live { border-color: var(--ledger-2, var(--accent-2)); }
 .pet-task.tone-hold { color: var(--ink); }
 .pet-task.tone-couch { color: var(--leisure); }
 .pet-sign {
@@ -99,7 +99,7 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
 }
 .pet-sign:hover { border-color: var(--ink-2); }
 .pet-sign:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
-.pet-sign.tone-live { color: var(--accent); border-color: var(--accent-2); }
+.pet-sign.tone-live { color: var(--ledger, var(--accent)); border-color: var(--ledger-2, var(--accent-2)); }
 .pet-sign.tone-rest { color: var(--ink-2); }
 .pet-sign.tone-ready { color: var(--ink-2); border-color: var(--accent-2); }
 .pet-sign.tone-idle { color: var(--ink-3); }

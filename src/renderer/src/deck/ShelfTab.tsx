@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Check, LockSimple, PencilSimple, Play, Plus, Trash } from '@phosphor-icons/react'
 import {
-  dayStats, entrySpentMs, entryTomatoes, LEDGER_CAP, ledgerEntries, span, startOfDay, type Entry, type GlyphName, type Ledger, type MayorlyState,
+  dayStats, entrySpentMs, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, ledgerEntries, span, startOfDay, type Entry, type GlyphName, type Ledger, type LedgerTheme, type MayorlyState,
 } from '@core/index'
 import { Glyph, GLYPHS } from '../lib/glyphs'
+import { ledgerVars, THEME_COLORS } from '../lib/themes'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { cycleLedger, useListKeys } from '../lib/listkeys'
 import { noteOrigin } from '../lib/origin'
@@ -99,7 +100,7 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
           const openCount = ledgerEntries(s, l.id).length
           const ms = today.byLedger.find((b) => b.ledgerId === l.id)?.focusMs ?? 0
           return (
-            <div key={l.id} className={`bay bay-open ${cell === i ? 'is-selected' : ''}`} role="button" tabIndex={0} onClick={() => setOpen(l.id)} onKeyDown={(e) => e.key === 'Enter' && setOpen(l.id)} aria-label={`Open ${l.name}`}>
+            <div key={l.id} className={`bay bay-open ${cell === i ? 'is-selected' : ''}`} style={ledgerVars(l)} role="button" tabIndex={0} onClick={() => setOpen(l.id)} onKeyDown={(e) => e.key === 'Enter' && setOpen(l.id)} aria-label={`Open ${l.name}`}>
               <span className="bay-n mono dim">{i + 1}</span>
               <button
                 type="button"
@@ -117,6 +118,7 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
               <span className="bay-stats mono num">
                 <span>{openCount} open</span>
                 <span>{span(ms)} today</span>
+                {l.pays === false && <span className="bay-nopay" title="Paid work: tomatoes count, no coin is minted">no coins</span>}
                 {l.handWritten && <LockSimple size={12} aria-label="Hand-written, locked from the clerk" />}
               </span>
             </div>
@@ -221,7 +223,7 @@ function LedgerRow({ s, e, index, now, live, selected, renameTick }: { s: Mayorl
   }, [renameTick])
   const spent = entrySpentMs(s, e.id, now)
   return (
-    <li className={`row no-grip ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} data-row={e.id} aria-current={selected ? 'true' : undefined}>
+    <li className={`row no-grip ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} style={ledgerVars(s.ledgers.find((l) => l.id === e.ledgerId))} data-row={e.id} aria-current={selected ? 'true' : undefined}>
       <span className="row-n mono num dim">{String(index + 1).padStart(2, '0')}</span>
       <select
         className="code-select mono"
@@ -281,13 +283,15 @@ function LedgerForm({ s, ledger, done }: { s: MayorlyState; ledger: Ledger | nul
   const [code, setCode] = useState(ledger?.code ?? '')
   const [criterion, setCriterion] = useState(ledger?.criterion ?? '')
   const [glyph, setGlyph] = useState<GlyphName>(ledger?.glyph ?? 'book')
+  const [pays, setPays] = useState(ledger?.pays !== false)
+  const [theme, setTheme] = useState<LedgerTheme>(ledger?.theme ?? 'amber')
   const [confirm, setConfirm] = useState(false)
   const taken = s.ledgers.some((l) => l.id !== ledger?.id && l.code === code.toUpperCase())
 
   const save = () => {
     if (!name.trim()) return
-    if (ledger) dispatch({ type: 'ledger/update', id: ledger.id, patch: { name, code, criterion, glyph } })
-    else dispatch({ type: 'ledger/create', name, code: code || undefined, criterion, glyph })
+    if (ledger) dispatch({ type: 'ledger/update', id: ledger.id, patch: { name, code, criterion, glyph, pays, theme } })
+    else dispatch({ type: 'ledger/create', name, code: code || undefined, criterion, glyph, pays, theme })
     done()
   }
 
@@ -320,6 +324,18 @@ function LedgerForm({ s, ledger, done }: { s: MayorlyState; ledger: Ledger | nul
             <Glyph name={g} size={16} />
           </button>
         ))}
+      </div>
+      <div className="form-row ledger-extras">
+        <div className="theme-pick" role="radiogroup" aria-label="Colour">
+          {LEDGER_THEMES.map((t) => (
+            <button type="button" key={t} role="radio" aria-checked={t === theme} className={t === theme ? 'on' : ''} style={{ background: THEME_COLORS[t] }} onClick={() => setTheme(t)} aria-label={t} title={t} />
+          ))}
+        </div>
+        <label className="check" title="Off for work you are paid for in money: tomatoes still count, no coin is minted, nothing is charged.">
+          <input type="checkbox" checked={pays} onChange={(e) => setPays(e.target.checked)} />
+          <span className="check-box" aria-hidden />
+          <span>Pays coins</span>
+        </label>
       </div>
       <div className="form-actions">
         <button type="submit" className="btn primary" disabled={!name.trim() || taken}>Save</button>

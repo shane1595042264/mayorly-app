@@ -1,3 +1,4 @@
+import { LEDGER_THEMES, type LedgerTheme } from './model'
 import { deriveCode, prefixClerk, type Clerk, type Filing } from './clerk'
 import type {
   Block, Ctx, Entry, GlyphName, HeldSession, HudEvent, Id, Ledger, MayorlyState, Mode, Settings, Superset,
@@ -39,8 +40,8 @@ export type Action =
   | { type: 'entry/reopen'; id: Id }
   | { type: 'entry/delete'; id: Id }
   | { type: 'entry/move'; id: Id; toIndex: number }
-  | { type: 'ledger/create'; name: string; code?: string; criterion: string; glyph: GlyphName }
-  | { type: 'ledger/update'; id: Id; patch: Partial<Pick<Ledger, 'name' | 'code' | 'criterion' | 'glyph'>> }
+  | { type: 'ledger/create'; name: string; code?: string; criterion: string; glyph: GlyphName; pays?: boolean; theme?: LedgerTheme }
+  | { type: 'ledger/update'; id: Id; patch: Partial<Pick<Ledger, 'name' | 'code' | 'criterion' | 'glyph' | 'pays' | 'theme'>> }
   | { type: 'ledger/delete'; id: Id }
   | { type: 'superset/save'; superset: Superset }
   | { type: 'superset/delete'; id: Id }
@@ -303,6 +304,8 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
         criterion: action.criterion.trim(),
         glyph: action.glyph,
         handWritten: true,
+        pays: action.pays !== false,
+        theme: validTheme(action.theme),
         createdAt: now,
       })
       break
@@ -314,6 +317,8 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       if (p.name !== undefined && p.name.trim()) l.name = p.name.trim()
       if (p.criterion !== undefined) l.criterion = p.criterion.trim()
       if (p.glyph !== undefined) l.glyph = p.glyph
+      if (p.pays !== undefined) l.pays = !!p.pays
+      if (p.theme !== undefined) l.theme = validTheme(p.theme)
       if (p.code !== undefined) {
         const c = normaliseCode(p.code)
         if (c && !s.ledgers.some((o) => o.id !== l.id && o.code === c)) l.code = c
@@ -609,9 +614,10 @@ function completeEntry(s: MayorlyState, ctx: Ctx, ev: HudEvent[], id: Id) {
   // The harvest: every tomato grown on the entry pays out now.
   const grown = e.tomatoes ?? 0
   if (grown > 0) {
-    const amount = grown * tokensForTomato(1)
+    // The ledger it is cleared from decides whether the crop pays.
+    const amount = ledgerPays(s, e.ledgerId) ? grown * tokensForTomato(1) : 0
     const sittingId = s.desk.sittingId ?? e.id
-    s.tokens.push({ id: `${e.id}:harvest:${now}`, at: now, amount, reason: 'harvest', sittingId, entryId: e.id })
+    s.tokens.push({ id: `${e.id}:harvest:${now}`, at: now, amount, reason: 'harvest', tomatoes: grown, sittingId, entryId: e.id })
     const sitting = s.sittings.find((x) => x.id === s.desk.sittingId)
     if (sitting) sitting.tokens += amount
     e.tomatoes = 0
@@ -664,6 +670,16 @@ function endSitting(s: MayorlyState, at: number, ev: HudEvent[], reason: 'stood'
   s.desk = { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null }
   // The parked session comes back, paused where it was.
   if (held) restore(s, null, held, at, false)
+}
+
+/** Whether desk time in this ledger mints coins; the tray and a missing ledger do. */
+export function ledgerPays(s: MayorlyState, ledgerId: Id | null): boolean {
+  const l = ledgerId ? s.ledgers.find((x) => x.id === ledgerId) : null
+  return !l || l.pays !== false
+}
+
+function validTheme(t: unknown): LedgerTheme {
+  return (LEDGER_THEMES as readonly string[]).includes(String(t)) ? (t as LedgerTheme) : 'amber'
 }
 
 /** Where a swap-back would go: the entry before the last swap, or its ledger when that entry is gone. Null when there is none. */
@@ -794,7 +810,8 @@ function mint(s: MayorlyState, at: number, ev: HudEvent[]) {
   const due = Math.floor(liveFocus(s, at) / sitting.tomatoMs)
   while (sitting.tomatoes < due) {
     sitting.tomatoes++
-    const amount = tokensForTomato(sitting.tomatoes)
+    // A ledger that does not pay (paid work) still grows the tomato; the record carries no coin.
+    const amount = ledgerPays(s, s.desk.block?.ledgerId ?? null) ? tokensForTomato(sitting.tomatoes) : 0
     const entry = s.entries.find((e) => e.id === s.desk.block?.entryId && e.doneAt === null)
     if (entry) {
       // Grown on the entry; it pays when the entry is cleared.
@@ -802,7 +819,7 @@ function mint(s: MayorlyState, at: number, ev: HudEvent[]) {
       ev.push({ type: 'tomato', at, n: sitting.tomatoes, tokens: 0, entryId: entry.id })
     } else {
       sitting.tokens += amount
-      s.tokens.push({ id: `${sitting.id}:${sitting.tomatoes}`, at, amount, reason: 'tomato', sittingId: sitting.id })
+      s.tokens.push({ id: `${sitting.id}:${sitting.tomatoes}`, at, amount, reason: 'tomato', tomatoes: 1, sittingId: sitting.id })
       ev.push({ type: 'tomato', at, n: sitting.tomatoes, tokens: amount, entryId: null })
     }
   }

@@ -303,6 +303,50 @@ describe('capture and start', () => {
   })
 })
 
+describe('a ledger that does not pay', () => {
+  it('grows and counts tomatoes, mints no coin on ledger time or at the harvest, and still charges nothing', () => {
+    const w = world()
+    w.do({ type: 'ledger/create', name: 'Professional Work', code: 'PRO', criterion: 'Hours someone pays for.', glyph: 'book', pays: false, theme: 'slate' })
+    const pro = w.ledger('PRO')
+    expect(pro.pays).toBe(false)
+    expect(pro.theme).toBe('slate')
+    // Ledger time: a tomato ripens, the record carries no coin.
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: pro.id })
+    w.wait(25 * MIN + 1000)
+    expect(balance(w.s)).toBe(0)
+    expect(w.s.tokens).toHaveLength(1)
+    expect(w.s.tokens[0].amount).toBe(0)
+    expect(dayStats(w.s, new Date(T0).setHours(0, 0, 0, 0), w.now).tomatoes).toBe(1)
+    w.do({ type: 'desk/standDown' })
+    // An entry there: the crop is counted, not paid.
+    w.do({ type: 'entry/capture', text: 'pro: the Tuesday shift' })
+    const shift = w.entry('the Tuesday shift')
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: shift.id })
+    w.wait(25 * MIN + 1000)
+    expect(w.entry('the Tuesday shift').tomatoes).toBe(1)
+    const r = w.do({ type: 'entry/complete', id: shift.id })
+    const harvest = r.events.find((e) => e.type === 'harvest')
+    expect(harvest && harvest.type === 'harvest' ? harvest.tokens : -1).toBe(0)
+    expect(balance(w.s)).toBe(0)
+    expect(dayStats(w.s, new Date(T0).setHours(0, 0, 0, 0), w.now).tomatoes).toBe(2)
+    // Turned back on, the same ledger pays again.
+    w.do({ type: 'ledger/update', id: pro.id, patch: { pays: true, theme: 'teal' } })
+    expect(w.ledger('PRO').pays).toBe(true)
+    expect(w.ledger('PRO').theme).toBe('teal')
+  })
+
+  it('a harvest counts every tomato in the day, not one per entry', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('a').id })
+    w.wait(2 * 30 * MIN + 1000)
+    w.do({ type: 'entry/complete', id: w.entry('a').id })
+    const today = dayStats(w.s, new Date(T0).setHours(0, 0, 0, 0), w.now)
+    expect(today.tomatoes).toBe(2)
+    expect(today.tokens).toBe(2)
+  })
+})
+
 describe('the quick drawer', () => {
   it('keeps notes and a checklist under an entry, and edits a rule under a leisure item', () => {
     const w = world()

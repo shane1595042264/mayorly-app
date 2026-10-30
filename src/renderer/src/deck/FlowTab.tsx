@@ -9,6 +9,7 @@ import { hotkeyLabel } from '../lib/keys'
 import { cycleLedger, useListKeys } from '../lib/listkeys'
 import { noteOrigin } from '../lib/origin'
 import { dispatch, useAi, useNow } from '../store'
+import { ledgerVars } from '../lib/themes'
 import { Tomatoes } from './Tomatoes'
 
 export function FlowTab({ s }: { s: MayorlyState }) {
@@ -163,7 +164,7 @@ function Row({ e, s, index, live, selected, renameTick, now, onDrop }: { e: Entr
   const est = e.estimateMin
 
   return (
-    <Reorder.Item value={e.id} dragListener={false} dragControls={controls} onDragEnd={onDrop} className={`row ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} data-row={e.id} aria-current={selected ? 'true' : undefined} as="li">
+    <Reorder.Item value={e.id} dragListener={false} dragControls={controls} onDragEnd={onDrop} className={`row ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} style={ledgerVars(s.ledgers.find((l) => l.id === e.ledgerId))} data-row={e.id} aria-current={selected ? 'true' : undefined} as="li">
       <span className="grip" role="button" onPointerDown={(ev) => controls.start(ev)} aria-label="Drag to reorder">
         <DotsSixVertical size={16} />
       </span>

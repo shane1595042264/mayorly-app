@@ -334,7 +334,7 @@ function boot() {
       // The HUD is hidden: the desk still speaks, through the system.
       if ((ev.type === 'block' || ev.type === 'sitting-end') && !overlay.win.isVisible()) notify(ev)
       // macOS: the coins fly across the screen in the effects window; Windows draws them in the overlay.
-      if (ev.type === 'harvest' && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0))
+      if (ev.type === 'harvest' && ev.tokens > 0 && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0))
     }
   })
   ipcMain.on(IPC.effectDone, () => overlay.effectDone())

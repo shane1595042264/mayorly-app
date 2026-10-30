@@ -1,4 +1,4 @@
-import type { Block, Entry, Id, Ledger, MayorlyState, Ms } from './model'
+import type { Block, Entry, Id, Ledger, MayorlyState, Ms, TokenTx } from './model'
 import { openFlow, supersetOf } from './planner'
 import { switchBack } from './reducer'
 
@@ -39,6 +39,12 @@ export function blockView(s: MayorlyState, now: number): BlockView | null {
   }
 }
 
+
+/** Tomatoes a coin record stands for. Older records say nothing, so a harvest's coins are its crop and a tomato is one. */
+export function tomatoesOf(t: TokenTx): number {
+  if (t.tomatoes !== undefined) return t.tomatoes
+  return t.reason === 'tomato' ? 1 : t.reason === 'harvest' ? Math.max(0, t.amount) : 0
+}
 
 export function balance(s: MayorlyState): number {
   return s.tokens.reduce((n, t) => n + t.amount, 0)
@@ -123,7 +129,7 @@ export function dayStats(s: MayorlyState, dayStart: number, now: number): DaySta
   const txs = s.tokens.filter((t) => inDay(t.at))
   return {
     focusMs,
-    tomatoes: txs.length,
+    tomatoes: txs.reduce((n, t) => n + tomatoesOf(t), 0),
     tokens: txs.reduce((n, t) => n + t.amount, 0),
     cleared: s.entries.filter((e) => e.doneAt !== null && inDay(e.doneAt)).length,
     byLedger: [...by.entries()]

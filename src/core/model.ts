@@ -10,6 +10,10 @@ export type GlyphName =
   | 'scales' | 'music' | 'briefcase' | 'book' | 'code' | 'barbell'
   | 'pen' | 'house' | 'heart' | 'flask' | 'globe' | 'paint' | 'run' | 'game'
 
+/** The colours a ledger can wear; amber is the HUD's own accent and the default. */
+export const LEDGER_THEMES = ['amber', 'teal', 'blue', 'green', 'rose', 'slate'] as const
+export type LedgerTheme = (typeof LEDGER_THEMES)[number]
+
 export interface Ledger {
   id: Id
   name: string
@@ -21,6 +25,13 @@ export interface Ledger {
   /** User-made ledgers are locked: the clerk may file into them, never rename, merge or delete. */
   handWritten: boolean
   createdAt: Epoch
+  /**
+   * Off for work you are paid for in money: tomatoes still ripen and count, no coin is minted
+   * on ledger time or at the harvest, and nothing is charged. Missing means on.
+   */
+  pays?: boolean
+  /** The ledger's colour on the pet, the shelf and the swap menu. Missing means amber. */
+  theme?: LedgerTheme
 }
 
 export interface Entry {
@@ -171,6 +182,8 @@ export interface TokenTx {
   /** Positive when earned, negative when spent. */
   amount: number
   reason: 'tomato' | 'harvest' | 'leisure' | 'refund'
+  /** Tomatoes this record stands for: one for a tomato, the crop for a harvest. Absent on older records and on spends. */
+  tomatoes?: number
   sittingId: Id
   leisureId?: Id
   entryId?: Id

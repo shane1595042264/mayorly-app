@@ -28,7 +28,7 @@ export function Feed() {
       (events: HudEvent[]) => {
         for (const e of events) {
           if (e.type === 'tomato') push(e.tokens > 0 ? { score: `+${e.tokens}`, text: `Tomato ${e.n}` } : { text: `Tomato ${e.n}  growing` })
-          else if (e.type === 'harvest') push({ score: `+${e.tokens}`, text: `Harvest  ${e.title}` })
+          else if (e.type === 'harvest') push(e.tokens > 0 ? { score: `+${e.tokens}`, text: `Harvest  ${e.title}` } : { text: `Harvest  ${e.title}  ${e.tomatoes} ${e.tomatoes === 1 ? 'tomato' : 'tomatoes'}, no coins` })
           else if (e.type === 'swap') push({ text: `Swap  ${code(e.ledgerId)}` })
           else if (e.type === 'cleared') push({ text: `Cleared  ${e.title}` })
           else if (e.type === 'notice') push({ text: e.text })
