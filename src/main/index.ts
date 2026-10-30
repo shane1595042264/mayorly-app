@@ -20,6 +20,7 @@ import { Store } from './store'
 import { createTray } from './tray'
 import { installUpdates } from './updates'
 import { installReplanner } from './calendar/replanner'
+import { Feeds } from './calendar/feeds'
 
 // mayorly:// links (Shortcuts, Raycast, a browser) arrive here on macOS, sometimes before boot.
 let onUrl: ((url: string) => void) | null = null
@@ -126,6 +127,10 @@ function boot() {
   // one, and arrives at the reducer with its filing. Any failure files by prefix.
   installReplanner(engine)
   const seal = new Seal(dataDir)
+  const feeds = new Feeds(engine, seal, dataDir)
+  ipcMain.handle(IPC.calAddSource, (_e, url: string, label: string, titles: boolean) => feeds.add(String(url ?? ''), String(label ?? ''), !!titles))
+  ipcMain.handle(IPC.calRemoveSource, (_e, id: string) => feeds.remove(String(id)))
+  ipcMain.handle(IPC.calRefresh, () => feeds.refresh())
   const clerk = new AiClerk(dataDir, seal, (pub) => send(IPC.ai, pub))
   const say = (n: ClerkNotice) => send(IPC.clerk, n)
   const short = (t: string) => (t.length > 36 ? `${t.slice(0, 35)}…` : t)
@@ -345,6 +350,7 @@ function boot() {
     }
   }
   if (engine.fresh) markSeen()
+  feeds.start()
   ipcMain.handle(IPC.getBuild, () => BUILD)
   ipcMain.handle(IPC.whatsNew, () => app.isPackaged && seenBuild() !== BUILD.commit)
   ipcMain.on(IPC.seenBuild, markSeen)

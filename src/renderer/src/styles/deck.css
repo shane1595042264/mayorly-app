@@ -323,6 +323,11 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .ask-lines li.no { color: var(--ink-2); }
 .ask-which { display: grid; gap: 6px; }
 .cal-empty { display: flex; align-items: center; gap: 8px; }
+.sources { display: grid; gap: 10px; }
+.source-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); font-size: 13px; }
+.source-label { font-weight: 600; }
+.source-row .field-help { flex: 1; }
+.source-add { align-items: end; }
 .hours-grid { display: grid; gap: 6px; margin-top: 10px; }
 .hours-row { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .hours-row .check { width: 86px; }

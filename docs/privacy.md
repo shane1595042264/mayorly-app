@@ -21,6 +21,8 @@ The server keeps the latest copy and a revision number, nothing else. It does no
 
 ## If you add an AI key
 
+The calendar can read an outside calendar of yours, such as a Google calendar, through its secret iCal address. That address is kept sealed on the machine that added it and is used only to fetch the calendar from Google. The events read from it go into your account's document so the plan on another machine sees them; with "Keep titles" off, only the word Busy and the times are kept.
+
 The clerk is optional and brings its own key: you paste a key from Anthropic, OpenAI, Google or another provider. The key is sealed on your computer (with the operating system's store on Windows and Linux, with a key kept beside Mayorly's data on a Mac) and never leaves it except to that provider. When the clerk files an entry, the entry's text, the names and criteria of your ledgers, and your house rules are sent to the provider you chose, under that provider's terms. Nothing is sent to us.
 
 ## Children

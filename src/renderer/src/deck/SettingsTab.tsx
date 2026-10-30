@@ -442,7 +442,61 @@ function CalendarSection({ s }: { s: MayorlyState }) {
           <span>Keep placing past a due, marked late</span>
         </label>
       </div>
+      <OutsideCalendars s={s} />
     </section>
+  )
+}
+
+/** Google calendars read as busy time, through their secret iCal address. */
+function OutsideCalendars({ s }: { s: MayorlyState }) {
+  const [url, setUrl] = useState('')
+  const [label, setLabel] = useState('')
+  const [titles, setTitles] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  const feeds = s.calendar.feeds
+  const add = async () => {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const r = await bridge.calendar.addSource(url, label, titles)
+      setMsg(r.message)
+      if (r.ok) {
+        setUrl('')
+        setLabel('')
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+  const fmt = (t: number) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(t)
+  return (
+    <div className="sources">
+      <h4 className="field-label caps" style={{ marginTop: 18 }}>Outside calendars</h4>
+      <p className="field-help">Your Google calendar, read as busy time so the planner routes around it. In Google Calendar, Settings, your calendar, copy the secret address in iCal format. The address stays on this machine; the events go into your account, with their titles unless you keep them out.</p>
+      {feeds.map((f) => (
+        <div key={f.id} className="source-row">
+          <span className="source-label">{f.label}</span>
+          <span className="field-help">{f.error ? f.error : f.lastFetchedAt ? `${s.calendar.external.filter((x) => x.feedId === f.id).length} events, read ${fmt(f.lastFetchedAt)}` : 'not read yet'}</span>
+          <label className="check" title="Keep the event titles in your account, or only Busy">
+            <input type="checkbox" checked={f.titles} onChange={(e) => dispatch({ type: 'calendar/feed-update', id: f.id, patch: { titles: e.target.checked } })} />
+            <span className="check-box" aria-hidden />
+            <span>Titles</span>
+          </label>
+          <button type="button" className="btn ghost" onClick={() => void bridge.calendar.refreshSources()}>Refresh</button>
+          <button type="button" className="btn ghost" onClick={() => void bridge.calendar.removeSource(f.id)}>Remove</button>
+        </div>
+      ))}
+      <div className="form-row source-add">
+        <label className="field grow"><span className="field-label caps">Secret address</span><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://calendar.google.com/calendar/ical/.../private-.../basic.ics" spellCheck={false} /></label>
+        <label className="field"><span className="field-label caps">Name</span><input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Google" maxLength={60} /></label>
+      </div>
+      <div className="form-actions">
+        <label className="check"><input type="checkbox" checked={titles} onChange={(e) => setTitles(e.target.checked)} /><span className="check-box" aria-hidden /><span>Keep titles</span></label>
+        <button type="button" className="btn" disabled={busy || !url.trim()} onClick={() => void add()}>{busy ? 'Reading' : 'Add calendar'}</button>
+        {msg && <span className="field-help">{msg}</span>}
+      </div>
+    </div>
   )
 }
 

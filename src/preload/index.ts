@@ -49,6 +49,11 @@ const bridge: Bridge = {
     discardArrangement: (id) => ipcRenderer.send(IPC.aiDiscardArrangement, id),
   },
   onAi: (fn) => sub(IPC.ai, fn),
+  calendar: {
+    addSource: (url, label, titles) => ipcRenderer.invoke(IPC.calAddSource, url, label, titles),
+    removeSource: (id) => ipcRenderer.invoke(IPC.calRemoveSource, id),
+    refreshSources: () => ipcRenderer.invoke(IPC.calRefresh),
+  },
   onClerk: (fn) => sub(IPC.clerk, fn),
   onClerkAsk: (fn) => sub(IPC.clerkAsk, fn),
   setMoving: (on) => ipcRenderer.send(IPC.moving, on),

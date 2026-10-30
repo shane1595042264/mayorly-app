@@ -188,6 +188,11 @@ export function createWebBridge(): Bridge {
       discardArrangement: () => {},
     },
     onAi: () => () => {},
+    calendar: {
+      addSource: async () => ({ ok: false, message: 'Outside calendars are read by the desktop app.' }),
+      removeSource: async () => {},
+      refreshSources: async () => {},
+    },
     onClerk: () => () => {},
     // The preview has no AI clerk; the question after a correction is the shell's own fallback line.
     onClerkAsk: (fn) => {

@@ -9,7 +9,8 @@ The top section is what the app shows once per build, the first time that build 
 - Settings has the hours per day, the break, the smallest chunk and the horizon. The hours are kept in your zone and sync.
 - Select a block and the side panel has its knobs: estimate, due, not before, up next, splitting, off the calendar. New event (or n) adds an event of your own; a selected event can be edited.
 - The clerk listens: the ask box at the bottom of the Calendar tab, or /cal in the capture line. "move leetcode to tomorrow 9am", "give the resume two hours", "block Friday afternoon for dance". It answers with a proposal, every change in words, and nothing happens until you press Apply. It cannot touch your own events; that is not a rule it follows but a thing it cannot say.
-- Next up: Google comes in as busy time, and your plan goes out as a feed Google can subscribe to.
+- Google comes in as busy time: in Settings, under Calendar, paste a calendar's secret address in iCal format. Its events show on the grid, hatched, and the planner routes around them; all-day and free ones are drawn, not busy. Read every fifteen minutes. The address never leaves this machine.
+- Next up: your plan goes out as a feed Google can subscribe to.
 
 ## More icons, more colours, and a pick by the clerk
 

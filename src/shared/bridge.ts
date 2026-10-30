@@ -212,6 +212,12 @@ export interface Bridge {
     discardArrangement(id: string): void
   }
   onAi(fn: (ai: AiPublic) => void): () => void
+  /** Outside calendars read as busy time. The address stays on this machine; the events enter the account. */
+  calendar: {
+    addSource(url: string, label: string, titles: boolean): Promise<{ ok: boolean; message: string }>
+    removeSource(id: string): Promise<void>
+    refreshSources(): Promise<void>
+  }
   /** What the clerk is doing right now, for the pet to say. */
   onClerk(fn: (n: ClerkNotice) => void): () => void
   onClerkAsk(fn: (q: ClerkQuestion) => void): () => void
@@ -267,6 +273,9 @@ export const IPC = {
   aiSweep: 'mayorly:ai-sweep',
   aiPickGlyph: 'mayorly:ai-pick-glyph',
   aiArrange: 'mayorly:ai-arrange',
+  calAddSource: 'mayorly:cal-add-source',
+  calRemoveSource: 'mayorly:cal-remove-source',
+  calRefresh: 'mayorly:cal-refresh',
   aiApplyArrangement: 'mayorly:ai-apply-arrangement',
   aiDiscardArrangement: 'mayorly:ai-discard-arrangement',
   ai: 'mayorly:ai',
