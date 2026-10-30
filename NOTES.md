@@ -7,7 +7,9 @@ The top section is what the app shows once per build, the first time that build 
 - A Calendar tab, second in the deck: the week, with every entry that has an estimate placed into your work hours, earliest due first, in the order of the flow. What does not fit is said at the top, not hidden.
 - Your own events never move. Select a block with j and k, Enter starts it, p pins it where it is. [ and ] turn the week, t comes back.
 - Settings has the hours per day, the break, the smallest chunk and the horizon. The hours are kept in your zone and sync.
-- Next up: the clerk takes requests, Google comes in as busy time and your plan goes out as a feed Google can subscribe to.
+- Select a block and the side panel has its knobs: estimate, due, not before, up next, splitting, off the calendar. New event (or n) adds an event of your own; a selected event can be edited.
+- The clerk listens: the ask box at the bottom of the Calendar tab, or /cal in the capture line. "move leetcode to tomorrow 9am", "give the resume two hours", "block Friday afternoon for dance". It answers with a proposal, every change in words, and nothing happens until you press Apply. It cannot touch your own events; that is not a rule it follows but a thing it cannot say.
+- Next up: Google comes in as busy time, and your plan goes out as a feed Google can subscribe to.
 
 ## More icons, more colours, and a pick by the clerk
 

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Seal } from '../seal'
+import { ARRANGE_SYSTEM } from './arrange'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Filing, Ledger } from '@core/index'
@@ -269,6 +270,26 @@ export class AiClerk {
       const q = r.text.trim().split('\n')[0].replace(/^["'\s]+|["'\s]+$/g, '')
       return q && q.length <= 140 ? q : null
     } catch {
+      return null
+    }
+  }
+
+  /** A calendar request in words: the raw answer and the model that gave it. Null without a key, on a slow call, or when the model said nothing. */
+  async arrange(request: string, context: string, rules: string[]): Promise<{ text: string; model: string } | null> {
+    const k = this.pick()
+    if (!k) return null
+    const model = k.preferredModel ?? k.defaultModel
+    const system = `${ARRANGE_SYSTEM}${houseRules(rules)}`
+    const prompt = `${context}\n\nRequest: ${request.trim().slice(0, 500)}`
+    try {
+      const r = await Promise.race([
+        generate(k.provider, k.key, model, { system, prompt, maxTokens: 600 }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new ProviderError('other', 0, 'The clerk took too long')), 15_000)),
+      ])
+      this.record({ at: Date.now(), provider: k.provider, model, feature: 'file', inputTokens: r.inputTokens, outputTokens: r.outputTokens, costMicroUsd: costMicroUsd(k.provider, model, r.inputTokens, r.outputTokens) })
+      return r.text.trim() ? { text: r.text, model } : null
+    } catch (err) {
+      console.error('[clerk] could not arrange:', err instanceof Error ? err.message : err)
       return null
     }
   }

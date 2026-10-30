@@ -70,6 +70,28 @@ export interface AiKeyPublic {
   createdAt: number
 }
 
+/** One line of the clerk's proposal for the calendar: what it would do, or why it was refused. */
+export interface ArrangementLine {
+  text: string
+  ok: boolean
+  reason?: string
+}
+
+/** The clerk's proposal after a request in words, previewed and held by the shell until applied or discarded. */
+export interface Arrangement {
+  id: string
+  /** The clerk's own log line. */
+  say: string
+  /** What the clerk could not do, in words, or null. */
+  ask: string | null
+  lines: ArrangementLine[]
+  /** Blocks that would move, and blocks that would turn late, if applied. */
+  moved: number
+  newLate: number
+  /** Names it could not pin down: pick one per ref before applying. */
+  asks: { ref: string; options: { id: string; title: string }[] }[]
+}
+
 /** The clerk's question after you corrected or confirmed a filing. Answering is optional. */
 export interface ClerkQuestion {
   entryId: string
@@ -183,6 +205,11 @@ export interface Bridge {
     sweepTray(): Promise<void>
     /** The clerk picks a glyph name for a ledger from the catalogue, skipping names other ledgers wear. Null without a key or an answer. */
     pickGlyph(name: string, criterion: string, options: string[], taken: string[]): Promise<string | null>
+    /** A request in words about the calendar. The proposal is held by the shell; null when the clerk could not read it or has no key. */
+    arrange(request: string): Promise<Arrangement | null>
+    /** Apply a held proposal, with a pick per unresolved name. False when it expired or a pick is missing. */
+    applyArrangement(id: string, picks: Record<string, string>): Promise<boolean>
+    discardArrangement(id: string): void
   }
   onAi(fn: (ai: AiPublic) => void): () => void
   /** What the clerk is doing right now, for the pet to say. */
@@ -239,6 +266,9 @@ export const IPC = {
   aiPreferredProvider: 'mayorly:ai-preferred-provider',
   aiSweep: 'mayorly:ai-sweep',
   aiPickGlyph: 'mayorly:ai-pick-glyph',
+  aiArrange: 'mayorly:ai-arrange',
+  aiApplyArrangement: 'mayorly:ai-apply-arrangement',
+  aiDiscardArrangement: 'mayorly:ai-discard-arrangement',
   ai: 'mayorly:ai',
   clerk: 'mayorly:clerk',
   clerkAsk: 'mayorly:clerk-ask',

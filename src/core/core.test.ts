@@ -396,6 +396,39 @@ describe('the calendar', () => {
   })
 })
 
+describe('the clerk arranging', () => {
+  it('applies the commands it may, refuses the rest, and cannot reach a user event', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a ~30' })
+    w.do({ type: 'entry/capture', text: 'dance: b ~30' })
+    const [a, b] = [w.entry('a'), w.entry('b')]
+    w.do({ type: 'calendar/event-add', title: 'Dentist', start: w.now + 60 * MIN, end: w.now + 120 * MIN })
+    const dentist = w.s.calendar.events[0]
+    const r = w.do({ type: 'schedule/apply', log: 'clerk: arranged per request', commands: [
+      { op: 'estimate', entryId: a.id, minutes: 90 },
+      { op: 'due', entryId: b.id, at: w.now + 5 * 60 * MIN },
+      { op: 'rush', entryId: b.id, on: true },
+      { op: 'order', entryId: b.id, place: 'first' },
+      { op: 'place', entryId: a.id, start: w.now + 70 * MIN, minutes: 30 },
+      { op: 'place', entryId: a.id, start: w.now + 3 * 60 * MIN, minutes: 30 },
+      { op: 'block', title: 'Dance, by request', start: w.now + 4 * 60 * MIN, minutes: 60 },
+      { op: 'estimate', entryId: 'nope', minutes: 30 },
+      { op: 'notBefore', entryId: a.id, at: w.now - 10 * 60 * MIN },
+    ] })
+    expect(r.state.entries.find((e) => e.id === a.id)?.estimateMin).toBe(90)
+    expect(w.entry('b').due).toBe(w.now + 5 * 60 * MIN)
+    expect(w.entry('b').rush).toBe(true)
+    expect(w.entry('b').order).toBe(0)
+    const pins = w.s.calendar.events.filter((e) => e.origin === 'clerk')
+    expect(pins.map((p) => [p.entryId, p.start])).toEqual([[a.id, w.now + 3 * 60 * MIN], [null, w.now + 4 * 60 * MIN]])
+    expect(w.s.calendar.events.find((e) => e.id === dentist.id)).toEqual(dentist)
+    expect(w.s.clerkLog[w.s.clerkLog.length - 1].text).toBe('clerk: arranged per request, 3 refused')
+    w.do({ type: 'schedule/apply', log: 'clerk: let the planner place a', commands: [{ op: 'unplace', entryId: a.id }] })
+    expect(w.s.calendar.events.filter((e) => e.origin === 'clerk' && e.entryId === a.id)).toEqual([])
+    expect(w.s.calendar.events.find((e) => e.id === dentist.id)).toEqual(dentist)
+  })
+})
+
 describe('a ledger that does not pay', () => {
   it('grows and counts tomatoes, mints no coin on ledger time or at the harvest, and still charges nothing', () => {
     const w = world()

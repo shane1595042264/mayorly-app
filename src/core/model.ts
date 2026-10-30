@@ -147,6 +147,26 @@ export interface Calendar {
   horizonEnd: Epoch | null
 }
 
+/**
+ * What the clerk may ask for, after main has turned the model's words into ids. The reducer
+ * re-checks every id, time and overlap before applying. No command names a user event: the
+ * fence against touching what you made by hand is the type itself.
+ */
+export type ClerkCommand =
+  | { op: 'estimate'; entryId: Id; minutes: number }
+  | { op: 'due'; entryId: Id; at: Epoch | null }
+  | { op: 'notBefore'; entryId: Id; at: Epoch | null }
+  | { op: 'rush'; entryId: Id; on: boolean }
+  | { op: 'order'; entryId: Id; place: 'first' | 'last' | 'before' | 'after'; than?: Id }
+  | { op: 'split'; entryId: Id; splittable: boolean; minChunkMin?: number; maxChunkMin?: number }
+  | { op: 'off'; entryId: Id; on: boolean }
+  /** Place the entry at a time: a clerk pin. Refused over any user event or outside busy time. Replaces the entry's other clerk pins. */
+  | { op: 'place'; entryId: Id; start: Epoch; minutes: number }
+  /** Remove the clerk's pins on the entry; the planner takes over again. */
+  | { op: 'unplace'; entryId: Id }
+  /** A block of your time with no entry, on your request ("block Friday afternoon for dance"): a clerk event. */
+  | { op: 'block'; title: string; start: Epoch; minutes: number }
+
 /** Minutes from midnight; a window ends at or before 24 * 60. */
 export interface HoursWindow {
   start: number

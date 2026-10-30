@@ -1,14 +1,16 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor } from 'electron'
-import { migrate, type Action, type Entry, type HudEvent, type Settings } from '@core/index'
-import { IPC, type AiProvider, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
+import { migrate, type Action, type ClerkCommand, type Entry, type HudEvent, type Settings } from '@core/index'
+import { IPC, type AiProvider, type Arrangement, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from './ai/service'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
 import { Engine } from './engine'
 import { installLog, log } from './log'
+import { randomUUID } from 'node:crypto'
+import { describeForClerk, draftCommands, fillDraft, parseAnswer, previewApply, PROPOSAL_TTL_MS, toArrangement, type Draft } from './ai/arrange'
 import { Seal } from './seal'
 import { SessionStore } from './session'
 import { Sync } from './sync'
@@ -214,6 +216,52 @@ function boot() {
   }
   ipcMain.handle(IPC.aiGet, () => clerk.public())
   ipcMain.handle(IPC.aiSweep, () => sweepTray())
+  // The clerk arranging the calendar: a request becomes a held proposal, previewed through pure
+  // reduce; applying dispatches the real schedule/apply, which checks everything again.
+  const proposals = new Map<string, { drafts: Draft[]; log: string; model: string; at: number }>()
+  ipcMain.handle(IPC.aiArrange, async (_e, request: string): Promise<Arrangement | null> => {
+    const text = String(request ?? '').trim()
+    if (!text) return null
+    if (!clerk.enabled()) {
+      say({ phase: 'done', text: 'No working AI key: add one in Settings for the clerk to arrange the calendar' })
+      return null
+    }
+    const st = engine.state
+    say({ phase: 'working', text: `Clerk is reading '${short(text)}'` })
+    const answer = await clerk.arrange(text, describeForClerk(st, Date.now()), st.houseRules.map((r) => r.text))
+    const parsed = answer ? parseAnswer(answer.text) : null
+    if (!answer || !parsed) {
+      say({ phase: 'done', text: 'The clerk could not read that request' })
+      return null
+    }
+    const now = Date.now()
+    const live = engine.state
+    const drafts = draftCommands(parsed, live, now)
+    const ready = drafts.map((d) => d.command).filter((c): c is ClerkCommand => !!c)
+    const ctx = { now, newId: () => randomUUID(), random: Math.random }
+    const outcome = ready.length ? previewApply(live, ready, parsed.log, ctx) : { moved: 0, newLate: 0 }
+    const id = randomUUID()
+    proposals.set(id, { drafts, log: parsed.log || `clerk: arranged '${short(text)}'`, model: answer.model, at: now })
+    for (const [k, p] of proposals) if (now - p.at > PROPOSAL_TTL_MS) proposals.delete(k)
+    say({ phase: 'done', text: drafts.length ? `Clerk proposes ${drafts.filter((d) => d.line.ok).length} ${drafts.length === 1 ? 'change' : 'changes'}` : parsed.ask ? 'The clerk has a question' : 'The clerk found nothing to do' })
+    return toArrangement(id, parsed.log || 'clerk: proposal ready', parsed.ask, drafts, live, outcome)
+  })
+  ipcMain.handle(IPC.aiApplyArrangement, (_e, id: string, picks: Record<string, string>) => {
+    const p = proposals.get(String(id))
+    if (!p || Date.now() - p.at > PROPOSAL_TTL_MS) return false
+    const now = Date.now()
+    const commands: ClerkCommand[] = []
+    for (const d of p.drafts) {
+      if (!d.line.ok) continue
+      const c = fillDraft(d, picks && typeof picks === 'object' ? picks : {}, engine.state, now)
+      if (c) commands.push(c)
+    }
+    proposals.delete(String(id))
+    if (commands.length === 0) return false
+    engine.dispatch({ type: 'schedule/apply', commands, log: p.log, model: p.model })
+    return true
+  })
+  ipcMain.on(IPC.aiDiscardArrangement, (_e, id: string) => void proposals.delete(String(id)))
   ipcMain.handle(IPC.aiPickGlyph, (_e, name: string, criterion: string, options: string[], taken: string[]) =>
     clerk.pickGlyph(String(name), String(criterion), Array.isArray(options) ? options.map(String) : [], Array.isArray(taken) ? taken.map(String) : []))
   ipcMain.handle(IPC.aiAddKey, (_e, key: string) => aiCall(async () => {

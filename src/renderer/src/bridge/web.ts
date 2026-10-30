@@ -179,6 +179,13 @@ export function createWebBridge(): Bridge {
       setPreferredProvider: async () => NO_AI,
       sweepTray: async () => {},
       pickGlyph: async () => null,
+      // The preview has no clerk; ?demo shows a sample proposal so the card can be seen.
+      arrange: async (request: string) =>
+        demo
+          ? { id: 'demo', say: `clerk: arranged '${request.slice(0, 40)}'`, ask: null, lines: [{ text: 'Review lease renewal clause 7: estimate 90m', ok: true }, { text: 'Footwork drills, three sets: at 2026-10-31 15:00 for 60m', ok: true }, { text: 'Dentist: moved', ok: false, reason: 'yours, not the clerk\'s to move' }], moved: 3, newLate: 0, asks: [{ ref: 'the resume', options: [{ id: 'x', title: 'Tailor resume for the next posting' }, { id: 'y', title: 'Send two follow-up emails' }] }] }
+          : null,
+      applyArrangement: async () => true,
+      discardArrangement: () => {},
     },
     onAi: () => () => {},
     onClerk: () => () => {},

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import { CaretRight } from '@phosphor-icons/react'
 import { matchLedger, parseSuperset, prefixClerk, type Action, type MayorlyState } from '@core/index'
+import { askCalendar } from '../lib/calendarAsk'
 import { IS_MAC } from '../lib/keys'
 import { aiOn, dispatch } from '../store'
 
@@ -61,8 +62,12 @@ function plan(raw: string, s: MayorlyState): Plan {
         return { tone: 'order', text: 'Skip to the next block', run: go({ type: 'desk/skip' }) }
       case 'stand':
         return { tone: 'order', text: 'Stand down and end the sitting', run: go({ type: 'desk/standDown' }) }
+      case 'cal':
+      case 'calendar':
+        if (!arg) return { tone: 'error', text: 'Ask the clerk about the calendar: /cal move leetcode to tomorrow 9am' }
+        return { tone: 'order', text: `Ask the clerk: ${arg}`, run: () => askCalendar(arg) }
       default:
-        return { tone: 'error', text: 'Orders: /ss  /pomo  /blitz  /hold  /go  /skip  /stand' }
+        return { tone: 'error', text: 'Orders: /ss  /pomo  /blitz  /hold  /go  /skip  /stand  /cal' }
     }
   }
 

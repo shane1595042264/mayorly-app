@@ -304,12 +304,24 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .cal-external { background: repeating-linear-gradient(135deg, rgb(237 240 241 / 0.06) 0 4px, transparent 4px 8px); color: var(--ink-2); border-color: var(--line); }
 .cal-external.free { opacity: 0.6; border-style: dashed; }
 .cal-item.is-selected { border-color: var(--accent); outline: 1px solid var(--accent); z-index: 4; }
-.cal-side { padding-left: 24px; border-left: 1px solid var(--line); display: grid; align-content: start; gap: 20px; }
+.cal-side { min-width: 0; padding-left: 24px; border-left: 1px solid var(--line); display: grid; align-content: start; gap: 20px; }
 .cal-sel-title { margin: 6px 0 4px; font-size: 16px; font-weight: 600; }
 .cal-list ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink-2); display: grid; gap: 4px; }
 .cal-sel { display: grid; gap: 10px; align-content: start; }
 .cal-knobs { display: grid; gap: 10px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
 .deck .cal-sel input[type='datetime-local'] { font-size: 13px; height: 34px; }
+.ask-box { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); }
+.ask-card { padding: 12px; border: 1px solid var(--accent-2); background: rgb(240 174 60 / 0.05); outline: none; }
+.ask-card .side-title { display: flex; align-items: center; gap: 6px; color: var(--accent); margin: 0; }
+.ask-say { margin: 0; font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; }
+.ask-card, .ask-box { min-width: 0; }
+.ask-which .form-actions .btn { white-space: normal; text-align: left; }
+.ask-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.ask-lines li { display: flex; gap: 8px; align-items: flex-start; }
+.ask-lines li svg { flex: none; margin-top: 3px; }
+.ask-lines li.ok svg { color: var(--accent); }
+.ask-lines li.no { color: var(--ink-2); }
+.ask-which { display: grid; gap: 6px; }
 .cal-empty { display: flex; align-items: center; gap: 8px; }
 .hours-grid { display: grid; gap: 6px; margin-top: 10px; }
 .hours-row { display: flex; align-items: center; gap: 10px; font-size: 14px; }

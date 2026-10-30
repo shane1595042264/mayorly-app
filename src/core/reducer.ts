@@ -1,4 +1,4 @@
-import { LEDGER_THEMES, type CalBlock, type CalendarSettings, type CalEvent, type CalFeed, type Epoch, type ExternalEvent, type HoursWindow, type Interval, type LedgerTheme, type Overflow } from './model'
+import { LEDGER_THEMES, type CalBlock, type CalendarSettings, type CalEvent, type CalFeed, type ClerkCommand, type Epoch, type ExternalEvent, type HoursWindow, type Interval, type LedgerTheme, type Overflow } from './model'
 import { plan, type Placement, type PlanTask } from './schedule'
 import { DEFAULT_SETTINGS } from './seed'
 import { deriveCode, prefixClerk, type Clerk, type Filing } from './clerk'
@@ -51,6 +51,8 @@ export type Action =
   | { type: 'calendar/external'; feedId: Id; events: ExternalEvent[]; fetchedAt: Epoch; error: string | null }
   /** The planner runs: work hours as absolute windows (expanded outside core, in the calendar's zone) and where to stop. */
   | { type: 'schedule/replan'; windows: Interval[]; horizonEnd: Epoch }
+  /** The clerk's proposal, resolved to ids by main. Each command is checked and applied on its own; a bad one is skipped and counted. */
+  | { type: 'schedule/apply'; commands: ClerkCommand[]; log: string; model?: string }
   | { type: 'entry/complete'; id: Id }
   | { type: 'entry/reopen'; id: Id }
   | { type: 'entry/delete'; id: Id }
@@ -507,6 +509,19 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     case 'desk/tick':
       tick(s, ctx, ev)
       break
+    case 'schedule/apply': {
+      const commands = Array.isArray(action.commands) ? action.commands.slice(0, 10) : []
+      let applied = 0
+      let refused = 0
+      for (const c of commands) {
+        if (applyClerkCommand(s, ctx, c)) applied++
+        else refused++
+      }
+      if (applied === 0 && refused === 0) break
+      const line = action.log.trim().slice(0, 200) || `clerk arranged ${applied} ${applied === 1 ? 'thing' : 'things'}`
+      log(s, now, `${line}${refused ? `, ${refused} refused` : ''}`)
+      break
+    }
     case 'calendar/event-add': {
       const title = action.title.trim().slice(0, 160)
       const entryId = action.entryId && s.entries.some((e) => e.id === action.entryId && e.doneAt === null) ? action.entryId : null
@@ -1104,6 +1119,102 @@ function planPatch(e: Entry, p: Partial<Pick<Entry, 'due' | 'notBefore' | 'rush'
     e.maxChunkMin = Number.isFinite(n) && n >= 5 ? Math.min(1440, Math.round(n / 5) * 5) : undefined
   }
   if (e.minChunkMin !== undefined && e.maxChunkMin !== undefined && e.maxChunkMin < e.minChunkMin) e.maxChunkMin = e.minChunkMin
+}
+
+/** One clerk command against the draft state: true when applied, false when refused. */
+function applyClerkCommand(s: MayorlyState, ctx: Ctx, c: ClerkCommand): boolean {
+  const now = ctx.now
+  const horizon = now + 60 * 86_400_000
+  const minutes = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) && n >= 5 && n <= 1440 ? Math.round(n / 5) * 5 : null)
+  const future = (t: unknown) => (typeof t === 'number' && Number.isFinite(t) && t >= now - 60_000 && t <= horizon ? Math.round(t) : null)
+  if (c.op === 'block') {
+    const title = String(c.title ?? '').trim().slice(0, 160)
+    const start = future(c.start)
+    const len = minutes(c.minutes)
+    if (!title || start === null || len === null) return false
+    const end = start + len * 60_000
+    if (overlapsFixed(s, start, end)) return false
+    s.calendar.events.push({ id: ctx.newId(), title, origin: 'clerk', entryId: null, start, end, createdAt: now, seq: 0 })
+    return true
+  }
+  const e = s.entries.find((x) => x.id === c.entryId && x.doneAt === null)
+  if (!e) return false
+  switch (c.op) {
+    case 'estimate': {
+      const n = minutes(c.minutes)
+      if (n === null) return false
+      e.estimateMin = n
+      return true
+    }
+    case 'due': {
+      if (c.at === null) {
+        e.due = null
+        return true
+      }
+      // A due in the past is allowed: it is what makes something late.
+      if (typeof c.at !== 'number' || !Number.isFinite(c.at) || c.at > horizon) return false
+      planPatch(e, { due: Math.round(c.at) })
+      return true
+    }
+    case 'notBefore': {
+      if (c.at === null) {
+        e.notBefore = null
+        return true
+      }
+      const t = future(c.at)
+      if (t === null) return false
+      planPatch(e, { notBefore: t })
+      return true
+    }
+    case 'rush':
+      e.rush = !!c.on
+      return true
+    case 'off':
+      e.offCalendar = !!c.on
+      return true
+    case 'split':
+      planPatch(e, { splittable: !!c.splittable, minChunkMin: c.minChunkMin, maxChunkMin: c.maxChunkMin })
+      return true
+    case 'order': {
+      const flow = openFlow(s)
+      const from = flow.findIndex((x) => x.id === e.id)
+      if (from < 0) return false
+      const [moved] = flow.splice(from, 1)
+      let to: number
+      if (c.place === 'first') to = 0
+      else if (c.place === 'last') to = flow.length
+      else {
+        const i = flow.findIndex((x) => x.id === c.than)
+        if (i < 0) return false
+        to = c.place === 'before' ? i : i + 1
+      }
+      flow.splice(to, 0, moved)
+      flow.forEach((x, i) => (x.order = i))
+      return true
+    }
+    case 'place': {
+      const start = future(c.start)
+      const len = minutes(c.minutes)
+      if (start === null || len === null) return false
+      const end = start + len * 60_000
+      if (overlapsFixed(s, start, end)) return false
+      s.calendar.events = s.calendar.events.filter((x) => !(x.entryId === e.id && x.origin === 'clerk'))
+      s.calendar.events.push({ id: ctx.newId(), title: e.title, origin: 'clerk', entryId: e.id, start, end, createdAt: now, seq: 0 })
+      return true
+    }
+    case 'unplace':
+      s.calendar.events = s.calendar.events.filter((x) => !(x.entryId === e.id && x.origin === 'clerk'))
+      return true
+    default:
+      return false
+  }
+}
+
+/** True when [start, end) crosses anything the clerk may not touch: a user event, or outside busy time. */
+function overlapsFixed(s: MayorlyState, start: number, end: number): boolean {
+  for (const x of s.calendar.events) if (x.origin === 'user' && x.start < end && x.end > start) return true
+  for (const x of s.calendar.external) if (!x.allDay && !x.free && x.start < end && x.end > start) return true
+  return false
 }
 
 function validSpan(start: unknown, end: unknown): boolean {

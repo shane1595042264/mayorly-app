@@ -6,6 +6,7 @@ import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { useListKeys } from '../lib/listkeys'
 import { ledgerVars } from '../lib/themes'
 import { current, dispatch, useNow } from '../store'
+import { AskClerk } from './AskClerk'
 
 // The calendar: a week of the plan. Blocks are what the planner placed (derived, redrawn on
 // every replan), events are yours and never move, outside events are busy time from Google.
@@ -102,6 +103,7 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
         if (it?.kind === 'block') dispatch({ type: 'calendar/pin', blockId: it.block.id })
         else if (it?.kind === 'event' && it.event.entryId) dispatch({ type: 'calendar/event-delete', id: it.event.id })
       } else if (a === 'cal.new') setAdding(true)
+      else if (a === 'cal.ask') document.getElementById('cal-ask')?.focus()
       else return
       e.preventDefault()
       recordUse(a)
@@ -235,6 +237,7 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
         {cal.blocks.length === 0 && unestimated.length === 0 && off.length === 0 && (
           <p className="dim cal-empty"><CalendarBlank size={16} /> Nothing to plan. Capture an entry with an estimate, like ~45.</p>
         )}
+        <AskClerk />
       </aside>
     </div>
   )

@@ -99,6 +99,7 @@ export const KEYS: KeyDef[] = [
   { id: 'cal.today', scope: 'cal', label: 'This week', keys: ['t'] },
   { id: 'cal.pin', scope: 'cal', label: 'Pin the block where it is, or unpin', keys: ['p'], note: 'A pin is yours: the planner keeps it and counts it' },
   { id: 'cal.new', scope: 'cal', label: 'New event of your own', keys: ['n'] },
+  { id: 'cal.ask', scope: 'cal', label: 'Ask the clerk', keys: ['a'], note: 'Puts the cursor in the ask box' },
 
   { id: 'move.left', scope: 'move', label: 'Left', keys: ['h', 'ArrowLeft'], note: 'Shift goes far' },
   { id: 'move.down', scope: 'move', label: 'Down', keys: ['j', 'ArrowDown'], note: 'Shift goes far' },

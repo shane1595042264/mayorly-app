@@ -16,6 +16,7 @@ import { Objectives } from './hud/Objectives'
 import { Pet } from './hud/Pet'
 import { MODIFIER_KEYS, hotkeyLabel, matchesAcceleratorKey, physicalKey } from './lib/keys'
 import { setSoundEnabled, sfx } from './lib/sound'
+import { onCalendarAsk } from './lib/calendarAsk'
 import { ARM_OF_ACTION, ARM_OF_COMMAND, isPick, onArm, pointArm, pointPick } from './plus/arms'
 import { PlusMenu } from './plus/PlusMenu'
 import { balance } from '@core/index'
@@ -196,6 +197,10 @@ export function App() {
     bridge.setMode('field')
     document.body.classList.toggle('web', bridge.kind === 'web')
   }, [])
+
+  // A /cal request from the capture line: the deck opens, and turns to the Calendar tab. The
+  // capture line closes itself right after the order, so the open waits a beat to come after.
+  useEffect(() => onCalendarAsk(() => void setTimeout(() => setMode('deck'), 40)), [setMode])
 
   // The first launch of a new build opens the deck, which shows what changed.
   useEffect(() => {
