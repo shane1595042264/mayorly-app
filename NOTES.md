@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## More icons, more colours, and a pick by the clerk
+
+- A ledger can wear any of 174 icons, searchable by name, and one of twelve colours. Icons another ledger already wears are dimmed.
+- Auto picks the icon for a ledger from its name and criterion: the clerk chooses from the same set when a key is set, your own words choose otherwise. Nothing is drawn; the icons stay one family.
+
 ## Paid work, and ledger colours
 
 - A ledger can be set to pay no coins, for work you are paid for in money: tomatoes still ripen and count, nothing is minted and nothing is charged. Edit the ledger on the shelf and untick Pays coins.

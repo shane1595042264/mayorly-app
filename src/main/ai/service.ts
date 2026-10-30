@@ -273,6 +273,31 @@ export class AiClerk {
     }
   }
 
+  /**
+   * A glyph for a ledger: the clerk picks one name from the catalogue, the way a person would
+   * choose an icon, never drawing one. Names other ledgers wear are off the table. Null when
+   * there is no key, the call is slow, or the answer is not in the list.
+   */
+  async pickGlyph(name: string, criterion: string, options: string[], taken: string[]): Promise<string | null> {
+    const k = this.pick()
+    if (!k || options.length === 0) return null
+    const model = k.preferredModel ?? k.defaultModel
+    const free = options.filter((o) => !taken.includes(o))
+    const system = 'You choose one icon for a ledger in a personal ledger system. The icons are minimalist line icons named in the list. Pick the one that depicts what this ledger is about most specifically, not the most generic match. Reply with the icon name only, exactly as written in the list, nothing else.'
+    const prompt = `Ledger: ${name}\nWhat belongs in it: ${criterion || '(not written)'}\nIcons: ${free.join(', ')}`
+    try {
+      const r = await Promise.race([
+        generate(k.provider, k.key, model, { system, prompt, maxTokens: 20 }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new ProviderError('other', 0, 'slow')), 8_000)),
+      ])
+      this.record({ at: Date.now(), provider: k.provider, model, feature: 'file', inputTokens: r.inputTokens, outputTokens: r.outputTokens, costMicroUsd: costMicroUsd(k.provider, model, r.inputTokens, r.outputTokens) })
+      const said = r.text.trim().toLowerCase().replace(/[^a-z0-9-]+/g, ' ').trim().split(/\s+/)
+      return said.find((w) => free.includes(w)) ?? null
+    } catch {
+      return null
+    }
+  }
+
   // ---- internals ----
 
   private pick(): KeyRecord | null {

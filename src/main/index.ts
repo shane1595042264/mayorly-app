@@ -212,6 +212,8 @@ function boot() {
   }
   ipcMain.handle(IPC.aiGet, () => clerk.public())
   ipcMain.handle(IPC.aiSweep, () => sweepTray())
+  ipcMain.handle(IPC.aiPickGlyph, (_e, name: string, criterion: string, options: string[], taken: string[]) =>
+    clerk.pickGlyph(String(name), String(criterion), Array.isArray(options) ? options.map(String) : [], Array.isArray(taken) ? taken.map(String) : []))
   ipcMain.handle(IPC.aiAddKey, (_e, key: string) => aiCall(async () => {
     const pub = await clerk.addKey(String(key))
     void sweepTray()

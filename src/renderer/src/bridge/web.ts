@@ -157,6 +157,7 @@ export function createWebBridge(): Bridge {
       setPreferredModel: async () => NO_AI,
       setPreferredProvider: async () => NO_AI,
       sweepTray: async () => {},
+      pickGlyph: async () => null,
     },
     onAi: () => () => {},
     onClerk: () => () => {},

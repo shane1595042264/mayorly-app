@@ -6,10 +6,16 @@ import type { Ledger, LedgerTheme } from '@core/index'
 
 export const THEME_COLORS: Record<LedgerTheme, string> = {
   amber: '#f0ae3c',
-  teal: '#3fc8b4',
-  blue: '#5ea8ff',
-  green: '#8fd35a',
+  orange: '#ff8a3d',
+  coral: '#ff6f61',
   rose: '#ff7f9c',
+  magenta: '#e06bd0',
+  indigo: '#8a7dff',
+  blue: '#5ea8ff',
+  sky: '#5fd3f3',
+  teal: '#3fc8b4',
+  green: '#8fd35a',
+  lime: '#cfe84a',
   slate: '#a3adb5',
 }
 

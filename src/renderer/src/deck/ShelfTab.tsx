@@ -3,7 +3,8 @@ import { ArrowLeft, Check, LockSimple, PencilSimple, Play, Plus, Trash } from '@
 import {
   dayStats, entrySpentMs, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, ledgerEntries, span, startOfDay, type Entry, type GlyphName, type Ledger, type LedgerTheme, type MayorlyState,
 } from '@core/index'
-import { Glyph, GLYPHS } from '../lib/glyphs'
+import { Glyph, GLYPH_NAMES, glyphKey, localGlyph } from '../lib/glyphs'
+import { bridge } from '../bridge'
 import { ledgerVars, THEME_COLORS } from '../lib/themes'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { cycleLedger, useListKeys } from '../lib/listkeys'
@@ -282,7 +283,22 @@ function LedgerForm({ s, ledger, done }: { s: MayorlyState; ledger: Ledger | nul
   const [name, setName] = useState(ledger?.name ?? '')
   const [code, setCode] = useState(ledger?.code ?? '')
   const [criterion, setCriterion] = useState(ledger?.criterion ?? '')
-  const [glyph, setGlyph] = useState<GlyphName>(ledger?.glyph ?? 'book')
+  const [glyph, setGlyph] = useState<GlyphName>(glyphKey(ledger?.glyph) ?? 'book-open')
+  const [glyphQuery, setGlyphQuery] = useState('')
+  const [picking, setPicking] = useState(false)
+  const worn = s.ledgers.filter((l) => l.id !== ledger?.id).map((l) => glyphKey(l.glyph)).filter((g): g is string => !!g)
+  const shown = GLYPH_NAMES.filter((g) => !glyphQuery.trim() || g.includes(glyphQuery.trim().toLowerCase().replace(/\s+/g, '-')))
+  // Auto: the clerk picks a name from the catalogue; without a key, the words of the ledger do.
+  const auto = async () => {
+    setPicking(true)
+    try {
+      const byClerk = await bridge.ai.pickGlyph(name, criterion, GLYPH_NAMES, worn).catch(() => null)
+      const pick = byClerk ?? localGlyph(name, criterion, worn)
+      if (pick) setGlyph(pick)
+    } finally {
+      setPicking(false)
+    }
+  }
   const [pays, setPays] = useState(ledger?.pays !== false)
   const [theme, setTheme] = useState<LedgerTheme>(ledger?.theme ?? 'amber')
   const [confirm, setConfirm] = useState(false)
@@ -318,12 +334,20 @@ function LedgerForm({ s, ledger, done }: { s: MayorlyState; ledger: Ledger | nul
         <span className="field-label caps">Criterion</span>
         <textarea rows={2} value={criterion} onChange={(e) => setCriterion(e.target.value)} placeholder="What belongs in this ledger, in one sentence." />
       </label>
+      <div className="glyph-head">
+        <span className="glyph-now"><Glyph name={glyph} size={18} /><span className="mono dim">{glyph}</span></span>
+        <input className="glyph-search" value={glyphQuery} onChange={(e) => setGlyphQuery(e.target.value)} placeholder="Search icons" aria-label="Search icons" />
+        <button type="button" className="btn ghost" onClick={() => void auto()} disabled={picking || !name.trim()} title="The clerk picks an icon for this ledger; without a key, its words do">
+          {picking ? 'Picking' : 'Auto'}
+        </button>
+      </div>
       <div className="glyph-pick" role="radiogroup" aria-label="Glyph">
-        {(Object.keys(GLYPHS) as GlyphName[]).map((g) => (
-          <button type="button" key={g} role="radio" aria-checked={g === glyph} className={g === glyph ? 'on' : ''} onClick={() => setGlyph(g)} aria-label={g}>
+        {shown.map((g) => (
+          <button type="button" key={g} role="radio" aria-checked={g === glyph} className={`${g === glyph ? 'on' : ''} ${worn.includes(g) ? 'taken' : ''}`} onClick={() => setGlyph(g)} aria-label={g} title={worn.includes(g) ? `${g} (another ledger wears it)` : g}>
             <Glyph name={g} size={16} />
           </button>
         ))}
+        {shown.length === 0 && <span className="dim">No icon by that name.</span>}
       </div>
       <div className="form-row ledger-extras">
         <div className="theme-pick" role="radiogroup" aria-label="Colour">

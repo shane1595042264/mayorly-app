@@ -6,12 +6,11 @@ export type Id = string
 export type Ms = number
 export type Epoch = number
 
-export type GlyphName =
-  | 'scales' | 'music' | 'briefcase' | 'book' | 'code' | 'barbell'
-  | 'pen' | 'house' | 'heart' | 'flask' | 'globe' | 'paint' | 'run' | 'game'
+/** A Phosphor icon by name, from the renderer's catalogue (`lib/glyphs.tsx`); a name it does not know draws the crosshair. */
+export type GlyphName = string
 
 /** The colours a ledger can wear; amber is the HUD's own accent and the default. */
-export const LEDGER_THEMES = ['amber', 'teal', 'blue', 'green', 'rose', 'slate'] as const
+export const LEDGER_THEMES = ['amber', 'orange', 'coral', 'rose', 'magenta', 'indigo', 'blue', 'sky', 'teal', 'green', 'lime', 'slate'] as const
 export type LedgerTheme = (typeof LEDGER_THEMES)[number]
 
 export interface Ledger {

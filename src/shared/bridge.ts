@@ -181,6 +181,8 @@ export interface Bridge {
     setPreferredProvider(provider: AiProvider | null): Promise<AiPublic>
     /** Send everything in the tray to the clerk now. */
     sweepTray(): Promise<void>
+    /** The clerk picks a glyph name for a ledger from the catalogue, skipping names other ledgers wear. Null without a key or an answer. */
+    pickGlyph(name: string, criterion: string, options: string[], taken: string[]): Promise<string | null>
   }
   onAi(fn: (ai: AiPublic) => void): () => void
   /** What the clerk is doing right now, for the pet to say. */
@@ -236,6 +238,7 @@ export const IPC = {
   aiPreferredModel: 'mayorly:ai-preferred-model',
   aiPreferredProvider: 'mayorly:ai-preferred-provider',
   aiSweep: 'mayorly:ai-sweep',
+  aiPickGlyph: 'mayorly:ai-pick-glyph',
   ai: 'mayorly:ai',
   clerk: 'mayorly:clerk',
   clerkAsk: 'mayorly:clerk-ask',

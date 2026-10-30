@@ -43,6 +43,7 @@ const bridge: Bridge = {
     setPreferredModel: (id, model) => ipcRenderer.invoke(IPC.aiPreferredModel, id, model),
     setPreferredProvider: (provider) => ipcRenderer.invoke(IPC.aiPreferredProvider, provider),
     sweepTray: () => ipcRenderer.invoke(IPC.aiSweep),
+    pickGlyph: (name, criterion, options, taken) => ipcRenderer.invoke(IPC.aiPickGlyph, name, criterion, options, taken),
   },
   onAi: (fn) => sub(IPC.ai, fn),
   onClerk: (fn) => sub(IPC.clerk, fn),
