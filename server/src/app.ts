@@ -1,6 +1,8 @@
+import { randomBytes } from 'node:crypto'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { pool } from './db.js'
+import { buildFeed } from './feed.js'
 import { issueToken, requireAuth, revokeAll, signInWithGoogle, userById, type AuthVars } from './auth.js'
 
 // Routes. The server keeps no rules of the product: it stores one state document
@@ -20,16 +22,19 @@ export const app = new Hono<{ Variables: AuthVars }>()
 const RATE_WINDOW_MS = 10 * 60_000
 const RATE_MAX = 30
 const attempts = new Map<string, { n: number; at: number }>()
-function limited(ip: string): boolean {
+/** Feed reads per address: a subscriber reads every few hours, a guesser would need millions. */
+const FEED_MAX = 120
+const feedReads = new Map<string, { n: number; at: number }>()
+function limited(ip: string, table = attempts, max = RATE_MAX): boolean {
   const now = Date.now()
-  if (attempts.size > 10_000) for (const [k, v] of attempts) if (now - v.at > RATE_WINDOW_MS) attempts.delete(k)
-  const a = attempts.get(ip)
+  if (table.size > 10_000) for (const [k, v] of table) if (now - v.at > RATE_WINDOW_MS) table.delete(k)
+  const a = table.get(ip)
   if (!a || now - a.at > RATE_WINDOW_MS) {
-    attempts.set(ip, { n: 1, at: now })
+    table.set(ip, { n: 1, at: now })
     return false
   }
   a.n++
-  return a.n > RATE_MAX
+  return a.n > max
 }
 const addressOf = (c: { req: { header: (n: string) => string | undefined } }) => c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || 'local'
 
@@ -122,6 +127,63 @@ app.put('/sync/state', requireAuth, bodyLimit({ maxSize: STATE_LIMIT }), async (
   } finally {
     client.release()
   }
+})
+
+// The plan as a calendar feed. The address carries a secret token in place of a sign-in,
+// the way Google's own secret iCal address does: whoever has it can read the plan until it is
+// rotated. One token per account, made on request, never derived from anything.
+
+const FEED_TOKEN_RE = /^[A-Za-z0-9_-]{32}$/
+const newFeedToken = () => randomBytes(24).toString('base64url')
+
+app.get('/cal/feed', requireAuth, async (c) => {
+  const { rows } = await pool.query<{ token: string }>('SELECT token FROM feed_tokens WHERE user_id = $1', [c.get('userId')])
+  return c.json({ token: rows[0]?.token ?? null })
+})
+
+/** The account's feed token, made now if there is none. */
+app.post('/cal/feed', requireAuth, async (c) => {
+  const userId = c.get('userId')
+  const { rows } = await pool.query<{ token: string }>(
+    `INSERT INTO feed_tokens (user_id, token) VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET token = feed_tokens.token
+     RETURNING token`,
+    [userId, newFeedToken()],
+  )
+  return c.json({ token: rows[0].token })
+})
+
+/** A fresh token; the old address stops working at once. */
+app.post('/cal/feed/rotate', requireAuth, async (c) => {
+  const { rows } = await pool.query<{ token: string }>(
+    `INSERT INTO feed_tokens (user_id, token, created_at) VALUES ($1, $2, now())
+     ON CONFLICT (user_id) DO UPDATE SET token = EXCLUDED.token, created_at = now()
+     RETURNING token`,
+    [c.get('userId'), newFeedToken()],
+  )
+  return c.json({ token: rows[0].token })
+})
+
+app.delete('/cal/feed', requireAuth, async (c) => {
+  await pool.query('DELETE FROM feed_tokens WHERE user_id = $1', [c.get('userId')])
+  return c.json({ ok: true })
+})
+
+/** Public: the feed itself, by token. Unknown tokens and bad shapes answer alike. */
+app.get('/cal/:file', async (c) => {
+  if (limited(addressOf(c), feedReads, FEED_MAX)) return c.text('Too many requests', 429)
+  const file = c.req.param('file')
+  const token = file.endsWith('.ics') ? file.slice(0, -4) : ''
+  if (!FEED_TOKEN_RE.test(token)) return c.text('Not found', 404)
+  const { rows } = await pool.query<{ state: unknown }>(
+    'SELECT s.state FROM feed_tokens f JOIN states s ON s.user_id = f.user_id WHERE f.token = $1', [token])
+  const row = rows[0]
+  if (!row) return c.text('Not found', 404)
+  const body = buildFeed(row.state, new Date())
+  c.header('Content-Type', 'text/calendar; charset=utf-8')
+  c.header('Cache-Control', 'private, max-age=300')
+  c.header('X-Robots-Tag', 'noindex')
+  return c.body(body)
 })
 
 app.onError((err, c) => {

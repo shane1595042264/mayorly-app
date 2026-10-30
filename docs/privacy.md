@@ -23,6 +23,8 @@ The server keeps the latest copy and a revision number, nothing else. It does no
 
 The calendar can read an outside calendar of yours, such as a Google calendar, through its secret iCal address. That address is kept sealed on the machine that added it and is used only to fetch the calendar from Google. The events read from it go into your account's document so the plan on another machine sees them; with "Keep titles" off, only the word Busy and the times are kept.
 
+Your plan can be read by Google Calendar, or any calendar app, through a feed address the server makes for your account on request. The address carries a secret token in place of a sign-in, so anyone who has it can read the plan's blocks and the events made in Mayorly, with their titles and notes, until you make a new address or stop sharing in Settings. The server keeps the token beside your account and nothing else about who reads the feed; a read is not logged. Outside events read in from Google are never sent back out.
+
 The clerk is optional and brings its own key: you paste a key from Anthropic, OpenAI, Google or another provider. The key is sealed on your computer (with the operating system's store on Windows and Linux, with a key kept beside Mayorly's data on a Mac) and never leaves it except to that provider. When the clerk files an entry, the entry's text, the names and criteria of your ledgers, and your house rules are sent to the provider you chose, under that provider's terms. Nothing is sent to us.
 
 ## Children

@@ -53,6 +53,7 @@ const bridge: Bridge = {
     addSource: (url, label, titles) => ipcRenderer.invoke(IPC.calAddSource, url, label, titles),
     removeSource: (id) => ipcRenderer.invoke(IPC.calRemoveSource, id),
     refreshSources: () => ipcRenderer.invoke(IPC.calRefresh),
+    feed: (op) => ipcRenderer.invoke(IPC.calFeed, op),
   },
   onClerk: (fn) => sub(IPC.clerk, fn),
   onClerkAsk: (fn) => sub(IPC.clerkAsk, fn),

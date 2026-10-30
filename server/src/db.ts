@@ -35,6 +35,11 @@ export async function migrate() {
       updated_at timestamptz NOT NULL DEFAULT now()
     );
     ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version integer NOT NULL DEFAULT 0;
+    CREATE TABLE IF NOT EXISTS feed_tokens (
+      user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      token text NOT NULL UNIQUE,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
   `)
 }
 

@@ -138,8 +138,9 @@ export function createWebBridge(): Bridge {
     onCaption: () => () => {},
     getLayout: async () => ({ compact: false, side: 'right' as const, dragging: false }),
     onLayout: () => () => {},
-    accountsAvailable: async () => false,
-    getAccount: async () => null,
+    // The sample data has an account, so the parts of Settings that need one can be seen.
+    accountsAvailable: async () => demo,
+    getAccount: async () => (demo ? { email: 'you@example.com', name: 'You', avatarUrl: null } : null),
     signIn: async () => { throw new Error('Sign in from the desktop app') },
     signOut: async () => {},
     deleteAccount: async () => {},
@@ -192,6 +193,7 @@ export function createWebBridge(): Bridge {
       addSource: async () => ({ ok: false, message: 'Outside calendars are read by the desktop app.' }),
       removeSource: async () => {},
       refreshSources: async () => {},
+      feed: async (op) => (demo && op !== 'drop' ? 'https://api.mayorly.example/cal/demo-token-demo-token-demo-tok.ics' : null),
     },
     onClerk: () => () => {},
     // The preview has no AI clerk; the question after a correction is the shell's own fallback line.

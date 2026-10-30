@@ -23,6 +23,7 @@ This is the application layer of Mayorly, a life OS: entries filed into ledgers,
 | `src/shared/windows.ts`, `src/main/calendar/replanner.ts` | work hours expanded in the calendar's zone with Intl; the one trigger that asks the reducer to replan |
 | `src/renderer/src/deck/CalendarTab.tsx` | the week grid: derived blocks, the user's events, outside busy time |
 | `src/main/calendar/feeds.ts`, `ics.ts` | outside calendars: secret iCal addresses sealed in `cal.bin`, a fifteen-minute read, series expanded into `calendar/external` |
+| `server/src/feed.ts` | the plan as an iCalendar feed: `GET /cal/:token.ics`, one secret token per account, UIDs from block and event ids, SEQUENCE from the reducer's `seq` |
 | `src/main/ai/arrange.ts` | the clerk listening: the plan in lines, the model's JSON into typed `ClerkCommand`s with ids, a preview through pure reduce, proposals held until Apply |
 | `src/core/core.test.ts` | rules tested against a fake clock |
 | `src/main/engine.ts` | heartbeat, sleep detection, broadcast |

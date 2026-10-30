@@ -443,7 +443,66 @@ function CalendarSection({ s }: { s: MayorlyState }) {
         </label>
       </div>
       <OutsideCalendars s={s} />
+      <PlanFeed />
     </section>
+  )
+}
+
+/** The plan as a calendar Google subscribes to: one secret address per account, from the server. */
+function PlanFeed() {
+  const account = useAccount()
+  const [url, setUrl] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!account) {
+      setUrl(null)
+      return
+    }
+    void bridge.calendar.feed('get').then(setUrl).catch(() => {})
+  }, [account])
+  const run = async (op: 'create' | 'rotate' | 'drop') => {
+    setBusy(true)
+    setError(null)
+    try {
+      setUrl(await bridge.calendar.feed(op))
+    } catch (e) {
+      setError(e instanceof Error ? e.message.replace(/^Error: /, '') : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const copy = () => {
+    if (!url) return
+    void navigator.clipboard.writeText(url).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  if (!account) return null
+  return (
+    <div className="plan-feed">
+      <h4 className="field-label caps" style={{ marginTop: 18 }}>Your plan in Google Calendar</h4>
+      <p className="field-help">A calendar address Google can subscribe to: the planned blocks and the events made here. In Google Calendar, Other calendars, plus, From URL. Google reads it on its own clock, often hours apart; the plan here is always current. Anyone with the address can read your plan, so keep it to yourself or make a new one.</p>
+      {url ? (
+        <>
+          <div className="form-row">
+            <label className="field grow"><span className="field-label caps">Address</span><input value={url} readOnly onFocus={(e) => e.currentTarget.select()} spellCheck={false} /></label>
+          </div>
+          <div className="form-actions">
+            <button type="button" className="btn" onClick={copy}>{copied ? 'Copied' : 'Copy address'}</button>
+            <button type="button" className="btn ghost" disabled={busy} title="The old address stops working at once" onClick={() => void run('rotate')}>New address</button>
+            <button type="button" className="btn ghost" disabled={busy} onClick={() => void run('drop')}>Stop sharing</button>
+          </div>
+        </>
+      ) : (
+        <div className="form-actions">
+          <button type="button" className="btn" disabled={busy} onClick={() => void run('create')}>{busy ? 'Making' : 'Make an address'}</button>
+        </div>
+      )}
+      {error && <span className="field-help field-error">{error}</span>}
+    </div>
   )
 }
 

@@ -8,6 +8,11 @@ The sync server. It knows no rules of the product. It verifies a Google sign-in,
 | `GET /auth/me` | the signed-in user |
 | `GET /sync/state?have=N` | `{ revision, state, updatedAt, device }`, or `unchanged: true` when `N` is current |
 | `PUT /sync/state` | `{ baseRevision, state, device }` → `{ revision }` or `409 { revision, state }` |
+| `GET /cal/feed` | `{ token }`, null when the account has no feed address |
+| `POST /cal/feed` | makes the feed token if there is none → `{ token }` |
+| `POST /cal/feed/rotate` | a fresh token; the old address stops working → `{ token }` |
+| `DELETE /cal/feed` | drops the token |
+| `GET /cal/:token.ics` | public: the plan and the events made in Mayorly as an iCalendar feed, for Google to subscribe to |
 | `GET /health` | pings the database |
 
 Runs on Railway from the `Dockerfile`; the tables are created on boot. Environment: see `.env.example`.

@@ -324,6 +324,22 @@ function boot() {
     if (!res.ok && res.status !== 401) throw new Error(`The server answered ${res.status}`)
     setSession(null)
   })
+  // The plan's feed address: the server keeps one secret token per account; the address is
+  // the API's own, so a subscriber reads the plan straight from it.
+  ipcMain.handle(IPC.calFeed, async (_e, op: 'get' | 'create' | 'rotate' | 'drop'): Promise<string | null> => {
+    if (!session) throw new Error('Sign in first')
+    const path = op === 'rotate' ? '/cal/feed/rotate' : '/cal/feed'
+    const method = op === 'get' ? 'GET' : op === 'drop' ? 'DELETE' : 'POST'
+    const res = await fetch(`${config.apiUrl}${path}`, { method, headers: { Authorization: `Bearer ${session.token}` } })
+    if (res.status === 401) {
+      setSession(null)
+      throw new Error('The session has ended. Sign in again.')
+    }
+    if (!res.ok) throw new Error(`The server answered ${res.status}`)
+    if (op === 'drop') return null
+    const body = (await res.json()) as { token?: string | null }
+    return body.token ? `${config.apiUrl}/cal/${body.token}.ics` : null
+  })
   ipcMain.on(IPC.log, (_e, level: string, message: string) => (level === 'error' ? log.error : log.warn)('[renderer]', String(message).slice(0, 2000)))
   ipcMain.handle(IPC.deleteAccount, async () => {
     if (!session) return

@@ -217,6 +217,8 @@ export interface Bridge {
     addSource(url: string, label: string, titles: boolean): Promise<{ ok: boolean; message: string }>
     removeSource(id: string): Promise<void>
     refreshSources(): Promise<void>
+    /** The plan's own feed address on the server, for Google to subscribe to. get: the address or null; create: made if missing; rotate: a fresh one; drop: none. Needs an account. */
+    feed(op: 'get' | 'create' | 'rotate' | 'drop'): Promise<string | null>
   }
   /** What the clerk is doing right now, for the pet to say. */
   onClerk(fn: (n: ClerkNotice) => void): () => void
@@ -276,6 +278,7 @@ export const IPC = {
   calAddSource: 'mayorly:cal-add-source',
   calRemoveSource: 'mayorly:cal-remove-source',
   calRefresh: 'mayorly:cal-refresh',
+  calFeed: 'mayorly:cal-feed',
   aiApplyArrangement: 'mayorly:ai-apply-arrangement',
   aiDiscardArrangement: 'mayorly:ai-discard-arrangement',
   ai: 'mayorly:ai',
