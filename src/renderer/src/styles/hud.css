@@ -148,10 +148,14 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
 body.compact .drawer { left: 4px; right: 4px; width: auto; }
 body.compact.drawer-below .drawer { top: auto; bottom: 4px; }
 body.compact.drawer-above .drawer { top: 4px; bottom: auto; }
-/* The drawer window is the pet's window grown by the drawer's height, downward when it fits. The pet keeps
-   its anchor from the bottom, moved up by exactly that height, so it does not move on screen; grown upward,
-   the bottom edge is the same edge and nothing changes. While the drawer is down the pet is not a drag handle. */
-body.compact.mode-drawer.drawer-below .pet-wrap { bottom: 364px; }
+/* The drawer window is the pet's window grown by the drawer's height, downward when it fits. Grown downward,
+   the pet anchors from the top with its scale origin at the top: in the small window that is the same pixels
+   as the bottom anchor, and in the tall one the pet stays where it was. So the rule can switch before the
+   window grows and after it shrinks, and the pet never moves. Grown upward, the bottom edge is the same edge
+   and nothing changes. While the drawer is down the pet is not a drag handle. */
+body.compact.mode-drawer.drawer-below .pet-wrap { top: 4px; bottom: auto; }
+body.compact.mode-drawer.drawer-below .pet-right { transform-origin: 100% 0%; }
+body.compact.mode-drawer.drawer-below .pet-left { transform-origin: 0% 0%; }
 body.compact.mode-drawer .pet-body { -webkit-app-region: no-drag; cursor: default; }
 .drawer-head { display: grid; gap: 2px; }
 .drawer-kicker { font-size: 11px; color: var(--accent); }

@@ -148,8 +148,12 @@ export function App() {
     }
   }, [])
 
+  // The drawer's placement rule goes on the moment the drawer is asked for, and comes off only once the shell
+  // says the window is the pet's again: on both sides of each resize the pet is where it was.
+  const [askedDrawer, setAskedDrawer] = useState(false)
   const tellShell = (m: UiMode) => {
     shellMode.current = m
+    setAskedDrawer(m === 'drawer')
     bridge.setMode(m)
   }
 
@@ -237,9 +241,10 @@ export function App() {
     document.body.classList.toggle('side-right', layout.side === 'right')
     document.body.classList.toggle('drawer-above', layout.drawer === 'above')
     document.body.classList.toggle('drawer-below', layout.drawer !== 'above')
-    // By the window the shell has made, not by this page's own timers: the pet must not move.
-    document.body.classList.toggle('mode-drawer', layout.mode === 'drawer')
   }, [layout])
+  useEffect(() => {
+    document.body.classList.toggle('mode-drawer', askedDrawer || layout.mode === 'drawer')
+  }, [askedDrawer, layout.mode])
 
   // Hotkeys from the shell. Holding the swap key auto-repeats, so ignore repeats until it is released.
   useEffect(

@@ -326,6 +326,11 @@ export class Overlay {
       this.startHoverPoll()
     } else {
       this.stopHoverPoll()
+      // The drawer: say which way the window will grow before it grows, so the page has placed the pet by then.
+      if (mac && mode === 'drawer') {
+        this.drawerBounds(this.display())
+        this.sendLayout()
+      }
       if (mac) this.fit()
       if (!this.win.isVisible()) this.win.showInactive()
       this.win.setIgnoreMouseEvents(false)
