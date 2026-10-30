@@ -17,6 +17,7 @@ import { Overlay } from './overlay'
 import { Store } from './store'
 import { createTray } from './tray'
 import { installUpdates } from './updates'
+import { installReplanner } from './calendar/replanner'
 
 // mayorly:// links (Shortcuts, Raycast, a browser) arrive here on macOS, sometimes before boot.
 let onUrl: ((url: string) => void) | null = null
@@ -121,6 +122,7 @@ function boot() {
 
   // The AI clerk: a captured line goes to the user's own model first, when there is
   // one, and arrives at the reducer with its filing. Any failure files by prefix.
+  installReplanner(engine)
   const seal = new Seal(dataDir)
   const clerk = new AiClerk(dataDir, seal, (pub) => send(IPC.ai, pub))
   const say = (n: ClerkNotice) => send(IPC.clerk, n)

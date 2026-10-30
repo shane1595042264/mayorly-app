@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_HOTKEYS, firstRunState } from './seed'
+import { DEFAULT_HOTKEYS, firstRunState, migrate } from './seed'
 import { DEVICE_SETTINGS } from './reducer'
 import {
   type Action, type HudEvent, type MayorlyState,
@@ -300,6 +300,99 @@ describe('capture and start', () => {
     w.do({ type: 'entry/file', id: e.id, ledgerId: w.ledger('LGL').id, estimateMin: null, log: 'filed by the clerk' })
     expect(w.s.desk.block?.ledgerId).toBe(w.ledger('LGL').id)
     expect(w.s.desk.block?.label).toBe('Legal')
+  })
+})
+
+describe('the calendar', () => {
+  const windows = (w: typeof world extends (...a: never[]) => infer R ? R : never) => [{ start: w.now, end: w.now + 8 * 60 * MIN }, { start: w.now + 24 * 60 * MIN, end: w.now + 32 * 60 * MIN }]
+  const replan = (w: ReturnType<typeof world>) => w.do({ type: 'schedule/replan', windows: windows(w), horizonEnd: w.now + 14 * 24 * 60 * MIN })
+
+  it('plans entries with estimates into the windows, and a quiet replan returns the same state', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a ~90' })
+    w.do({ type: 'entry/capture', text: 'dance: b ~30' })
+    replan(w)
+    const blocks = w.s.calendar.blocks
+    expect(blocks.map((b) => [b.entryId === w.entry('a').id ? 'a' : 'b', (b.end - b.start) / MIN])).toEqual([['a', 90], ['b', 30]])
+    expect(blocks[0].id).toBe(`${w.entry('a').id}#1`)
+    expect(blocks[1].start).toBe(blocks[0].end + 5 * MIN)
+    const before = w.s
+    replan(w)
+    expect(w.s).toBe(before)
+  })
+
+  it('a pin is busy to the planner and credit to its entry; a cleared entry leaves the calendar', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a ~90' })
+    const a = w.entry('a')
+    w.do({ type: 'calendar/event-add', title: '', start: w.now + 60 * MIN, end: w.now + 120 * MIN, entryId: a.id })
+    expect(w.s.calendar.events[0].title).toBe('a')
+    replan(w)
+    const mine = w.s.calendar.blocks.filter((b) => b.entryId === a.id)
+    expect(mine.map((b) => (b.end - b.start) / MIN)).toEqual([30])
+    expect(mine[0].start).toBe(w.now)
+    w.do({ type: 'calendar/event-add', title: 'Dentist', start: w.now + 3 * 60 * MIN, end: w.now + 4 * 60 * MIN })
+    w.do({ type: 'entry/complete', id: a.id })
+    expect(w.s.calendar.blocks).toEqual([])
+    expect(w.s.calendar.events.map((e) => [e.title, e.entryId])).toEqual([['a', null], ['Dentist', null]])
+  })
+
+  it('refuses a backwards event, an empty one, and a stale pin; editing bumps the sequence', () => {
+    const w = world()
+    w.do({ type: 'calendar/event-add', title: 'x', start: w.now + MIN, end: w.now })
+    w.do({ type: 'calendar/event-add', title: '   ', start: w.now, end: w.now + MIN })
+    expect(w.s.calendar.events).toHaveLength(0)
+    w.do({ type: 'calendar/event-add', title: 'Standup', start: w.now, end: w.now + 30 * MIN })
+    const id = w.s.calendar.events[0].id
+    w.do({ type: 'calendar/event-update', id, patch: { start: w.now + 10 * MIN, end: w.now + 40 * MIN } })
+    expect(w.s.calendar.events[0].seq).toBe(1)
+    w.do({ type: 'calendar/event-update', id, patch: { title: 'Standup, moved' } })
+    expect(w.s.calendar.events[0].seq).toBe(1)
+    w.do({ type: 'calendar/event-delete', id })
+    expect(w.s.calendar.events).toHaveLength(0)
+  })
+
+  it('a block can be pinned, and the due and not-before knobs are checked', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a ~60' })
+    const a = w.entry('a')
+    w.do({ type: 'entry/update', id: a.id, patch: { due: w.now + 2 * 60 * MIN, notBefore: w.now + 3 * 60 * MIN } })
+    expect(w.entry('a').due).toBe(w.now + 2 * 60 * MIN)
+    expect(w.entry('a').notBefore).toBeNull()
+    replan(w)
+    const b = w.s.calendar.blocks[0]
+    w.do({ type: 'calendar/pin', blockId: b.id })
+    expect(w.s.calendar.events[0]).toMatchObject({ entryId: a.id, start: b.start, end: b.end, origin: 'user' })
+    replan(w)
+    expect(w.s.calendar.blocks).toEqual([])
+  })
+
+  it('outside events are busy unless free or all-day, and a feed keeps titles out when told to', () => {
+    const w = world()
+    w.do({ type: 'calendar/feed-add', id: 'g1', label: 'Google', titles: false })
+    w.do({ type: 'calendar/external', feedId: 'g1', fetchedAt: w.now, error: null, events: [
+      { id: 'g1:u1:1', feedId: 'g1', title: 'Secret meeting', start: w.now, end: w.now + 60 * MIN, allDay: false, free: false },
+      { id: 'g1:u2:1', feedId: 'g1', title: 'Holiday', start: w.now, end: w.now + 24 * 60 * MIN, allDay: true, free: false },
+      { id: 'other:u3:1', feedId: 'g1', title: 'Not mine', start: w.now, end: w.now + 60 * MIN, allDay: false, free: false },
+    ] })
+    expect(w.s.calendar.external.map((x) => x.title)).toEqual(['Busy', 'Busy'])
+    w.do({ type: 'entry/capture', text: 'legal: a ~30' })
+    replan(w)
+    expect(w.s.calendar.blocks[0].start).toBe(w.now + 60 * MIN)
+    w.do({ type: 'calendar/feed-remove', id: 'g1' })
+    expect(w.s.calendar.external).toEqual([])
+  })
+
+  it('calendar settings are sanitised and an old save loads with defaults', () => {
+    const w = world()
+    w.do({ type: 'settings/update', patch: { calendar: { tz: 'America/Chicago', hours: [[], [{ start: 600, end: 540 }, { start: 480, end: 720 }, { start: 700, end: 900 }], [], [], [], [], []], breakMin: 7, minChunkMin: 2, horizonDays: 99, spill: false } } })
+    expect(w.s.settings.calendar).toEqual({ tz: 'America/Chicago', hours: [[], [{ start: 480, end: 900 }], [], [], [], [], []], breakMin: 5, minChunkMin: 5, horizonDays: 28, spill: false })
+    const old = JSON.parse(JSON.stringify(w.s)) as Record<string, unknown>
+    delete old.calendar
+    delete (old.settings as Record<string, unknown>).calendar
+    const back = migrate(old)!
+    expect(back.calendar.blocks).toEqual([])
+    expect(back.settings.calendar.minChunkMin).toBe(25)
   })
 })
 

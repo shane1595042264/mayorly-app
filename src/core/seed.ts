@@ -1,3 +1,4 @@
+import type { Calendar, HoursWindow } from './model'
 import type { HotkeyAction, MayorlyState, Settings } from './model'
 
 export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
@@ -12,6 +13,9 @@ export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   drawer: 'Alt+Shift+R',
 }
 
+/** Nine to five, minutes from midnight. */
+const WORKDAY: HoursWindow[] = [{ start: 9 * 60, end: 17 * 60 }]
+
 export const DEFAULT_SETTINGS: Settings = {
   focusMin: 25,
   shortRestMin: 5,
@@ -23,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hudSide: 'right',
   hudScale: 1,
   text: { pet: 1, deck: 1, plus: 1 },
+  calendar: { tz: '', hours: [[], WORKDAY, WORKDAY, WORKDAY, WORKDAY, WORKDAY, []], breakMin: 5, minChunkMin: 25, horizonDays: 14, spill: true },
   trayTimer: false,
   hotkeys: DEFAULT_HOTKEYS,
   keymap: {},
@@ -42,8 +47,13 @@ export function emptyState(): MayorlyState {
     houseRules: [],
     leisure: [],
     desk: { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null },
-    settings: { ...DEFAULT_SETTINGS, hotkeys: { ...DEFAULT_HOTKEYS } },
+    settings: { ...DEFAULT_SETTINGS, hotkeys: { ...DEFAULT_HOTKEYS }, calendar: { ...DEFAULT_SETTINGS.calendar, hours: DEFAULT_SETTINGS.calendar.hours.map((d) => d.map((w) => ({ ...w }))) } },
+    calendar: emptyCalendar(),
   }
+}
+
+export function emptyCalendar(): Calendar {
+  return { events: [], external: [], feeds: [], blocks: [], overflow: [], plannedAt: null, horizonEnd: null }
 }
 
 /** First run: the three ledgers from the founder's brief and one rotation across them. */
@@ -97,6 +107,7 @@ export function migrate(raw: unknown): MayorlyState | null {
     desk: { ...base.desk, ...x.desk },
     leisure: (x.leisure ?? []).map((it) => ({ ...it, cues: Array.isArray(it.cues) ? it.cues : [] })),
     entries: (x.entries ?? []).map((e) => ({ ...e, tomatoes: Number.isFinite(e.tomatoes) ? e.tomatoes : 0 })),
-    settings: { ...base.settings, ...x.settings, hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys } },
+    settings: { ...base.settings, ...x.settings, hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys }, calendar: { ...base.settings.calendar, ...x.settings?.calendar } },
+    calendar: { ...emptyCalendar(), ...x.calendar },
   } as MayorlyState
 }

@@ -6,6 +6,7 @@ import type { Store } from './store'
 // API for mods) send actions in and receive snapshots out, so no client is special.
 
 type Listener = (state: MayorlyState, events: HudEvent[]) => void
+type ActionListener = (action: Action, changed: boolean) => void
 
 export class Engine {
   state: MayorlyState
@@ -15,6 +16,7 @@ export class Engine {
   readonly restoredFrom: string | null
   private lastBeat: number | null
   private listeners = new Set<Listener>()
+  private actionListeners = new Set<ActionListener>()
   private beat: NodeJS.Timeout | null = null
   private lastPersistedBeat = 0
 
@@ -52,12 +54,19 @@ export class Engine {
     return () => this.listeners.delete(fn)
   }
 
+  /** Every action that ran, with whether it changed the state. The replanner listens here. */
+  onAction(fn: ActionListener): () => void {
+    this.actionListeners.add(fn)
+    return () => this.actionListeners.delete(fn)
+  }
+
   dispatch(action: Action) {
     const r = reduce(this.state, action, { now: Date.now(), newId: randomUUID, random: Math.random })
     const changed = r.state !== this.state
     this.state = r.state
     if (changed) this.store.save(this.state, this.lastBeat)
     if (changed || r.events.length) for (const fn of this.listeners) fn(this.state, r.events)
+    for (const fn of this.actionListeners) fn(action, changed)
   }
 
   private heartbeat() {

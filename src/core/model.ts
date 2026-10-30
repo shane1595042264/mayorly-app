@@ -52,6 +52,120 @@ export interface Entry {
   /** The quick drawer: a few lines of your own, and a checklist under the entry. */
   notes?: string
   subtasks?: Subtask[]
+  /** The calendar. due: finish by (the planner flags late when it cannot). notBefore: never placed earlier. Missing means none. */
+  due?: Epoch | null
+  notBefore?: Epoch | null
+  /** Up next: placed ahead of every deadline. */
+  rush?: boolean
+  /** Missing means true: the planner may cut it into chunks of minChunkMin or more. */
+  splittable?: boolean
+  /** Smallest and largest chunk, minutes. Missing means the calendar setting and no cap. */
+  minChunkMin?: number
+  maxChunkMin?: number
+  /** True keeps the entry in the flow and off the calendar, estimate or not. */
+  offCalendar?: boolean
+}
+
+// ---------------------------------------------------------------- the calendar
+
+/** Half-open [start, end) in epoch ms. */
+export interface Interval {
+  start: Epoch
+  end: Epoch
+}
+
+/**
+ * An event on the calendar that the planner routes around and never moves. `user`: made by
+ * hand; no clerk command can name it. `clerk`: placed on the user's request; a later request
+ * may move or remove it, and editing it by hand makes it `user`. With `entryId` set it is a
+ * pin: its minutes count toward that entry's estimate.
+ */
+export interface CalEvent extends Interval {
+  id: Id
+  title: string
+  origin: 'user' | 'clerk'
+  entryId: Id | null
+  createdAt: Epoch
+  note?: string
+  /** Bumped when the times change: the feed's SEQUENCE. */
+  seq: number
+}
+
+/** One occurrence from an outside calendar (Google), read as busy time, never written back. */
+export interface ExternalEvent extends Interval {
+  /** `${feedId}:${uid}:${start}` so a recurring series expands to stable ids. */
+  id: Id
+  feedId: Id
+  /** The feed's own title, or "Busy" when the feed keeps titles out of the account. */
+  title: string
+  allDay: boolean
+  /** TRANSP:TRANSPARENT in the feed: drawn, not busy. */
+  free: boolean
+}
+
+/** A subscribed outside calendar. Its address lives sealed beside the save on the machine that added it, never here. */
+export interface CalFeed {
+  id: Id
+  label: string
+  /** Keep event titles in the account (they then sync and show on the grid) or only "Busy". */
+  titles: boolean
+  createdAt: Epoch
+  lastFetchedAt: Epoch | null
+  /** Plain words when the last fetch failed; null when fine. */
+  error: string | null
+}
+
+/** A chunk the planner placed. Derived: rewritten whole on every replan, never minted, never owed. */
+export interface CalBlock extends Interval {
+  /** `${entryId}#${chunk}`, stable per chunk so the feed's UID survives a move. */
+  id: Id
+  entryId: Id
+  chunk: number
+  of: number
+  /** Ends after the entry's due. */
+  late: boolean
+  /** Bumped by the reducer when this id's times change: the feed's SEQUENCE. */
+  seq: number
+}
+
+export interface Overflow {
+  entryId: Id
+  /** past-due: placed, but finishing `minutes` after the due. no-room: `minutes` found no window inside the horizon. */
+  kind: 'past-due' | 'no-room'
+  minutes: number
+}
+
+export interface Calendar {
+  events: CalEvent[]
+  external: ExternalEvent[]
+  feeds: CalFeed[]
+  blocks: CalBlock[]
+  overflow: Overflow[]
+  /** When the blocks were last computed; null before the first replan. */
+  plannedAt: Epoch | null
+  /** Where the last plan stopped looking, so the grid knows where the plan ends. */
+  horizonEnd: Epoch | null
+}
+
+/** Minutes from midnight; a window ends at or before 24 * 60. */
+export interface HoursWindow {
+  start: number
+  end: number
+}
+
+export interface CalendarSettings {
+  /** The IANA zone the hours are written in. Every machine expands the windows in this zone, so two machines agree. Empty until the first launch fills it. */
+  tz: string
+  /** Seven lists of windows, Sunday first. An empty list is a day off. */
+  hours: HoursWindow[][]
+  /** Padding after every placed block, minutes. */
+  breakMin: number
+  /** Smallest chunk, minutes (25: one tomato). */
+  minChunkMin: number
+  /** How far the planner looks ahead, days. */
+  horizonDays: number
+  /** Keep placing past a due (flagged late) rather than reporting no room. */
+  spill: boolean
 }
 
 export interface Subtask {
@@ -229,6 +343,8 @@ export interface Settings {
   hudScale: number
   /** Text size per area, 1 is the design size: the pet's task line, the deck, the swap menu. Per machine. */
   text: { pet: number; deck: number; plus: number }
+  /** Work hours and the planner's knobs. Syncs: the zone travels with it. */
+  calendar: CalendarSettings
   /** macOS: the running block's clock beside the menu bar tomato. */
   trayTimer: boolean
   hotkeys: Record<HotkeyAction, string>
@@ -250,6 +366,7 @@ export interface MayorlyState {
   leisure: LeisureItem[]
   desk: Desk
   settings: Settings
+  calendar: Calendar
 }
 
 export type HudEvent =

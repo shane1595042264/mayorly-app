@@ -1,9 +1,11 @@
-import { LEDGER_THEMES, type LedgerTheme } from './model'
+import { LEDGER_THEMES, type CalBlock, type CalendarSettings, type CalEvent, type CalFeed, type Epoch, type ExternalEvent, type HoursWindow, type Interval, type LedgerTheme, type Overflow } from './model'
+import { plan, type Placement, type PlanTask } from './schedule'
+import { DEFAULT_SETTINGS } from './seed'
 import { deriveCode, prefixClerk, type Clerk, type Filing } from './clerk'
 import type {
   Block, Ctx, Entry, GlyphName, HeldSession, HudEvent, Id, Ledger, MayorlyState, Mode, Settings, Superset,
 } from './model'
-import { advance, blitzBlock, firstBlock, firstOpenInLedger, initialPlan, nextInFlow, openFlow, type DeployOpts } from './planner'
+import { advance, blitzBlock, entrySpentMs, firstBlock, firstOpenInLedger, initialPlan, nextInFlow, openFlow, type DeployOpts } from './planner'
 import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_BLOCK, tokensForTomato } from './rules'
 import { migrate } from './seed'
 import { mergeStates } from './merge'
@@ -35,7 +37,20 @@ export type Action =
   | { type: 'rule/delete'; id: Id }
   /** Your answer to the clerk's question: appended to the rule it learned, or a new rule when it only confirmed. */
   | { type: 'rule/explain'; entryId: Id; ruleId: Id | null; text: string }
-  | { type: 'entry/update'; id: Id; patch: Partial<Pick<Entry, 'title' | 'ledgerId' | 'estimateMin'>> }
+  | { type: 'entry/update'; id: Id; patch: Partial<Pick<Entry, 'title' | 'ledgerId' | 'estimateMin' | 'due' | 'notBefore' | 'rush' | 'splittable' | 'minChunkMin' | 'maxChunkMin' | 'offCalendar'>> }
+  /** The calendar. Events are the user's (or the clerk's pins); the planner routes around them and never moves one. */
+  | { type: 'calendar/event-add'; title: string; start: Epoch; end: Epoch; entryId?: Id | null; note?: string; origin?: 'user' | 'clerk' }
+  | { type: 'calendar/event-update'; id: Id; patch: Partial<Pick<CalEvent, 'title' | 'start' | 'end' | 'note' | 'entryId'>> }
+  | { type: 'calendar/event-delete'; id: Id }
+  /** Copy a planned block into a user event on its entry: a pin the planner will keep. */
+  | { type: 'calendar/pin'; blockId: Id }
+  /** Outside calendars: a feed and what was last read from it. The address stays on the machine. */
+  | { type: 'calendar/feed-add'; id: Id; label: string; titles: boolean }
+  | { type: 'calendar/feed-update'; id: Id; patch: Partial<Pick<CalFeed, 'label' | 'titles'>> }
+  | { type: 'calendar/feed-remove'; id: Id }
+  | { type: 'calendar/external'; feedId: Id; events: ExternalEvent[]; fetchedAt: Epoch; error: string | null }
+  /** The planner runs: work hours as absolute windows (expanded outside core, in the calendar's zone) and where to stop. */
+  | { type: 'schedule/replan'; windows: Interval[]; horizonEnd: Epoch }
   | { type: 'entry/complete'; id: Id }
   | { type: 'entry/reopen'; id: Id }
   | { type: 'entry/delete'; id: Id }
@@ -97,6 +112,12 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       return reduce(incoming, { type: 'desk/pause', at: Math.min(ctx.now, incoming.desk.runStartedAt ?? ctx.now) }, ctx, clerk)
     }
     return { state: incoming, events: [] }
+  }
+
+  // The planner runs often and usually changes nothing: compute first, copy only when it did.
+  if (action.type === 'schedule/replan') {
+    const next = replanned(state, action.windows, action.horizonEnd, ctx.now)
+    return { state: next ?? state, events: [] }
   }
 
   const s = structuredClone(state)
@@ -234,6 +255,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       if (!e) break
       const p = action.patch
       if (p.title !== undefined && p.title.trim()) e.title = p.title.trim()
+      planPatch(e, p)
       if (p.ledgerId !== undefined) {
         const to = validLedger(s, p.ledgerId)
         // Moving an entry the clerk filed is a correction: it becomes a house rule.
@@ -255,6 +277,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     }
     case 'entry/complete':
       completeEntry(s, ctx, ev, action.id)
+      tidyCalendar(s, action.id)
       break
     case 'entry/reopen': {
       const e = s.entries.find((x) => x.id === action.id)
@@ -273,6 +296,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
         swapTo(s, ctx, ev, next?.id ?? null, next?.ledgerId ?? s.desk.block.ledgerId)
       }
       s.entries = s.entries.filter((x) => x.id !== e.id)
+      tidyCalendar(s, e.id)
       for (const ss of s.supersets) {
         ss.slots = ss.slots.filter((sl) => !(sl.target.kind === 'entry' && sl.target.entryId === e.id))
       }
@@ -483,6 +507,79 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     case 'desk/tick':
       tick(s, ctx, ev)
       break
+    case 'calendar/event-add': {
+      const title = action.title.trim().slice(0, 160)
+      const entryId = action.entryId && s.entries.some((e) => e.id === action.entryId && e.doneAt === null) ? action.entryId : null
+      const t = title || (entryId ? s.entries.find((e) => e.id === entryId)!.title : '')
+      if (!t || !validSpan(action.start, action.end)) break
+      if (entryId && action.end <= now) break
+      s.calendar.events.push({ id: ctx.newId(), title: t, origin: action.origin === 'clerk' ? 'clerk' : 'user', entryId, start: action.start, end: action.end, createdAt: now, note: action.note?.trim().slice(0, 400) || undefined, seq: 0 })
+      break
+    }
+    case 'calendar/event-update': {
+      const e = s.calendar.events.find((x) => x.id === action.id)
+      if (!e) break
+      const p = action.patch
+      const start = p.start ?? e.start
+      const end = p.end ?? e.end
+      if (!validSpan(start, end)) break
+      if (p.entryId !== undefined) e.entryId = p.entryId && s.entries.some((x) => x.id === p.entryId && x.doneAt === null) ? p.entryId : null
+      if (p.title !== undefined && p.title.trim()) e.title = p.title.trim().slice(0, 160)
+      if (p.note !== undefined) e.note = p.note.trim().slice(0, 400) || undefined
+      if (start !== e.start || end !== e.end) {
+        e.start = start
+        e.end = end
+        e.seq += 1
+      }
+      // Your hand is on it now.
+      e.origin = 'user'
+      break
+    }
+    case 'calendar/event-delete':
+      s.calendar.events = s.calendar.events.filter((x) => x.id !== action.id)
+      break
+    case 'calendar/pin': {
+      const b = s.calendar.blocks.find((x) => x.id === action.blockId)
+      if (!b || b.end <= now) break
+      const e = s.entries.find((x) => x.id === b.entryId && x.doneAt === null)
+      if (!e) break
+      s.calendar.events.push({ id: ctx.newId(), title: e.title, origin: 'user', entryId: e.id, start: Math.max(b.start, now), end: b.end, createdAt: now, seq: 0 })
+      break
+    }
+    case 'calendar/feed-add': {
+      const label = action.label.trim().slice(0, 60)
+      if (!label || !action.id || s.calendar.feeds.some((f) => f.id === action.id) || s.calendar.feeds.length >= 8) break
+      s.calendar.feeds.push({ id: action.id, label, titles: !!action.titles, createdAt: now, lastFetchedAt: null, error: null })
+      break
+    }
+    case 'calendar/feed-update': {
+      const f = s.calendar.feeds.find((x) => x.id === action.id)
+      if (!f) break
+      if (action.patch.label !== undefined && action.patch.label.trim()) f.label = action.patch.label.trim().slice(0, 60)
+      if (action.patch.titles !== undefined) {
+        f.titles = !!action.patch.titles
+        if (!f.titles) for (const x of s.calendar.external) if (x.feedId === f.id) x.title = 'Busy'
+      }
+      break
+    }
+    case 'calendar/feed-remove':
+      s.calendar.feeds = s.calendar.feeds.filter((x) => x.id !== action.id)
+      s.calendar.external = s.calendar.external.filter((x) => x.feedId !== action.id)
+      break
+    case 'calendar/external': {
+      const f = s.calendar.feeds.find((x) => x.id === action.feedId)
+      if (!f) break
+      const lo = now - 86_400_000
+      const hi = now + 60 * 86_400_000
+      const fresh = (Array.isArray(action.events) ? action.events : [])
+        .filter((x) => x && typeof x.id === 'string' && x.id.startsWith(`${f.id}:`) && Number.isFinite(x.start) && Number.isFinite(x.end) && x.end > x.start && x.end > lo && x.start < hi)
+        .slice(0, 500)
+        .map((x) => ({ id: x.id, feedId: f.id, title: f.titles ? String(x.title ?? 'Busy').slice(0, 120) : 'Busy', start: x.start, end: x.end, allDay: !!x.allDay, free: !!x.free }))
+      s.calendar.external = [...s.calendar.external.filter((x) => x.feedId !== f.id), ...fresh]
+      f.lastFetchedAt = action.fetchedAt
+      f.error = action.error
+      break
+    }
     case 'settings/update':
       s.settings = sanitiseSettings({ ...s.settings, ...action.patch })
       break
@@ -947,7 +1044,135 @@ export function sanitiseSettings(x: Settings): Settings {
     hudScale: Math.min(1.6, Math.max(0.7, Number(x.hudScale) || 1)),
     hudSide: x.hudSide === 'left' ? 'left' : 'right',
     text: { pet: textSize(x.text?.pet), deck: textSize(x.text?.deck), plus: textSize(x.text?.plus) },
+    calendar: sanitiseCalendar(x.calendar),
   }
+}
+
+function sanitiseCalendar(c: Partial<CalendarSettings> | undefined): CalendarSettings {
+  const base = DEFAULT_SETTINGS.calendar
+  const days = Array.isArray(c?.hours) ? c!.hours : base.hours
+  const hours: HoursWindow[][] = []
+  for (let d = 0; d < 7; d++) {
+    const list = Array.isArray(days[d]) ? days[d] : []
+    const clean = list
+      .map((w) => ({ start: Math.max(0, Math.min(1440, Math.round(Number(w?.start)))), end: Math.max(0, Math.min(1440, Math.round(Number(w?.end)))) }))
+      .filter((w) => Number.isFinite(w.start) && Number.isFinite(w.end) && w.end > w.start)
+      .sort((a, b) => a.start - b.start)
+    const merged: HoursWindow[] = []
+    for (const w of clean) {
+      const last = merged[merged.length - 1]
+      if (last && w.start <= last.end) last.end = Math.max(last.end, w.end)
+      else merged.push(w)
+    }
+    hours.push(merged)
+  }
+  const step5 = (v: unknown, lo: number, hi: number, dflt: number) => {
+    const n = Number(v)
+    return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n / 5) * 5)) : dflt
+  }
+  return {
+    tz: typeof c?.tz === 'string' ? c.tz.slice(0, 64) : base.tz,
+    hours,
+    breakMin: step5(c?.breakMin, 0, 60, base.breakMin),
+    minChunkMin: step5(c?.minChunkMin, 5, 240, base.minChunkMin),
+    horizonDays: Math.min(28, Math.max(7, Math.round(Number(c?.horizonDays)) || base.horizonDays)),
+    spill: c?.spill === undefined ? base.spill : !!c.spill,
+  }
+}
+
+/** The calendar knobs on an entry, each checked; a bad value is left as it was. */
+function planPatch(e: Entry, p: Partial<Pick<Entry, 'due' | 'notBefore' | 'rush' | 'splittable' | 'minChunkMin' | 'maxChunkMin' | 'offCalendar'>>) {
+  const epochOrNull = (v: unknown): Epoch | null | undefined => (v === null ? null : typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : undefined)
+  if (p.due !== undefined) {
+    const v = epochOrNull(p.due)
+    if (v !== undefined) e.due = v
+  }
+  if (p.notBefore !== undefined) {
+    const v = epochOrNull(p.notBefore)
+    if (v !== undefined) e.notBefore = v
+  }
+  if (e.due !== null && e.due !== undefined && e.notBefore !== null && e.notBefore !== undefined && e.notBefore > e.due) e.notBefore = null
+  if (p.rush !== undefined) e.rush = !!p.rush
+  if (p.splittable !== undefined) e.splittable = !!p.splittable
+  if (p.offCalendar !== undefined) e.offCalendar = !!p.offCalendar
+  if (p.minChunkMin !== undefined) {
+    const n = Number(p.minChunkMin)
+    e.minChunkMin = Number.isFinite(n) && n >= 5 ? Math.min(1440, Math.round(n / 5) * 5) : undefined
+  }
+  if (p.maxChunkMin !== undefined) {
+    const n = Number(p.maxChunkMin)
+    e.maxChunkMin = Number.isFinite(n) && n >= 5 ? Math.min(1440, Math.round(n / 5) * 5) : undefined
+  }
+  if (e.minChunkMin !== undefined && e.maxChunkMin !== undefined && e.maxChunkMin < e.minChunkMin) e.maxChunkMin = e.minChunkMin
+}
+
+function validSpan(start: unknown, end: unknown): boolean {
+  return typeof start === 'number' && typeof end === 'number' && Number.isFinite(start) && Number.isFinite(end) && end > start && end - start <= 86_400_000
+}
+
+/** A cleared or deleted entry leaves the calendar: its blocks go now (the replan would drop them anyway), its clerk pins go, its user events lose the link. */
+function tidyCalendar(s: MayorlyState, entryId: Id) {
+  const cal = s.calendar
+  cal.blocks = cal.blocks.filter((b) => b.entryId !== entryId)
+  cal.overflow = cal.overflow.filter((o) => o.entryId !== entryId)
+  cal.events = cal.events.filter((e) => !(e.entryId === entryId && e.origin === 'clerk'))
+  for (const e of cal.events) if (e.entryId === entryId) e.entryId = null
+}
+
+/** The planner, against the state as it is: the new state when the plan changed, null when it is the same. */
+function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: number, now: number): MayorlyState | null {
+  if (!Array.isArray(windowsIn) || windowsIn.length > 400 || !Number.isFinite(horizonEndIn)) return null
+  const horizonEnd = Math.min(horizonEndIn, now + 60 * 86_400_000)
+  if (horizonEnd <= now) return null
+  const cal = state.calendar
+  const settings = state.settings.calendar
+  const busy: Interval[] = [
+    ...cal.events.map((e) => ({ start: e.start, end: e.end })),
+    ...cal.external.filter((x) => !x.allDay && !x.free).map((x) => ({ start: x.start, end: x.end })),
+  ]
+  const tasks: PlanTask[] = []
+  for (const e of openFlow(state)) {
+    if (!e.estimateMin || e.offCalendar) continue
+    const spent = Math.floor(entrySpentMs(state, e.id, now) / 60_000)
+    let pinned = 0
+    for (const ev of cal.events) {
+      if (ev.entryId !== e.id || ev.end <= now) continue
+      pinned += Math.round((ev.end - Math.max(ev.start, now)) / 60_000)
+    }
+    const needMin = e.estimateMin - spent - pinned
+    if (needMin <= 0) continue
+    tasks.push({
+      id: e.id,
+      needMin,
+      due: e.due ?? null,
+      notBefore: e.notBefore ?? null,
+      rush: !!e.rush,
+      order: e.order,
+      splittable: e.splittable !== false,
+      minChunkMin: e.minChunkMin ?? null,
+      maxChunkMin: e.maxChunkMin ?? null,
+    })
+  }
+  const previous: Placement[] = cal.blocks.map((b) => ({ taskId: b.entryId, start: b.start, end: b.end, late: b.late }))
+  const r = plan({ now, horizonEnd, windows: windowsIn, busy, tasks, previous, minChunkMin: settings.minChunkMin, gridMin: 5, breakMin: settings.breakMin, spill: settings.spill })
+  // Chunks numbered per entry by start; ids stable per chunk number so a moved chunk keeps its feed UID.
+  const byTask = new Map<Id, Placement[]>()
+  for (const p of r.placements) byTask.set(p.taskId, [...(byTask.get(p.taskId) ?? []), p])
+  const old = new Map(cal.blocks.map((b) => [b.id, b]))
+  const blocks: CalBlock[] = []
+  for (const [entryId, ps] of byTask) {
+    ps.forEach((p, i) => {
+      const id = `${entryId}#${i + 1}`
+      const was = old.get(id)
+      const seq = was ? (was.start !== p.start || was.end !== p.end ? was.seq + 1 : was.seq) : 0
+      blocks.push({ id, entryId, chunk: i + 1, of: ps.length, start: p.start, end: p.end, late: p.late, seq })
+    })
+  }
+  blocks.sort((a, b) => a.start - b.start || (a.id < b.id ? -1 : 1))
+  const overflow: Overflow[] = r.overflow.map((o) => ({ entryId: o.taskId, kind: o.kind, minutes: o.minutes }))
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+  if (same(blocks, cal.blocks) && same(overflow, cal.overflow) && cal.horizonEnd === horizonEnd && cal.plannedAt !== null) return null
+  return { ...state, calendar: { ...cal, blocks, overflow, plannedAt: now, horizonEnd } }
 }
 
 export const TEXT_MIN = 0.8

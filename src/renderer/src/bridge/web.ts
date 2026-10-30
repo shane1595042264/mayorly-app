@@ -4,6 +4,7 @@ import {
 } from '@core/index'
 import type { Bridge, Command, UiMode } from '../../../shared/bridge'
 import { BUILD } from '../../../shared/build'
+import { machineZone, windowsFor } from '../../../shared/windows'
 import { physicalKey } from '../lib/keys'
 import { demoState } from './demo'
 
@@ -61,7 +62,27 @@ export function createWebBridge(): Bridge {
       stateSubs.forEach((f) => f(state))
     }
     if (r.events.length) eventSubs.forEach((f) => f(r.events))
+    if (action.type !== 'schedule/replan' && action.type !== 'desk/tick' && /^(entry\/|calendar\/|settings\/update|ledger\/delete)/.test(action.type)) replanSoon()
   }
+
+  // The planner, in-page: the same trigger main's replanner gives the app.
+  let replanTimer: ReturnType<typeof setTimeout> | null = null
+  function replan() {
+    replanTimer = null
+    const cal = state.settings.calendar
+    if (!cal.tz) {
+      dispatch({ type: 'settings/update', patch: { calendar: { ...cal, tz: machineZone() } } })
+      return
+    }
+    const now = Date.now()
+    dispatch({ type: 'schedule/replan', windows: windowsFor(cal, now, cal.horizonDays + 1), horizonEnd: now + cal.horizonDays * 86_400_000 })
+  }
+  function replanSoon() {
+    if (replanTimer) clearTimeout(replanTimer)
+    replanTimer = setTimeout(replan, 250)
+  }
+  setInterval(replan, 60_000)
+  setTimeout(replan, 300)
 
   if (state.desk.status === 'running' && !demo) dispatch({ type: 'desk/pause' })
   setInterval(() => {

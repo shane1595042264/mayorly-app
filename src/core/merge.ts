@@ -50,6 +50,17 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
   const houseRules = mergeDeletable(local.houseRules, incoming.houseRules, since, (r) => r.createdAt, theirs)
   // Supersets carry no date: one only this machine has is kept.
   const supersets = mergeDeletable(local.supersets, incoming.supersets, since, () => Infinity, theirs)
+  // The calendar: events and feeds like entries; outside events per feed, the fresher fetch wins;
+  // blocks and overflow are derived and the next replan here rewrites them anyway.
+  const lc = local.calendar
+  const ic = incoming.calendar
+  const events = mergeDeletable(lc.events, ic.events, since, (e) => e.createdAt, (l, t) => (l.seq >= t.seq ? l : t))
+  const feeds = mergeDeletable(lc.feeds, ic.feeds, since, (f) => f.createdAt, (l, t) => ((l.lastFetchedAt ?? 0) >= (t.lastFetchedAt ?? 0) ? l : t))
+  const feedIds = new Set(feeds.map((f) => f.id))
+  const fresherHere = new Set(feeds.filter((f) => lc.feeds.some((x) => x.id === f.id && (x.lastFetchedAt ?? 0) >= (ic.feeds.find((y) => y.id === f.id)?.lastFetchedAt ?? 0))).map((f) => f.id))
+  const external = [...lc.external.filter((x) => feedIds.has(x.feedId) && fresherHere.has(x.feedId)), ...ic.external.filter((x) => feedIds.has(x.feedId) && !fresherHere.has(x.feedId))]
+  const newerPlan = (lc.plannedAt ?? 0) >= (ic.plannedAt ?? 0) ? lc : ic
+  const calendar = { events, feeds, external, blocks: newerPlan.blocks, overflow: newerPlan.overflow, plannedAt: newerPlan.plannedAt, horizonEnd: newerPlan.horizonEnd }
   const seen = new Set<string>()
   const clerkLog = [...incoming.clerkLog, ...local.clerkLog]
     .filter((x) => {
@@ -61,5 +72,5 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
     .sort((a, b) => a.at - b.at)
     .slice(-CLERK_LOG_CAP)
   const desk = local.desk.status === 'running' ? local.desk : incoming.desk
-  return { ...incoming, ledgers, entries, supersets, leisure, houseRules, sittings, segments, tokens, clerkLog, desk }
+  return { ...incoming, ledgers, entries, supersets, leisure, houseRules, sittings, segments, tokens, clerkLog, desk, calendar }
 }
