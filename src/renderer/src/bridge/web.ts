@@ -115,7 +115,7 @@ export function createWebBridge(): Bridge {
     setHit: () => {},
     setCaption: () => {},
     onCaption: () => () => {},
-    getLayout: async () => ({ compact: false, side: 'right' as const, dragging: false, drawer: 'below' as const, mode: 'field' as const }),
+    getLayout: async () => ({ compact: false, side: 'right' as const, dragging: false }),
     onLayout: () => () => {},
     accountsAvailable: async () => false,
     getAccount: async () => null,
@@ -177,6 +177,7 @@ export function createWebBridge(): Bridge {
     snap: () => {},
     onEffect: () => () => {},
     effectDone: () => {},
+    closeDrawer: () => {},
     onHotkeyFailures: () => () => {},
   }
 }

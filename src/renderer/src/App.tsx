@@ -41,10 +41,10 @@ export function App() {
   /** The mode the shell was last told; its window size follows it. */
   const shellMode = useRef<UiMode>('field')
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const layoutRef = useRef<Layout>({ compact: false, side: 'right', dragging: false, drawer: 'below', mode: 'field' })
+  const layoutRef = useRef<Layout>({ compact: false, side: 'right', dragging: false })
   const held = useRef<{ since: number } | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
-  const [layout, setLayout] = useState<Layout>({ compact: false, side: 'right', dragging: false, drawer: 'below', mode: 'field' })
+  const [layout, setLayout] = useState<Layout>({ compact: false, side: 'right', dragging: false })
   const [clerk, setClerk] = useState<string | null>(null)
   // Keyboard move: the pet takes the keys until Enter, Escape, a blur, or a key it does not know.
   const [moving, setMoving] = useState(false)
@@ -148,12 +148,8 @@ export function App() {
     }
   }, [])
 
-  // The drawer's placement rule goes on the moment the drawer is asked for, and comes off only once the shell
-  // says the window is the pet's again: on both sides of each resize the pet is where it was.
-  const [askedDrawer, setAskedDrawer] = useState(false)
   const tellShell = (m: UiMode) => {
     shellMode.current = m
-    setAskedDrawer(m === 'drawer')
     bridge.setMode(m)
   }
 
@@ -167,28 +163,8 @@ export function App() {
       clearTimeout(pending.current)
       pending.current = null
     }
-    // The drawer keeps the pet in view: the window grows from the pet, the pet stays put.
+    // The drawer keeps the pet in view (Windows and the browser: it is drawn beside the pet in this window).
     const away = m !== 'field' && m !== 'drawer'
-    const drawerInvolved = m === 'drawer' || shellMode.current === 'drawer'
-    if (layoutRef.current.compact && drawerInvolved) {
-      setPetAway(away)
-      if (m === 'field') {
-        // Closing: the drawer plays its exit, then the window shrinks back to the pet.
-        setShown('field')
-        pending.current = setTimeout(() => {
-          pending.current = null
-          tellShell('field')
-        }, 130)
-      } else {
-        // Opening, or leaving the drawer for a full panel: the window changes first, then the panel draws.
-        tellShell(m)
-        pending.current = setTimeout(() => {
-          pending.current = null
-          setShown(m)
-        }, 60)
-      }
-      return
-    }
     const windowIsBig = shellMode.current !== 'field'
     if (!layoutRef.current.compact || (m !== 'field' && windowIsBig)) {
       // Windows, or moving between panels: the window does not change size, nothing to wait for.
@@ -239,12 +215,7 @@ export function App() {
     document.body.classList.toggle('compact', layout.compact)
     document.body.classList.toggle('side-left', layout.side === 'left')
     document.body.classList.toggle('side-right', layout.side === 'right')
-    document.body.classList.toggle('drawer-above', layout.drawer === 'above')
-    document.body.classList.toggle('drawer-below', layout.drawer !== 'above')
   }, [layout])
-  useEffect(() => {
-    document.body.classList.toggle('mode-drawer', askedDrawer || layout.mode === 'drawer')
-  }, [askedDrawer, layout.mode])
 
   // Hotkeys from the shell. Holding the swap key auto-repeats, so ignore repeats until it is released.
   useEffect(

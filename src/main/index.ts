@@ -338,6 +338,7 @@ function boot() {
     }
   })
   ipcMain.on(IPC.effectDone, () => overlay.effectDone())
+  ipcMain.on(IPC.drawerClose, () => overlay.closeDrawer())
   ipcMain.on(IPC.moving, (_e, on: boolean) => overlay.setMoving(!!on))
   ipcMain.on(IPC.nudge, (_e, dx: number, dy: number) => overlay.nudge(Number(dx) || 0, Number(dy) || 0))
   ipcMain.on(IPC.snap, (_e, corner: number) => {
@@ -396,7 +397,8 @@ function boot() {
         hide: () => overlay.toggleVisible(),
         switch: () => engine.dispatch({ type: 'desk/switch' }),
         move: () => command('move'),
-        drawer: () => command('drawer'),
+        // macOS: the drawer is the shell's own window beside the pet. Elsewhere the overlay draws it.
+        drawer: () => (process.platform === 'darwin' ? overlay.toggleDrawer() : command('drawer')),
         clear: clearDesk,
       })
       if (failed.length) {

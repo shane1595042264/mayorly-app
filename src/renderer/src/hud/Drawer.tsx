@@ -2,11 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'motion/react'
 import { Check, Plus, X } from '@phosphor-icons/react'
 import { blockView, type MayorlyState } from '@core/index'
-import { dispatch } from '../store'
+import { bridge } from '../bridge'
+import { dispatch, useMayorly } from '../store'
 
 // The quick drawer: what is on the desk, with room to write under it. An entry gets a few
-// lines of notes and a checklist; a leisure item gets its context switch rules. It drops
-// down (or up) from the pet, never the whole deck. Esc or a click outside closes it.
+// lines of notes and a checklist; a leisure item gets its context switch rules. It hangs
+// beside the pet, never the whole deck. Esc, a click outside or losing focus closes it.
+// On a Mac it is the shell's own window (?drawer), so the pet's window never changes.
+
+export function DrawerApp() {
+  const s = useMayorly()
+  if (!s) return null
+  return <Drawer s={s} close={() => bridge.closeDrawer()} />
+}
 
 export function Drawer({ s, close }: { s: MayorlyState; close: () => void }) {
   const v = blockView(s, Date.now())

@@ -5,7 +5,7 @@ import type { Action, HudEvent, MayorlyState } from '../core/index'
 // in-page engine. A future local sync API would implement the same shape.
 
 /** field: the passive HUD, clicks fall through to your apps. The rest take focus. */
-/** drawer: the quick drawer under the pet, for what is on the desk; on a Mac the window grows just enough for it. */
+/** drawer: the quick drawer beside the pet, for what is on the desk. On a Mac it is the shell's own window (?drawer), never this one. */
 export type UiMode = 'field' | 'plus' | 'deck' | 'capture' | 'drawer'
 
 /** Hotkey-driven requests from the shell to the HUD. `close` returns to field mode (the window lost focus). */
@@ -21,10 +21,6 @@ export interface Layout {
   side: 'left' | 'right'
   /** The window is being dragged by its tomato; nothing unfolds until it settles. */
   dragging: boolean
-  /** macOS, drawer mode: which way the window grew from the pet, so the drawer draws on that side. */
-  drawer: 'below' | 'above'
-  /** The mode the shell has sized the window for; pushed with every resize so the page places the pet by the window, not by its own timers. */
-  mode: UiMode
 }
 
 export interface DisplayInfo {
@@ -200,6 +196,8 @@ export interface Bridge {
   onEffect(fn: (e: Effect) => void): () => void
   /** The effects page is done; the shell may hide the window. */
   effectDone(): void
+  /** The drawer page (macOS) is done: Esc, or nothing to show. The shell hides its window. */
+  closeDrawer(): void
   /** Hotkeys that could not be registered (taken by another app, or refused by the OS). */
   onHotkeyFailures(fn: (failures: HotkeyFailures) => void): () => void
 }
@@ -246,5 +244,6 @@ export const IPC = {
   snap: 'mayorly:snap',
   effect: 'mayorly:effect',
   effectDone: 'mayorly:effect-done',
+  drawerClose: 'mayorly:drawer-close',
   hotkeyFailures: 'mayorly:hotkey-failures',
 } as const

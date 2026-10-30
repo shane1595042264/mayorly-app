@@ -52,6 +52,7 @@ const bridge: Bridge = {
   snap: (corner) => ipcRenderer.send(IPC.snap, corner),
   onEffect: (fn) => sub(IPC.effect, fn),
   effectDone: () => ipcRenderer.send(IPC.effectDone),
+  closeDrawer: () => ipcRenderer.send(IPC.drawerClose),
   onHotkeyFailures: (fn) => sub(IPC.hotkeyFailures, fn),
 }
 

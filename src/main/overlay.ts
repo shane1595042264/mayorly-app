@@ -29,7 +29,7 @@ const PET = { width: 140 + 10 + 48, height: 48 + 24 }
 const TASK_LINES = 2 * 12 * 1.15
 /** The pet's own corner inside the window; matches `body.compact .pet-wrap` in hud.css. */
 const INSET = { x: 4, y: 4 }
-/** The quick drawer under the pet: the window grows this much from the pet, down when there is room, else up. */
+/** The quick drawer's own window, hung under the pet when there is room, over it otherwise. */
 const DRAWER = { width: 340, height: 360 }
 /** The caption window: generous, because it is click-through; the text hugs the tomato's side. */
 const CAPTION = { width: 360, height: 40 }
@@ -59,7 +59,8 @@ export class Overlay {
   private anchor: Anchor | null = null
   private scale = 1
   private text = 1
-  private drawerSide: Layout['drawer'] = 'below'
+  private drawer: BrowserWindow | null = null
+  private drawerShownAt = 0
   private dragging = false
   private caption: BrowserWindow | null = null
   private captionText: string | null = null
@@ -326,11 +327,6 @@ export class Overlay {
       this.startHoverPoll()
     } else {
       this.stopHoverPoll()
-      // The drawer: say which way the window will grow before it grows, so the page has placed the pet by then.
-      if (mac && mode === 'drawer') {
-        this.drawerBounds(this.display())
-        this.sendLayout()
-      }
       if (mac) this.fit()
       if (!this.win.isVisible()) this.win.showInactive()
       this.win.setIgnoreMouseEvents(false)
@@ -498,7 +494,7 @@ export class Overlay {
     const target = this.display()
     this.displayId = target.id
     this.fitting = true
-    this.win.setBounds(mac && this.mode === 'field' ? this.fieldBounds(target) : mac && this.mode === 'drawer' ? this.drawerBounds(target) : target.workArea)
+    this.win.setBounds(mac && this.mode === 'field' ? this.fieldBounds(target) : target.workArea)
     this.fitting = false
     this.pin()
     // The page places the pet by the window it is in; tell it in the same step the window changes.
@@ -538,24 +534,87 @@ export class Overlay {
 
   layout(): Layout {
     const wa = this.display().workArea
-    return { compact: mac, side: this.side(wa, this.anchor ?? this.defaultAnchor(wa)), dragging: this.dragging, drawer: this.drawerSide, mode: this.mode }
+    return { compact: mac, side: this.side(wa, this.anchor ?? this.defaultAnchor(wa)), dragging: this.dragging }
   }
 
-  /** The pet's window plus the drawer: below the pet when it fits, above it otherwise, hung on the pet's side. */
-  private drawerBounds(display: Display): Rectangle {
+  /**
+   * The quick drawer: its own window hung under the pet (over it when the pet sits low), so
+   * the pet's window never changes and the tomato never moves. Focusable, since you type in
+   * it; it closes when it loses focus, on Esc from its page, or on the hotkey again.
+   */
+  toggleDrawer() {
+    if (!mac || this.win.isDestroyed()) return
+    if (this.drawer && !this.drawer.isDestroyed() && this.drawer.isVisible()) {
+      this.closeDrawer()
+      return
+    }
+    this.setCaption(null)
+    if (!this.drawer || this.drawer.isDestroyed()) {
+      this.drawer = new BrowserWindow({
+        width: DRAWER.width,
+        height: DRAWER.height,
+        show: false,
+        frame: false,
+        transparent: true,
+        backgroundColor: '#00000000',
+        hasShadow: false,
+        resizable: false,
+        movable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        skipTaskbar: true,
+        hiddenInMissionControl: true,
+        focusable: true,
+        alwaysOnTop: true,
+        type: 'panel',
+        title: 'Mayorly drawer',
+        webPreferences: {
+          preload: join(import.meta.dirname, '../preload/index.cjs'),
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          backgroundThrottling: false,
+          spellcheck: false,
+        },
+      })
+      this.drawer.setAlwaysOnTop(true, 'screen-saver')
+      this.drawer.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
+      const page = process.env.ELECTRON_RENDERER_URL ? `${process.env.ELECTRON_RENDERER_URL}?drawer` : null
+      if (page) void this.drawer.loadURL(page)
+      else void this.drawer.loadFile(join(import.meta.dirname, '../renderer/index.html'), { query: { drawer: '1' } })
+      // Losing focus closes it, like every other interface; the first moments after showing are ignored, since taking focus can bounce once.
+      this.drawer.on('blur', () => {
+        if (Date.now() - this.drawerShownAt > 400) this.closeDrawer()
+      })
+      this.drawer.on('closed', () => {
+        this.drawer = null
+      })
+    }
+    this.drawer.setBounds(this.drawerPlace(this.display()))
+    this.drawerShownAt = Date.now()
+    this.drawer.show()
+    this.drawer.focus()
+    this.drawer.webContents.focus()
+  }
+
+  closeDrawer() {
+    if (this.drawer && !this.drawer.isDestroyed() && this.drawer.isVisible()) this.drawer.hide()
+  }
+
+  /** Under the pet when there is room, over it otherwise, flush with the pet's outer side. */
+  private drawerPlace(display: Display): Rectangle {
     const wa = display.workArea
     const pet = this.fieldBounds(display)
-    const width = Math.max(pet.width, DRAWER.width)
-    const height = pet.height + DRAWER.height
-    const below = pet.y + height <= wa.y + wa.height
-    this.drawerSide = below ? 'below' : 'above'
-    const x = this.side(wa, this.anchor ?? this.defaultAnchor(wa)) === 'right' ? pet.x + pet.width - width : pet.x
-    const y = below ? pet.y : pet.y + pet.height - height
+    const gap = 4
+    const below = pet.y + pet.height + gap + DRAWER.height <= wa.y + wa.height
+    const x = this.side(wa, this.anchor ?? this.defaultAnchor(wa)) === 'right' ? pet.x + pet.width - DRAWER.width : pet.x
+    const y = below ? pet.y + pet.height + gap : pet.y - gap - DRAWER.height
     return {
-      x: Math.round(Math.min(Math.max(x, wa.x), wa.x + wa.width - width)),
-      y: Math.round(Math.min(Math.max(y, wa.y), wa.y + wa.height - height)),
-      width,
-      height,
+      x: Math.round(Math.min(Math.max(x, wa.x), wa.x + wa.width - DRAWER.width)),
+      y: Math.round(Math.min(Math.max(y, wa.y), wa.y + wa.height - DRAWER.height)),
+      width: DRAWER.width,
+      height: DRAWER.height,
     }
   }
 
