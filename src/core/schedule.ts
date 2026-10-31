@@ -1,11 +1,14 @@
-import type { Epoch, Id, Interval, Ms } from './model'
+import type { Epoch, Id, Interval, Ms, PlanMode } from './model'
 
-// The planner: entries with estimates become blocks on the calendar, placed into work hours
+// The planner: entries with real or assumed lengths become blocks, placed into work hours
 // around everything fixed (the user's events, the clerk's pins, outside calendars). Pure and
 // deterministic: the same input gives byte-identical output, and nothing here reads a clock.
 //
 // The rule is earliest deadline first with the flow's own order as the tiebreak, which is the
-// list the user already keeps; the only extra tier is `rush` (up next). Placements stick from
+// list the user already keeps; the only extra tier is `rush` (up next). In rotate mode the
+// order after rush is a round: one task from each group (ledger) in turn, so no two in a row
+// come from the same ledger while other groups remain (rush is exempt). Dues order each
+// group's own tasks; rotation may delay a due across groups. Placements stick from
 // one run to the next unless something fixed landed on them, so the calendar does not churn;
 // stickiness yields once to a deadline it would make late. What cannot fit is reported as
 // overflow, never thrown and never silently dropped. No weights, no scoring: a plan the user
@@ -26,6 +29,8 @@ export interface PlanTask {
   splittable: boolean
   minChunkMin: number | null
   maxChunkMin: number | null
+  /** The ledger, for rotate mode; null is the tray. */
+  group: string | null
 }
 
 export interface Placement extends Interval {
@@ -59,6 +64,8 @@ export interface PlanInput {
   breakMin: number
   /** Keep placing past a due (flagged late) instead of reporting no-room. */
   spill: boolean
+  /** done: by due then the flow. rotate: round-robin across groups after rush. */
+  mode?: PlanMode
 }
 
 export interface PlanResult {
@@ -137,7 +144,7 @@ export function plan(input: PlanInput): PlanResult {
   // tasks ranked below it that sit before its due are released and the plan runs again.
   const late = first.overflow.filter((o) => o.kind === 'past-due')
   if (late.length === 0 || input.previous.length === 0) return first
-  const ranked = order(input.tasks)
+  const ranked = order(input.tasks, input.mode)
   const rankOf = new Map(ranked.map((t, i) => [t.id, i]))
   const byId = new Map(input.tasks.map((t) => [t.id, t]))
   const released = new Set<string>()
@@ -147,7 +154,10 @@ export function plan(input: PlanInput): PlanResult {
     if (!t || t.due === null || r === undefined) continue
     for (const p of input.previous) {
       const pr = rankOf.get(p.taskId)
-      if (pr === undefined || pr <= r) continue
+      const pt = byId.get(p.taskId)
+      if (pr === undefined || pr <= r || !pt) continue
+      // Never released for it: a task due sooner, which rotate mode may rank lower.
+      if (pt.due !== null && pt.due <= t.due) continue
       if (p.start < t.due && !(p.start < input.now && input.now < p.end)) released.add(key(p))
     }
   }
@@ -158,12 +168,26 @@ export function plan(input: PlanInput): PlanResult {
 const key = (p: Placement) => `${p.taskId}|${p.start}|${p.end}`
 
 /** rush, then earliest due, then the flow's order, then id: a total order. */
-function order(tasks: PlanTask[]): PlanTask[] {
-  return [...tasks].sort((a, b) =>
-    Number(b.rush) - Number(a.rush) ||
+function byDue(a: PlanTask, b: PlanTask): number {
+  return Number(b.rush) - Number(a.rush) ||
     (a.due ?? Infinity) - (b.due ?? Infinity) ||
     a.order - b.order ||
-    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+}
+
+/** The order tasks are placed in. done: byDue. rotate: rush first, then rounds across the groups. */
+export function order(tasks: PlanTask[], mode: PlanMode = 'done'): PlanTask[] {
+  const sorted = [...tasks].sort(byDue)
+  if (mode !== 'rotate') return sorted
+  const rush = sorted.filter((t) => t.rush)
+  const rest = sorted.filter((t) => !t.rush)
+  // Groups in the order their first task comes in; each group's tasks keep the due order.
+  const groups = new Map<string | null, PlanTask[]>()
+  for (const t of rest) groups.set(t.group, [...(groups.get(t.group) ?? []), t])
+  const queues = [...groups.values()]
+  const out = [...rush]
+  for (let round = 0; queues.some((q) => q.length > round); round++) for (const q of queues) if (q[round]) out.push(q[round])
+  return out
 }
 
 function run(input: PlanInput, previous: Placement[]): PlanResult {
@@ -172,7 +196,7 @@ function run(input: PlanInput, previous: Placement[]): PlanResult {
   const breakMs = Math.max(0, input.breakMin) * MIN
   const windows = clip(normalize(input.windows), now, horizonEnd)
   let free = subtract(windows, normalize(input.busy))
-  const tasks = order(input.tasks)
+  const tasks = order(input.tasks, input.mode)
   const byId = new Map(tasks.map((t) => [t.id, t]))
   const remaining = new Map(tasks.map((t) => [t.id, Math.max(0, roundUp(t.needMin, input.gridMin)) ]))
   const placements: Placement[] = []

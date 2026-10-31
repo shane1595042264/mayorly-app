@@ -60,7 +60,7 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
   const fresherHere = new Set(feeds.filter((f) => lc.feeds.some((x) => x.id === f.id && (x.lastFetchedAt ?? 0) >= (ic.feeds.find((y) => y.id === f.id)?.lastFetchedAt ?? 0))).map((f) => f.id))
   const external = [...lc.external.filter((x) => feedIds.has(x.feedId) && fresherHere.has(x.feedId)), ...ic.external.filter((x) => feedIds.has(x.feedId) && !fresherHere.has(x.feedId))]
   const newerPlan = (lc.plannedAt ?? 0) >= (ic.plannedAt ?? 0) ? lc : ic
-  const calendar = { events, feeds, external, blocks: newerPlan.blocks, overflow: newerPlan.overflow, plannedAt: newerPlan.plannedAt, horizonEnd: newerPlan.horizonEnd }
+  const calendar = { events, feeds, external, blocks: newerPlan.blocks, overflow: newerPlan.overflow, plannedAt: newerPlan.plannedAt, horizonEnd: newerPlan.horizonEnd, plannedMode: newerPlan.plannedMode }
   const seen = new Set<string>()
   const clerkLog = [...incoming.clerkLog, ...local.clerkLog]
     .filter((x) => {

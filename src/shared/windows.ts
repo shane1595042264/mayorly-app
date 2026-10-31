@@ -22,16 +22,20 @@ export function wallClock(t: number, tz: string): { y: number; m: number; d: num
   return { y: Number(parts.year), m: Number(parts.month), d: Number(parts.day), weekday, minutes: Number(parts.hour) * 60 + Number(parts.minute) }
 }
 
-/** The epoch of a wall-clock moment in a zone, found by correcting a UTC guess twice (enough across any DST change). */
+/** Wall time to epoch: use the earlier occurrence of a repeated time, and move gaps forward. */
 export function zonedEpoch(tz: string, y: number, m: number, d: number, minutes: number): number {
-  let guess = Date.UTC(y, m - 1, d, 0, 0) + minutes * 60_000
-  for (let i = 0; i < 2; i++) {
-    const w = wallClock(guess, tz)
-    const have = Date.UTC(w.y, w.m - 1, w.d, 0, 0) + w.minutes * 60_000
-    const want = Date.UTC(y, m - 1, d, 0, 0) + minutes * 60_000
-    guess += want - have
+  const want = Date.UTC(y, m - 1, d) + minutes * 60_000
+  const wallEpoch = (t: number) => {
+    const w = wallClock(t, tz)
+    return Date.UTC(w.y, w.m - 1, w.d) + w.minutes * 60_000
   }
-  return guess
+  // Offsets on both sides of a transition give both candidates. A missing midnight must
+  // resolve to the first instant of the new day, not the previous evening.
+  const offsets = new Set([-DAY, 0, DAY].map((delta) => wallEpoch(want + delta) - (want + delta)))
+  const candidates = [...offsets].map((offset) => want - offset).sort((a, b) => a - b)
+  return candidates.find((t) => wallEpoch(t) === want)
+    ?? candidates.find((t) => wallEpoch(t) > want)
+    ?? candidates[candidates.length - 1]
 }
 
 /** Midnight of the day `t` falls in, in the zone. */
@@ -54,6 +58,14 @@ export function windowsFor(cal: CalendarSettings, from: number, days: number): I
     day = startOfDayIn(day + DAY + DAY / 2, cal.tz)
   }
   return out.sort((a, b) => a.start - b.start)
+}
+
+/** Where the plan ends: the end of the last of `horizonDays` days, today the first. */
+export function horizonEndFor(cal: CalendarSettings, now: number): number {
+  const days = Math.max(1, Math.round(cal.horizonDays) || 1)
+  let day = startOfDayIn(now, cal.tz)
+  for (let i = 0; i < days; i++) day = startOfDayIn(day + DAY + DAY / 2, cal.tz)
+  return day
 }
 
 export function machineZone(): string {

@@ -264,6 +264,11 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .cal-overflow { display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 12px; border: 1px solid var(--accent-2); color: var(--ink); font-size: 13px; }
 .cal-overflow svg { color: var(--accent); flex: none; }
 .cal-overflow-text { flex: 1; min-width: 0; }
+.cal-waiting { color: var(--ink-2); background: var(--glass-3); padding: 8px 12px; font-size: 13px; }
+.cal-waiting summary { cursor: pointer; }
+.cal-waiting summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.cal-waiting ul { padding-left: 20px; margin: 8px 0; }
+.cal-waiting p { margin: 8px 0 0; }
 .cal-overflow .btn.small { flex: none; padding: 4px 10px; font-size: 11px; display: inline-flex; align-items: center; gap: 6px; }
 .cal-overflow .btn.small svg { color: inherit; }
 .cal-grid {
@@ -301,6 +306,11 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .cal-item-icon { position: absolute; bottom: 4px; right: 5px; color: var(--ink-3); }
 .cal-block { border-color: var(--ledger-2, var(--accent-2)); box-shadow: inset 3px 0 0 var(--ledger, var(--accent)); }
 .cal-block.late { border-style: dashed; }
+.cal-block.assumed { border-style: dotted; }
+.cal-assumed-mark { display: none; }
+.cal-block.compact .cal-item-title { order: -1; flex-shrink: 0; }
+.cal-block.compact .cal-item-t, .cal-block.compact .cal-item-n { display: none; }
+.cal-block.compact .cal-assumed-mark { display: inline; }
 .cal-block.late .cal-item-icon { color: var(--accent); }
 .cal-block.live { background: rgb(240 174 60 / 0.16); }
 .cal-event { background: rgb(163 173 181 / 0.14); border-color: rgb(163 173 181 / 0.5); box-shadow: inset 3px 0 0 var(--ink-2); }

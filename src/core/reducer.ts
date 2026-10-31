@@ -89,12 +89,28 @@ export interface Result {
   events: HudEvent[]
 }
 
+/** Older builds strip the new planner controls and clamp the day range. Keep our choices
+ * when those fields are absent; documents from a current build still sync them normally. */
+function migrateSync(raw: unknown, local: MayorlyState): MayorlyState | null {
+  const incoming = migrate(raw)
+  if (!incoming) return null
+  const calendar = (raw as Partial<MayorlyState>).settings?.calendar
+  if (calendar?.mode === undefined) {
+    incoming.settings.calendar.mode = local.settings.calendar.mode
+    incoming.settings.calendar.horizonDays = local.settings.calendar.horizonDays
+    // An old planner always uses deadline order, even if it carried our last mode stamp.
+    incoming.calendar.plannedMode = 'done'
+  }
+  if (calendar?.defaultMin === undefined) incoming.settings.calendar.defaultMin = local.settings.calendar.defaultMin
+  return incoming
+}
+
 export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Clerk = prefixClerk): Result {
   // The heartbeat runs every second; only pay for a copy when something is due.
   if (action.type === 'desk/tick' && !tickDue(state, ctx.now)) return { state, events: [] }
 
   if (action.type === 'sync/merge') {
-    const incoming = migrate(action.state)
+    const incoming = migrateSync(action.state, state)
     if (!incoming) return { state, events: [] }
     const merged = mergeStates(state, incoming, action.syncedAt)
     merged.settings = sanitiseSettings({ ...merged.settings, ...Object.fromEntries(DEVICE_SETTINGS.map((k) => [k, state.settings[k]])) })
@@ -106,7 +122,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
   }
 
   if (action.type === 'sync/replace') {
-    const incoming = migrate(action.state)
+    const incoming = migrateSync(action.state, state)
     if (!incoming) return { state, events: [] }
     incoming.settings = sanitiseSettings({ ...incoming.settings, ...Object.fromEntries(DEVICE_SETTINGS.map((k) => [k, state.settings[k]])) })
     // A desk left running on another machine is not running here: time this
@@ -1097,8 +1113,10 @@ function sanitiseCalendar(c: Partial<CalendarSettings> | undefined): CalendarSet
     hours,
     breakMin: step5(c?.breakMin, 0, 60, base.breakMin),
     minChunkMin: step5(c?.minChunkMin, 5, 240, base.minChunkMin),
-    horizonDays: Math.min(28, Math.max(7, Math.round(Number(c?.horizonDays)) || base.horizonDays)),
+    horizonDays: Math.min(28, Math.max(1, Math.round(Number(c?.horizonDays)) || base.horizonDays)),
     spill: c?.spill === undefined ? base.spill : !!c.spill,
+    defaultMin: step5(c?.defaultMin, 5, 240, base.defaultMin),
+    mode: c?.mode === 'rotate' || c?.mode === 'done' ? c.mode : base.mode,
   }
 }
 
@@ -1249,15 +1267,21 @@ function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: num
     ...cal.external.filter((x) => !x.allDay && !x.free).map((x) => ({ start: x.start, end: x.end })),
   ]
   const tasks: PlanTask[] = []
+  const assumedIds = new Set<Id>()
   for (const e of openFlow(state)) {
-    if (!e.estimateMin || e.offCalendar) continue
+    if (e.offCalendar) continue
+    // No estimate: placed at the default length, so the plan never waits for a number.
+    const estimate = e.estimateMin || settings.defaultMin
+    if (!e.estimateMin) assumedIds.add(e.id)
     const spent = Math.floor(entrySpentMs(state, e.id, now) / 60_000)
     let pinned = 0
     for (const ev of cal.events) {
       if (ev.entryId !== e.id || ev.end <= now) continue
       pinned += Math.round((ev.end - Math.max(ev.start, now)) / 60_000)
     }
-    const needMin = e.estimateMin - spent - pinned
+    // A real estimate is a budget desk time uses up; an assumed one is only a length, so an
+    // entry without a number stays on the plan until it is cleared.
+    const needMin = e.estimateMin ? estimate - spent - pinned : estimate - pinned
     if (needMin <= 0) continue
     tasks.push({
       id: e.id,
@@ -1269,10 +1293,16 @@ function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: num
       splittable: e.splittable !== false,
       minChunkMin: e.minChunkMin ?? null,
       maxChunkMin: e.maxChunkMin ?? null,
+      group: e.ledgerId,
     })
   }
-  const previous: Placement[] = cal.blocks.map((b) => ({ taskId: b.entryId, start: b.start, end: b.end, late: b.late }))
-  const r = plan({ now, horizonEnd, windows: windowsIn, busy, tasks, previous, minChunkMin: settings.minChunkMin, gridMin: 5, breakMin: settings.breakMin, spill: settings.spill })
+  // A mode change releases future placements, but keeps the current block and the old
+  // blocks below so moved feed items retain their ids and increment their sequences.
+  const modeChanged = (cal.plannedMode ?? 'done') !== settings.mode
+  const previous: Placement[] = cal.blocks
+    .filter((b) => !modeChanged || (b.start < now && now < b.end))
+    .map((b) => ({ taskId: b.entryId, start: b.start, end: b.end, late: b.late }))
+  const r = plan({ now, horizonEnd, windows: windowsIn, busy, tasks, previous, minChunkMin: settings.minChunkMin, gridMin: 5, breakMin: settings.breakMin, spill: settings.spill, mode: settings.mode })
   // Chunks numbered per entry by start; ids stable per chunk number so a moved chunk keeps its feed UID.
   const byTask = new Map<Id, Placement[]>()
   for (const p of r.placements) byTask.set(p.taskId, [...(byTask.get(p.taskId) ?? []), p])
@@ -1283,14 +1313,14 @@ function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: num
       const id = `${entryId}#${i + 1}`
       const was = old.get(id)
       const seq = was ? (was.start !== p.start || was.end !== p.end ? was.seq + 1 : was.seq) : 0
-      blocks.push({ id, entryId, chunk: i + 1, of: ps.length, start: p.start, end: p.end, late: p.late, seq })
+      blocks.push({ id, entryId, chunk: i + 1, of: ps.length, start: p.start, end: p.end, late: p.late, seq, assumed: assumedIds.has(entryId) })
     })
   }
   blocks.sort((a, b) => a.start - b.start || (a.id < b.id ? -1 : 1))
   const overflow: Overflow[] = r.overflow.map((o) => ({ entryId: o.taskId, kind: o.kind, minutes: o.minutes }))
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
-  if (same(blocks, cal.blocks) && same(overflow, cal.overflow) && cal.horizonEnd === horizonEnd && cal.plannedAt !== null) return null
-  return { ...state, calendar: { ...cal, blocks, overflow, plannedAt: now, horizonEnd } }
+  if (same(blocks, cal.blocks) && same(overflow, cal.overflow) && cal.horizonEnd === horizonEnd && cal.plannedAt !== null && cal.plannedMode === settings.mode) return null
+  return { ...state, calendar: { ...cal, blocks, overflow, plannedAt: now, horizonEnd, plannedMode: settings.mode } }
 }
 
 export const TEXT_MIN = 0.8

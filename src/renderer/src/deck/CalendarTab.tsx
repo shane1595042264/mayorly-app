@@ -178,7 +178,13 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
   const nowMin = wallClock(now, tz).minutes
 
   const overflow = cal.overflow.map((o) => ({ ...o, entry: entryOf(o.entryId) })).filter((o) => o.entry)
-  const unestimated = openFlow(s).filter((e) => !e.estimateMin && !e.offCalendar)
+  const needsAttention = (o: typeof overflow[number]) => o.kind === 'past-due' || (o.entry?.due != null && o.entry.due <= (cal.horizonEnd ?? now))
+  const late = overflow.filter(needsAttention)
+  const waiting = overflow.filter((o) => !needsAttention(o))
+  const unestimated = openFlow(s).filter((e) => !e.estimateMin && !e.offCalendar && cal.blocks.some((b) => b.entryId === e.id))
+  // horizonEnd is the midnight that starts the day after the last planned day; the last day is what the eye wants.
+  const lastDay = cal.horizonEnd ? fmtDay(cal.horizonEnd - 1) : null
+  const rangeLabel = s.settings.calendar.horizonDays === 1 ? 'this day' : s.settings.calendar.horizonDays === 2 ? 'a day ahead' : s.settings.calendar.horizonDays === 7 ? 'the week ahead' : s.settings.calendar.horizonDays === 14 ? 'two weeks' : `${s.settings.calendar.horizonDays} days, including today,`
   const off = openFlow(s).filter((e) => e.offCalendar)
   const selected = items.find((i) => i.id === sel) ?? null
 
@@ -192,17 +198,24 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
           {weekOffset !== 0 && <button type="button" className="btn ghost" onClick={() => setWeekOffset(0)}>Today</button>}
           <button type="button" className="btn ghost" onClick={() => setAdding(true)}>New event</button>
           <span className="cal-planned dim">
-            {cal.horizonEnd ? `Planned to ${fmtDay(cal.horizonEnd)}` : 'Not planned yet'}
+            {lastDay ? `Planned to ${lastDay}` : 'Not planned yet'}
             {!tz && '  (no zone yet; it is set on the first launch)'}
           </span>
         </header>
-        {overflow.length > 0 && (
+        {late.length > 0 && (
           <p className="cal-overflow" role="status">
             <Warning size={14} weight="fill" />
-            {overflow.length === 1 ? 'One entry does not fit: ' : `${overflow.length} entries do not fit: `}
-            <span className="cal-overflow-text">{overflow.map((o, i) => `${i ? ', ' : ''}${o.entry!.title} (${o.kind === 'past-due' ? `${span(o.minutes * MIN)} past its due` : `${span(o.minutes * MIN)} with no room before ${cal.horizonEnd ? fmtDay(cal.horizonEnd) : 'the horizon'}`})`)}</span>
-            <button type="button" className="btn ghost small" onClick={() => askCalendar(`Find room for ${overflow.map((o) => `"${o.entry!.title}"`).join(' and ')}`)}><Sparkle size={12} /> Ask the clerk</button>
+            {late.length === 1 ? 'One entry needs attention: ' : `${late.length} entries need attention: `}
+            <span className="cal-overflow-text">{late.map((o, i) => `${i ? ', ' : ''}${o.entry!.title} (${span(o.minutes * MIN)} ${o.kind === 'past-due' ? 'past its due' : 'cannot fit before its due'})`)}</span>
+            <button type="button" className="btn ghost small" onClick={() => askCalendar(`Find room before the due for ${late.map((o) => `"${o.entry!.title}"`).join(' and ')}`)}><Sparkle size={12} /> Ask the clerk</button>
           </p>
+        )}
+        {waiting.length > 0 && (
+          <details className="cal-waiting">
+            <summary>{waiting.length === 1 ? 'One entry waits' : `${waiting.length} entries wait`} beyond the plan ending {lastDay ?? 'today'}</summary>
+            <ul>{waiting.map((o) => <li key={o.entryId}>{o.entry!.title}: {span(o.minutes * MIN)} still to place</li>)}</ul>
+            <p>Extend the range in Settings to plan further ahead. Check due dates when work cannot fit.</p>
+          </details>
         )}
         <div className={`cal-grid ${drag ? 'is-dragging' : ''}`} ref={gridRef} onPointerMove={onGridMove} onPointerUp={onGridUp} onPointerCancel={onGridUp} style={{ ['--rows' as string]: rows, ['--hour' as string]: `${HOUR_PX}px` }}>
           <div className="cal-corner" />
@@ -246,9 +259,9 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
                     const l = ledgerOf(e?.ledgerId ?? null)
                     const live = s.desk.block?.entryId === it.block.entryId && s.desk.status !== 'idle'
                     return (
-                      <div key={it.id} className={`cal-item cal-block ${isSel ? 'is-selected' : ''} ${it.block.late ? 'late' : ''} ${live ? 'live' : ''} ${lifted}`} style={{ ...style, ...ledgerVars(l) }} data-row={it.id} title={`${e?.title ?? ''} ${fmt(it.start)} to ${fmt(it.end)}. Drag to pin it elsewhere.`} onPointerDown={(ev) => grabItem(ev, it, 'move')}>
-                        <span className="cal-item-t mono num">{fmt(it.start)}</span>
-                        <span className="cal-item-title">{l && <b className="mono">{l.code} </b>}{e?.title ?? '(gone)'}</span>
+                      <div key={it.id} className={`cal-item cal-block ${style.height < 38 ? 'compact' : ''} ${isSel ? 'is-selected' : ''} ${it.block.late ? 'late' : ''} ${live ? 'live' : ''} ${it.block.assumed ? 'assumed' : ''} ${lifted}`} style={{ ...style, ...ledgerVars(l) }} data-row={it.id} title={`${e?.title ?? ''} ${fmt(it.start)} to ${fmt(it.end)}.${it.block.assumed ? ' No estimate yet; placed at the default length.' : ''} Drag to pin it elsewhere.`} onPointerDown={(ev) => grabItem(ev, it, 'move')}>
+                        <span className="cal-item-t mono num">{fmt(it.start)}{it.block.assumed ? ' ~' : ''}</span>
+                        <span className="cal-item-title">{it.block.assumed && <span className="cal-assumed-mark">~ </span>}{l && <b className="mono">{l.code} </b>}{e?.title ?? '(gone)'}</span>
                         {it.block.of > 1 && <span className="cal-item-n mono num">{it.block.chunk}/{it.block.of}</span>}
                         {it.block.late && <Warning size={12} weight="fill" className="cal-item-icon" />}
                       </div>
@@ -285,12 +298,12 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
         ) : (
           <>
             <h3 className="side-title caps">The plan</h3>
-            <p className="field-help">Entries with an estimate are placed into your hours, earliest due first, in the order of the flow. Your own events are never moved. Select a block with j and k; Enter starts it, p pins it where it is. Drag a block to pin it elsewhere; drag an event to move it, its bottom edge to resize it.</p>
+            <p className="field-help">The clerk keeps {rangeLabel} filled with every open entry, {s.settings.calendar.mode === 'rotate' ? 'one ledger after another' : 'earliest due first'}, from now. Your own events are never moved. Select a block with j and k; Enter starts it, p pins it where it is. Drag a block to pin it elsewhere; drag an event to move it, its bottom edge to resize it. Change the range and the mode in Settings.</p>
           </>
         )}
         {unestimated.length > 0 && (
           <section className="cal-list">
-            <h3 className="side-title caps">Needs an estimate</h3>
+            <h3 className="side-title caps">Planned without an estimate</h3>
             <ul>
               {unestimated.slice(0, 8).map((e) => <li key={e.id}>{e.title}</li>)}
               {unestimated.length > 8 && <li className="dim">and {unestimated.length - 8} more</li>}
@@ -303,8 +316,8 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
             <ul>{off.map((e) => <li key={e.id}>{e.title}</li>)}</ul>
           </section>
         )}
-        {cal.blocks.length === 0 && unestimated.length === 0 && off.length === 0 && (
-          <p className="dim cal-empty"><CalendarBlank size={16} /> Nothing to plan. Capture an entry with an estimate, like ~45.</p>
+        {openFlow(s).length === 0 && (
+          <p className="dim cal-empty"><CalendarBlank size={16} /> Nothing to plan. Capture an entry and it is placed from now; ~45 gives it a length.</p>
         )}
         <AskClerk />
       </aside>
@@ -398,7 +411,7 @@ function Selected({ s, item, fmt, fmtDay, tz }: { s: MayorlyState; item: Item; f
       <section className="cal-sel">
         <h3 className="side-title caps">{l?.code ?? 'Tray'}  block {item.block.chunk} of {item.block.of}</h3>
         <p className="cal-sel-title">{e.title}</p>
-        <p className="field-help">{when}{item.block.late ? '. Past its due.' : ''}</p>
+        <p className="field-help">{when}{item.block.late ? '. Past its due.' : ''}{item.block.assumed ? '. No estimate yet, so the default length; give it one below.' : ''}</p>
         <div className="form-actions">
           <button type="button" className="btn" onClick={() => dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })}><Play size={14} /> Start now</button>
           <button type="button" className="btn ghost" onClick={() => dispatch({ type: 'calendar/pin', blockId: item.block.id })}><PushPin size={14} /> Pin here</button>

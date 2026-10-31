@@ -368,6 +368,94 @@ describe('the calendar', () => {
     expect(w.s.calendar.blocks).toEqual([])
   })
 
+  it('an entry without an estimate is placed at the default length and marked assumed; the range may be one day', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: no number' })
+    w.do({ type: 'entry/capture', text: 'legal: with ~50' })
+    replan(w)
+    const a = w.s.calendar.blocks.find((b) => b.entryId === w.entry('no number').id)!
+    const b = w.s.calendar.blocks.find((b) => b.entryId === w.entry('with').id)!
+    expect(a.assumed).toBe(true)
+    expect(a.end - a.start).toBe(w.s.settings.calendar.defaultMin * MIN)
+    expect(b.assumed).toBe(false)
+    w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, horizonDays: 1, defaultMin: 45, mode: 'rotate' } } })
+    expect(w.s.settings.calendar).toMatchObject({ horizonDays: 1, defaultMin: 45, mode: 'rotate' })
+    w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, mode: 'sideways' as never, horizonDays: -3 } } })
+    expect(w.s.settings.calendar).toMatchObject({ horizonDays: 1, mode: 'done' })
+  })
+
+  it('an assumed length remains on the plan after more than that much desk time', () => {
+    const w = world()
+    w.do({ type: 'settings/update', patch: { focusMin: 60 } })
+    w.do({ type: 'entry/capture', text: 'legal: ongoing', start: true })
+    const id = w.entry('ongoing').id
+    replan(w)
+    w.wait(35 * MIN)
+    replan(w)
+    const blocks = w.s.calendar.blocks.filter((b) => b.entryId === id)
+    expect(blocks.length).toBeGreaterThan(0)
+    expect(blocks.every((b) => b.assumed)).toBe(true)
+    expect(blocks.reduce((sum, b) => sum + b.end - b.start, 0)).toBe(30 * MIN)
+    expect(w.entry('ongoing').doneAt).toBeNull()
+    w.do({ type: 'entry/complete', id })
+    replan(w)
+    expect(w.s.calendar.blocks.some((b) => b.entryId === id)).toBe(false)
+  })
+
+  it('changing mode reorders future blocks without resetting feed sequences or moving events', () => {
+    const w = world()
+    for (const text of ['legal: a ~30', 'legal: b ~30', 'dance: c ~30']) w.do({ type: 'entry/capture', text })
+    w.do({ type: 'calendar/event-add', title: 'Appointment', start: w.now + 180 * MIN, end: w.now + 210 * MIN })
+    replan(w)
+    const ids = ['a', 'b', 'c'].map((title) => w.entry(title).id)
+    expect(w.s.calendar.blocks.map((b) => b.entryId)).toEqual(ids)
+    const before = new Map(w.s.calendar.blocks.map((b) => [b.id, b]))
+    const fixed = structuredClone(w.s.calendar.events)
+    w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, mode: 'rotate' } } })
+    replan(w)
+    expect(w.s.calendar.blocks.map((b) => b.entryId)).toEqual([ids[0], ids[2], ids[1]])
+    for (const b of w.s.calendar.blocks) {
+      const old = before.get(b.id)!
+      expect(b.seq).toBe(old.seq + Number(old.start !== b.start || old.end !== b.end))
+    }
+    expect(w.s.calendar.events).toEqual(fixed)
+    expect(w.s.calendar.plannedMode).toBe('rotate')
+    const stable = w.s
+    replan(w)
+    expect(w.s).toBe(stable)
+  })
+
+  it.each(['sync/replace', 'sync/merge'] as const)('%s preserves planner controls stripped by an older build, and accepts current ones', (type) => {
+    const w = world()
+    w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, mode: 'rotate', defaultMin: 45, horizonDays: 1 } } })
+    const old = structuredClone(w.s)
+    const oldCalendar = old.settings.calendar as Partial<typeof old.settings.calendar>
+    delete oldCalendar.mode
+    delete oldCalendar.defaultMin
+    oldCalendar.horizonDays = 7
+    oldCalendar.breakMin = 10
+    old.calendar.plannedMode = 'rotate'
+    old.calendar.plannedAt = w.now
+    w.do(type === 'sync/merge' ? { type, state: old, syncedAt: null } : { type, state: old })
+    expect(w.s.settings.calendar).toMatchObject({ mode: 'rotate', defaultMin: 45, horizonDays: 1, breakMin: 10 })
+    expect(w.s.calendar.plannedMode).toBe('done')
+    const current = structuredClone(w.s)
+    current.settings.calendar = { ...current.settings.calendar, mode: 'done', defaultMin: 60, horizonDays: 2 }
+    w.do(type === 'sync/merge' ? { type, state: current, syncedAt: null } : { type, state: current })
+    expect(w.s.settings.calendar).toMatchObject({ mode: 'done', defaultMin: 60, horizonDays: 2 })
+  })
+
+  it('a mode change keeps the block already in progress', () => {
+    const w = world()
+    for (const text of ['legal: a ~60', 'legal: b ~30', 'dance: c ~30']) w.do({ type: 'entry/capture', text })
+    replan(w)
+    const current = w.s.calendar.blocks[0]
+    w.wait(10 * MIN)
+    w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, mode: 'rotate' } } })
+    replan(w)
+    expect(w.s.calendar.blocks[0]).toMatchObject({ entryId: current.entryId, start: w.now, end: current.end })
+  })
+
   it('a block dragged to another time pins there, never before now, and planned time is summed', () => {
     const w = world()
     w.do({ type: 'entry/capture', text: 'legal: a ~60' })
@@ -399,14 +487,15 @@ describe('the calendar', () => {
 
   it('calendar settings are sanitised and an old save loads with defaults', () => {
     const w = world()
-    w.do({ type: 'settings/update', patch: { calendar: { tz: 'America/Chicago', hours: [[], [{ start: 600, end: 540 }, { start: 480, end: 720 }, { start: 700, end: 900 }], [], [], [], [], []], breakMin: 7, minChunkMin: 2, horizonDays: 99, spill: false } } })
-    expect(w.s.settings.calendar).toEqual({ tz: 'America/Chicago', hours: [[], [{ start: 480, end: 900 }], [], [], [], [], []], breakMin: 5, minChunkMin: 5, horizonDays: 28, spill: false })
+    w.do({ type: 'settings/update', patch: { calendar: { tz: 'America/Chicago', hours: [[], [{ start: 600, end: 540 }, { start: 480, end: 720 }, { start: 700, end: 900 }], [], [], [], [], []], breakMin: 7, minChunkMin: 2, horizonDays: 99, spill: false, defaultMin: 1000, mode: 'rotate' } } })
+    expect(w.s.settings.calendar).toEqual({ tz: 'America/Chicago', hours: [[], [{ start: 480, end: 900 }], [], [], [], [], []], breakMin: 5, minChunkMin: 5, horizonDays: 28, spill: false, defaultMin: 240, mode: 'rotate' })
     const old = JSON.parse(JSON.stringify(w.s)) as Record<string, unknown>
     delete old.calendar
     delete (old.settings as Record<string, unknown>).calendar
     const back = migrate(old)!
     expect(back.calendar.blocks).toEqual([])
     expect(back.settings.calendar.minChunkMin).toBe(25)
+    expect(back.settings.calendar).toMatchObject({ defaultMin: 30, mode: 'done' })
   })
 })
 

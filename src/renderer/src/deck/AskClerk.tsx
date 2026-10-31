@@ -107,7 +107,7 @@ export function AskClerk() {
           e.stopPropagation()
         }}
       />
-      <p className="field-help">{busy ? 'The clerk is reading.' : note ?? 'It can change estimates, dues, order and splitting, place an entry at a time, or block time for you. It cannot touch your own events.'}</p>
+      <p className="field-help">{busy ? 'The clerk is reading.' : note ?? 'The plan is already made; ask only to correct it. The clerk can change estimates, dues, order and splitting, place an entry at a time, or block time for you. It cannot touch your own events.'}</p>
     </section>
   )
 }

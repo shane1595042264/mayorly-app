@@ -126,6 +126,8 @@ export interface CalBlock extends Interval {
   late: boolean
   /** Bumped by the reducer when this id's times change: the feed's SEQUENCE. */
   seq: number
+  /** The entry has no estimate; it was placed at the default length. */
+  assumed: boolean
 }
 
 export interface Overflow {
@@ -143,6 +145,8 @@ export interface Calendar {
   overflow: Overflow[]
   /** When the blocks were last computed; null before the first replan. */
   plannedAt: Epoch | null
+  /** Mode that produced these blocks; absent on saves made before modes existed. */
+  plannedMode?: PlanMode
   /** Where the last plan stopped looking, so the grid knows where the plan ends. */
   horizonEnd: Epoch | null
 }
@@ -182,11 +186,17 @@ export interface CalendarSettings {
   breakMin: number
   /** Smallest chunk, minutes (25: one tomato). */
   minChunkMin: number
-  /** How far the planner looks ahead, days. */
+  /** Days the plan covers, today counted first: 1 is this day, 2 a day ahead, 7 the week ahead. It ends at the end of the last day. */
   horizonDays: number
   /** Keep placing past a due (flagged late) rather than reporting no room. */
   spill: boolean
+  /** Minutes an entry without an estimate is placed at, so nothing waits for a number. */
+  defaultMin: number
+  /** done: earliest due first, the flow's order after. rotate: one entry from each ledger in turn. */
+  mode: PlanMode
 }
+
+export type PlanMode = 'done' | 'rotate'
 
 export interface Subtask {
   id: Id

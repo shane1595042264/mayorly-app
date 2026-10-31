@@ -12,7 +12,7 @@ const at = (dayOffset: number, hour: number, minute = 0) => Date.UTC(2026, 0, 5 
 const windows = (days = 10, from = 9, to = 17) => Array.from({ length: days }, (_, d) => ({ start: at(d, from), end: at(d, to) }))
 
 function task(id: string, needMin: number, extra: Partial<PlanTask> = {}): PlanTask {
-  return { id, needMin, due: null, notBefore: null, rush: false, order: 0, splittable: true, minChunkMin: null, maxChunkMin: null, ...extra }
+  return { id, needMin, due: null, notBefore: null, rush: false, order: 0, splittable: true, minChunkMin: null, maxChunkMin: null, group: null, ...extra }
 }
 function input(tasks: PlanTask[], extra: Partial<PlanInput> = {}): PlanInput {
   return { now: NOW, horizonEnd: NOW + 10 * DAY, windows: windows(), busy: [], tasks, previous: [], minChunkMin: 25, gridMin: 5, breakMin: 0, spill: true, ...extra }
@@ -28,6 +28,35 @@ describe('interval algebra', () => {
 })
 
 describe('the planner', () => {
+  it('rotate mode takes one task from each ledger in turn, rush first, each ledger earliest due first', () => {
+    const tasks = [
+      task('l1', 60, { group: 'legal', order: 0 }),
+      task('l2', 60, { group: 'legal', order: 1, due: at(0, 12) }),
+      task('d1', 60, { group: 'dance', order: 2 }),
+      task('c1', 60, { group: 'career', order: 3 }),
+      task('d2', 60, { group: 'dance', order: 4, rush: true }),
+    ]
+    const r = plan(input(tasks, { mode: 'rotate' }))
+    expect(r.placements.map((p) => p.taskId)).toEqual(['d2', 'l2', 'd1', 'c1', 'l1'])
+    const done = plan(input(tasks, { mode: 'done' }))
+    expect(done.placements.map((p) => p.taskId)).toEqual(['d2', 'l2', 'l1', 'd1', 'c1'])
+  })
+
+  it('rotate never releases an earlier deadline to rescue a later one', () => {
+    const tasks = [
+      task('b1', 60, { group: 'B', due: at(0, 10) }),
+      task('b2', 60, { group: 'B', due: at(0, 11) }),
+      task('a1', 120, { group: 'A', due: at(0, 12) }),
+    ]
+    const previous = [
+      { taskId: 'b1', start: at(0, 9), end: at(0, 10), late: false },
+      { taskId: 'b2', start: at(0, 10), end: at(0, 11), late: false },
+    ]
+    const r = plan(input(tasks, { mode: 'rotate', previous }))
+    expect(r.placements.find((p) => p.taskId === 'b2')).toEqual(previous[1])
+    expect(r.overflow).toEqual([{ taskId: 'a1', kind: 'past-due', minutes: 60 }])
+  })
+
   it('places one task at the first free moment', () => {
     const r = plan(input([task('a', 90)]))
     expect(r.placements.map(span)).toEqual([[at(0, 9), at(0, 10, 30)]])

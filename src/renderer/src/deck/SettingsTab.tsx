@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowsClockwise, GoogleLogo, Keyboard, Plus, Trash } from '@phosphor-icons/react'
-import { TEXT_MAX, TEXT_MIN, type MayorlyState, type Settings } from '@core/index'
+import { TEXT_MAX, TEXT_MIN, type MayorlyState, type PlanMode, type Settings } from '@core/index'
 import type { AiProvider, AppInfo } from '../../../shared/bridge'
 import { builtOn } from '../../../shared/build'
 import { bridge } from '../bridge'
@@ -395,6 +395,9 @@ const minutesOf = (t: string) => {
   return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : NaN
 }
 
+const RANGES: [number, string][] = [[1, 'This day'], [2, 'A day ahead'], [7, 'The week ahead'], [14, 'Two weeks']]
+const MODES: [PlanMode, string][] = [['done', 'Get it done'], ['rotate', 'Rotate']]
+
 /** Work hours and the planner's knobs. One window a day here; the reducer keeps any extra ones a request added. */
 function CalendarSection({ s }: { s: MayorlyState }) {
   const c = s.settings.calendar
@@ -406,7 +409,7 @@ function CalendarSection({ s }: { s: MayorlyState }) {
   return (
     <section>
       <h3 className="side-title caps">Calendar</h3>
-      <p className="field-help">The planner places entries with an estimate into these hours, earliest due first, in the order of the flow. Hours are kept in {c.tz || 'this machine\'s zone'} and sync with the account.</p>
+      <p className="field-help">The clerk plans open entries into these hours automatically, from now. What does not fit waits beyond the plan. Hours are kept in {c.tz || 'this machine\'s zone'} and sync with the account.</p>
       <div className="hours-grid">
         {DAY_NAMES.map((name, d) => {
           const w = c.hours[d]?.[0]
@@ -430,10 +433,30 @@ function CalendarSection({ s }: { s: MayorlyState }) {
           )
         })}
       </div>
+      <div className="form-row" style={{ marginTop: 14 }}>
+        <div className="field">
+          <span className="field-label caps">Plan</span>
+          <div className="seg" role="radiogroup" aria-label="How far the clerk plans">
+            {RANGES.map(([days, label]) => (
+              <button key={days} role="radio" aria-checked={c.horizonDays === days} className={c.horizonDays === days ? 'on' : ''} onClick={() => set({ horizonDays: days })}>{label}</button>
+            ))}
+          </div>
+          <span className="field-help">{RANGES.some(([d]) => d === c.horizonDays) ? 'How far ahead the plan reaches. What does not fit waits.' : `${c.horizonDays} days, including today.`}</span>
+        </div>
+        <div className="field">
+          <span className="field-label caps">Mode</span>
+          <div className="seg" role="radiogroup" aria-label="Planning mode">
+            {MODES.map(([mode, label]) => (
+              <button key={mode} role="radio" aria-checked={c.mode === mode} className={c.mode === mode ? 'on' : ''} onClick={() => set({ mode })}>{label}</button>
+            ))}
+          </div>
+          <span className="field-help">{c.mode === 'rotate' ? 'One entry per ledger in turn, then the rest. Up next goes first. Rotation can delay a due; Get it done puts deadlines first.' : 'Earliest due first, up next ahead of all, the flow\'s order after.'}</span>
+        </div>
+      </div>
       <div className="rules" style={{ marginTop: 14 }}>
-        <Num label="Break" help="minutes after each block" value={c.breakMin} min={0} max={60} onChange={(breakMin) => set({ breakMin })} />
-        <Num label="Smallest chunk" help="minutes; a tomato is 25" value={c.minChunkMin} min={5} max={240} onChange={(minChunkMin) => set({ minChunkMin })} />
-        <Num label="Horizon" help="days ahead the planner looks" value={c.horizonDays} min={7} max={28} onChange={(horizonDays) => set({ horizonDays })} />
+        <Num step={5} label="No estimate" help="minutes an entry is placed at until it has one" value={c.defaultMin} min={5} max={240} onChange={(defaultMin) => set({ defaultMin })} />
+        <Num step={5} label="Break" help="minutes after each block" value={c.breakMin} min={0} max={60} onChange={(breakMin) => set({ breakMin })} />
+        <Num step={5} label="Smallest chunk" help="minutes; a tomato is 25" value={c.minChunkMin} min={5} max={240} onChange={(minChunkMin) => set({ minChunkMin })} />
       </div>
       <div className="rules">
         <label className="check" title="On, work keeps being placed past its due and is marked late. Off, nothing is placed past a due and the rest is reported as no room.">
@@ -569,12 +592,12 @@ function TextSize({ label, value, onChange }: { label: string; value: number; on
   )
 }
 
-function Num({ label, help, value, min, max, onChange }: { label: string; help: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
+function Num({ label, help, value, min, max, step = 1, onChange }: { label: string; help: string; value: number; min: number; max: number; step?: number; onChange: (n: number) => void }) {
   const [text, setText] = useState(String(value))
   const [editing, setEditing] = useState(false)
   const commit = () => {
     setEditing(false)
-    const n = Math.min(max, Math.max(min, Math.round(Number(text)) || min))
+    const n = Math.min(max, Math.max(min, Math.round(Number(text) / step) * step || min))
     setText(String(n))
     if (n !== value) onChange(n)
   }
@@ -586,6 +609,7 @@ function Num({ label, help, value, min, max, onChange }: { label: string; help: 
         type="number"
         min={min}
         max={max}
+        step={step}
         value={editing ? text : String(value)}
         onFocus={(e) => {
           setText(String(value))

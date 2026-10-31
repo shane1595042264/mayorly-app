@@ -2,6 +2,14 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The plan fills itself
+
+- Every open entry is on the calendar now, from this moment on: one without an estimate is placed at a default length (30 minutes, in Settings) and shows a tilde until it has one. The pet shows the next planned entry. Entries without estimates stay on the plan until cleared.
+- Settings under Calendar has the range the clerk plans: this day, a day ahead, the week ahead, two weeks. What does not fit waits past it, in a quiet list above the calendar.
+- And the mode. Get it done: earliest due first, up next ahead of all, then the flow's order. Rotate: one entry from each ledger in turn, then the rest. Rotation can delay deadlines; Get it done puts them first.
+- The ask box is for corrections. The clerk has already made the plan; tell it what to change.
+- The quick drawer (Option+Shift+R) now shows what is on the desk right now. It used to keep the entry from the first time it opened.
+
 ## The calendar
 
 - A Calendar tab, second in the deck: the week, with every entry that has an estimate placed into your work hours, earliest due first, in the order of the flow. What does not fit is said at the top, not hidden.

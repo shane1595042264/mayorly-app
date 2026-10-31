@@ -1,6 +1,6 @@
 import { powerMonitor } from 'electron'
 import type { Action } from '@core/index'
-import { machineZone, windowsFor } from '../../shared/windows'
+import { horizonEndFor, machineZone, windowsFor } from '../../shared/windows'
 import type { Engine } from '../engine'
 
 // The planner's trigger, in one place. After anything that can change the plan (entries,
@@ -9,7 +9,6 @@ import type { Engine } from '../engine'
 // to replan. The reducer returns the same state when nothing moved, so a quiet tick costs
 // nothing downstream. Coalesced so a burst of edits plans once.
 
-const DAY = 86_400_000
 const SETTLE_MS = 250
 const EVERY_MS = 60_000
 const TRIGGERS = ['entry/', 'calendar/', 'schedule/apply', 'settings/update', 'sync/', 'ledger/delete']
@@ -25,8 +24,7 @@ export function installReplanner(engine: Engine) {
       return
     }
     const now = Date.now()
-    const horizonEnd = now + cal.horizonDays * DAY
-    engine.dispatch({ type: 'schedule/replan', windows: windowsFor(cal, now, cal.horizonDays + 1), horizonEnd })
+    engine.dispatch({ type: 'schedule/replan', windows: windowsFor(cal, now, cal.horizonDays + 1), horizonEnd: horizonEndFor(cal, now) })
   }
   const soon = () => {
     if (timer) clearTimeout(timer)

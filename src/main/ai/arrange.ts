@@ -1,6 +1,6 @@
 import { entrySpentMs, openFlow, reduce, type ClerkCommand, type Ctx, type Id, type MayorlyState } from '@core/index'
 import type { Arrangement, ArrangementLine } from '../../shared/bridge'
-import { wallClock, windowsFor, zonedEpoch } from '../../shared/windows'
+import { horizonEndFor, wallClock, windowsFor, zonedEpoch } from '../../shared/windows'
 
 // The clerk listening: a request in words becomes typed commands the reducer checks. The
 // model sees the plan in plain lines and answers JSON naming entries by title; this file
@@ -9,7 +9,6 @@ import { wallClock, windowsFor, zonedEpoch } from '../../shared/windows'
 // in the past. Nothing the model wrote reaches the reducer except a ClerkCommand with ids.
 
 const MIN = 60_000
-const DAY = 24 * 60 * MIN
 export const PROPOSAL_TTL_MS = 5 * MIN
 
 export interface RawCommand {
@@ -34,7 +33,7 @@ export interface RawAnswer {
 }
 
 export const ARRANGE_SYSTEM = [
-  'You are the clerk of Mayorly, a personal ledger system. The user keeps entries with time estimates; a planner places them into work hours around fixed events, earliest due first, in the order of the flow.',
+  'You are the clerk of Mayorly, a personal ledger system. A planner automatically places open entries into work hours around fixed events. Entries without estimates use a default length until cleared; actual estimates are budgets reduced by desk time. Get it done orders by earliest due, then flow order. Rotate takes one entry per ledger in turn, then the rest; it can delay deadlines. Up next goes first in either mode. The plan is already made; the user asks you to correct it.',
   'You cannot move or change events the user made. You may only change an entry\'s estimate, due, not-before, rush (up next), order, splitting, keep it off the calendar, place it at a time, let the planner place it again, or block a stretch of time with a title on the user\'s request.',
   'Reply with JSON only: {"commands": [...], "ask": string or null, "log": string}. At most 10 commands. Name entries by their title exactly as listed, in "ref". Times are the user\'s wall clock as "YYYY-MM-DD HH:MM", no zone.',
   'Ops: estimate {ref, minutes}; due {ref, at or null}; notBefore {ref, at or null}; rush {ref, on}; order {ref, place: first|last|before|after, than?: ref}; split {ref, splittable, minChunkMin?, maxChunkMin?}; off {ref, on}; place {ref, start, minutes}; unplace {ref}; block {title, start, minutes}.',
@@ -45,6 +44,7 @@ export const ARRANGE_SYSTEM = [
 export function describeForClerk(s: MayorlyState, now: number): string {
   const cal = s.settings.calendar
   const tz = cal.tz
+  const horizonEnd = horizonEndFor(cal, now)
   const stamp = (t: number) => {
     const w = wallClock(t, tz)
     return `${w.y}-${String(w.m).padStart(2, '0')}-${String(w.d).padStart(2, '0')} ${String(Math.floor(w.minutes / 60)).padStart(2, '0')}:${String(w.minutes % 60).padStart(2, '0')}`
@@ -52,18 +52,19 @@ export function describeForClerk(s: MayorlyState, now: number): string {
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const hours = cal.hours.map((d, i) => (d.length ? `${dayNames[i]} ${d.map((h) => `${hhmm(h.start)}-${hhmm(h.end)}`).join(',')}` : null)).filter(Boolean).join('; ')
   const lines: string[] = [`Now: ${dayNames[wallClock(now, tz).weekday]} ${stamp(now)}`, `Work hours: ${hours || 'none set'}`]
+  lines.push(`Plan: ${cal.mode === 'rotate' ? 'Rotate' : 'Get it done'}, ${cal.horizonDays} days including today, until ${stamp(horizonEnd)} (exclusive); default length ${cal.defaultMin}m; ${cal.spill ? 'late work stays on the plan' : 'no work after its due'}`)
   const flow = openFlow(s)
   lines.push(`Entries (${flow.length}), in flow order:`)
   for (const e of flow.slice(0, 40)) {
     const l = s.ledgers.find((x) => x.id === e.ledgerId)
     const spent = Math.floor(entrySpentMs(s, e.id, now) / MIN)
-    const blocks = s.calendar.blocks.filter((b) => b.entryId === e.id && b.end > now && b.start < now + 7 * DAY).map((b) => `${stamp(b.start)}-${hhmm(wallClock(b.end, tz).minutes)}`)
-    const bits = [l ? l.code : 'TRAY', e.estimateMin ? `est ${e.estimateMin}m` : 'no estimate', spent ? `spent ${spent}m` : null, e.due ? `due ${stamp(e.due)}` : null, e.notBefore ? `not before ${stamp(e.notBefore)}` : null, e.rush ? 'up next' : null, e.offCalendar ? 'off calendar' : null, e.splittable === false ? 'one piece' : null, blocks.length ? `blocks ${blocks.join(' ')}` : null].filter(Boolean)
+    const blocks = s.calendar.blocks.filter((b) => b.entryId === e.id && b.end > now && b.start < horizonEnd).map((b) => `${stamp(b.start)}-${hhmm(wallClock(b.end, tz).minutes)}`)
+    const bits = [l ? l.code : 'TRAY', e.estimateMin ? `est ${e.estimateMin}m` : `no estimate (default ${cal.defaultMin}m)`, spent ? `spent ${spent}m` : null, e.due ? `due ${stamp(e.due)}` : null, e.notBefore ? `not before ${stamp(e.notBefore)}` : null, e.rush ? 'up next' : null, e.offCalendar ? 'off calendar' : null, e.splittable === false ? 'one piece' : null, blocks.length ? `blocks ${blocks.join(' ')}` : null].filter(Boolean)
     lines.push(`- "${e.title}" ${bits.join(', ')}`)
   }
   if (flow.length > 40) lines.push(`- and ${flow.length - 40} more`)
-  const fixed = [...s.calendar.events.filter((x) => x.end > now && x.start < now + 7 * DAY).map((x) => `- "${x.title}" ${stamp(x.start)}-${hhmm(wallClock(x.end, tz).minutes)} [${x.origin === 'user' ? 'yours' : 'clerk'}${x.entryId ? ', pin' : ''}]`), ...s.calendar.external.filter((x) => !x.allDay && !x.free && x.end > now && x.start < now + 7 * DAY).map((x) => `- "${x.title}" ${stamp(x.start)}-${hhmm(wallClock(x.end, tz).minutes)} [outside]`)]
-  if (fixed.length) lines.push('Fixed events this week (cannot be moved):', ...fixed.slice(0, 40))
+  const fixed = [...s.calendar.events.filter((x) => x.end > now && x.start < horizonEnd).map((x) => `- "${x.title}" ${stamp(x.start)}-${hhmm(wallClock(x.end, tz).minutes)} [${x.origin === 'user' ? 'yours' : 'clerk'}${x.entryId ? ', pin' : ''}]`), ...s.calendar.external.filter((x) => !x.allDay && !x.free && x.end > now && x.start < horizonEnd).map((x) => `- "${x.title}" ${stamp(x.start)}-${hhmm(wallClock(x.end, tz).minutes)} [outside]`)]
+  if (fixed.length) lines.push('Fixed events in the planning range (cannot be moved):', ...fixed.slice(0, 40))
   if (s.calendar.overflow.length) {
     lines.push('Not fitting:')
     for (const o of s.calendar.overflow) {
@@ -225,7 +226,7 @@ export function fillDraft(d: Draft, picks: Record<string, Id>, s: MayorlyState, 
 export function previewApply(s: MayorlyState, commands: ClerkCommand[], log: string, ctx: Ctx): { moved: number; newLate: number } {
   const cal = s.settings.calendar
   const windows = windowsFor(cal, ctx.now, cal.horizonDays + 1)
-  const horizonEnd = ctx.now + cal.horizonDays * DAY
+  const horizonEnd = horizonEndFor(cal, ctx.now)
   const applied = reduce(s, { type: 'schedule/apply', commands, log }, ctx).state
   const after = reduce(applied, { type: 'schedule/replan', windows, horizonEnd }, ctx).state
   const before = new Map(s.calendar.blocks.map((b) => [b.id, b]))

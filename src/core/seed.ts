@@ -27,7 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hudSide: 'right',
   hudScale: 1,
   text: { pet: 1, deck: 1, plus: 1 },
-  calendar: { tz: '', hours: [[], WORKDAY, WORKDAY, WORKDAY, WORKDAY, WORKDAY, []], breakMin: 5, minChunkMin: 25, horizonDays: 14, spill: true },
+  calendar: { tz: '', hours: [[], WORKDAY, WORKDAY, WORKDAY, WORKDAY, WORKDAY, []], breakMin: 5, minChunkMin: 25, horizonDays: 7, spill: true, defaultMin: 30, mode: 'done' },
   trayTimer: false,
   hotkeys: DEFAULT_HOTKEYS,
   keymap: {},
