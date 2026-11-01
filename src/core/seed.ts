@@ -1,5 +1,6 @@
 import type { Calendar, HoursWindow } from './model'
 import type { HotkeyAction, MayorlyState, Settings } from './model'
+import { DEFAULT_ALARMS, sanitiseAlarms } from './alarms'
 
 export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   plus: 'Alt+T',
@@ -24,6 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoStartFocus: true,
   autoStartRest: true,
   sound: true,
+  alarms: DEFAULT_ALARMS,
   hudSide: 'right',
   hudScale: 1,
   text: { pet: 1, deck: 1, plus: 1 },
@@ -107,7 +109,7 @@ export function migrate(raw: unknown): MayorlyState | null {
     desk: { ...base.desk, ...x.desk },
     leisure: (x.leisure ?? []).map((it) => ({ ...it, cues: Array.isArray(it.cues) ? it.cues : [] })),
     entries: (x.entries ?? []).map((e) => ({ ...e, tomatoes: Number.isFinite(e.tomatoes) ? e.tomatoes : 0 })),
-    settings: { ...base.settings, ...x.settings, hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys }, calendar: { ...base.settings.calendar, ...x.settings?.calendar } },
+    settings: { ...base.settings, ...x.settings, alarms: sanitiseAlarms(x.settings?.alarms), hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys }, calendar: { ...base.settings.calendar, ...x.settings?.calendar } },
     calendar: { ...emptyCalendar(), ...x.calendar },
   } as MayorlyState
 }

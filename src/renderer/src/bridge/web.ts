@@ -127,6 +127,11 @@ export function createWebBridge(): Bridge {
 
   return {
     kind: 'web',
+    alarms: {
+      pick: async () => null,
+      save: async () => { throw new Error('Upload custom sounds in the desktop app.') },
+      read: async () => null,
+    },
     getState: async () => state,
     dispatch: async (a: Action) => dispatch(a),
     onState: (fn) => sub(stateSubs, fn),

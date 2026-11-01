@@ -9,9 +9,10 @@ import { advance, blitzBlock, entrySpentMs, firstBlock, firstOpenInLedger, focus
 import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_BLOCK, tokensForTomato } from './rules'
 import { migrate } from './seed'
 import { mergeStates } from './merge'
+import { sanitiseAlarms } from './alarms'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
-export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'trayTimer', 'text'] as const
+export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'alarms', 'trayTimer', 'text'] as const
 
 export type Action =
   /**
@@ -1226,6 +1227,7 @@ export function sanitiseSettings(x: Settings): Settings {
     hudSide: x.hudSide === 'left' ? 'left' : 'right',
     text: { pet: textSize(x.text?.pet), deck: textSize(x.text?.deck), plus: textSize(x.text?.plus) },
     calendar: sanitiseCalendar(x.calendar),
+    alarms: sanitiseAlarms(x.alarms),
   }
 }
 

@@ -21,6 +21,7 @@ import { createTray } from './tray'
 import { installUpdates } from './updates'
 import { installReplanner } from './calendar/replanner'
 import { Feeds } from './calendar/feeds'
+import { AlarmFiles, AUDIO_EXTENSIONS } from './alarms'
 
 // mayorly:// links (Shortcuts, Raycast, a browser) arrive here on macOS, sometimes before boot.
 let onUrl: ((url: string) => void) | null = null
@@ -108,6 +109,20 @@ function boot() {
   // A file dialog of our own takes focus too; it is not a reason to close.
   let opened = 0
   let dialogOpen = false
+  const alarmFiles = new AlarmFiles(dataDir)
+  ipcMain.handle(IPC.alarmRead, (_e, id: string) => alarmFiles.read(id))
+  ipcMain.handle(IPC.alarmPick, async () => {
+    dialogOpen = true
+    try {
+      const result = await dialog.showOpenDialog({ title: 'Choose an alarm sound', properties: ['openFile'], filters: [{ name: 'Audio', extensions: AUDIO_EXTENSIONS }] })
+      return result.canceled || !result.filePaths[0] ? null : alarmFiles.pickFile(result.filePaths[0])
+    } finally { dialogOpen = false }
+  })
+  ipcMain.handle(IPC.alarmSave, (_e, kind: string, name: string, dataUrl: string) => {
+    if (kind !== 'work' && kind !== 'rest') throw new Error('Unknown alarm')
+    const choice = alarmFiles.save(name, dataUrl)
+    engine.dispatch({ type: 'settings/update', patch: { alarms: { ...engine.state.settings.alarms, [kind]: choice } } })
+  })
   ipcMain.on(IPC.setMode, (_e, mode: UiMode) => { if (mode !== 'field') opened = Date.now() })
   overlay.win.on('blur', () => {
     if (!dialogOpen && overlay.mode !== 'field' && Date.now() - opened > 400) send(IPC.command, 'close')

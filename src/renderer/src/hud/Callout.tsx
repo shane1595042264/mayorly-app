@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { clock, span, type HudEvent } from '@core/index'
-import { sfx } from '../lib/sound'
+import { playAlarm, sfx } from '../lib/sound'
 import { current, useHudEvents } from '../store'
 
 interface Shout {
@@ -45,7 +45,7 @@ export function Callout({ quiet }: { quiet: boolean }) {
                 detail: `${entry ? entry.title + '   ' : ''}${length}${e.started ? '' : '   ready'}`,
               })
             }
-            sfx.block()
+            void playAlarm(s.settings.alarms[b.kind === 'rest' ? 'rest' : 'work'])
           } else if (e.type === 'sitting-end') {
             const title = e.reason === 'complete' ? 'Rotation complete' : e.reason === 'flow-clear' ? 'Flow clear' : 'Stood down'
             show({ kicker: 'Sitting', title, detail: `${span(e.focusMs)}   ${e.tomatoes} tomatoes   +${e.tokens} ${e.tokens === 1 ? 'coin' : 'coins'}` })

@@ -63,6 +63,8 @@ SHOT_URL="http://localhost:5199/?demo" SHOT_OUT=shot.png SHOT_JS='...' npx elect
 
 ## Things that look like bugs and are not
 
+- **Work and rest alarms are per machine.** `settings.alarms` is in `DEVICE_SETTINGS`; each choice has a built-in tone or a local custom asset id. `src/main/alarms.ts` copies uploads into `alarms/` beside the save. Audio bytes never enter state or sync. The renderer decodes a picked file before saving it, caches decoded audio for playback, and plays at most 15 seconds. Preview works with Sound cues off; automatic alarms obey it. The native picker uses `dialogOpen` so the deck stays open.
+
 - **The resting HUD is only the tomato and a number.** Hover gives one line of text and a hop, nothing more. Hold, skip, clear and stand down live in the Plus menu and the command line; there is no control strip.
 - **The overlay window is never focusable in field mode.** That is how it avoids stealing keystrokes. Plus, deck and capture flip it on and hand focus back with `blur()`.
 - **A held Alt+T fires the command repeatedly.** The renderer ignores repeats until the key is released; releasing after 400 ms closes the menu (hold to peek), unless an arm was steered meanwhile, which commits the open.

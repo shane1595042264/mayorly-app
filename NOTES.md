@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Your work and break sounds
+
+- Settings has separate work and break alarms: Classic, Bell, Chime, Pulse, Gentle or Silent, with a Preview button for each.
+- Upload your own audio for either alarm. Mayorly keeps a local copy so it still plays after a restart or after you move the original file.
+- Sound cues controls automatic playback. Preview works while cues are off. Custom alarms play up to 15 seconds.
+
 ## Rests stay out of the quick switch
 
 - Option+Q brings back the last task, never its rest timer. Leaving a rest for another task keeps the task behind that rest available to switch back to.

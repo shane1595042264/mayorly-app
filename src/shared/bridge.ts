@@ -1,4 +1,4 @@
-import type { Action, HudEvent, MayorlyState } from '../core/index'
+import type { Action, AlarmKind, HudEvent, MayorlyState } from '../core/index'
 
 // The contract between a Mayorly client (the HUD) and whatever owns the state.
 // In Electron that is the main process over IPC; in a plain browser it is an
@@ -151,6 +151,11 @@ export interface AiPublic {
 
 export interface Bridge {
   kind: 'electron' | 'web'
+  alarms: {
+    pick(): Promise<{ name: string; dataUrl: string } | null>
+    save(kind: AlarmKind, name: string, dataUrl: string): Promise<void>
+    read(id: string): Promise<string | null>
+  }
   getState(): Promise<MayorlyState>
   /** Resolves when the main process has reduced it; rejects when it could not. */
   dispatch(action: Action): Promise<unknown>
@@ -240,6 +245,9 @@ export interface Bridge {
 }
 
 export const IPC = {
+  alarmPick: 'mayorly:alarm-pick',
+  alarmSave: 'mayorly:alarm-save',
+  alarmRead: 'mayorly:alarm-read',
   getState: 'mayorly:get-state',
   dispatch: 'mayorly:dispatch',
   state: 'mayorly:state',

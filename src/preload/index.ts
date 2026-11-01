@@ -9,6 +9,11 @@ function sub<T>(channel: string, fn: (v: T) => void): () => void {
 
 const bridge: Bridge = {
   kind: 'electron',
+  alarms: {
+    pick: () => ipcRenderer.invoke(IPC.alarmPick),
+    save: (kind, name, dataUrl) => ipcRenderer.invoke(IPC.alarmSave, kind, name, dataUrl),
+    read: (id) => ipcRenderer.invoke(IPC.alarmRead, id),
+  },
   getState: () => ipcRenderer.invoke(IPC.getState),
   dispatch: (action) => ipcRenderer.invoke(IPC.dispatch, action),
   onState: (fn) => sub(IPC.state, fn),

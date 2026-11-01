@@ -378,6 +378,7 @@ export interface Settings {
   autoStartFocus: boolean
   autoStartRest: boolean
   sound: boolean
+  alarms: Record<AlarmKind, AlarmChoice>
   hudSide: 'right' | 'left'
   hudScale: number
   /** Text size per area, 1 is the design size: the pet's task line, the deck, the swap menu. Per machine. */
@@ -390,6 +391,14 @@ export interface Settings {
   /** In-app keys the user changed, by action id, up to two keys each. Missing ids use the HUD's defaults; syncs with the account. */
   keymap: Record<string, string[]>
   openAtLogin: boolean
+}
+
+export type AlarmKind = 'work' | 'rest'
+export type AlarmTone = 'classic' | 'bell' | 'chime' | 'pulse' | 'gentle' | 'silent' | 'custom'
+export interface AlarmChoice {
+  tone: AlarmTone
+  customId?: string
+  customName?: string
 }
 
 export interface MayorlyState {

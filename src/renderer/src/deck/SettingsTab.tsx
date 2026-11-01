@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { ArrowsClockwise, GoogleLogo, Keyboard, Plus, Trash } from '@phosphor-icons/react'
-import { TEXT_MAX, TEXT_MIN, type MayorlyState, type PlanMode, type Settings } from '@core/index'
+import { ArrowsClockwise, GoogleLogo, Keyboard, Play, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
+import { ALARM_TONES, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type MayorlyState, type PlanMode, type Settings } from '@core/index'
 import type { AiProvider, AppInfo } from '../../../shared/bridge'
 import { builtOn } from '../../../shared/build'
 import { bridge } from '../bridge'
 import { hotkeyLabel, IS_MAC } from '../lib/keys'
 import { GLOBAL_ACTIONS } from '../lib/keymap'
 import { dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
+import { decodeAlarm, playAlarm } from '../lib/sound'
 
 const EXAMPLE = IS_MAC ? 'Option+T' : 'Alt+T'
 /** Electron's accelerator grammar, every modifier spelling it accepts, one key. */
@@ -37,6 +38,8 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
           {kind === 'electron' && IS_MAC && <Check label="Timer beside the menu bar tomato" value={st.trayTimer} onChange={(trayTimer) => set({ trayTimer })} />}
         </div>
       </section>
+
+      <AlarmSection s={s} kind={kind} />
 
       <section>
         <h3 className="side-title caps">HUD</h3>
@@ -91,6 +94,50 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
         </div>
       </section>
     </div>
+  )
+}
+
+function AlarmSection({ s, kind }: { s: MayorlyState; kind: 'electron' | 'web' }) {
+  const [busy, setBusy] = useState<AlarmKind | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const upload = async (alarm: AlarmKind) => {
+    setBusy(alarm)
+    setError(null)
+    try {
+      const file = await bridge.alarms.pick()
+      if (!file) return
+      await decodeAlarm(file.dataUrl)
+      await bridge.alarms.save(alarm, file.name, file.dataUrl)
+    } catch (e) { setError(e instanceof Error ? e.message.replace(/^Error: /, '') : String(e)) }
+    finally { setBusy(null) }
+  }
+  return (
+    <section>
+      <h3 className="side-title caps">Alarms</h3>
+      <p className="field-help">Work and break sounds on this machine. Sound cues must be on for alarms; Preview always plays.</p>
+      <div className="rules">
+        {(['work', 'rest'] as const).map(alarm => {
+          const choice = s.settings.alarms[alarm]
+          const label = alarm === 'work' ? 'Work starts' : 'Break starts'
+          return <div className="field" key={alarm}>
+            <label className="field-label caps" htmlFor={`alarm-${alarm}`}>{label}</label>
+            <select id={`alarm-${alarm}`} value={choice.tone} onChange={e => {
+              setError(null)
+              void dispatch({ type: 'settings/update', patch: { alarms: { ...s.settings.alarms, [alarm]: { ...choice, tone: e.target.value as AlarmTone } } } })
+            }}>
+              {ALARM_TONES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+              {choice.customId && <option value="custom">{choice.customName ?? 'Custom sound'}</option>}
+            </select>
+            <div className="form-actions">
+              <button className="btn" type="button" disabled={choice.tone === 'silent'} aria-label={`Preview ${alarm === 'work' ? 'work' : 'break'} alarm`} onClick={() => { setError(null); void playAlarm(choice, true).catch(e => setError(e instanceof Error ? e.message : String(e))) }}><Play size={14} /> Preview</button>
+              <button className="btn" type="button" disabled={busy !== null || kind !== 'electron'} title={kind === 'web' ? 'Upload custom sounds in the desktop app' : undefined} onClick={() => void upload(alarm)}><UploadSimple size={14} /> {busy === alarm ? 'Reading' : 'Upload sound'}</button>
+            </div>
+          </div>
+        })}
+      </div>
+      <p className="field-help">MP3, WAV, OGG, M4A, AAC or FLAC, up to 5 MB. Custom alarms play up to 15 seconds.</p>
+      {error && <p className="field-error" role="alert">{error}</p>}
+    </section>
   )
 }
 
