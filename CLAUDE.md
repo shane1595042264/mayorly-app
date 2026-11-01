@@ -51,6 +51,8 @@ npm run ship:mac     build Mayorly.app, install it in /Applications, relaunch it
 
 There is no staging: the founder runs the installed app, so a change is done when `ship:mac` has run and the new app is up. `npm run dev` is for iterating (hot reload, and with `MAYORLY_DEBUG=1` the `SIGUSR1`/`SIGUSR2` previews); the dev instance and the installed app share one single-instance lock, so only one runs at a time and the ship script quits whichever is up.
 
+Work through tickets one at a time. For each fix, check it, commit and push it, run `npm run ship:mac`, and verify the installed app is running before closing the ticket or starting the next one. The founder actively tests the installed app.
+
 To screenshot the browser preview at full resolution:
 
 ```

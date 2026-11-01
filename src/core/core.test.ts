@@ -827,6 +827,74 @@ describe('the couch', () => {
 })
 
 describe('the quick switch', () => {
+  it('selecting the current leisure item keeps its timer and the previous task', () => {
+    const w = world()
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: w.ledger('CAR').id })
+    w.wait(25 * MIN)
+    w.do({ type: 'desk/skip' })
+    const workId = w.s.desk.sittingId
+    w.do({ type: 'leisure/add', title: 'Stream watch' })
+    const leisureId = w.s.leisure[0].id
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId })
+    w.wait(3 * MIN)
+    const sittingId = w.s.desk.sittingId
+    w.do({ type: 'desk/pause' })
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId })
+    expect(w.s.desk.sittingId).toBe(sittingId)
+    expect(w.s.desk.status).toBe('running')
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(22 * MIN)
+    expect(w.s.desk.holster?.sittingId).toBe(workId)
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block?.kind).toBe('focus')
+    expect(w.s.desk.sittingId).toBe(workId)
+    expect(w.s.sittings.find(x => x.id === workId)?.endedAt).toBeNull()
+  })
+
+  it('selecting a parked task resumes its existing timer instead of starting another sitting', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'entry/capture', text: 'dance: b' })
+    const a = w.entry('a').id, b = w.entry('b').id
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: a })
+    w.wait(4 * MIN)
+    const sittingId = w.s.desk.sittingId
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: b })
+    w.wait(2 * MIN)
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: a })
+    expect(w.s.desk.sittingId).toBe(sittingId)
+    expect(w.s.sittings).toHaveLength(2)
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(21 * MIN)
+    expect(switchTarget(w.s)).toBe('b')
+    expect(w.s.sittings.every(x => x.endedAt === null)).toBe(true)
+  })
+
+  it('selecting the current focus task preserves its timer and swap-back entry', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'entry/capture', text: 'dance: b' })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('a').id })
+    w.wait(2 * MIN)
+    w.do({ type: 'desk/swap', entryId: w.entry('b').id })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('b').id })
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(23 * MIN)
+    expect(switchTarget(w.s)).toBe('a')
+    expect(w.s.sittings).toHaveLength(1)
+  })
+
+  it('does not switch to an older saved copy of the current task', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('a').id })
+    w.wait(2 * MIN)
+    // Old builds could leave the same entry parked with a different clock.
+    const d = w.s.desk
+    d.holster = { sittingId: 'old-copy', plan: structuredClone(d.plan!), block: structuredClone(d.block!), bankMs: 10 * MIN }
+    expect(switchTarget(w.s)).toBeNull()
+    const r = w.do({ type: 'desk/switch' })
+    expect(r.events.some(e => e.type === 'switch')).toBe(false)
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(23 * MIN)
+  })
+
   it('parks the running session with its clock where it is and brings the other back where it was', () => {
     const w = world()
     w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: w.ledger('CAR').id })

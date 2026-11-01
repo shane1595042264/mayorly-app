@@ -431,18 +431,15 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       // The switch is between the last two places the desk was: the entry before the last swap
       // first, like a primary and a secondary weapon, else the session parked by a redeploy.
       // Swapping to a third entry drops the oldest, parked or not.
-      const d = s.desk
       const back = switchBack(s)
       if (back) {
         swapTo(s, ctx, ev, back.entryId, back.ledgerId, true)
         ev.push({ type: 'switch', at: now, label: s.desk.block?.label ?? '', parked: null })
         break
       }
-      if (d.holster) {
-        const held = d.holster
-        const parked = park(s, now)
-        restore(s, ctx, held, now, true)
-        ev.push({ type: 'switch', at: now, label: s.desk.block?.label ?? '', parked: parked?.block.label ?? null })
+      const held = switchSession(s)
+      if (held) {
+        bringBack(s, ctx, ev, held)
         break
       }
       ev.push({ type: 'notice', at: now, text: 'Nothing to switch back to' })
@@ -486,12 +483,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       break
     }
     case 'desk/resume': {
-      if (s.desk.status !== 'paused' && s.desk.status !== 'ready') break
-      if (!s.desk.block) break
-      s.desk.status = 'running'
-      s.desk.runStartedAt = now
-      openSegment(s, ctx, now)
-      if (s.desk.bankMs === 0) ev.push({ type: 'block', at: now, block: s.desk.block, started: true })
+      resumeDesk(s, ctx, ev)
       break
     }
     case 'desk/skip': {
@@ -634,6 +626,19 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
     ev.push({ type: 'notice', at: now, text: opts.mode === 'blitz' ? 'Flow is empty' : opts.mode === 'couch' ? 'Pick something from the couch list' : 'Superset has no slots' })
     return
   }
+  const next = firstBlock(s, plan, now)
+  const d = s.desk
+  const samePlan = (p: typeof plan | null) => p?.mode === plan.mode && p.supersetId === plan.supersetId
+  // Picking a task again is a resume, not a second copy with a fresh clock.
+  if (d.status !== 'idle' && samePlan(d.plan) && sameTask(d.block, next)) {
+    resumeDesk(s, ctx, ev)
+    return
+  }
+  const held = switchSession(s)
+  if (held && samePlan(held.plan) && sameTask(held.block, next)) {
+    bringBack(s, ctx, ev, held)
+    return
+  }
   if (plan.mode === 'couch') {
     // Each completed leisure block costs one coin. Nothing is earned on the couch.
     if (balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
@@ -697,6 +702,15 @@ function startBlock(s: MayorlyState, ctx: Ctx, ev: HudEvent[], block: Block, at:
     s.desk.runStartedAt = null
   }
   ev.push({ type: 'block', at, block, started: auto })
+}
+
+function resumeDesk(s: MayorlyState, ctx: Ctx, ev: HudEvent[]) {
+  const d = s.desk
+  if ((d.status !== 'paused' && d.status !== 'ready') || !d.block) return
+  d.status = 'running'
+  d.runStartedAt = ctx.now
+  openSegment(s, ctx, ctx.now)
+  if (d.bankMs === 0) ev.push({ type: 'block', at: ctx.now, block: d.block, started: true })
 }
 
 /**
@@ -837,6 +851,27 @@ export function switchBack(s: MayorlyState): { entryId: Id | null; ledgerId: Id 
   }
   if ((!entryId && !ledgerId) || (entryId === block.entryId && ledgerId === block.ledgerId)) return null
   return { entryId, ledgerId }
+}
+
+/** Task identity ignores a session's clock and mode. Rest handling belongs to its plan. */
+function sameTask(a: Block | null, b: Block | null): boolean {
+  if (!a || !b || a.kind !== b.kind || a.kind === 'rest') return false
+  if (a.kind === 'leisure') return !!a.leisureId && a.leisureId === b.leisureId
+  return a.entryId ? a.entryId === b.entryId : !b.entryId && a.ledgerId === b.ledgerId
+}
+
+/** An old save can contain a parked copy of the current task. It is not a switch target. */
+export function switchSession(s: MayorlyState): HeldSession | null {
+  const held = s.desk.holster
+  return held && !sameTask(s.desk.block, held.block) ? held : null
+}
+
+function bringBack(s: MayorlyState, ctx: Ctx, ev: HudEvent[], held: HeldSession) {
+  // This sitting is coming back, not being discarded by park().
+  s.desk.holster = null
+  const parked = park(s, ctx.now)
+  restore(s, ctx, held, ctx.now, true)
+  ev.push({ type: 'switch', at: ctx.now, label: s.desk.block?.label ?? '', parked: parked?.block.label ?? null })
 }
 
 /**

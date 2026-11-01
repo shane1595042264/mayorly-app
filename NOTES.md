@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The quick switch keeps one clock per task
+
+- Selecting the task already on the desk keeps its clock and the previous task. Selecting a parked task resumes its saved clock.
+- Option+Q skips an older saved copy of the same task, so it cannot jump between two timers for one task.
+
 ## The plan fills itself
 
 - Every open entry is on the calendar now, from this moment on: one without an estimate is placed at a default length (30 minutes, in Settings) and shows a tilde until it has one. The pet shows the next planned entry. Entries without estimates stay on the plan until cleared.
