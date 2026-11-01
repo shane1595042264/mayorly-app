@@ -827,6 +827,146 @@ describe('the couch', () => {
 })
 
 describe('the quick switch', () => {
+  it('parks the task behind a rest, never the rest timer', () => {
+    const w = world()
+    for (const title of ['a', 'b']) w.do({ type: 'entry/capture', text: `legal: ${title}` })
+    const a = w.entry('a').id, b = w.entry('b').id
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: a })
+    w.wait(26 * MIN)
+    expect(w.s.desk.block?.kind).toBe('rest')
+    w.do({ type: 'desk/select', entryId: b })
+    expect(w.s.desk.holster?.block).toMatchObject({ kind: 'focus', entryId: a })
+    expect(switchTarget(w.s)).toBe('a')
+    w.wait(2 * MIN)
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', entryId: a })
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(25 * MIN)
+    expect(w.entry('a').tomatoes).toBe(1)
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block?.entryId).toBe(b)
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(23 * MIN)
+  })
+
+  it('switches out of a rest to the previous real task in the same sitting', () => {
+    const w = world()
+    for (const title of ['a', 'b']) w.do({ type: 'entry/capture', text: `legal: ${title}` })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('a').id })
+    w.do({ type: 'desk/swap', entryId: w.entry('b').id })
+    w.wait(26 * MIN)
+    expect(switchTarget(w.s)).toBe('a')
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', entryId: w.entry('a').id })
+    expect(switchTarget(w.s)).toBe('b')
+    expect(w.s.desk.status).toBe('running')
+    expect(w.s.sittings).toHaveLength(1)
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(25 * MIN)
+  })
+
+  it('returns to the last task from a rest when there is no other task', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('a').id })
+    w.wait(25 * MIN)
+    expect(switchTarget(w.s)).toBe('a')
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', entryId: w.entry('a').id })
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(25 * MIN)
+  })
+
+  it('remembers the last superset slot rather than the upcoming slot across a parked rest', () => {
+    const w = world()
+    w.do({ type: 'desk/deploy', mode: 'superset', supersetId: w.s.supersets[0].id })
+    w.wait(26 * MIN)
+    w.do({ type: 'entry/capture', text: 'career: detour', start: true })
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.plan?.mode).toBe('superset')
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', ledgerId: w.ledger('LGL').id, slotIndex: 0 })
+    expect(w.s.desk.plan?.step).toBe(0)
+    expect(w.s.desk.plan?.focusCount).toBe(1)
+    w.do({ type: 'desk/skip' })
+    w.do({ type: 'desk/skip' })
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', ledgerId: w.ledger('DNC').id })
+  })
+
+  it('skips a couch rest without charging for it or replaying the completed leisure block', () => {
+    const w = world()
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: w.ledger('CAR').id })
+    w.wait(55 * MIN)
+    w.do({ type: 'desk/standDown' })
+    expect(balance(w.s)).toBe(2)
+    w.do({ type: 'leisure/add', title: 'Stream watch' })
+    const leisureId = w.s.leisure[0].id
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId })
+    w.wait(26 * MIN)
+    expect(balance(w.s)).toBe(1)
+    w.do({ type: 'entry/capture', text: 'legal: a', start: true })
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block).toMatchObject({ kind: 'leisure', leisureId, round: 2 })
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(25 * MIN)
+    expect(balance(w.s)).toBe(1)
+    w.wait(25 * MIN)
+    expect(balance(w.s)).toBe(0)
+    expect(new Set(w.s.tokens.filter(t => t.reason === 'leisure').map(t => t.id)).size).toBe(2)
+  })
+
+  it('resolves a rest parked by an older build from its recorded task', () => {
+    const w = world()
+    for (const title of ['a', 'b']) w.do({ type: 'entry/capture', text: `legal: ${title}` })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('a').id })
+    w.wait(26 * MIN)
+    const d = w.s.desk
+    const oldHeld = { sittingId: d.sittingId!, plan: structuredClone(d.plan!), block: structuredClone(d.block!), bankMs: MIN }
+    w.do({ type: 'desk/select', entryId: w.entry('b').id })
+    w.s.desk.holster = oldHeld
+    // JSON round-trip models a save loaded from before restTask existed.
+    w.do({ type: 'sync/replace', state: JSON.parse(JSON.stringify(w.s)) })
+    expect(switchTarget(w.s)).toBe('a')
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', entryId: w.entry('a').id })
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(25 * MIN)
+    expect(w.entry('a').tomatoes).toBe(1)
+  })
+
+  it('does not resurrect a cleared task behind a rest', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('a').id })
+    w.wait(25 * MIN)
+    w.do({ type: 'entry/complete', id: w.entry('a').id })
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', entryId: null, ledgerId: w.ledger('LGL').id })
+    expect(balance(w.s)).toBe(1)
+  })
+
+  it('does not start another leisure block from rest when the last coin was spent', () => {
+    const w = world()
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: w.ledger('CAR').id })
+    w.wait(25 * MIN)
+    w.do({ type: 'desk/standDown' })
+    w.do({ type: 'leisure/add', title: 'Stream watch' })
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: w.s.leisure[0].id })
+    w.wait(25 * MIN)
+    expect(balance(w.s)).toBe(0)
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block?.kind).toBe('rest')
+    w.do({ type: 'entry/capture', text: 'legal: a', start: true })
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block?.entryId).toBe(w.entry('a').id)
+    expect(balance(w.s)).toBe(0)
+  })
+
+  it('resumes the same task from its rest without parking a second copy', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    const id = w.entry('a').id
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: id })
+    w.wait(25 * MIN)
+    w.do({ type: 'desk/select', entryId: id })
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', entryId: id })
+    expect(w.s.sittings).toHaveLength(1)
+    expect(w.s.desk.holster).toBeNull()
+  })
+
   it('commits a final menu choice as one swap and resumes only that task', () => {
     const w = world()
     for (const title of ['a', 'b', 'c']) w.do({ type: 'entry/capture', text: `legal: ${title}` })

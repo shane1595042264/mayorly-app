@@ -5,7 +5,7 @@ import { deriveCode, prefixClerk, type Clerk, type Filing } from './clerk'
 import type {
   Block, Ctx, Entry, GlyphName, HeldSession, HudEvent, Id, Ledger, MayorlyState, Mode, Settings, Superset,
 } from './model'
-import { advance, blitzBlock, entrySpentMs, firstBlock, firstOpenInLedger, initialPlan, nextInFlow, openFlow, type DeployOpts } from './planner'
+import { advance, blitzBlock, entrySpentMs, firstBlock, firstOpenInLedger, focusForSlot, initialPlan, leisureBlock, nextInFlow, openFlow, type DeployOpts } from './planner'
 import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_BLOCK, tokensForTomato } from './rules'
 import { migrate } from './seed'
 import { mergeStates } from './merge'
@@ -435,6 +435,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       // Swapping to a third entry drops the oldest, parked or not.
       const back = switchBack(s)
       if (back) {
+        leaveRest(s, ctx, ev, false)
         swapTo(s, ctx, ev, back.entryId, back.ledgerId, true)
         ev.push({ type: 'switch', at: now, label: s.desk.block?.label ?? '', parked: null })
         break
@@ -442,6 +443,10 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const held = switchSession(s)
       if (held) {
         bringBack(s, ctx, ev, held)
+        break
+      }
+      if (restSession(s)) {
+        leaveRest(s, ctx, ev, true)
         break
       }
       ev.push({ type: 'notice', at: now, text: 'Nothing to switch back to' })
@@ -493,7 +498,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       if (!block || !plan || status === 'idle') break
       if (status === 'running') closeSegment(s, now)
       mint(s, now, ev)
-      const next = advance(s, plan, block, now, ctx.random)
+      const next = advanceDesk(s, ctx, now)
       if (!next) endSitting(s, now, ev, plan.mode === 'blitz' ? 'flow-clear' : 'complete')
       else startBlock(s, ctx, ev, next, now, true)
       break
@@ -640,6 +645,11 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
   const next = firstBlock(s, plan, now)
   const d = s.desk
   const samePlan = (p: typeof plan | null) => p?.mode === plan.mode && p.supersetId === plan.supersetId
+  const resting = restSession(s)
+  if (resting && samePlan(resting.plan) && sameTask(resting.block, next)) {
+    leaveRest(s, ctx, ev, true)
+    return
+  }
   // Picking a task again is a resume, not a second copy with a fresh clock.
   if (d.status !== 'idle' && samePlan(d.plan) && sameTask(d.block, next)) {
     resumeDesk(s, ctx, ev)
@@ -703,6 +713,7 @@ function startBlock(s: MayorlyState, ctx: Ctx, ev: HudEvent[], block: Block, at:
   }
   const auto = force || block.kind === 'leisure' || (block.kind === 'focus' ? s.settings.autoStartFocus : s.settings.autoStartRest)
   s.desk.block = block
+  if (block.kind !== 'rest') s.desk.restTask = null
   s.desk.bankMs = 0
   if (auto) {
     s.desk.status = 'running'
@@ -792,7 +803,7 @@ function completeEntry(s: MayorlyState, ctx: Ctx, ev: HudEvent[], id: Id) {
   if (mode === 'blitz') {
     if (d.status === 'running') closeSegment(s, now)
     mint(s, now, ev)
-    const next = advance(s, d.plan, d.block, now, ctx.random)
+    const next = advanceDesk(s, ctx, now)
     if (!next) endSitting(s, now, ev, 'flow-clear')
     else startBlock(s, ctx, ev, next, now, false)
     return
@@ -802,7 +813,7 @@ function completeEntry(s: MayorlyState, ctx: Ctx, ev: HudEvent[], id: Id) {
     if (ss?.onClear === 'next-slot') {
       if (d.status === 'running') closeSegment(s, now)
       mint(s, now, ev)
-      const next = advance(s, d.plan, d.block, now, ctx.random)
+      const next = advanceDesk(s, ctx, now)
       if (!next) endSitting(s, now, ev, 'complete')
       else startBlock(s, ctx, ev, next, now, false)
       return
@@ -826,7 +837,7 @@ function endSitting(s: MayorlyState, at: number, ev: HudEvent[], reason: 'stood'
     sitting.endedAt = at
     ev.push({ type: 'sitting-end', at, reason, focusMs: sitting.focusMs, tomatoes: sitting.tomatoes, tokens: sitting.tokens })
   }
-  const held = d.holster
+  const held = d.holster ? taskSession(s, d.holster) : null
   s.desk = { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null }
   // The parked session comes back, paused where it was.
   if (held) restore(s, null, held, at, false)
@@ -846,7 +857,7 @@ function validTheme(t: unknown): LedgerTheme {
 export function switchBack(s: MayorlyState): { entryId: Id | null; ledgerId: Id | null } | null {
   const d = s.desk
   const p = d.previous ?? null
-  const block = d.block
+  const block = restSession(s)?.block ?? d.block
   if (!p || !block || block.kind !== 'focus') return null
   let entryId: Id | null = null
   let ledgerId: Id | null = null
@@ -873,11 +884,16 @@ function sameTask(a: Block | null, b: Block | null): boolean {
 
 /** An old save can contain a parked copy of the current task. It is not a switch target. */
 export function switchSession(s: MayorlyState): HeldSession | null {
-  const held = s.desk.holster
-  return held && !sameTask(s.desk.block, held.block) ? held : null
+  const held = s.desk.holster ? taskSession(s, s.desk.holster) : null
+  const current = restSession(s)?.block ?? s.desk.block
+  return held && !sameTask(current, held.block) ? held : null
 }
 
 function bringBack(s: MayorlyState, ctx: Ctx, ev: HudEvent[], held: HeldSession) {
+  if (held.block.kind === 'leisure' && balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
+    ev.push({ type: 'notice', at: ctx.now, text: 'No coins: a tomato at the desk buys a block on the couch' })
+    return
+  }
   // This sitting is coming back, not being discarded by park().
   s.desk.holster = null
   const parked = park(s, ctx.now)
@@ -902,7 +918,7 @@ function park(s: MayorlyState, at: number): HeldSession | null {
   }
   if (d.status === 'running') closeSegment(s, at)
   const bankMs = d.bankMs + (d.status === 'running' && d.runStartedAt !== null ? Math.max(0, at - d.runStartedAt) : 0)
-  const held: HeldSession = { sittingId: d.sittingId, plan: d.plan, block: d.block, bankMs }
+  const held = taskSession(s, { sittingId: d.sittingId, plan: d.plan, block: d.block, bankMs, restTask: d.restTask })
   d.holster = held
   d.previous = null
   d.status = 'idle'
@@ -911,6 +927,7 @@ function park(s: MayorlyState, at: number): HeldSession | null {
   d.block = null
   d.runStartedAt = null
   d.bankMs = 0
+  d.restTask = null
   return held
 }
 
@@ -922,6 +939,7 @@ function restore(s: MayorlyState, ctx: Ctx | null, held: HeldSession, at: number
   d.plan = held.plan
   d.block = held.block
   d.bankMs = held.bankMs
+  d.restTask = null
   if (run && ctx) {
     d.status = 'running'
     d.runStartedAt = at
@@ -930,6 +948,85 @@ function restore(s: MayorlyState, ctx: Ctx | null, held: HeldSession, at: number
     d.status = 'paused'
     d.runStartedAt = null
   }
+}
+
+/** Preserve the task before advance changes its plan to point past a rest. */
+function advanceDesk(s: MayorlyState, ctx: Ctx, at: number): Block | null {
+  const d = s.desk
+  if (!d.plan || !d.block) return null
+  const task = d.block.kind !== 'rest' ? { plan: structuredClone(d.plan), block: structuredClone(d.block) } : null
+  const next = advance(s, d.plan, d.block, at, ctx.random)
+  if (next?.kind === 'rest' && task) {
+    // The completed block still counts toward cadence and has already paid its coin, if any.
+    task.plan.focusCount = d.plan.focusCount
+    if (task.plan.mode === 'couch' || task.plan.mode === 'pomodoro') task.block.round = d.plan.focusCount + 1
+    d.restTask = task
+  }
+  return next
+}
+
+/** Resolve a saved rest to its last actual task, with a fresh task clock. Pure, also used by labels. */
+function taskSession(s: MayorlyState, held: HeldSession): HeldSession | null {
+  if (held.block.kind !== 'rest') return held
+  const plan = structuredClone(held.restTask?.plan ?? held.plan)
+  let block = held.restTask?.block ? structuredClone(held.restTask.block) : null
+  if (!block) {
+    // Before restTask was saved, segments were the record of which task actually ran.
+    const last = s.segments.findLast(x => x.sittingId === held.sittingId && x.kind !== 'rest')
+    if (plan.mode === 'couch') {
+      const id = last?.leisureId ?? plan.leisureId
+      if (!id) return null
+      plan.leisureId = id
+      block = leisureBlock(s, id, plan.focusCount + 1)
+    } else if (plan.mode === 'superset') {
+      const ss = s.supersets.find(x => x.id === plan.supersetId)
+      if (!ss) return null
+      let slot = last ? ss.slots.findIndex(x => x.target.kind === 'entry' ? x.target.entryId === last.entryId : x.target.ledgerId === last.ledgerId) : -1
+      if (slot < 0) slot = plan.sequence[Math.max(0, plan.step - 1)] ?? 0
+      plan.step = Math.max(0, plan.sequence.indexOf(slot))
+      block = focusForSlot(s, ss, slot, plan.round)
+      if (last) { block.entryId = last.entryId; block.ledgerId = last.ledgerId }
+    } else if (plan.mode === 'pomodoro') {
+      if (last) { plan.anchorEntryId = last.entryId; plan.anchorLedgerId = last.ledgerId }
+      block = firstBlock(s, plan, 0)
+      if (block) block.round = plan.focusCount + 1
+    }
+  }
+  if (!block || block.kind === 'rest') return null
+  if (block.kind === 'leisure') {
+    const item = s.leisure.find(x => x.id === block!.leisureId && x.archivedAt === null)
+    if (!item) return null
+    block.label = item.title
+  } else {
+    const ledger = s.ledgers.find(l => l.id === block!.ledgerId)
+    const entry = s.entries.find(e => e.id === block!.entryId && e.doneAt === null) ?? firstOpenInLedger(s, ledger?.id ?? null)
+    block.entryId = entry?.id ?? null
+    block.ledgerId = entry?.ledgerId ?? ledger?.id ?? null
+    block.label = ledgerLabel(s, block.ledgerId)
+    if (plan.mode === 'pomodoro') {
+      plan.anchorEntryId = block.entryId
+      plan.anchorLedgerId = block.ledgerId
+    }
+  }
+  return { sittingId: held.sittingId, plan, block, bankMs: 0 }
+}
+
+export function restSession(s: MayorlyState): HeldSession | null {
+  const d = s.desk
+  if (d.block?.kind !== 'rest' || !d.plan || !d.sittingId) return null
+  return taskSession(s, { sittingId: d.sittingId, plan: d.plan, block: d.block, bankMs: 0, restTask: d.restTask })
+}
+
+function leaveRest(s: MayorlyState, ctx: Ctx, ev: HudEvent[], run: boolean) {
+  const held = restSession(s)
+  if (!held) return
+  if (held.block.kind === 'leisure' && balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
+    ev.push({ type: 'notice', at: ctx.now, text: 'No coins: a tomato at the desk buys a block on the couch' })
+    return
+  }
+  if (s.desk.status === 'running') closeSegment(s, ctx.now)
+  restore(s, ctx, held, ctx.now, run)
+  if (run) ev.push({ type: 'block', at: ctx.now, block: held.block, started: true })
 }
 
 function tickDue(s: MayorlyState, now: number): boolean {
@@ -967,7 +1064,7 @@ function tick(s: MayorlyState, ctx: Ctx, ev: HudEvent[]) {
     if (d.block.kind === 'leisure' && d.sittingId) {
       s.tokens.push({ id: `${d.sittingId}:leisure:${d.block.round}`, at: end, amount: -LEISURE_TOKENS_PER_BLOCK, reason: 'leisure', sittingId: d.sittingId, leisureId: d.block.leisureId ?? undefined })
     }
-    const next = advance(s, d.plan, d.block, end, ctx.random)
+    const next = advanceDesk(s, ctx, end)
     if (!next) {
       endSitting(s, end, ev, 'complete')
       return

@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Rests stay out of the quick switch
+
+- Option+Q brings back the last task, never its rest timer. Leaving a rest for another task keeps the task behind that rest available to switch back to.
+- A completed block stays completed. Returning from its rest starts a fresh task block, with no extra tomato or coin charge for the rest.
+- Older saves with a parked rest follow the same rule.
+
 ## Pick first, start when the menu closes
 
 - Option+T previews your task, ledger, mode or couch choice. Only the final choice takes effect when the menu closes.

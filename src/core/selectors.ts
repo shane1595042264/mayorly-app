@@ -1,6 +1,6 @@
 import type { Block, Entry, Id, Ledger, MayorlyState, Ms, TokenTx } from './model'
 import { openFlow, supersetOf } from './planner'
-import { switchBack, switchSession } from './reducer'
+import { restSession, switchBack, switchSession } from './reducer'
 
 
 export interface BlockView {
@@ -102,7 +102,7 @@ export function switchTarget(s: MayorlyState): string | null {
     const e = back.entryId ? s.entries.find((x) => x.id === back.entryId) : null
     return e?.title ?? s.ledgers.find((l) => l.id === back.ledgerId)?.name ?? null
   }
-  const held = switchSession(s)
+  const held = switchSession(s) ?? restSession(s)
   if (!held) return null
   return s.entries.find(e => e.id === held.block.entryId)?.title ?? held.block.label
 }

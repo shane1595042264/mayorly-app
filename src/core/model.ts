@@ -304,6 +304,12 @@ export interface Segment {
 /** ready = a block is queued and waiting for you to start it (auto-start off). */
 export type DeskStatus = 'idle' | 'running' | 'paused' | 'ready'
 
+/** The task before a rest, including its place in a superset. Rest itself is never a swap target. */
+export interface RestTask {
+  plan: Plan
+  block: Block
+}
+
 export interface Desk {
   status: DeskStatus
   sittingId: Id | null
@@ -317,6 +323,7 @@ export interface Desk {
   holster: HeldSession | null
   /** The entry the desk was on before the last swap: the other half of the quick switch when nothing is parked. */
   previous: { entryId: Id | null; ledgerId: Id | null } | null
+  restTask?: RestTask | null
 }
 
 export interface TokenTx {
@@ -351,6 +358,8 @@ export interface HeldSession {
   plan: Plan
   block: Block
   bankMs: Ms
+  /** Only older saves can hold a rest; kept here so it can be resolved to its task. */
+  restTask?: RestTask | null
 }
 
 export interface ClerkLine {
