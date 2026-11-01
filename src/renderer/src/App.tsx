@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import type { HudEvent } from '@core/index'
+import type { Action, HudEvent } from '@core/index'
 import type { Command, Layout, UiMode } from '../../shared/bridge'
 import { bridge } from './bridge'
 import { Capture } from './capture/Capture'
@@ -17,10 +17,10 @@ import { Pet } from './hud/Pet'
 import { MODIFIER_KEYS, hotkeyLabel, matchesAcceleratorKey, physicalKey } from './lib/keys'
 import { setSoundEnabled, sfx } from './lib/sound'
 import { onCalendarAsk } from './lib/calendarAsk'
-import { ARM_OF_ACTION, ARM_OF_COMMAND, isPick, onArm, pointArm, pointPick } from './plus/arms'
+import { ARM_OF_ACTION, ARM_OF_COMMAND, isPick, onArm, pointArm, pointPick, takeArmHint, takePickHint } from './plus/arms'
 import { PlusMenu } from './plus/PlusMenu'
 import { balance } from '@core/index'
-import { current, useHudEvents, useMayorly } from './store'
+import { current, dispatch, useHudEvents, useMayorly } from './store'
 
 /** How long the swap hotkey must be held before releasing it closes the menu (hold to peek). */
 const PEEK_MS = 400
@@ -39,6 +39,11 @@ export function App() {
   const [shown, setShown] = useState<UiMode>('field')
   const [petAway, setPetAway] = useState(false)
   const modeRef = useRef<UiMode>('field')
+  // Browsing the Plus menu is temporary. Only its final choice reaches the engine on close.
+  const plusChoice = useRef<Action | null>(null)
+  const stagePlus = useCallback((action: Action | null) => {
+    if (modeRef.current === 'plus') plusChoice.current = action
+  }, [])
   /** The mode the shell was last told; its window size follows it. */
   const shellMode = useRef<UiMode>('field')
   const pending = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -156,10 +161,18 @@ export function App() {
 
   const setMode = useCallback((m: UiMode) => {
     if (modeRef.current === m) return
+    const leavingPlus = modeRef.current === 'plus'
     if (m === 'field') sfx.close()
     else sfx.open()
     modeRef.current = m
     setModeState(m)
+    if (leavingPlus) {
+      const action = plusChoice.current
+      plusChoice.current = null
+      takeArmHint()
+      takePickHint()
+      if (action) void dispatch(action)
+    }
     if (pending.current) {
       clearTimeout(pending.current)
       pending.current = null
@@ -379,7 +392,7 @@ export function App() {
       <Callout quiet={mode !== 'field'} />
 
       <AnimatePresence>
-        {shown === 'plus' && <PlusMenu key="plus" s={s} close={close} open={setMode} />}
+        {shown === 'plus' && <PlusMenu key="plus" s={s} close={close} open={setMode} stage={stagePlus} />}
         {shown === 'deck' && <Deck key="deck" s={s} close={close} kind={bridge.kind} />}
         {shown === 'capture' && <Capture key="capture" s={s} close={close} />}
         {shown === 'drawer' && <Drawer key="drawer" s={s} close={close} />}

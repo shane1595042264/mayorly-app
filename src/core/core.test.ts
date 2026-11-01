@@ -827,6 +827,34 @@ describe('the couch', () => {
 })
 
 describe('the quick switch', () => {
+  it('commits a final menu choice as one swap and resumes only that task', () => {
+    const w = world()
+    for (const title of ['a', 'b', 'c']) w.do({ type: 'entry/capture', text: `legal: ${title}` })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('a').id })
+    w.wait(2 * MIN)
+    w.do({ type: 'desk/pause' })
+    // b was only a menu preview. The engine receives c when the menu closes.
+    w.do({ type: 'desk/select', entryId: w.entry('c').id })
+    expect(w.s.desk.status).toBe('running')
+    expect(w.s.desk.block?.entryId).toBe(w.entry('c').id)
+    expect(switchTarget(w.s)).toBe('a')
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(23 * MIN)
+    expect(w.s.segments.some(x => x.entryId === w.entry('b').id)).toBe(false)
+  })
+
+  it('starts a final menu choice from idle and refuses a choice cleared while browsing', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    const id = w.entry('a').id
+    w.do({ type: 'desk/select', entryId: id })
+    expect(w.s.desk.block?.entryId).toBe(id)
+    expect(w.s.desk.status).toBe('running')
+    w.do({ type: 'desk/standDown' })
+    w.do({ type: 'entry/complete', id })
+    w.do({ type: 'desk/select', entryId: id })
+    expect(w.s.desk.status).toBe('idle')
+  })
+
   it('selecting the current leisure item keeps its timer and the previous task', () => {
     const w = world()
     w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: w.ledger('CAR').id })

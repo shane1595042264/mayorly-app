@@ -78,6 +78,8 @@ export type Action =
   | { type: 'desk/skip' }
   | { type: 'desk/standDown' }
   | { type: 'desk/swap'; entryId?: Id | null; ledgerId?: Id | null }
+  /** A final Plus menu choice, applied once when the menu closes against the current desk. */
+  | { type: 'desk/select'; entryId?: Id | null; ledgerId?: Id | null; leisureId?: Id | null; mode?: Mode; supersetId?: Id | null }
   | { type: 'desk/tick' }
   | { type: 'settings/update'; patch: Partial<Settings> }
   /** The account's state arrived from the sync server and replaces this copy. */
@@ -499,7 +501,16 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     case 'desk/standDown':
       if (s.desk.status !== 'idle') endSitting(s, now, ev, 'stood')
       break
+    case 'desk/select':
     case 'desk/swap': {
+      if (action.type === 'desk/select') {
+        if (action.entryId && !s.entries.some(e => e.id === action.entryId && e.doneAt === null)) break
+        if (action.ledgerId && !s.ledgers.some(l => l.id === action.ledgerId)) break
+        if (action.mode || action.leisureId || s.desk.block?.kind !== 'focus') {
+          deploy(s, ctx, ev, { ...action, mode: action.leisureId ? 'couch' : action.mode ?? 'pomodoro' })
+          break
+        }
+      }
       const { block } = s.desk
       if (!block || block.kind !== 'focus') break
       let entryId = action.entryId ?? null

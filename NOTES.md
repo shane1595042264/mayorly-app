@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Pick first, start when the menu closes
+
+- Option+T previews your task, ledger, mode or couch choice. Only the final choice takes effect when the menu closes.
+- Browsing leaves a held timer on hold and keeps the last real task in Option+Q. Opening and closing without a choice changes nothing.
+
 ## The quick switch keeps one clock per task
 
 - Selecting the task already on the desk keeps its clock and the previous task. Selecting a parked task resumes its saved clock.
