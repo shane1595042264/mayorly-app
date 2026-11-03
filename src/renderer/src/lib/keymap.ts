@@ -37,6 +37,7 @@ export const GLOBAL_ACTIONS: [HotkeyAction, string][] = [
   ['capture', 'Capture'],
   ['deck', 'Deck'],
   ['pause', 'Hold and resume'],
+  ['skipRest', 'Skip rest and return to the task'],
   ['hide', 'Hide the HUD'],
   ['switch', 'Switch to the other session'],
   ['clear', 'Clear the entry on the desk'],

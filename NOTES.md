@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Back to the task from a rest
+
+- Option+R skips the current rest and immediately resumes its task. Change it under Hotkeys in Settings.
+- It also works on a held or waiting rest. Pressing it during work leaves the timer alone.
+
 ## One app on Windows and macOS
 
 - The Windows build is the same app as the Mac one again, with everything since the first HUD: ledgers, the planner and calendar, the clerk, accounts and sync, alarms, the history and the trash.

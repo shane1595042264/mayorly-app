@@ -489,6 +489,7 @@ function boot() {
         capture: () => command('capture'),
         deck: () => command('deck'),
         pause: togglePause,
+        skipRest: () => engine.dispatch({ type: 'desk/skipRest' }),
         hide: () => overlay.toggleVisible(),
         switch: () => engine.dispatch({ type: 'desk/switch' }),
         move: () => command('move'),

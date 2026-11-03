@@ -84,6 +84,8 @@ export type Action =
   | { type: 'desk/pause'; at?: number }
   | { type: 'desk/resume' }
   | { type: 'desk/skip' }
+  /** Leave only a rest, returning to its task with a fresh running block. */
+  | { type: 'desk/skipRest' }
   | { type: 'desk/standDown' }
   | { type: 'desk/swap'; entryId?: Id | null; ledgerId?: Id | null }
   /** A final Plus menu choice, applied once when the menu closes against the current desk. */
@@ -116,6 +118,7 @@ function migrateSync(raw: unknown, local: MayorlyState): MayorlyState | null {
 }
 
 export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Clerk = prefixClerk): Result {
+  if (action.type === 'desk/skipRest' && state.desk.block?.kind !== 'rest') return { state, events: [] }
   // The heartbeat runs every second; only pay for a copy when something is due.
   if (action.type === 'desk/tick' && !tickDue(state, ctx.now)) return { state, events: [] }
 
@@ -522,6 +525,9 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       resumeDesk(s, ctx, ev)
       break
     }
+    case 'desk/skipRest':
+      leaveRest(s, ctx, ev, true)
+      break
     case 'desk/skip': {
       const { block, plan, status } = s.desk
       if (!block || !plan || status === 'idle') break
