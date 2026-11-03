@@ -1,7 +1,9 @@
 # Builds the Windows installer and the macOS disk images, and on a tag attaches them to the
 # GitHub release the auto-updater reads. A Mac can only be built on macOS, so each platform
 # gets its own runner. Signing happens when the secrets exist (docs/release.md); without them
-# the Mac build is ad-hoc signed and the Windows build unsigned.
+# the Mac build is ad-hoc signed and the Windows build unsigned. The Apple certificate is
+# scoped to the Mac steps: electron-builder's Windows signer falls back to CSC_LINK, and an
+# Authenticode signature from a Developer ID would be refused by Windows and by the updater.
 name: dist
 on:
   push:
@@ -25,13 +27,6 @@ jobs:
       MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL }}
       MAIN_VITE_GOOGLE_CLIENT_ID: ${{ vars.MAIN_VITE_GOOGLE_CLIENT_ID }}
       MAIN_VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.MAIN_VITE_GOOGLE_CLIENT_SECRET }}
-      # Mac signing and notarization: a base64 .p12 of the Developer ID Application certificate,
-      # its password, and an App Store Connect app-specific password for the Apple ID.
-      CSC_LINK: ${{ secrets.CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       MAC_SIGNED: ${{ secrets.CSC_LINK != '' }}
     steps:
       - uses: actions/checkout@v4
@@ -43,11 +38,25 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      # No buildVersion here: on Windows it becomes the exe's FileVersion, which should stay the app's.
+      # Authenticode signing happens when a Windows certificate is set; an empty WIN_CSC_LINK means none.
       - name: Package (Windows)
         if: runner.os == 'Windows'
-        run: npx electron-builder --win --publish never -c.buildVersion=${{ github.run_number }}
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: npx electron-builder --win --publish never
+      # Mac signing and notarization: a base64 .p12 of the Developer ID Application certificate,
+      # its password, and an App Store Connect app-specific password for the Apple ID. The build
+      # number (CFBundleVersion) is the run number, so every build is higher than the last.
       - name: Package (macOS, signed and notarized)
         if: runner.os == 'macOS' && env.MAC_SIGNED == 'true'
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx electron-builder --mac --publish never -c.mac.hardenedRuntime=true -c.mac.notarize=true -c.buildVersion=${{ github.run_number }}
       - name: Package (macOS, ad-hoc)
         if: runner.os == 'macOS' && env.MAC_SIGNED != 'true'

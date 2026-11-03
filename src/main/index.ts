@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor } from 'electron'
+import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
 import { migrate, type Action, type ClerkCommand, type Entry, type HudEvent, type Settings } from '@core/index'
 import { IPC, type AiProvider, type Arrangement, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
@@ -109,12 +109,16 @@ function boot() {
   // A file dialog of our own takes focus too; it is not a reason to close.
   let opened = 0
   let dialogOpen = false
+  // Off macOS the overlay is a topmost window over the whole work area, so a dialog nobody owns
+  // opens beneath it; owned by the overlay it stays on top. The Mac panel gets no sheet.
+  const openDialog = (options: OpenDialogOptions) => (process.platform === 'darwin' ? dialog.showOpenDialog(options) : dialog.showOpenDialog(overlay.win, options))
+  const saveDialog = (options: SaveDialogOptions) => (process.platform === 'darwin' ? dialog.showSaveDialog(options) : dialog.showSaveDialog(overlay.win, options))
   const alarmFiles = new AlarmFiles(dataDir)
   ipcMain.handle(IPC.alarmRead, (_e, id: string) => alarmFiles.read(id))
   ipcMain.handle(IPC.alarmPick, async () => {
     dialogOpen = true
     try {
-      const result = await dialog.showOpenDialog({ title: 'Choose an alarm sound', properties: ['openFile'], filters: [{ name: 'Audio', extensions: AUDIO_EXTENSIONS }] })
+      const result = await openDialog({ title: 'Choose an alarm sound', properties: ['openFile'], filters: [{ name: 'Audio', extensions: AUDIO_EXTENSIONS }] })
       return result.canceled || !result.filePaths[0] ? null : alarmFiles.pickFile(result.filePaths[0])
     } finally { dialogOpen = false }
   })
@@ -390,7 +394,7 @@ function boot() {
   ipcMain.handle(IPC.exportState, async () => {
     dialogOpen = true
     try {
-      const r = await dialog.showSaveDialog({ title: 'Export Mayorly data', defaultPath: `Mayorly-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] })
+      const r = await saveDialog({ title: 'Export Mayorly data', defaultPath: `Mayorly-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'JSON', extensions: ['json'] }] })
       if (r.canceled || !r.filePath) return null
       writeFileSync(r.filePath, JSON.stringify({ app: 'mayorly', exportedAt: new Date().toISOString(), state: engine.state }, null, 2))
       return r.filePath
@@ -401,7 +405,7 @@ function boot() {
   ipcMain.handle(IPC.importState, async () => {
     dialogOpen = true
     try {
-      const r = await dialog.showOpenDialog({ title: 'Import Mayorly data', filters: [{ name: 'JSON', extensions: ['json'] }], properties: ['openFile'] })
+      const r = await openDialog({ title: 'Import Mayorly data', filters: [{ name: 'JSON', extensions: ['json'] }], properties: ['openFile'] })
       if (r.canceled || !r.filePaths[0]) return { ok: false, message: '' }
       const raw = JSON.parse(readFileSync(r.filePaths[0], 'utf8')) as unknown
       const inner = raw && typeof raw === 'object' && 'state' in (raw as object) ? (raw as { state: unknown }).state : raw
@@ -511,7 +515,8 @@ function boot() {
   engine.on((state) => applySettings(state.settings))
 
   const updates = installUpdates()
-  updates.onReady((v) => say({ phase: 'done', text: `Mayorly ${v} is ready. Restart from the menu bar tomato to update.` }))
+  const bar = process.platform === 'darwin' ? 'menu bar' : 'tray'
+  updates.onReady((v) => say({ phase: 'done', text: `Mayorly ${v} is ready. Restart from the ${bar} tomato to update.` }))
   createTray(engine, overlay, { command, togglePause, dataDir, updates })
   overlay.load()
   // The first launch opens the deck, which starts on the shelf and says what the keys are.
@@ -540,7 +545,9 @@ function boot() {
     else if (what === 'capture' || what === 'deck' || what === 'plus') command(what)
     else if (what === 'pause') togglePause()
   }
-  if (app.isPackaged) app.setAsDefaultProtocolClient('mayorly')
+  // The portable Windows exe unpacks to a fresh temp folder each run, so registering it would
+  // point every mayorly:// link at a path that is gone by the next launch.
+  if (app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR) app.setAsDefaultProtocolClient('mayorly')
   onUrl = handleUrl
   for (const u of queuedUrls.splice(0)) handleUrl(u)
   for (const a of process.argv) if (a.startsWith('mayorly://')) handleUrl(a)

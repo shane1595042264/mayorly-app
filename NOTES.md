@@ -2,6 +2,14 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## One app on Windows and macOS
+
+- The Windows build is the same app as the Mac one again, with everything since the first HUD: ledgers, the planner and calendar, the clerk, accounts and sync, alarms, the history and the trash.
+- On Windows the file pickers for alarms, export and import now open in front of the HUD instead of behind it.
+- The portable Windows exe stays portable: it no longer downloads the installer or claims mayorly:// links. The installed build keeps updating itself.
+- Coins paid by the first Windows build for work on an entry count as that entry's harvest, so clearing the entry does not pay them twice. Your balance does not change.
+- The quick drawer opens beside the tomato on whichever side you keep it. Key hints on Windows say Alt and the Windows key, not Option and Cmd.
+
 ## The history and the trash
 
 - Every cleared entry keeps its record: its time, its tomatoes, its notes and checklist, and what they said each time it was cleared. Cleared today in Flow and inside a ledger now has a History button (or H) that opens all of it, searchable.

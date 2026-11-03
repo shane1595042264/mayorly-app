@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowCounterClockwise, Keyboard, MagnifyingGlass } from '@phosphor-icons/react'
 import { DEFAULT_HOTKEYS, type HotkeyAction, type MayorlyState } from '@core/index'
-import { MODIFIER_KEYS, hotkeyLabel, physicalKey } from '../lib/keys'
+import { IS_MAC, MODIFIER_KEYS, hotkeyLabel, physicalKey } from '../lib/keys'
 import { conflictsOf, GLOBAL_ACTIONS, KEYS, keyLabel, keyOf, keysFor, SCOPES, setKeymapOpen, usesOf, type Scope } from '../lib/keymap'
 import { reveal } from '../lib/listkeys'
 import { dispatch } from '../store'
@@ -34,7 +34,8 @@ function acceleratorOf(e: KeyboardEvent): string | null {
   if (e.ctrlKey) mods.push('Ctrl')
   if (e.altKey) mods.push('Alt')
   if (e.shiftKey) mods.push('Shift')
-  if (e.metaKey) mods.push('Cmd')
+  // Electron spells the Windows key Super; Cmd is a Mac key and registers nowhere else.
+  if (e.metaKey) mods.push(IS_MAC ? 'Cmd' : 'Super')
   let key: string
   if (e.code.startsWith('Key') || e.code.startsWith('Digit')) key = physicalKey(e).toUpperCase()
   else if (e.code === 'Space') key = 'Space'
@@ -142,7 +143,7 @@ export function Keymap({ s, close }: { s: MayorlyState; close: () => void }) {
     if (r.global) {
       const accel = acceleratorOf(e)
       if (!accel) {
-        say('A global hotkey needs Ctrl, Alt or Cmd in it')
+        say(IS_MAC ? 'A global hotkey needs Control, Option or Cmd in it' : 'A global hotkey needs Ctrl, Alt or the Windows key in it')
         return
       }
       setGlobal(r.global, accel)

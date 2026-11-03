@@ -26,7 +26,9 @@ export function installUpdates(): Updates {
     onReady: (fn) => void subs.add(fn),
     install: () => autoUpdater.quitAndInstall(),
   }
-  if (!app.isPackaged || process.mas) return updates
+  // The portable Windows exe is packed from the same folder as the installer and so carries the
+  // feed; left alone it would download the setup and run it on quit. Portable means portable.
+  if (!app.isPackaged || process.mas || process.env.PORTABLE_EXECUTABLE_DIR) return updates
   // A build installed by ship:mac carries no app-update.yml: there is no feed to ask.
   if (!existsSync(join(process.resourcesPath, 'app-update.yml'))) return updates
   autoUpdater.autoDownload = true

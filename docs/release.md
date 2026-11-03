@@ -1,17 +1,17 @@
 # Releasing Mayorly
 
-There is no staging. The founder runs the installed app, so a change is done when `npm run ship:mac` has run and the new app is up. Everything below is about putting the same build in other people's hands.
+There is no staging. The founder runs the installed app, so a change is done when the new app is up: `npm run ship:mac` on a Mac, `npm run dist:win` and the installer from `dist/` on Windows. Everything below is about putting the same build in other people's hands.
 
 ## Versions
 
-`npm version patch` (or `minor`) bumps `package.json`, commits and tags `vX.Y.Z`. Pushing the tag runs `.github/workflows/dist.yml`, which builds Windows and macOS, attaches the installers to the GitHub release, and attaches `latest.yml` and `latest-mac.yml`, which installed apps read to find updates. The build number (`CFBundleVersion`) is the workflow run number, so every build is higher than the last, which the App Store insists on.
+`npm version patch` (or `minor`) bumps `package.json`, commits and tags `vX.Y.Z`. Pushing the tag runs `.github/workflows/dist.yml`, which builds Windows and macOS, attaches the installers to the GitHub release, and attaches `latest.yml` and `latest-mac.yml`, which installed apps read to find updates. On the Mac the build number (`CFBundleVersion`) is the workflow run number, so every build is higher than the last, which the App Store insists on; the Windows exe keeps the package version as its file version.
 
 ## What the app does for a release already
 
-- One log a user can send: `logs/mayorly.log` in the data folder (Open data folder in the menu bar). Uncaught errors are written there, and a renderer that dies is reloaded.
+- One log a user can send: `logs/mayorly.log` in the data folder (Open data folder in the tray, or the menu bar on a Mac). Uncaught errors are written there, and a renderer that dies is reloaded.
 - Backups: `backups/` beside the save, one copy a day (14 kept) and one before a sync or an import replaces the state (6 kept). A save that cannot be read falls back to the newest backup that can.
 - Export and import in Settings, account deletion in Settings (Apple guideline 5.1.1(v)), and the server removes the account's document the moment it is asked.
-- Updates: the direct-download build checks GitHub releases after launch and every six hours, downloads quietly, and offers Restart to update in the menu bar. Only a Developer ID signed build can be updated on a Mac.
+- Updates: the direct-download build checks GitHub releases after launch and every six hours, downloads quietly, and offers Restart to update in the tray (the menu bar on a Mac). Only a Developer ID signed build can be updated on a Mac. The portable Windows exe never checks: it would install the setup on quit.
 - `mayorly://capture?text=...`, `mayorly://deck`, `plus`, `capture`, `pause`, `clear`, `switch` for Shortcuts, Raycast and browsers.
 
 ## Direct download (first)
@@ -21,7 +21,7 @@ Needs an Apple Developer Program membership (99 USD a year) and, from it, a **De
 1. Export the certificate and key as a `.p12`. In the repository secrets set `CSC_LINK` (the file, base64), `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` (from appleid.apple.com) and `APPLE_TEAM_ID`. With these present the workflow signs with the hardened runtime (`build/entitlements.mac.plist`) and notarizes; without them it ad-hoc signs, which Gatekeeper refuses on first launch until Open Anyway.
 2. Locally, a certificate in the keychain is found on its own: `CSC_NAME="Developer ID Application: Name (TEAMID)" npm run ship:mac` signs the installed copy too.
 3. Without a Developer ID, `sh scripts/local-cert.sh` once per machine puts a self-signed "Mayorly Local" certificate in the login keychain and `ship:mac` signs with it. macOS ties a keychain Always Allow (the safeStorage prompt) to the app's designated requirement; ad-hoc signatures change every build, one certificate does not, so the prompt is answered once.
-3. Windows: SmartScreen warns about unsigned installers until the publisher has reputation or a certificate. Azure Trusted Signing is the cheap route; set `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD` the same way, or sign with the `signtool` step electron-builder documents.
+4. Windows: SmartScreen warns about unsigned installers until the publisher has reputation or a certificate. Azure Trusted Signing is the cheap route; set `WIN_CSC_LINK` (a base64 `.pfx`) and `WIN_CSC_KEY_PASSWORD` as repository secrets, which the Windows package step in `dist.yml` reads, or sign with the `signtool` step electron-builder documents. The Apple certificate is scoped to the Mac steps and never reaches the Windows signer.
 
 ## Mac App Store (after)
 

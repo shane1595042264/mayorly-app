@@ -26,6 +26,30 @@ function world() {
   }
 }
 
+describe('a save from the first Windows build', () => {
+  it('does not pay a second time for entry time its coins already paid', () => {
+    const w = world()
+    w.act({ type: 'desk/deploy', mode: 'blitz', entryId: w.a })
+    const start = w.now
+    w.advance(90)
+    w.act({ type: 'desk/pause' })
+    expect(w.s.entries[0].tomatoes).toBe(3)
+    // That build paid one coin the minute each tomato ripened: no count, no entry on the record.
+    const sittingId = w.s.sittings[0].id
+    for (const n of [1, 2, 3]) w.s.tokens.push({ id: `${sittingId}:${n}`, at: start + n * 30 * MIN, amount: 1, reason: 'tomato', sittingId })
+    expect(balance(w.s)).toBe(3)
+    w.load()
+    expect(w.s.entries[0].tomatoes).toBe(0)
+    expect(balance(w.s)).toBe(3)
+    expect(w.s.tokens.map(t => t.reason)).toEqual(['harvest', 'harvest', 'harvest'])
+    w.act({ type: 'entry/complete', id: w.a })
+    expect(balance(w.s)).toBe(3)
+    // Loading again changes nothing more.
+    w.load()
+    expect(balance(w.s)).toBe(3)
+  })
+})
+
 describe('tomatoes belong to the time on each task', () => {
   it('keeps fractions across switches and never gives B the tomato started on A', () => {
     const w = world()

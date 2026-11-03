@@ -30,7 +30,9 @@ interface Props {
   notice: string | null
 }
 
+// The window is the pet on a Mac and goes anywhere; elsewhere the HUD has two places, left or right.
 const MOVE_HINT = 'Arrows or hjkl move it, 1 to 4 pick a corner, Enter when done'
+const SIDE_HINT = 'Left or right (h, l) picks the side, Enter when done'
 
 export function Pet({ s, away, moving, open, side, dragging, compact, notice }: Props) {
   // Idle, the pet only counts today's tomatoes; a clock is what needs the quarter second.
@@ -68,7 +70,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice }: 
   const hint = !v
     ? nextEntry ? `Next: ${nextEntry.title}, ${nextAt}. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.` : `Desk idle. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.`
     : back ? `${hotkeyLabel(s.settings.hotkeys.switch)}: back to ${back}` : ''
-  const text = moving ? MOVE_HINT : (notice ?? hint)
+  const text = moving ? (compact ? MOVE_HINT : SIDE_HINT) : (notice ?? hint)
   const showCaption = moving || !!notice || (hover && !dragging && hint !== '')
 
   // macOS: the caption is the shell's window. Elsewhere it is drawn above the pet.
@@ -116,7 +118,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice }: 
         </div>
         <motion.div
           className={`pet-body ${moving ? 'is-moving' : ''}`}
-          title="Drag to move"
+          title={compact ? 'Drag to move' : undefined}
           animate={
             reduce || dragging ? { y: 0, scale: 1 }
               : hover ? { y: [0, -6, 0], scale: 1 }

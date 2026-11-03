@@ -4,7 +4,7 @@ Mayorly is a desk timer and journal that lives on your computer. This page says 
 
 ## On your computer
 
-Everything you put into Mayorly stays in one file on your computer: your ledgers, entries, desk time, coins, settings and the clerk's log. Beside it are daily backups and a log file for problems. You can export all of it as JSON from Settings, import it back, and delete it by removing the app's data folder (Open data folder in the menu bar).
+Everything you put into Mayorly stays in one file on your computer: your ledgers, entries, desk time, coins, settings and the clerk's log. Beside it are daily backups and a log file for problems. You can export all of it as JSON from Settings, import it back, and delete it by removing the app's data folder (Open data folder in the tray, or the menu bar on a Mac).
 
 Mayorly has no analytics, no advertising, no tracking and no crash reporting. The log stays on your computer unless you send it to us.
 

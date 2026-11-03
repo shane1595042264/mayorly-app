@@ -47,11 +47,14 @@ npm test             core rules
 npm run typecheck    everything
 npm run web          the HUD at localhost:5199 (?demo for sample data, ?fresh for first run)
 npm run ship:mac     build Mayorly.app, install it in /Applications, relaunch it
+npm run dist:win     on Windows: build the installer and the portable exe into dist/
 ```
 
-There is no staging: the founder runs the installed app, so a change is done when `ship:mac` has run and the new app is up. `npm run dev` is for iterating (hot reload, and with `MAYORLY_DEBUG=1` the `SIGUSR1`/`SIGUSR2` previews); the dev instance and the installed app share one single-instance lock, so only one runs at a time and the ship script quits whichever is up.
+There is no staging: the founder runs the installed app, so a change is done when the new app is up. On a Mac that is `ship:mac`. On Windows it is `npm run dist:win`, then quit the running Mayorly from the tray and run `dist\Mayorly-Setup-<version>.exe`, which replaces the installed copy and relaunches it. `npm run dev` is for iterating (hot reload, and on a Mac with `MAYORLY_DEBUG=1` the `SIGUSR1`/`SIGUSR2` previews, which Windows has no signals for); the dev instance and the installed app share one single-instance lock, so only one runs at a time and the ship script quits whichever is up.
 
-Work through tickets one at a time. For each fix, check it, commit and push it, run `npm run ship:mac`, and verify the installed app is running before closing the ticket or starting the next one. The founder actively tests the installed app.
+Work through tickets one at a time. For each fix, check it, commit and push it, ship it (`ship:mac`, or `dist:win` and the installer), and verify the installed app is running before closing the ticket or starting the next one. The founder actively tests the installed app.
+
+One codebase, two desktops. `main` is the branch both are built from; the Windows installer and the Mac disk image come out of the same tag (`.github/workflows/dist.yml`). Platform differences live behind `process.platform === 'darwin'` in the main process and `IS_MAC` in the renderer, nowhere else. The portable Windows exe never checks for updates and never registers `mayorly://`, since it unpacks to a fresh temp folder each run.
 
 To screenshot the browser preview at full resolution:
 
@@ -95,7 +98,7 @@ SHOT_URL="http://localhost:5199/?demo" SHOT_OUT=shot.png SHOT_JS='...' npx elect
 - **`backups/` fills up on its own.** One copy a day, one before a sync or an import replaces the state; `Store.load` falls back to them when the save cannot be read. A file dialog of our own sets `dialogOpen`, so the blur that would close the deck is ignored while it is up.
 - **`mayorly://` is registered only in a packaged build**, and `open-url` can arrive before boot, so it is queued at module level.
 - **Every build carries a stamp.** `build-info.ts` puts the version, the short commit (with a `+` when the tree was dirty), the build time and the top section of `NOTES.md` into every bundle as `__MAYORLY_BUILD__`. The first launch of a build on a machine opens the deck on the What changed card; `notes.json` beside the save remembers the build seen, a first run marks it seen without showing it, and Settings shows the build and brings the card back. Write the top section of `NOTES.md` in plain words before shipping.
-- **The updater is silent.** Errors go to the log. A build installed by `ship:mac` has no `app-update.yml`, so it never checks; a signed download build without a Developer ID logs one error per check, which is expected until the certificate exists.
+- **The updater is silent.** Errors go to the log. A build installed by `ship:mac` has no `app-update.yml`, so it never checks; the portable Windows exe carries one but never checks either (`PORTABLE_EXECUTABLE_DIR`), or it would install the setup on quit; a signed download build without a Developer ID logs one error per check, which is expected until the certificate exists.
 - **A deleted account's token still verifies.** `requireAuth` on the server looks the user row up on every request; the missing row is what answers 401.
 - **Capture and start skips the clerk's wait.** `entry/capture` with `start` files by prefix and puts the entry on the desk in the same reduce (a focus block swaps to it and resumes, anything else deploys a pomodoro); `captureLine` then asks the clerk and, if it names another ledger, dispatches `entry/file`, which moves a block that is on that entry along with it.
 - **A dragged block is a pin.** The planner owns a block's time; dragging one dispatches `calendar/pin` with the new `start` and `end`, which makes a user event on the entry, and the next replan routes around it. An event drags whole or resizes by its bottom edge (`calendar/event-update`). The pointer is captured by the item and read by the grid; a press that moves less than 4 px is a click, which selects.

@@ -40,6 +40,23 @@ export function ledgerTomatoes(s: MayorlyState, sittingId: Id, ledgerId: Id | nu
   return units(s, now, seg => seg.sittingId === sittingId && seg.entryId === null && seg.ledgerId === ledgerId)
 }
 
+/**
+ * The first Windows build paid a coin the minute a tomato ripened, entry or not, as a tomato record
+ * with no count and no entry. Under the harvest those coins would be paid a second time when the
+ * entry is cleared. Each such record whose minute fell in a focus segment on an entry becomes a
+ * one-tomato harvest on that entry, once; id and amount stay, so the balance and the coin history
+ * do not change. Records for ledger time are left as they are.
+ */
+export function settleLegacyCoins(s: MayorlyState): MayorlyState {
+  const tokens = s.tokens.map(tx => {
+    if (tx.reason !== 'tomato' || tx.tomatoes !== undefined) return tx
+    const seg = s.segments.find(seg => seg.sittingId === tx.sittingId && seg.kind === 'focus' && seg.start < tx.at && (seg.end === null || seg.end >= tx.at))
+    if (!seg || seg.entryId === null) return tx
+    return { ...tx, reason: 'harvest' as const, tomatoes: 1, entryId: seg.entryId }
+  })
+  return { ...s, tokens }
+}
+
 /** Rebuild derived counts from closed intervals on load/merge, never replay old payments. */
 export function reconcileTomatoes(s: MayorlyState): MayorlyState {
   const closed = { ...s, segments: s.segments.filter(seg => seg.end !== null) }

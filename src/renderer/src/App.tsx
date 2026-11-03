@@ -228,12 +228,15 @@ export function App() {
     void bridge.getLayout().then(setLayout)
     return bridge.onLayout(setLayout)
   }, [])
+  // The side the pet is on: the shell's answer when the window is the pet, else the setting.
+  // The drawer and the caption hang off the same side.
+  const petSide = layout.compact || !s ? layout.side : s.settings.hudSide
   useEffect(() => {
     layoutRef.current = layout
     document.body.classList.toggle('compact', layout.compact)
-    document.body.classList.toggle('side-left', layout.side === 'left')
-    document.body.classList.toggle('side-right', layout.side === 'right')
-  }, [layout])
+    document.body.classList.toggle('side-left', petSide === 'left')
+    document.body.classList.toggle('side-right', petSide === 'right')
+  }, [layout, petSide])
 
   // Hotkeys from the shell. Holding the swap key auto-repeats, so ignore repeats until it is released.
   useEffect(
@@ -387,7 +390,7 @@ export function App() {
       </AnimatePresence>
 
       <Objectives s={s} mode={mode} />
-      <Pet s={s} away={petAway} moving={moving} open={setMode} side={layout.compact ? layout.side : s.settings.hudSide} dragging={layout.dragging} compact={layout.compact} notice={clerk ?? pop ?? (layout.compact ? warning : null)} />
+      <Pet s={s} away={petAway} moving={moving} open={setMode} side={petSide} dragging={layout.dragging} compact={layout.compact} notice={clerk ?? pop ?? (layout.compact ? warning : null)} />
       <Feed />
       <Callout quiet={mode !== 'field'} />
 

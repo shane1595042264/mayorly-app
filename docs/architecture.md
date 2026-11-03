@@ -112,4 +112,4 @@ Sync is one document per account with a revision (`GET`/`PUT /sync/state`). The 
 - Leisure: entertainment tags, buying time with coins, the couch countdown. The coin ledger is ready for debits.
 - The classifier proper: induction and assignment. `Clerk` is the seam.
 - Multi-monitor HUD (one display at a time today, picked from the tray).
-- Code signing and auto-update.
+- Signing: the Windows installer is unsigned until a certificate exists, the Mac build ad-hoc signed until a Developer ID does. Updates come from GitHub releases already (`src/main/updates.ts`), which on a Mac also needs that Developer ID.
