@@ -1404,3 +1404,71 @@ describe('sync merge', () => {
     expect(r.state).toBe(before)
   })
 })
+
+describe('skip rest shortcut', () => {
+  it('returns to the current task, keeps swap history, and does not mint for the rest', () => {
+    const w = world()
+    for (const title of ['a', 'b']) w.do({ type: 'entry/capture', text: `legal: ${title}` })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('a').id })
+    w.do({ type: 'desk/swap', entryId: w.entry('b').id })
+    w.wait(26 * MIN)
+    const sittingId = w.s.desk.sittingId
+    const crop = w.entry('b').tomatoes
+    const coins = balance(w.s)
+    const previous = structuredClone(w.s.desk.previous)
+    const r = w.do({ type: 'desk/skipRest' })
+    expect(w.s.desk).toMatchObject({ status: 'running', sittingId, bankMs: 0, previous, block: { kind: 'focus', entryId: w.entry('b').id } })
+    expect(w.s.desk.plan?.focusCount).toBe(1)
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(25 * MIN)
+    expect(w.entry('b').tomatoes).toBe(crop)
+    expect(balance(w.s)).toBe(coins)
+    expect(w.s.segments.filter(s => s.end === null)).toHaveLength(1)
+    expect(w.s.segments.at(-2)).toMatchObject({ kind: 'rest', end: w.now })
+    expect(r.events).toEqual([expect.objectContaining({ type: 'block', started: true })])
+    w.wait(MIN)
+    const before = w.s
+    expect(w.do({ type: 'desk/skipRest' })).toEqual({ state: before, events: [] })
+    expect(w.s).toBe(before)
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(24 * MIN)
+  })
+
+  it.each(['paused', 'ready'] as const)('immediately starts work from a %s rest even with automatic focus off', (status) => {
+    const w = world(s => { s.settings.autoStartRest = status !== 'ready'; s.settings.autoStartFocus = false })
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: w.entry('a').id })
+    w.wait(25 * MIN)
+    if (status === 'paused') w.do({ type: 'desk/pause' })
+    expect(w.s.desk.status).toBe(status)
+    w.do({ type: 'desk/skipRest' })
+    expect(w.s.desk).toMatchObject({ status: 'running', runStartedAt: w.now, block: { kind: 'focus', entryId: w.entry('a').id } })
+  })
+
+  it('returns to the same superset task rather than advancing to the next slot', () => {
+    const w = world()
+    w.do({ type: 'desk/deploy', mode: 'superset', supersetId: w.s.supersets[0].id })
+    w.wait(26 * MIN)
+    w.do({ type: 'desk/skipRest' })
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', ledgerId: w.ledger('LGL').id, slotIndex: 0 })
+    expect(w.s.desk.plan).toMatchObject({ mode: 'superset', step: 0, focusCount: 1 })
+  })
+
+  it('does nothing when idle or during held work', () => {
+    const w = world()
+    const idle = w.s
+    expect(w.do({ type: 'desk/skipRest' }).state).toBe(idle)
+    w.do({ type: 'desk/deploy', mode: 'pomodoro' })
+    w.wait(MIN)
+    w.do({ type: 'desk/pause' })
+    const paused = w.s
+    expect(w.do({ type: 'desk/skipRest' }).state).toBe(paused)
+  })
+
+  it('adds the shortcut to older saves and keeps a custom binding', () => {
+    const old = world().s
+    delete (old.settings.hotkeys as Partial<typeof old.settings.hotkeys>).skipRest
+    const loaded = migrate(old)!
+    expect(loaded.settings.hotkeys.skipRest).toBe('Alt+R')
+    loaded.settings.hotkeys.skipRest = 'Alt+F8'
+    expect(migrate(loaded)?.settings.hotkeys.skipRest).toBe('Alt+F8')
+  })
+})

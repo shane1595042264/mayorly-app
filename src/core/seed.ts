@@ -8,6 +8,7 @@ export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   capture: 'Alt+N',
   deck: 'Alt+M',
   pause: 'Alt+P',
+  skipRest: 'Alt+R',
   hide: 'Alt+H',
   switch: 'Alt+Q',
   clear: 'Alt+C',

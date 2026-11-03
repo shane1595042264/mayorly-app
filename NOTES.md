@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Back to the task from a rest
+
+- Option+R skips the current rest and immediately resumes its task. Change it under Hotkeys in Settings.
+- It also works on a held or waiting rest. Pressing it during work leaves the timer alone.
+
 ## The history and the trash
 
 - Every cleared entry keeps its record: its time, its tomatoes, its notes and checklist, and what they said each time it was cleared. Cleared today in Flow and inside a ledger now has a History button (or H) that opens all of it, searchable.

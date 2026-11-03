@@ -102,8 +102,9 @@ export function createWebBridge(): Bridge {
     // By key position: with Option held, macOS reports the composed character, not the letter.
     const k = physicalKey(e)
     const combo = `Alt+${e.shiftKey ? 'Shift+' : ''}${k.length === 1 ? k.toUpperCase() : k}`
-    const map: Record<string, Command | 'pause' | 'switch' | 'clear' | 'hide'> = {
+    const map: Record<string, Command | 'pause' | 'skipRest' | 'switch' | 'clear' | 'hide'> = {
       [hk.plus]: 'plus', [hk.capture]: 'capture', [hk.deck]: 'deck', [hk.drawer]: 'drawer', [hk.pause]: 'pause', [hk.move]: 'move', [hk.switch]: 'switch', [hk.clear]: 'clear', [hk.hide]: 'hide',
+      [hk.skipRest]: 'skipRest',
     }
     const cmd = map[combo]
     if (!cmd) return
@@ -111,7 +112,8 @@ export function createWebBridge(): Bridge {
     if (cmd === 'pause') {
       const st = state.desk.status
       dispatch(st === 'running' ? { type: 'desk/pause' } : { type: 'desk/resume' })
-    } else if (cmd === 'switch') dispatch({ type: 'desk/switch' })
+    } else if (cmd === 'skipRest') dispatch({ type: 'desk/skipRest' })
+    else if (cmd === 'switch') dispatch({ type: 'desk/switch' })
     else if (cmd === 'clear') {
       const id = state.desk.block?.entryId
       if (id) dispatch({ type: 'entry/complete', id })
