@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Tomatoes follow the task's time
+
+- A task's tomatoes now come from its own recorded work intervals. Switching tasks keeps each task's partial progress, including across sittings and restarts.
+- Clearing a task includes the final seconds of work before paying its whole tomatoes. Reopening it never pays the same tomato twice.
+- Existing task counts are corrected from saved time records. Past coin payments stay unchanged.
+
 ## Your work and break sounds
 
 - Settings has separate work and break alarms: Classic, Bell, Chime, Pulse, Gentle or Silent, with a Preview button for each.

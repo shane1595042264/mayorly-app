@@ -63,6 +63,8 @@ SHOT_URL="http://localhost:5199/?demo" SHOT_OUT=shot.png SHOT_JS='...' npx elect
 
 ## Things that look like bugs and are not
 
+- **Task tomatoes come from task intervals.** `accounting.ts` sums each focus segment's end minus start, divided by its sitting's locked tomato length. Fractions survive switches and sittings. `Entry.tomatoes` is a derived cache of whole tomatoes not yet paid; the displayed count includes all work. Mint before switching, parking or clearing. Migration and merge rebuild caches from closed segments, preserve coin records, and never replay historical ledger payments. Entry-free time has a separate counter per ledger in each sitting.
+
 - **Work and rest alarms are per machine.** `settings.alarms` is in `DEVICE_SETTINGS`; each choice has a built-in tone or a local custom asset id. `src/main/alarms.ts` copies uploads into `alarms/` beside the save. Audio bytes never enter state or sync. The renderer decodes a picked file before saving it, caches decoded audio for playback, and plays at most 15 seconds. Preview works with Sound cues off; automatic alarms obey it. The native picker uses `dialogOpen` so the deck stays open.
 
 - **The resting HUD is only the tomato and a number.** Hover gives one line of text and a hop, nothing more. Hold, skip, clear and stand down live in the Plus menu and the command line; there is no control strip.

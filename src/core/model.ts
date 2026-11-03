@@ -286,6 +286,8 @@ export interface Sitting {
   /** Focus time from closed segments. */
   focusMs: Ms
   tomatoes: number
+  /** Whole tomatoes already settled on entry-free time, separately for each ledger. */
+  ledgerTomatoes?: Record<string, number>
   tokens: number
 }
 

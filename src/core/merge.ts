@@ -1,5 +1,6 @@
 import type { Id, MayorlyState } from './model'
 import { CLERK_LOG_CAP } from './rules'
+import { reconcileTomatoes } from './accounting'
 
 // Two copies of one account's state, this machine's and the server's, become one without
 // losing work. Sittings, segments and coins are append-only, so their union is the truth.
@@ -35,8 +36,9 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
   const since = syncedAt ?? 0
   const theirs = <T>(_l: T, t: T) => t
   const sittings = unionLogs(local.sittings, incoming.sittings, (l, t) => {
-    if ((l.endedAt !== null) !== (t.endedAt !== null)) return l.endedAt !== null ? l : t
-    return l.focusMs >= t.focusMs ? l : t
+    const chosen = (l.endedAt !== null) !== (t.endedAt !== null) ? (l.endedAt !== null ? l : t) : (l.focusMs >= t.focusMs ? l : t)
+    const keys = new Set([...Object.keys(l.ledgerTomatoes ?? {}), ...Object.keys(t.ledgerTomatoes ?? {})])
+    return { ...chosen, ledgerTomatoes: Object.fromEntries([...keys].map(key => [key, Math.max(l.ledgerTomatoes?.[key] ?? 0, t.ledgerTomatoes?.[key] ?? 0)])) }
   }, (x) => x.startedAt)
   const segments = unionLogs(local.segments, incoming.segments, (l, t) => (l.end !== null ? l : t), (x) => x.start)
   const tokens = unionLogs(local.tokens, incoming.tokens, (l) => l, (x) => x.at)
@@ -72,5 +74,5 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
     .sort((a, b) => a.at - b.at)
     .slice(-CLERK_LOG_CAP)
   const desk = local.desk.status === 'running' ? local.desk : incoming.desk
-  return { ...incoming, ledgers, entries, supersets, leisure, houseRules, sittings, segments, tokens, clerkLog, desk, calendar }
+  return reconcileTomatoes({ ...incoming, ledgers, entries, supersets, leisure, houseRules, sittings, segments, tokens, clerkLog, desk, calendar })
 }

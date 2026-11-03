@@ -1,3 +1,4 @@
+import { segmentMs } from './accounting'
 import type { Block, Entry, Id, MayorlyState, Mode, Plan, Superset } from './model'
 
 // The planner decides what the desk does next. It never touches time or coins;
@@ -27,7 +28,7 @@ export function entrySpentMs(s: MayorlyState, entryId: Id, now: number): number 
   let ms = 0
   for (const seg of s.segments) {
     if (seg.entryId !== entryId || seg.kind !== 'focus') continue
-    ms += (seg.end ?? now) - seg.start
+    ms += segmentMs(seg, now)
   }
   return ms
 }

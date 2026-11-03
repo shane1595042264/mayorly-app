@@ -10,6 +10,7 @@ import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_BLOCK, tokensForTomato } 
 import { migrate } from './seed'
 import { mergeStates } from './merge'
 import { sanitiseAlarms } from './alarms'
+import { ledgerKey, ledgerTomatoes, unharvestedTomatoes, wholeTomatoes } from './accounting'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
 export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'alarms', 'trayTimer', 'text'] as const
@@ -668,9 +669,9 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
       return
     }
     // The couch is its own sitting; whatever was running is parked for the quick switch.
-    park(s, now)
+    park(s, now, ev)
     const sittingId = ctx.newId()
-    s.sittings.push({ id: sittingId, startedAt: now, endedAt: null, tomatoMs: s.settings.focusMin * 60_000, focusMs: 0, tomatoes: 0, tokens: 0 })
+    s.sittings.push({ id: sittingId, startedAt: now, endedAt: null, tomatoMs: s.settings.focusMin * 60_000, focusMs: 0, tomatoes: 0, ledgerTomatoes: {}, tokens: 0 })
     s.desk.sittingId = sittingId
     s.desk.plan = plan
     const block = firstBlock(s, plan, now)
@@ -682,7 +683,7 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
     return
   }
   // Whatever was running is parked for the quick switch; the new plan is a sitting of its own.
-  park(s, now)
+  park(s, now, ev)
   if (!s.desk.sittingId) {
     const id = ctx.newId()
     s.sittings.push({
@@ -692,6 +693,7 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
       tomatoMs: s.settings.focusMin * 60_000,
       focusMs: 0,
       tomatoes: 0,
+      ledgerTomatoes: {},
       tokens: 0,
     })
     s.desk.sittingId = id
@@ -750,6 +752,7 @@ function swapTo(s: MayorlyState, ctx: Ctx, ev: HudEvent[], entryId: Id | null, l
   const running = d.status === 'running'
   const starting = !running && resume && (d.status === 'paused' || d.status === 'ready')
   if (running) closeSegment(s, now)
+  mint(s, now, ev)
   // What the desk leaves is what the quick switch brings back.
   if (block.entryId !== entryId || block.ledgerId !== ledgerId) {
     d.previous = block.entryId || block.ledgerId ? { entryId: block.entryId, ledgerId: block.ledgerId } : null
@@ -781,6 +784,10 @@ function completeEntry(s: MayorlyState, ctx: Ctx, ev: HudEvent[], id: Id) {
   const now = ctx.now
   const e = s.entries.find((x) => x.id === id)
   if (!e || e.doneAt !== null) return
+  // Settle the last interval before marking the entry cleared or changing the desk.
+  if (s.desk.block?.entryId === id && s.desk.status === 'running') closeSegment(s, now)
+  mint(s, now, ev)
+  e.tomatoes = unharvestedTomatoes(s, id, now)
   e.doneAt = now
   ev.push({ type: 'cleared', at: now, entryId: e.id, title: e.title })
   // The harvest: every tomato grown on the entry pays out now.
@@ -897,7 +904,7 @@ function bringBack(s: MayorlyState, ctx: Ctx, ev: HudEvent[], held: HeldSession)
   }
   // This sitting is coming back, not being discarded by park().
   s.desk.holster = null
-  const parked = park(s, ctx.now)
+  const parked = park(s, ctx.now, ev)
   restore(s, ctx, held, ctx.now, true)
   ev.push({ type: 'switch', at: ctx.now, label: s.desk.block?.label ?? '', parked: parked?.block.label ?? null })
 }
@@ -907,7 +914,7 @@ function bringBack(s: MayorlyState, ctx: Ctx, ev: HudEvent[], held: HeldSession)
  * and it waits in the holster with its own sitting. A session already parked there is let
  * go first; its sitting ends. Returns what was parked.
  */
-function park(s: MayorlyState, at: number): HeldSession | null {
+function park(s: MayorlyState, at: number, ev: HudEvent[]): HeldSession | null {
   const d = s.desk
   if (d.status === 'idle' || !d.block || !d.plan || !d.sittingId) {
     d.holster = d.holster ?? null
@@ -918,6 +925,7 @@ function park(s: MayorlyState, at: number): HeldSession | null {
     if (old && old.endedAt === null) old.endedAt = at
   }
   if (d.status === 'running') closeSegment(s, at)
+  mint(s, at, ev)
   const bankMs = d.bankMs + (d.status === 'running' && d.runStartedAt !== null ? Math.max(0, at - d.runStartedAt) : 0)
   const held = taskSession(s, { sittingId: d.sittingId, plan: d.plan, block: d.block, bankMs, restTask: d.restTask })
   d.holster = held
@@ -1037,7 +1045,10 @@ function tickDue(s: MayorlyState, now: number): boolean {
   if (end !== null && now >= end) return true
   const sitting = s.sittings.find((x) => x.id === d.sittingId)
   if (!sitting) return false
-  return Math.floor(liveFocus(s, now) / sitting.tomatoMs) > sitting.tomatoes
+  if (d.block.kind !== 'focus') return false
+  const entry = s.entries.find(e => e.id === d.block!.entryId && e.doneAt === null)
+  if (entry) return unharvestedTomatoes(s, entry.id, now) !== entry.tomatoes
+  return wholeTomatoes(ledgerTomatoes(s, sitting.id, d.block.ledgerId, now)) > (sitting.ledgerTomatoes?.[ledgerKey(d.block.ledgerId)] ?? 0)
 }
 
 /** Absolute end of the running block, or null when it counts up or never auto-ends. */
@@ -1076,31 +1087,32 @@ function tick(s: MayorlyState, ctx: Ctx, ev: HudEvent[]) {
 
 const balanceOf = (s: MayorlyState) => s.tokens.reduce((n, t) => n + t.amount, 0)
 
-function liveFocus(s: MayorlyState, now: number): number {
-  const sitting = s.sittings.find((x) => x.id === s.desk.sittingId)
-  if (!sitting) return 0
-  const open = s.segments.find((x) => x.end === null && x.sittingId === sitting.id)
-  return sitting.focusMs + (open && open.kind === 'focus' ? Math.max(0, now - open.start) : 0)
-}
-
 function mint(s: MayorlyState, at: number, ev: HudEvent[]) {
-  const sitting = s.sittings.find((x) => x.id === s.desk.sittingId)
-  if (!sitting) return
-  const due = Math.floor(liveFocus(s, at) / sitting.tomatoMs)
-  while (sitting.tomatoes < due) {
-    sitting.tomatoes++
-    // A ledger that does not pay (paid work) still grows the tomato; the record carries no coin.
-    const amount = ledgerPays(s, s.desk.block?.ledgerId ?? null) ? tokensForTomato(sitting.tomatoes) : 0
-    const entry = s.entries.find((e) => e.id === s.desk.block?.entryId && e.doneAt === null)
-    if (entry) {
-      // Grown on the entry; it pays when the entry is cleared.
-      entry.tomatoes = (entry.tomatoes ?? 0) + 1
+  const sitting = s.sittings.find(x => x.id === s.desk.sittingId)
+  const block = s.desk.block
+  if (!sitting || block?.kind !== 'focus') return
+  const entry = s.entries.find(e => e.id === block.entryId && e.doneAt === null)
+  if (entry) {
+    const due = unharvestedTomatoes(s, entry.id, at)
+    const gained = Math.max(0, due - (entry.tomatoes ?? 0))
+    entry.tomatoes = due
+    for (let i = 0; i < gained; i++) {
+      sitting.tomatoes++
       ev.push({ type: 'tomato', at, n: sitting.tomatoes, tokens: 0, entryId: entry.id })
-    } else {
-      sitting.tokens += amount
-      s.tokens.push({ id: `${sitting.id}:${sitting.tomatoes}`, at, amount, reason: 'tomato', tomatoes: 1, sittingId: sitting.id })
-      ev.push({ type: 'tomato', at, n: sitting.tomatoes, tokens: amount, entryId: null })
     }
+    return
+  }
+  // Entry-free time cannot borrow an entry's partial tomato (or another ledger's).
+  const key = ledgerKey(block.ledgerId)
+  const paid = sitting.ledgerTomatoes ??= {}
+  const due = wholeTomatoes(ledgerTomatoes(s, sitting.id, block.ledgerId, at))
+  while ((paid[key] ?? 0) < due) {
+    const n = paid[key] = (paid[key] ?? 0) + 1
+    sitting.tomatoes++
+    const amount = ledgerPays(s, block.ledgerId) ? tokensForTomato(n) : 0
+    sitting.tokens += amount
+    s.tokens.push({ id: `${sitting.id}:ledger:${key}:${n}`, at, amount, reason: 'tomato', tomatoes: 1, sittingId: sitting.id })
+    ev.push({ type: 'tomato', at, n: sitting.tomatoes, tokens: amount, entryId: null })
   }
 }
 
