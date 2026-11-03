@@ -331,7 +331,7 @@ function AiSection() {
         <input
           className="mono"
           type="password"
-          placeholder="Paste an API key: sk-ant-..., sk-..., AIza..., xai-..."
+          placeholder="Paste an API key: Gemini, Claude, OpenAI or Grok"
           value={key}
           spellCheck={false}
           autoComplete="off"
