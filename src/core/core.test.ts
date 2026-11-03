@@ -5,7 +5,7 @@ import {
   plannedMs,
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
-  parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
+  mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
 } from './index'
 
 const MIN = 60_000
@@ -1275,6 +1275,72 @@ describe('first run', () => {
     expect(s.ledgers).toEqual([])
     expect(s.entries).toEqual([])
     expect(s.supersets).toEqual([])
+  })
+})
+
+describe('the trash', () => {
+  const DAY = 86_400_000
+  it('a deleted entry waits in the trash with its time, and a restore brings it back with its tomatoes', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: draft the lease ~60' })
+    const e = w.entry('draft the lease')
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })
+    w.wait(26 * MIN)
+    w.do({ type: 'desk/standDown' })
+    expect(entryTomatoes(w.s, e.id, w.now)).toBeGreaterThanOrEqual(1)
+    w.do({ type: 'entry/delete', id: e.id })
+    expect(w.s.entries.some((x) => x.id === e.id)).toBe(false)
+    expect(w.s.trash.map((t) => t.id)).toEqual([e.id])
+    expect(w.s.trash[0].deletedAt).toBe(w.now)
+    expect(w.s.calendar.blocks.some((b) => b.entryId === e.id)).toBe(false)
+    w.do({ type: 'entry/restore', id: e.id })
+    expect(w.s.trash).toEqual([])
+    const back = w.entry('draft the lease')
+    expect(back.ledgerId).toBe(e.ledgerId)
+    expect(back.restoredAt).toBe(w.now)
+    expect(entryTomatoes(w.s, back.id, w.now)).toBeGreaterThanOrEqual(1)
+  })
+
+  it('a restore lands in the tray when the ledger is gone, the trash drops and empties, and old items are purged', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'entry/capture', text: 'legal: b' })
+    w.do({ type: 'entry/capture', text: 'legal: c' })
+    const [a, b, c] = ['a', 'b', 'c'].map((t) => w.entry(t))
+    w.do({ type: 'entry/delete', id: a.id })
+    w.do({ type: 'entry/delete', id: b.id })
+    w.do({ type: 'ledger/delete', id: a.ledgerId! })
+    w.do({ type: 'entry/restore', id: a.id })
+    expect(w.entry('a').ledgerId).toBeNull()
+    w.do({ type: 'trash/drop', id: b.id })
+    expect(w.s.trash).toEqual([])
+    w.do({ type: 'entry/delete', id: c.id })
+    const later = reduce(w.s, { type: 'entry/delete', id: w.entry('a').id }, { now: w.now + 31 * DAY, newId: () => 'x', random: () => 0.5 }).state
+    expect(later.trash.map((t) => t.title)).toEqual(['a'])
+    w.do({ type: 'trash/empty' })
+    expect(w.s.trash).toEqual([])
+  })
+
+  it('a deletion elsewhere moves the entry to the trash here, and a restore after the last sync beats an older deletion', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: shared' })
+    const e = w.entry('shared')
+    const synced = w.now
+    const here = w.s
+    const there = reduce(here, { type: 'entry/delete', id: e.id }, { now: synced + 1000, newId: () => 'x', random: () => 0.5 }).state
+    const merged = mergeStates(here, there, synced)
+    expect(merged.entries.some((x) => x.id === e.id)).toBe(false)
+    expect(merged.trash.map((t) => t.id)).toEqual([e.id])
+    // Restored here after the deletion there: the restore is newer, so it is kept and the trash lets go.
+    const restored = reduce(merged, { type: 'entry/restore', id: e.id }, { now: synced + 5000, newId: () => 'y', random: () => 0.5 }).state
+    const again = mergeStates(restored, there, synced + 2000)
+    expect(again.entries.some((x) => x.id === e.id)).toBe(true)
+    expect(again.trash).toEqual([])
+    // Deleted there after the restore here: the deletion is newer and wins.
+    const deletedAgain = reduce(restored, { type: 'entry/delete', id: e.id }, { now: synced + 9000, newId: () => 'z', random: () => 0.5 }).state
+    const third = mergeStates(restored, deletedAgain, synced + 2000)
+    expect(third.entries.some((x) => x.id === e.id)).toBe(false)
+    expect(third.trash.map((t) => t.id)).toEqual([e.id])
   })
 })
 

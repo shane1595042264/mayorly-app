@@ -83,6 +83,10 @@ export const KEYS: KeyDef[] = [
   { id: 'list.cues', scope: 'list', label: 'Context switch rules', keys: ['Space'], note: 'The couch list' },
   { id: 'list.blitz', scope: 'list', label: 'Blitz the flow', keys: ['b'] },
   { id: 'list.sort', scope: 'list', label: 'Auto-classify the tray', keys: ['s'] },
+  { id: 'list.history', scope: 'list', label: 'Open the history', keys: ['H'], note: 'Everything cleared, and the trash' },
+  { id: 'list.restore', scope: 'list', label: 'Restore the row', keys: ['u'], note: 'In the history: reopen a cleared entry, or bring one back from the trash' },
+  { id: 'list.trash', scope: 'list', label: 'Cleared or the trash', keys: ['t'], note: 'In the history' },
+  { id: 'list.search', scope: 'list', label: 'Search', keys: ['/'], note: 'In the history' },
 
   { id: 'shelf.left', scope: 'shelf', label: 'Bay to the left', keys: ['h', 'ArrowLeft'] },
   { id: 'shelf.right', scope: 'shelf', label: 'Bay to the right', keys: ['l', 'ArrowRight'] },

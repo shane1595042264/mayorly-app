@@ -1,11 +1,15 @@
-import { useState } from 'react'
-import { balance, dayStats, lastDays, plannedMs, span, startOfDay, type MayorlyState } from '@core/index'
-import { useNow } from '../store'
+import { useEffect, useState } from 'react'
+import { balance, dayStats, entrySpentMs, entryTomatoes, lastDays, plannedMs, span, startOfDay, type MayorlyState } from '@core/index'
+import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
+import { current, useNow } from '../store'
+import { EntryHistory } from './EntryHistory'
+import { Tomatoes } from './Tomatoes'
 
 // What the desk recorded. One measure (focus time), so one colour: neutral ink,
 // with today picked out in the accent. Numbers wear text colours, never the bar's.
 
 export function RecordTab({ s }: { s: MayorlyState }) {
+  const [history, setHistory] = useState(false)
   const now = useNow(5000)
   const today = dayStats(s, startOfDay(now), now)
   const week = lastDays(s, now, 7)
@@ -14,6 +18,26 @@ export function RecordTab({ s }: { s: MayorlyState }) {
   const [hover, setHover] = useState<number | null>(null)
   const weekTotal = week.reduce((n, d) => n + d.focusMs, 0)
   const planned = plannedMs(s, now, startOfDay(now) + 86_400_000)
+  const recent = s.entries.filter((e) => e.doneAt !== null).sort((a, b) => b.doneAt! - a.doneAt!).slice(0, 8)
+  const fmt = (t: number) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(t)
+
+  // H opens the history, as on every list.
+  useEffect(() => {
+    if (history) return
+    const onKey = (e: KeyboardEvent) => {
+      if (keymapOpen() || e.altKey || e.ctrlKey || e.metaKey) return
+      if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select')) return
+      const st = current()
+      if (!st || actionFor(e, 'list', st.settings) !== 'list.history') return
+      e.preventDefault()
+      recordUse('list.history')
+      setHistory(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [history])
+
+  if (history) return <EntryHistory s={s} back={() => setHistory(false)} />
 
   return (
     <div className="record">
@@ -93,6 +117,29 @@ export function RecordTab({ s }: { s: MayorlyState }) {
             </li>
           ))}
         </ol>
+      </section>
+
+      <section className="rec-history">
+        <div className="history-heading"><h3 className="side-title caps">Cleared</h3><button type="button" className="btn ghost small" title="Everything cleared, and the trash (H)" onClick={() => setHistory(true)}>History</button></div>
+        {recent.length === 0 ? (
+          <p className="dim small">Nothing cleared yet.</p>
+        ) : (
+          <ol className="cleared">
+            {recent.map((e) => (
+              <li key={e.id}>
+                <span className="mono dim">{s.ledgers.find((l) => l.id === e.ledgerId)?.code ?? 'TRY'}</span>
+                <span className="cleared-entry">
+                  <span className="ellipsis">{e.title}</span>
+                  <span className="row-time mono num">
+                    <span className="dim">{fmt(e.doneAt!)}</span>
+                    <Tomatoes n={entryTomatoes(s, e.id, now)} showZero />
+                    {span(entrySpentMs(s, e.id, now))}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
       </section>
     </div>
   )

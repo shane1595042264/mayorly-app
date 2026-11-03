@@ -52,6 +52,10 @@ export interface Entry {
   /** The quick drawer: a few lines of your own, and a checklist under the entry. */
   notes?: string
   subtasks?: Subtask[]
+  /** Clearing/reopening never erases earlier completions or their notes and checklist. */
+  history?: EntryHistoryEvent[]
+  /** Put back from the trash at this time; a merge lets it beat an older deletion. */
+  restoredAt?: Epoch
   /** The calendar. due: finish by (the planner flags late when it cannot). notBefore: never placed earlier. Missing means none. */
   due?: Epoch | null
   notBefore?: Epoch | null
@@ -64,6 +68,18 @@ export interface Entry {
   maxChunkMin?: number
   /** True keeps the entry in the flow and off the calendar, estimate or not. */
   offCalendar?: boolean
+}
+
+/** A deleted entry, everything it was and when it went. Kept thirty days, then gone for good. */
+export interface TrashedEntry extends Entry {
+  deletedAt: Epoch
+}
+
+export interface EntryHistoryEvent {
+  id: Id
+  at: Epoch
+  kind: 'cleared' | 'reopened'
+  snapshot?: Pick<Entry, 'title' | 'ledgerId' | 'notes' | 'subtasks'>
 }
 
 // ---------------------------------------------------------------- the calendar
@@ -414,6 +430,8 @@ export interface MayorlyState {
   clerkLog: ClerkLine[]
   houseRules: HouseRule[]
   leisure: LeisureItem[]
+  /** Deleted entries, restorable for thirty days. */
+  trash: TrashedEntry[]
   desk: Desk
   settings: Settings
   calendar: Calendar

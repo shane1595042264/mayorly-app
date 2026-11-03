@@ -49,6 +49,7 @@ export function emptyState(): MayorlyState {
     clerkLog: [],
     houseRules: [],
     leisure: [],
+    trash: [],
     desk: { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null },
     settings: { ...DEFAULT_SETTINGS, hotkeys: { ...DEFAULT_HOTKEYS }, calendar: { ...DEFAULT_SETTINGS.calendar, hours: DEFAULT_SETTINGS.calendar.hours.map((d) => d.map((w) => ({ ...w }))) } },
     calendar: emptyCalendar(),
@@ -110,6 +111,7 @@ export function migrate(raw: unknown): MayorlyState | null {
     desk: { ...base.desk, ...x.desk },
     leisure: (x.leisure ?? []).map((it) => ({ ...it, cues: Array.isArray(it.cues) ? it.cues : [] })),
     entries: (x.entries ?? []).map((e) => ({ ...e, tomatoes: Number.isFinite(e.tomatoes) ? e.tomatoes : 0 })),
+    trash: (Array.isArray(x.trash) ? x.trash : []).filter((t) => t && typeof t.id === 'string' && Number.isFinite(t.deletedAt)).map((t) => ({ ...t, tomatoes: Number.isFinite(t.tomatoes) ? t.tomatoes : 0 })),
     settings: { ...base.settings, ...x.settings, alarms: sanitiseAlarms(x.settings?.alarms), hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys }, calendar: { ...base.settings.calendar, ...x.settings?.calendar } },
     calendar: { ...emptyCalendar(), ...x.calendar },
   } as MayorlyState)

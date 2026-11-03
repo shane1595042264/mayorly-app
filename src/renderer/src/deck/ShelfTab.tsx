@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Check, LockSimple, PencilSimple, Play, Plus, Trash } from '@phosphor-icons/react'
 import {
-  dayStats, entrySpentMs, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, ledgerEntries, span, startOfDay, type Entry, type GlyphName, type Ledger, type LedgerTheme, type MayorlyState,
+  completionHistory, dayStats, entrySpentMs, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, ledgerEntries, span, startOfDay, type Entry, type GlyphName, type Ledger, type LedgerTheme, type MayorlyState,
 } from '@core/index'
 import { Glyph, GLYPH_NAMES, glyphKey, localGlyph } from '../lib/glyphs'
 import { bridge } from '../bridge'
@@ -11,6 +11,7 @@ import { cycleLedger, useListKeys } from '../lib/listkeys'
 import { noteOrigin } from '../lib/origin'
 import { current, dispatch, useNow } from '../store'
 import { Tomatoes } from './Tomatoes'
+import { EntryHistory } from './EntryHistory'
 
 // The ledger shelf: nine bays. Every ledger here is hand-written by you, so the
 // clerk may file into it but never rename, merge or remove it. A bay opens the
@@ -132,6 +133,7 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
 
 /** Inside one ledger: its open entries, and what was cleared today. */
 function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: Ledger; now: number; back: () => void; edit: () => void }) {
+  const [history, setHistory] = useState<string | null>(null)
   const entries = ledgerEntries(s, ledger.id)
   const today = startOfDay(now)
   const cleared = s.entries.filter((e) => e.ledgerId === ledger.id && e.doneAt !== null && e.doneAt >= today).sort((a, b) => b.doneAt! - a.doneAt!)
@@ -141,6 +143,10 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
   // The keyboard: the list keys on the rows; Backspace back to the shelf, f focuses here.
   const [rename, setRename] = useState({ id: '', n: 0 })
   const { sel } = useListKeys(entries.map((e) => e.id), ({ action, id }) => {
+    if (action === 'list.history') {
+      setHistory('')
+      return true
+    }
     const e = id ? entries.find((x) => x.id === id) : undefined
     if (!e) return false
     if (action === 'list.go') dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })
@@ -154,7 +160,7 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
       dispatch({ type: 'entry/update', id: e.id, patch: { ledgerId: cycleLedger(s, e.ledgerId, action === 'list.ledgerNext' ? 1 : -1) } })
     } else return false
     return true
-  })
+  }, history === null)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (keymapOpen() || e.altKey || e.ctrlKey || e.metaKey) return
@@ -167,9 +173,12 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
       e.preventDefault()
       recordUse(a)
     }
+    if (history !== null) return
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [back, ledger.id])
+  }, [back, ledger.id, history])
+
+  if (history !== null) return <EntryHistory s={s} ledgerId={ledger.id} initialOpen={history} back={() => setHistory(null)} />
 
   return (
     <div className="ledger-view">
@@ -199,13 +208,13 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
         </ol>
       )}
 
-      {cleared.length > 0 && (
+      {s.entries.some(e => e.ledgerId === ledger.id && completionHistory(s, e).some(h => h.kind === 'cleared')) && (
         <section className="flow-cleared">
-          <h3 className="side-title caps">Cleared today</h3>
+          <div className="history-heading"><h3 className="side-title caps">Cleared today</h3><button type="button" className="btn ghost small" title="Everything cleared in this ledger, and its trash (H)" onClick={() => setHistory('')}>History</button></div>
           <ol className="flow-list">
             {cleared.map((e) => (
               <li key={e.id} className="row done">
-                <span className="row-title ellipsis">{e.title}</span>
+                <button className="row-title history-title" onClick={() => setHistory(e.id)}>{e.title}</button>
                 <span className="row-time mono num">
                   <Tomatoes n={entryTomatoes(s, e.id, now)} showZero />
                   {span(entrySpentMs(s, e.id, now))}

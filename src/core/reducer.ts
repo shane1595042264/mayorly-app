@@ -11,6 +11,7 @@ import { migrate } from './seed'
 import { mergeStates } from './merge'
 import { sanitiseAlarms } from './alarms'
 import { ledgerKey, ledgerTomatoes, unharvestedTomatoes, wholeTomatoes } from './accounting'
+import { completionHistory } from './history'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
 export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'alarms', 'trayTimer', 'text'] as const
@@ -58,6 +59,11 @@ export type Action =
   | { type: 'schedule/apply'; commands: ClerkCommand[]; log: string; model?: string }
   | { type: 'entry/complete'; id: Id }
   | { type: 'entry/reopen'; id: Id }
+  /** Back from the trash: into the flow's end, into its ledger if that still exists, with its tomatoes. */
+  | { type: 'entry/restore'; id: Id }
+  /** Out of the trash for good. */
+  | { type: 'trash/drop'; id: Id }
+  | { type: 'trash/empty' }
   | { type: 'entry/delete'; id: Id }
   | { type: 'entry/move'; id: Id; toIndex: number }
   | { type: 'ledger/create'; name: string; code?: string; criterion: string; glyph: GlyphName; pays?: boolean; theme?: LedgerTheme }
@@ -305,6 +311,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     case 'entry/reopen': {
       const e = s.entries.find((x) => x.id === action.id)
       if (!e || e.doneAt === null) break
+      e.history = [...completionHistory(s, e), { id: ctx.newId(), at: now, kind: 'reopened' }]
       e.doneAt = null
       e.order = maxOrder(s) + 1
       break
@@ -323,8 +330,28 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       for (const ss of s.supersets) {
         ss.slots = ss.slots.filter((sl) => !(sl.target.kind === 'entry' && sl.target.entryId === e.id))
       }
+      // Into the trash, not gone: its time and tomatoes wait with it for thirty days.
+      s.trash = [...purgedTrash(s, now).filter((t) => t.id !== e.id), { ...e, deletedAt: now }]
       break
     }
+    case 'entry/restore': {
+      const t = s.trash.find((x) => x.id === action.id)
+      if (!t || s.entries.some((x) => x.id === t.id)) break
+      s.trash = purgedTrash(s, now).filter((x) => x.id !== t.id)
+      const { deletedAt: _gone, ...e } = t
+      e.ledgerId = e.ledgerId !== null && s.ledgers.some((l) => l.id === e.ledgerId) ? e.ledgerId : null
+      e.order = maxOrder(s) + 1
+      e.restoredAt = now
+      e.tomatoes = unharvestedTomatoes(s, e.id, now)
+      s.entries.push(e)
+      break
+    }
+    case 'trash/drop':
+      s.trash = s.trash.filter((x) => x.id !== action.id)
+      break
+    case 'trash/empty':
+      s.trash = []
+      break
     case 'entry/move': {
       const flow = openFlow(s)
       const from = flow.findIndex((e) => e.id === action.id)
@@ -788,6 +815,10 @@ function completeEntry(s: MayorlyState, ctx: Ctx, ev: HudEvent[], id: Id) {
   if (s.desk.block?.entryId === id && s.desk.status === 'running') closeSegment(s, now)
   mint(s, now, ev)
   e.tomatoes = unharvestedTomatoes(s, id, now)
+  e.history = [...completionHistory(s, e), {
+    id: ctx.newId(), at: now, kind: 'cleared',
+    snapshot: { title: e.title, ledgerId: e.ledgerId, notes: e.notes, subtasks: structuredClone(e.subtasks ?? []) },
+  }]
   e.doneAt = now
   ev.push({ type: 'cleared', at: now, entryId: e.id, title: e.title })
   // The harvest: every tomato grown on the entry pays out now.
@@ -1173,6 +1204,12 @@ function learnRule(s: MayorlyState, ctx: Ctx, title: string, from: Id | null, to
 
 function maxOrder(s: MayorlyState): number {
   return s.entries.reduce((m, e) => Math.max(m, e.order), -1)
+}
+
+/** Thirty days in the trash, then gone for good. */
+export const TRASH_KEEP_MS = 30 * 86_400_000
+function purgedTrash(s: MayorlyState, now: number) {
+  return s.trash.filter((t) => now - t.deletedAt < TRASH_KEEP_MS)
 }
 
 function log(s: MayorlyState, at: number, text: string) {

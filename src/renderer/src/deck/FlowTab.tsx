@@ -11,9 +11,11 @@ import { noteOrigin } from '../lib/origin'
 import { dispatch, useAi, useNow } from '../store'
 import { ledgerVars } from '../lib/themes'
 import { Tomatoes } from './Tomatoes'
+import { EntryHistory } from './EntryHistory'
 
 export function FlowTab({ s }: { s: MayorlyState }) {
   const now = useNow(5000)
+  const [history, setHistory] = useState<string | null>(null)
   const flow = openFlow(s)
   const [ids, setIds] = useState(flow.map((e) => e.id))
   const key = flow.map((e) => e.id).join()
@@ -58,6 +60,10 @@ export function FlowTab({ s }: { s: MayorlyState }) {
       if (clerkOn && trayCount > 0 && !sorting) void autoClassify()
       return true
     }
+    if (action === 'list.history') {
+      setHistory('')
+      return true
+    }
     const e = id ? byId.get(id) : undefined
     if (!e) return false
     if (action === 'list.go') dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })
@@ -75,7 +81,9 @@ export function FlowTab({ s }: { s: MayorlyState }) {
       if (index > 0) dispatch({ type: 'entry/move', id: e.id, toIndex: index - 1 })
     } else return false
     return true
-  })
+  }, history === null)
+
+  if (history !== null) return <EntryHistory s={s} initialOpen={history} back={() => setHistory(null)} />
 
   return (
     <div className="flow">
@@ -131,7 +139,7 @@ export function FlowTab({ s }: { s: MayorlyState }) {
       </section>
 
       <aside className="flow-side">
-        <h3 className="side-title caps">Cleared today</h3>
+        <div className="history-heading"><h3 className="side-title caps">Cleared today</h3><button type="button" className="btn ghost small" title="Everything cleared, and the trash (H)" onClick={() => setHistory('')}>History</button></div>
         {cleared.length === 0 ? (
           <p className="dim small">Nothing cleared yet today. That is fine.</p>
         ) : (
@@ -140,7 +148,7 @@ export function FlowTab({ s }: { s: MayorlyState }) {
               <li key={e.id}>
                 <span className="mono dim">{s.ledgers.find((l) => l.id === e.ledgerId)?.code ?? 'TRY'}</span>
                 <span className="cleared-entry">
-                  <span className="ellipsis">{e.title}</span>
+                  <button className="history-title" onClick={() => setHistory(e.id)}>{e.title}</button>
                   <span className="row-time mono num">
                     <Tomatoes n={entryTomatoes(s, e.id, now)} showZero />
                     {span(entrySpentMs(s, e.id, now))}

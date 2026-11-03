@@ -14,7 +14,9 @@ export interface ListKey {
   e: KeyboardEvent
 }
 
-export function useListKeys(ids: Id[], on: (k: ListKey) => boolean | void) {
+export function useListKeys(ids: Id[], on: (k: ListKey) => boolean | void, enabled = true) {
+  const enabledRef = useRef(enabled)
+  enabledRef.current = enabled
   const [sel, setSelState] = useState<Id | null>(null)
   // A held key repeats faster than React renders, so the selection is read and written through a ref too.
   const selRef = useRef<Id | null>(null)
@@ -42,6 +44,7 @@ export function useListKeys(ids: Id[], on: (k: ListKey) => boolean | void) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (!enabledRef.current) return
       if (keymapOpen() || e.altKey || e.ctrlKey || e.metaKey) return
       if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]')) return
       const s = current()

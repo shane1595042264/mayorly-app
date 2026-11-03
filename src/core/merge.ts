@@ -42,11 +42,22 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
   }, (x) => x.startedAt)
   const segments = unionLogs(local.segments, incoming.segments, (l, t) => (l.end !== null ? l : t), (x) => x.start)
   const tokens = unionLogs(local.tokens, incoming.tokens, (l) => l, (x) => x.at)
-  const entries = mergeDeletable(local.entries, incoming.entries, since, (e) => e.createdAt, (l, t) => {
-    if ((l.doneAt !== null) !== (t.doneAt !== null)) return l.doneAt !== null ? l : t
-    if (l.tomatoes !== t.tomatoes) return l.tomatoes > t.tomatoes ? l : t
-    return t
+  // A restore counts as a making: an entry put back since the last sync is kept, like a new one.
+  const merged = mergeDeletable(local.entries, incoming.entries, since, (e) => Math.max(e.createdAt, e.restoredAt ?? 0), (l, t) => {
+    const history = unionLogs(l.history ?? [], t.history ?? [], (l) => l, e => e.at)
+    const latest = (e: typeof l) => Math.max(e.doneAt ?? 0, ...(e.history ?? []).map(h => h.at))
+    const chosen = latest(l) !== latest(t) ? (latest(l) > latest(t) ? l : t)
+      : (l.doneAt !== null) !== (t.doneAt !== null) ? (l.doneAt !== null ? l : t)
+      : l.tomatoes !== t.tomatoes ? (l.tomatoes > t.tomatoes ? l : t) : t
+    return { ...chosen, history }
   })
+  // The trash is a log: the later deletion of an id wins. A live entry restored after that
+  // deletion stays live and leaves the trash; otherwise the trash takes it off the list.
+  const trashAll = unionLogs(local.trash, incoming.trash, (l, t) => (l.deletedAt >= t.deletedAt ? l : t), (x) => x.deletedAt)
+  const deletedAt = new Map(trashAll.map((t) => [t.id, t.deletedAt]))
+  const entries = merged.filter((e) => !deletedAt.has(e.id) || (e.restoredAt ?? 0) > deletedAt.get(e.id)!)
+  const live = new Set(entries.map((e) => e.id))
+  const trash = trashAll.filter((t) => !live.has(t.id))
   const ledgers = mergeDeletable(local.ledgers, incoming.ledgers, since, (l) => l.createdAt, theirs)
   const leisure = mergeDeletable(local.leisure, incoming.leisure, since, (l) => l.createdAt, theirs)
   const houseRules = mergeDeletable(local.houseRules, incoming.houseRules, since, (r) => r.createdAt, theirs)
@@ -74,5 +85,5 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
     .sort((a, b) => a.at - b.at)
     .slice(-CLERK_LOG_CAP)
   const desk = local.desk.status === 'running' ? local.desk : incoming.desk
-  return reconcileTomatoes({ ...incoming, ledgers, entries, supersets, leisure, houseRules, sittings, segments, tokens, clerkLog, desk, calendar })
+  return reconcileTomatoes({ ...incoming, ledgers, entries, trash, supersets, leisure, houseRules, sittings, segments, tokens, clerkLog, desk, calendar })
 }

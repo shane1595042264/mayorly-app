@@ -395,7 +395,7 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .record {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-areas: 'tiles tiles' 'ledgers week' 'log log';
+  grid-template-areas: 'tiles tiles' 'ledgers week' 'history history' 'log log';
   gap: 30px 40px;
 }
 .tiles { grid-area: tiles; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -659,3 +659,31 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .keycap.fixed:hover { background: #33373a; border-color: #0b0d0e; }
 .keymap-foot { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-top: 2px solid #26292c; }
 .keymap-foot .btn.primary { margin-left: auto; }
+
+/* ------------------------------------------------------------ history and the trash */
+.history-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.history-heading .side-title { margin: 0; }
+.btn.small { padding: 4px 10px; font-size: 11px; }
+.history-title { appearance: none; background: none; border: 0; padding: 0; text-align: left; color: inherit; font: inherit; cursor: pointer; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-title:hover { text-decoration: underline; }
+.history { display: grid; gap: 14px; align-content: start; }
+.history-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.history-head .side-title { margin: 0; }
+.history-head .seg button .mono { margin-left: 6px; font-size: 11px; }
+.history-search { margin-left: auto; width: 260px; height: 32px; }
+.history-list { margin-top: 0; }
+.row.history-row { grid-template-columns: 36px minmax(0, 1fr) auto auto auto; opacity: 1; cursor: default; }
+.row.history-row .row-title { font-size: 15px; }
+.history-when { font-size: 11px; white-space: nowrap; }
+.history-detail { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 32px; padding: 6px 2px 10px 36px; border-top: 1px solid var(--line); margin-top: 4px; }
+.history-detail h4 { margin: 10px 0 6px; }
+.history-notes { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; color: var(--ink-2); }
+.history-checklist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); }
+.history-checklist li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: center; }
+.history-checklist li.done { color: var(--ink-3); text-decoration: line-through; }
+.history-tick { display: inline-grid; place-items: center; width: 14px; height: 14px; border: 1px solid var(--line-2); }
+.history-activity { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); max-height: 360px; overflow: auto; }
+.history-activity li { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; align-items: start; }
+.history-activity .mono { font-size: 11px; }
+.history-then { display: grid; gap: 4px; margin-top: 4px; padding-left: 10px; border-left: 2px solid var(--line); }
+.rec-history { grid-area: history; }

@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The history and the trash
+
+- Every cleared entry keeps its record: its time, its tomatoes, its notes and checklist, and what they said each time it was cleared. Cleared today in Flow and inside a ledger now has a History button (or H) that opens all of it, searchable.
+- Deleting an entry puts it in the trash, where it waits thirty days with its time and tomatoes. The trash is the second tab of the history. u restores a row, x deletes it, Enter opens it, t turns between cleared and the trash, / searches, Backspace goes back.
+- The Record tab lists what was cleared last, with the same History button.
+
 ## Tomatoes stay visible after clearing
 
 - Cleared entries in Flow and on the Shelf show their tomatoes beside their recorded focus time.
