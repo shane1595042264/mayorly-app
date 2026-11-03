@@ -206,7 +206,10 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
             {cleared.map((e) => (
               <li key={e.id} className="row done">
                 <span className="row-title ellipsis">{e.title}</span>
-                <span className="row-time mono num">{span(entrySpentMs(s, e.id, now))}</span>
+                <span className="row-time mono num">
+                  <Tomatoes n={entryTomatoes(s, e.id, now)} showZero />
+                  {span(entrySpentMs(s, e.id, now))}
+                </span>
               </li>
             ))}
           </ol>

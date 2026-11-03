@@ -139,7 +139,13 @@ export function FlowTab({ s }: { s: MayorlyState }) {
             {cleared.slice(0, 12).map((e) => (
               <li key={e.id}>
                 <span className="mono dim">{s.ledgers.find((l) => l.id === e.ledgerId)?.code ?? 'TRY'}</span>
-                <span className="ellipsis">{e.title}</span>
+                <span className="cleared-entry">
+                  <span className="ellipsis">{e.title}</span>
+                  <span className="row-time mono num">
+                    <Tomatoes n={entryTomatoes(s, e.id, now)} showZero />
+                    {span(entrySpentMs(s, e.id, now))}
+                  </span>
+                </span>
                 <button className="icon-btn" aria-label={`Reopen ${e.title}`} onClick={() => dispatch({ type: 'entry/reopen', id: e.id })}>
                   <ArrowCounterClockwise size={14} />
                 </button>

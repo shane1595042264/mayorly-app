@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Tomatoes stay visible after clearing
+
+- Cleared entries in Flow and on the Shelf show their tomatoes beside their recorded focus time.
+- The count includes partial tomatoes and stays visible after the harvest. A task with no work shows zero.
+
 ## Tomatoes follow the task's time
 
 - A task's tomatoes now come from its own recorded work intervals. Switching tasks keeps each task's partial progress, including across sittings and restarts.
