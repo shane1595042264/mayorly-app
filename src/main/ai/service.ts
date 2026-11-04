@@ -340,6 +340,7 @@ export class AiClerk {
     for (const model of models.slice(0, MAX_PROBES)) {
       try {
         const r = await generate(provider, key, model, { system: 'Reply with one word.', prompt: 'ok', maxTokens: 8 })
+        if (!r.text.trim()) throw new ProviderError('model', 200, `${model} returned no answer.`)
         this.record({ at: Date.now(), provider, model, feature: 'validate', inputTokens: r.inputTokens, outputTokens: r.outputTokens, costMicroUsd: costMicroUsd(provider, model, r.inputTokens, r.outputTokens) })
         return { models, defaultModel: model }
       } catch (err) {

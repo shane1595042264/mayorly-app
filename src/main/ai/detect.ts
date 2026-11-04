@@ -16,7 +16,7 @@ export const PROVIDER_LABEL: Record<AiProvider, string> = {
 
 export type Detection = { provider: AiProvider } | { provider: null; reason: string }
 
-const SUPPORTED = 'Supported keys: Google Gemini (AIza...), OpenAI (sk-...), Anthropic (sk-ant-...) and xAI Grok (xai-...).'
+const SUPPORTED = 'Supported keys: Google Gemini (AQ. or AIza), OpenAI (sk-...), Anthropic (sk-ant-...) and xAI Grok (xai-...).'
 
 export function detectProvider(raw: string): Detection {
   const key = raw.trim()
@@ -29,7 +29,9 @@ export function detectProvider(raw: string): Detection {
   if (key.startsWith('sk-admin-')) return { provider: null, reason: 'That is an OpenAI Admin key, which cannot run models. Create a project API key.' }
   if (key.startsWith('xai-')) return { provider: 'xai' }
   if (key.startsWith('gsk_')) return { provider: null, reason: 'That looks like a Groq key (gsk_). Groq is not supported; xAI Grok keys start with xai-.' }
-  if (/^AIza[0-9A-Za-z_-]{35}$/.test(key)) return { provider: 'gemini' }
+  // Google AI Studio now issues AQ. authorization keys. Their length can vary;
+  // this only routes the key. Listing models and a tiny generation validate it.
+  if (/^AQ\.[0-9A-Za-z_-]+$/.test(key) || /^AIza[0-9A-Za-z_-]{35}$/.test(key)) return { provider: 'gemini' }
   if (key.startsWith('sk-')) return { provider: 'openai' }
   return { provider: null, reason: `Could not tell which provider this key is for. ${SUPPORTED}` }
 }

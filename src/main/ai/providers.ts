@@ -111,6 +111,19 @@ export async function listModels(provider: AiProvider, key: string): Promise<str
 const isReasoning = (provider: AiProvider, model: string) =>
   (provider === 'openai' && /^(gpt-5|o\d)/.test(model)) || (provider === 'xai' && model.includes('grok-3-mini'))
 
+// generateContent uses token budgets for 2.5 and thinking levels for 3 and later.
+// Sending thinkingBudget to newer models produces a bare INVALID_ARGUMENT error.
+// Unknown aliases use the model's default instead of guessing its generation.
+function geminiThinking(model: string) {
+  if (/^gemini-2\.5-pro(?:-|$)/.test(model)) return { thinkingBudget: 128 }
+  if (/^gemini-2\.5-flash(?:-|$)/.test(model)) return { thinkingBudget: 0 }
+  if (Number(model.match(/^gemini-(\d+)/)?.[1]) >= 3) {
+    const minimal = /^gemini-3\.(?:1|5)-flash-lite(?:-|$)/.test(model)
+    return { thinkingLevel: minimal ? 'minimal' : 'low' }
+  }
+  return undefined
+}
+
 export async function generate(provider: AiProvider, key: string, model: string, input: GenerateInput): Promise<GenerateResult> {
   switch (provider) {
     case 'openai':
@@ -147,11 +160,11 @@ export async function generate(provider: AiProvider, key: string, model: string,
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: input.system }] },
           contents: [{ role: 'user', parts: [{ text: input.prompt }] }],
-          generationConfig: { maxOutputTokens: input.maxTokens + 1024, thinkingConfig: { thinkingBudget: 0 } },
+          generationConfig: { maxOutputTokens: input.maxTokens + 1024, thinkingConfig: geminiThinking(model) },
         }),
-      })) as { candidates?: { content?: { parts?: { text?: string }[] } }[]; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }
+      })) as { candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[]; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }
       return {
-        text: (b.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join(''),
+        text: (b.candidates?.[0]?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? '').join(''),
         inputTokens: b.usageMetadata?.promptTokenCount ?? 0,
         outputTokens: b.usageMetadata?.candidatesTokenCount ?? 0,
       }
