@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Gemini model requests
+
+- Gemini keys can now finish their check with newer Flash-Lite models and file captured tasks.
+
 ## New Gemini keys
 
 - The AI clerk now recognizes Gemini's new AQ. keys as well as older AIza keys. Add one in Settings.
