@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Action, HudEvent } from '@core/index'
 import type { Command, Layout, UiMode } from '../../shared/bridge'
+import { drawerBox, homeAnchor, petBox, sideOf, type Point } from '../../shared/pet'
 import { bridge } from './bridge'
 import { Capture } from './capture/Capture'
 import { ClerkAsk } from './deck/ClerkAsk'
@@ -73,17 +74,13 @@ export function App() {
       if (a) recordUse(a)
       const k = physicalKey(e).toLowerCase()
       const d = a ? DIRS[a] : undefined
-      const compact = layoutRef.current.compact
       if (d) {
         const step = e.shiftKey ? FAR : STEP
-        // Windows: the HUD has two places, left or right.
-        if (compact) bridge.nudge(d[0] * step, d[1] * step)
-        else if (d[0]) bridge.dispatch({ type: 'settings/update', patch: { hudSide: d[0] < 0 ? 'left' : 'right' } })
+        bridge.nudge(d[0] * step, d[1] * step)
         return
       }
       if (k === '1' || k === '2' || k === '3' || k === '4') {
-        if (compact) bridge.snap(Number(k) as 1 | 2 | 3 | 4)
-        else bridge.dispatch({ type: 'settings/update', patch: { hudSide: k === '1' || k === '3' ? 'left' : 'right' } })
+        bridge.snap(Number(k) as 1 | 2 | 3 | 4)
         return
       }
       done()
@@ -224,13 +221,44 @@ export function App() {
 
   // The shell says whether the window is the pet alone (macOS) and which side it hangs on.
   // Asked for on mount as well as subscribed to: the first push can land before this effect runs.
+  // A drag of the tomato in this window (Windows): its live place, until the shell answers with where it settled.
+  const [dragAnchor, setDragAnchor] = useState<Point | null>(null)
+  const dragClear = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    void bridge.getLayout().then(setLayout)
-    return bridge.onLayout(setLayout)
+    const take = (l: Layout) => {
+      setLayout(l)
+      setDragAnchor(null)
+    }
+    void bridge.getLayout().then(take)
+    return bridge.onLayout(take)
   }, [])
-  // The side the pet is on: the shell's answer when the window is the pet, else the setting.
-  // The drawer and the caption hang off the same side.
-  const petSide = layout.compact || !s ? layout.side : s.settings.hudSide
+  const onDrag = useCallback((a: Point) => setDragAnchor(a), [])
+  // While the tomato is held the overlay keeps the pointer, even where the pet cannot follow (a clamped edge, a fast flick).
+  const grabbing = useRef(false)
+  const onGrab = useCallback((held: boolean) => {
+    grabbing.current = held
+    if (held) bridge.setHit(true)
+  }, [])
+  const onPlace = useCallback((a: Point) => {
+    setDragAnchor(a)
+    bridge.placePet(a.x, a.y)
+    // The shell's layout clears it; if no answer comes, the pet does not stay stuck on the drag.
+    if (dragClear.current) clearTimeout(dragClear.current)
+    dragClear.current = setTimeout(() => setDragAnchor(null), 1500)
+  }, [])
+  // The window's size: on Windows the overlay is the work area, the room the pet moves in.
+  const [area, setArea] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }))
+  useEffect(() => {
+    const on = () => setArea({ width: window.innerWidth, height: window.innerHeight })
+    window.addEventListener('resize', on)
+    return () => window.removeEventListener('resize', on)
+  }, [])
+  // Where the tomato is in this window. On a Mac the window is the pet, so there is no such place.
+  const whole = { x: 0, y: 0, ...area }
+  const anchor = layout.compact ? null : (dragAnchor ?? layout.pet ?? homeAnchor(whole, s?.settings.hudScale ?? 1, s?.settings.hudSide ?? 'right'))
+  // The side the pet is on: the shell's answer when the window is the pet, else the tomato's half of
+  // the screen. The drawer and the caption hang off the same side.
+  const petSide = layout.compact || !anchor ? layout.side : sideOf(whole, anchor)
   useEffect(() => {
     layoutRef.current = layout
     document.body.classList.toggle('compact', layout.compact)
@@ -321,6 +349,10 @@ export function App() {
   useEffect(() => {
     let last = false
     const move = (e: MouseEvent) => {
+      if (grabbing.current) {
+        last = true
+        return
+      }
       const hit = !!(e.target as Element | null)?.closest?.('[data-hit]')
       if (hit !== last) {
         last = hit
@@ -329,6 +361,7 @@ export function App() {
     }
     // Leaving the window altogether (relatedTarget null) lets a hovered control go.
     const leave = (e: MouseEvent) => {
+      if (grabbing.current) return
       if (e.relatedTarget === null && last) {
         last = false
         bridge.setHit(false)
@@ -366,18 +399,22 @@ export function App() {
 
   if (!s) return null
   const close = () => setMode('field')
+  // Windows: the drawer in the box the Mac gives its window, under the pet or over it.
+  const drawerRect = anchor ? drawerBox(petBox(anchor, whole, s.settings.hudScale, s.settings.text.pet), whole, petSide) : null
+  const drawerAt = drawerRect ? { left: drawerRect.x + 4, top: drawerRect.y + 4, right: 'auto', bottom: 'auto' } : undefined
 
   // A click outside the open interface closes it, like clicking away from a menu.
   const onStageDown = (e: React.PointerEvent) => {
     if (modeRef.current === 'field') return
-    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .capture, .toast, .clerk-ask, .drawer, .pet')
+    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .capture, .clerk-ask, .drawer, .pet, .pet-caption-box')
     if (!inside) close()
   }
 
   return (
     <main className="stage" onPointerDownCapture={onStageDown}>
       <AnimatePresence>
-        {shown !== 'field' && (
+        {/* The drawer is a small panel by the pet, as on a Mac where it is its own window: nothing dims. */}
+        {shown !== 'field' && shown !== 'drawer' && (
           <motion.div
             key="vignette"
             className={`vignette ${shown === 'capture' ? 'light' : ''}`}
@@ -390,7 +427,21 @@ export function App() {
       </AnimatePresence>
 
       <Objectives s={s} mode={mode} />
-      <Pet s={s} away={petAway} moving={moving} open={setMode} side={petSide} dragging={layout.dragging} compact={layout.compact} notice={clerk ?? pop ?? (layout.compact ? warning : null)} />
+      <Pet
+        s={s}
+        away={petAway}
+        moving={moving}
+        open={setMode}
+        side={petSide}
+        dragging={layout.dragging || dragAnchor !== null}
+        compact={layout.compact}
+        notice={clerk ?? pop ?? warning}
+        anchor={anchor}
+        area={area}
+        onDrag={onDrag}
+        onPlace={onPlace}
+        onGrab={onGrab}
+      />
       <Feed />
       <Callout quiet={mode !== 'field'} />
 
@@ -398,19 +449,12 @@ export function App() {
         {shown === 'plus' && <PlusMenu key="plus" s={s} close={close} open={setMode} stage={stagePlus} />}
         {shown === 'deck' && <Deck key="deck" s={s} close={close} kind={bridge.kind} />}
         {shown === 'capture' && <Capture key="capture" s={s} close={close} />}
-        {shown === 'drawer' && <Drawer key="drawer" s={s} close={close} />}
+        {shown === 'drawer' && <Drawer key="drawer" s={s} close={close} style={drawerAt} />}
       </AnimatePresence>
 
       {shown !== 'field' && <ClerkAsk />}
       {cashIn && <CashIn key={cashIn.seq} amount={cashIn.amount} balance={cashIn.balance} from={cashIn.from} onDone={() => setCashIn(null)} />}
 
-      <AnimatePresence>
-        {warning && !layout.compact && (
-          <motion.p className="toast" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role="status">
-            {warning}
-          </motion.p>
-        )}
-      </AnimatePresence>
     </main>
   )
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { motion } from 'motion/react'
 import { Check, Plus, X } from '@phosphor-icons/react'
 import { blockView, type MayorlyState } from '@core/index'
@@ -16,7 +16,8 @@ export function DrawerApp() {
   return <Drawer s={s} close={() => bridge.closeDrawer()} />
 }
 
-export function Drawer({ s, close }: { s: MayorlyState; close: () => void }) {
+/** `style` places it in the Windows overlay, in the box the Mac gives the drawer's own window. */
+export function Drawer({ s, close, style }: { s: MayorlyState; close: () => void; style?: CSSProperties }) {
   const v = blockView(s, Date.now())
   const entry = v?.entry ?? null
   const leisure = v?.block.kind === 'leisure' ? s.leisure.find((x) => x.id === v.block.leisureId) ?? null : null
@@ -27,6 +28,8 @@ export function Drawer({ s, close }: { s: MayorlyState; close: () => void }) {
     <motion.section
       ref={box}
       className="drawer"
+      style={style}
+      data-hit
       role="dialog"
       aria-label="Quick drawer"
       initial={{ opacity: 0, y: -8 }}

@@ -52,6 +52,13 @@ function boot() {
   const store = new Store(dataDir)
   const engine = new Engine(store)
   const overlay = new Overlay(dataDir)
+  // The pet goes anywhere on both desktops. A first run on Windows starts it on the side the
+  // settings name; after that, wherever it is decides `hudSide`, so Settings shows the truth.
+  overlay.setScale(engine.state.settings.hudScale)
+  overlay.adoptSide(engine.state.settings.hudSide)
+  overlay.onLayout = (layout) => {
+    if (engine.state.settings.hudSide !== layout.side) engine.dispatch({ type: 'settings/update', patch: { hudSide: layout.side } })
+  }
 
   // Every page of ours gets the broadcast: the drawer is its own window on a Mac and is
   // kept, hidden, between uses, so it must see the desk move while it is away.
@@ -436,6 +443,7 @@ function boot() {
   ipcMain.on(IPC.drawerClose, () => overlay.closeDrawer())
   ipcMain.on(IPC.moving, (_e, on: boolean) => overlay.setMoving(!!on))
   ipcMain.on(IPC.nudge, (_e, dx: number, dy: number) => overlay.nudge(Number(dx) || 0, Number(dy) || 0))
+  ipcMain.on(IPC.placePet, (_e, x: number, y: number) => overlay.placeAt(Number(x), Number(y)))
   ipcMain.on(IPC.snap, (_e, corner: number) => {
     if (corner === 1 || corner === 2 || corner === 3 || corner === 4) overlay.snap(corner)
   })

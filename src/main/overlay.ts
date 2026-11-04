@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BrowserWindow, screen, type Display, type Rectangle } from 'electron'
 import { IPC, type Effect, type Layout, type UiMode } from '../shared/bridge'
+import { CAPTION, DRAWER, TASKBAR, TOMATO, anchorInBox, captionBox, clampAnchor, cornerAnchor, drawerBox, homeAnchor, petBox, sideOf, type Side } from '../shared/pet'
 
 // One transparent, always-on-top, frameless window.
 //
@@ -20,21 +21,8 @@ import { IPC, type Effect, type Layout, type UiMode } from '../shared/bridge'
 const mac = process.platform === 'darwin'
 const debug = process.env.MAYORLY_DEBUG ? (...a: unknown[]) => console.error('[overlay]', ...a) : () => {}
 
-/** The pet at HUD scale 1: the fixed-width sign, the gap, the tomato, and the hop's headroom.
- * The window is exactly this at the HUD scale, so nothing invisible catches a click, and it is
- * never resized on hover: a resize paints one frame of old content at the new position and the
- * tomato jumps. The caption is a separate click-through window. Matches `body.compact` in hud.css. */
-const PET = { width: 140 + 10 + 48, height: 48 + 24 }
-/** Two task lines at the design size (12px, line height 1.15): what grows when the pet's text setting does. */
-const TASK_LINES = 2 * 12 * 1.15
-/** The pet's own corner inside the window; matches `body.compact .pet-wrap` in hud.css. */
-const INSET = { x: 4, y: 4 }
-/** The quick drawer's own window, hung under the pet when there is room, over it otherwise. */
-const DRAWER = { width: 340, height: 360 }
-/** The caption window: generous, because it is click-through; the text hugs the tomato's side. */
-const CAPTION = { width: 360, height: 40 }
-/** The tomato sprite at scale 1, so the window can be placed around its centre. */
-const TOMATO = 48
+// The pet's sizes, and the rules for where it, its caption and the drawer sit, are in
+// src/shared/pet.ts, shared with the page, which draws the same boxes in the Windows overlay.
 /** How often the cursor is sampled for hover on macOS. */
 const HOVER_POLL_MS = 40
 /** The poll rate while the pointer is far from the pet: enough to notice it coming. */
@@ -72,10 +60,17 @@ export class Overlay {
   private fitting = false
   private settle: NodeJS.Timeout | null = null
   private readonly anchorFile: string
+  /** The user has put the pet somewhere (a saved place); a first run takes its side from the settings instead. */
+  private placed = false
+  /** Every layout change, so the shell can keep `hudSide` true to where the pet is. */
+  onLayout: ((layout: Layout) => void) | null = null
 
   constructor(dataDir: string) {
     this.anchorFile = join(dataDir, 'hud.json')
-    if (mac) this.anchor = this.loadAnchor()
+    // Both desktops remember where the tomato was left: the Mac moves its window there,
+    // Windows draws the pet there inside the overlay.
+    this.anchor = this.loadAnchor()
+    this.placed = this.anchor !== null
     const display = this.anchor ? screen.getDisplayNearestPoint(this.anchor) : screen.getPrimaryDisplay()
     this.displayId = display.id
     this.win = new BrowserWindow({
@@ -284,25 +279,14 @@ export class Overlay {
     this.caption.webContents.send(IPC.caption, { text: this.captionText ?? '', side: this.layout().side })
   }
 
-  /** Beside the pet, toward the centre of the screen, level with the sign. */
   /** Just above the tomato, starting at its outer edge and running over the sign's column; below it when the screen's top is in the way. */
   private placeCaption() {
     if (!this.caption) return
     const wa = this.display().workArea
     const a = this.anchor ?? this.defaultAnchor(wa)
-    const side = this.layout().side
-    const box = 30
-    const gap = 10
-    const top = a.y - TOMATO * this.scale
-    const x = side === 'left' ? a.x - this.half - 4 : a.x + this.half + 4 - CAPTION.width
-    let y = top - gap - box - (CAPTION.height - box) / 2
-    if (y < wa.y) y = a.y + gap - (CAPTION.height - box) / 2
-    debug('caption', { side, x: Math.round(x), y: Math.round(y), tomatoTop: Math.round(top), anchor: a })
-    this.caption.setBounds({
-      x: Math.round(Math.min(Math.max(x, wa.x), wa.x + wa.width - CAPTION.width)),
-      y: Math.round(Math.min(Math.max(y, wa.y), wa.y + wa.height - CAPTION.height)),
-      ...CAPTION,
-    })
+    const { below, ...box } = captionBox(a, wa, this.layout().side, this.scale)
+    debug('caption', { ...box, below, anchor: a })
+    this.caption.setBounds(box)
   }
 
   /** Re-assert topmost. Some focus changes on Windows quietly drop the level. 'screen-saver' is also the right macOS level: above the Dock and menu bar. */
@@ -329,7 +313,10 @@ export class Overlay {
       this.stopHoverPoll()
       if (mac) this.fit()
       if (!this.win.isVisible()) this.win.showInactive()
-      this.win.setIgnoreMouseEvents(false)
+      // Windows, the quick drawer: like the Mac's small drawer window, only the drawer and the pet take
+      // the pointer; a click anywhere else reaches the app beneath, and the blur that follows closes it.
+      if (!mac && mode === 'drawer') this.win.setIgnoreMouseEvents(!this.hit, { forward: true })
+      else this.win.setIgnoreMouseEvents(false)
       this.win.setFocusable(true)
       this.win.focus()
       this.win.webContents.focus()
@@ -341,7 +328,7 @@ export class Overlay {
   setHit(hit: boolean) {
     this.hit = hit
     if (mac) return
-    if (this.mode === 'field' && !this.win.isDestroyed()) this.win.setIgnoreMouseEvents(!hit, { forward: true })
+    if ((this.mode === 'field' || this.mode === 'drawer') && !this.win.isDestroyed()) this.win.setIgnoreMouseEvents(!hit, { forward: true })
   }
 
   /** The HUD scale setting: the pet window grows with it so nothing is clipped. */
@@ -360,10 +347,6 @@ export class Overlay {
     if (mac && this.mode === 'field') this.fit()
   }
 
-  private petHeight(): number {
-    return PET.height + Math.ceil(TASK_LINES * (this.text - 1))
-  }
-
   /** Keyboard move: the pet window takes the keyboard while the user nudges it, and gives it back after. */
   setMoving(on: boolean) {
     if (this.win.isDestroyed() || this.mode !== 'field') return
@@ -379,7 +362,6 @@ export class Overlay {
 
   /** Move the tomato by this much. */
   nudge(dx: number, dy: number) {
-    if (!mac) return
     const wa = this.display().workArea
     const a = this.anchor ?? this.defaultAnchor(wa)
     this.place({ x: a.x + dx, y: a.y + dy })
@@ -387,18 +369,28 @@ export class Overlay {
 
   /** Put the tomato in a corner of the work area it is on. */
   snap(corner: 1 | 2 | 3 | 4) {
-    if (!mac) return
     const wa = this.display().workArea
-    const margin = 24
-    const left = corner === 1 || corner === 3
-    const top = corner === 1 || corner === 2
-    this.place({
-      x: left ? wa.x + margin + this.half : wa.x + wa.width - margin - this.half,
-      y: top ? wa.y + margin + TOMATO * this.scale : wa.y + wa.height - margin,
-    })
+    this.place(cornerAnchor(wa, corner, this.scale, this.taskbarReserve(wa)))
   }
 
-  /** The tomato's new place, by keyboard: hang the window around it, remember it, tell the page. */
+  /**
+   * Windows: the page dragged the tomato to this point, in the overlay's own pixels. The
+   * point may be past the overlay's edge, on another display; the overlay follows it there.
+   */
+  placeAt(x: number, y: number) {
+    if (mac || !Number.isFinite(x) || !Number.isFinite(y)) return
+    const wa = this.display().workArea
+    this.place({ x: wa.x + x, y: wa.y + y })
+  }
+
+  /** Windows, first run: no saved place yet, so the pet starts in the bottom corner of the side the settings name. */
+  adoptSide(side: Side) {
+    if (mac || this.placed) return
+    this.anchor = this.defaultAnchor(this.display().workArea, side)
+    this.sendLayout()
+  }
+
+  /** The tomato's new place, by keyboard or a drag: hang the window around it, remember it, tell the page. */
   private place(a: Anchor) {
     if (this.settle) {
       clearTimeout(this.settle)
@@ -407,16 +399,12 @@ export class Overlay {
     const nearest = screen.getDisplayNearestPoint(a)
     this.displayId = nearest.id
     this.anchor = this.clampAnchor(a, nearest.workArea)
+    this.placed = true
     debug('place', this.anchor)
     this.fit()
     this.saveAnchor()
     this.sendLayout()
     this.pushCaption()
-  }
-
-  /** The tomato's half width at the current scale. */
-  private get half() {
-    return (TOMATO / 2) * this.scale
   }
 
   /** The user is dragging the window by the tomato. Drop the caption, pause hover, wait for it to settle. */
@@ -438,11 +426,7 @@ export class Overlay {
     this.dragging = false
     const b = this.win.getBounds()
     const wa = this.display().workArea
-    const side = this.side(wa, this.anchor ?? this.defaultAnchor(wa))
-    const a: Anchor = {
-      x: side === 'right' ? b.x + b.width - INSET.x - this.half : b.x + INSET.x + this.half,
-      y: b.y + b.height - INSET.y,
-    }
+    const a: Anchor = anchorInBox(b, this.side(wa, this.anchor ?? this.defaultAnchor(wa)), this.scale)
     const nearest = screen.getDisplayNearestPoint(a)
     this.displayId = nearest.id
     this.anchor = this.clampAnchor(a, nearest.workArea)
@@ -476,11 +460,9 @@ export class Overlay {
 
   moveTo(displayId: number) {
     this.displayId = displayId
-    if (mac) {
-      this.anchor = this.defaultAnchor(this.display().workArea)
-      this.saveAnchor()
-      this.sendLayout()
-    }
+    this.anchor = this.defaultAnchor(this.display().workArea)
+    this.saveAnchor()
+    this.sendLayout()
     this.fit()
   }
 
@@ -502,39 +484,36 @@ export class Overlay {
   }
 
   private side(wa: Rectangle, a: Anchor): Layout['side'] {
-    return a.x < wa.x + wa.width / 2 ? 'left' : 'right'
+    return sideOf(wa, a)
   }
 
-  private defaultAnchor(wa: Rectangle): Anchor {
-    return { x: wa.x + wa.width - 64 - this.half, y: wa.y + wa.height - 28 }
+  private defaultAnchor(wa: Rectangle, side: Side = 'right'): Anchor {
+    return homeAnchor(wa, this.scale, side, this.taskbarReserve(wa))
+  }
+
+  /** Windows: a work area that is the whole display means the taskbar hides itself and slides over the bottom when it shows. */
+  private taskbarReserve(wa: Rectangle): number {
+    if (mac) return 0
+    const d = screen.getAllDisplays().find((x) => x.workArea.x === wa.x && x.workArea.y === wa.y && x.workArea.width === wa.width && x.workArea.height === wa.height)
+    return d && d.workArea.height === d.bounds.height && d.workArea.width === d.bounds.width ? TASKBAR : 0
   }
 
   private clampAnchor(a: Anchor, wa: Rectangle): Anchor {
-    const mx = INSET.x + this.half
-    return {
-      x: Math.min(Math.max(a.x, wa.x + mx), wa.x + wa.width - mx),
-      y: Math.min(Math.max(a.y, wa.y + INSET.y + TOMATO * this.scale), wa.y + wa.height - INSET.y),
-    }
+    return clampAnchor(a, wa, this.scale)
   }
 
   /** The field window, hung off the tomato on the side it favours, kept on screen. */
   private fieldBounds(display: Display): Rectangle {
     const wa = display.workArea
     const a = this.anchor ?? (this.anchor = this.defaultAnchor(wa))
-    const size = { width: Math.ceil(PET.width * this.scale) + INSET.x * 2, height: Math.ceil(this.petHeight() * this.scale) + INSET.y * 2 }
-    const x = this.side(wa, a) === 'right' ? a.x + this.half + INSET.x - size.width : a.x - this.half - INSET.x
-    const y = a.y + INSET.y - size.height
-    return {
-      x: Math.round(Math.min(Math.max(x, wa.x), wa.x + wa.width - size.width)),
-      y: Math.round(Math.min(Math.max(y, wa.y), wa.y + wa.height - size.height)),
-      width: size.width,
-      height: size.height,
-    }
+    return petBox(a, wa, this.scale, this.text)
   }
 
   layout(): Layout {
     const wa = this.display().workArea
-    return { compact: mac, side: this.side(wa, this.anchor ?? this.defaultAnchor(wa)), dragging: this.dragging }
+    const a = this.anchor ?? this.defaultAnchor(wa)
+    // Windows: the overlay is the work area, so the page gets the tomato in its own pixels.
+    return { compact: mac, side: this.side(wa, a), dragging: this.dragging, pet: mac ? null : { x: a.x - wa.x, y: a.y - wa.y } }
   }
 
   /**
@@ -613,22 +592,14 @@ export class Overlay {
   /** Under the pet when there is room, over it otherwise, flush with the pet's outer side. */
   private drawerPlace(display: Display): Rectangle {
     const wa = display.workArea
-    const pet = this.fieldBounds(display)
-    const gap = 4
-    const below = pet.y + pet.height + gap + DRAWER.height <= wa.y + wa.height
-    const x = this.side(wa, this.anchor ?? this.defaultAnchor(wa)) === 'right' ? pet.x + pet.width - DRAWER.width : pet.x
-    const y = below ? pet.y + pet.height + gap : pet.y - gap - DRAWER.height
-    return {
-      x: Math.round(Math.min(Math.max(x, wa.x), wa.x + wa.width - DRAWER.width)),
-      y: Math.round(Math.min(Math.max(y, wa.y), wa.y + wa.height - DRAWER.height)),
-      width: DRAWER.width,
-      height: DRAWER.height,
-    }
+    return drawerBox(this.fieldBounds(display), wa, this.side(wa, this.anchor ?? this.defaultAnchor(wa)))
   }
 
   private sendLayout() {
     if (this.win.isDestroyed()) return
-    this.win.webContents.send(IPC.layout, this.layout())
+    const layout = this.layout()
+    this.win.webContents.send(IPC.layout, layout)
+    this.onLayout?.(layout)
   }
 
   private loadAnchor(): Anchor | null {

@@ -21,13 +21,18 @@
 .pet-right { right: 64px; justify-items: end; transform-origin: 100% 100%; }
 .pet-left { left: 64px; justify-items: start; transform-origin: 0% 100%; }
 
-/* Compact: the window is the pet. The shell hangs it off the tomato on the side it favours. */
+/* Compact: the window is the pet. The shell hangs it off the tomato on the side it favours.
+   On Windows the overlay is the work area and the page places the pet itself, in the same box
+   (src/shared/pet.ts), wherever the tomato was left; the corners above are only its first home. */
 body.compact .pet-wrap { bottom: 4px; }
 body.compact .pet-right { right: 4px; }
 body.compact .pet-left { left: 4px; }
-body.compact .objectives,
-body.compact .callout-wrap,
-body.compact .feed { display: none; }
+
+/* The resting HUD is only the tomato and a number, on both desktops. The older pieces stay
+   mounted, unseen, for the sounds they play. Body-qualified to outrank their own display rules below. */
+body .objectives,
+body .callout-wrap,
+body .feed { display: none; }
 
 
 .pet {
@@ -42,8 +47,11 @@ body.compact .feed { display: none; }
   display: block;
   line-height: 0;
 }
-/* Compact (macOS): the tomato is the window's drag handle; the sign still takes the click. */
-body.compact .pet-body { -webkit-app-region: drag; cursor: grab; }
+/* The tomato is the handle: on a Mac the window's drag region, on Windows the page drags it.
+   The sign still takes the click. */
+.pet-body { cursor: grab; touch-action: none; }
+.pet-body.is-dragging { cursor: grabbing; }
+body.compact .pet-body { -webkit-app-region: drag; }
 body.compact .pet-sign { -webkit-app-region: no-drag; }
 .pet-sprite {
   width: 48px;
@@ -361,21 +369,6 @@ body.drawer-page .drawer { position: fixed; inset: 4px; width: auto; height: aut
 .tone-order { color: var(--accent); }
 .tone-error { color: #ff9b8c; }
 
-/* ------------------------------------------------------------ toast */
-
-.toast {
-  position: absolute;
-  top: 24px;
-  right: 64px;
-  z-index: var(--z-toast);
-  max-width: 440px;
-  margin: 0;
-  padding: 11px 15px;
-  background: var(--glass);
-  border: 1px solid var(--line);
-  box-shadow: inset 2px 0 0 var(--accent);
-  font-size: 15px;
-}
 .pet-sign.is-notice { color: var(--ink); border-color: var(--accent-2); white-space: normal; }
 
 /* The caption window's page (macOS): transparent air, the box hugs the tomato's side. */
@@ -384,6 +377,11 @@ body.caption { background: transparent; }
 .caption-page.side-right { justify-content: flex-end; }
 .caption-page.side-left { justify-content: flex-start; }
 .caption-float { margin: 0; }
+/* Windows: the same box in the overlay, hugging the tomato's side; it never takes the pointer. */
+.pet-caption-box { position: absolute; z-index: var(--z-hud); display: flex; align-items: center; padding: 0 4px; pointer-events: none; }
+.pet-caption-box.side-right { justify-content: flex-end; }
+.pet-caption-box.side-left { justify-content: flex-start; }
+.pet-caption-box .pet-sign.is-caption { margin: 0; }
 
 /* The keyboard is moving the tomato: a dashed selection box, like an object picked up in an editor. */
 .pet-body.is-moving { outline: 2px dashed var(--accent); outline-offset: 3px; }

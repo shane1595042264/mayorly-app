@@ -106,11 +106,11 @@ export const KEYS: KeyDef[] = [
   { id: 'cal.new', scope: 'cal', label: 'New event of your own', keys: ['n'] },
   { id: 'cal.ask', scope: 'cal', label: 'Ask the clerk', keys: ['a'], note: 'Puts the cursor in the ask box' },
 
-  { id: 'move.left', scope: 'move', label: 'Left', keys: ['h', 'ArrowLeft'], note: IS_MAC ? 'Shift goes far' : 'Puts the tomato on the left' },
-  { id: 'move.down', scope: 'move', label: 'Down', keys: ['j', 'ArrowDown'], note: IS_MAC ? 'Shift goes far' : 'On a Mac, where the tomato goes anywhere' },
-  { id: 'move.up', scope: 'move', label: 'Up', keys: ['k', 'ArrowUp'], note: IS_MAC ? 'Shift goes far' : 'On a Mac, where the tomato goes anywhere' },
-  { id: 'move.right', scope: 'move', label: 'Right', keys: ['l', 'ArrowRight'], note: IS_MAC ? 'Shift goes far' : 'Puts the tomato on the right' },
-  { id: 'move.corner', scope: 'move', label: IS_MAC ? 'A corner' : 'A side', keys: ['1', '4'], fixed: true, range: true, note: IS_MAC ? 'Top left, top right, bottom left, bottom right' : '1 and 3 left, 2 and 4 right' },
+  { id: 'move.left', scope: 'move', label: 'Left', keys: ['h', 'ArrowLeft'], note: 'Shift goes far' },
+  { id: 'move.down', scope: 'move', label: 'Down', keys: ['j', 'ArrowDown'], note: 'Shift goes far' },
+  { id: 'move.up', scope: 'move', label: 'Up', keys: ['k', 'ArrowUp'], note: 'Shift goes far' },
+  { id: 'move.right', scope: 'move', label: 'Right', keys: ['l', 'ArrowRight'], note: 'Shift goes far' },
+  { id: 'move.corner', scope: 'move', label: 'A corner', keys: ['1', '4'], fixed: true, range: true, note: 'Top left, top right, bottom left, bottom right' },
   { id: 'move.done', scope: 'move', label: 'Done', keys: ['Enter', 'Escape'], note: 'So does any key not listed here' },
 
   { id: 'keymap.search', scope: 'keymap', label: 'Search', keys: ['/'], fixed: true },

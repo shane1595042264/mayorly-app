@@ -48,7 +48,7 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
             <span className="field-label caps">Side</span>
             <div className="seg" role="radiogroup" aria-label="HUD side">
               {(['left', 'right'] as const).map((v) => (
-                <button key={v} role="radio" aria-checked={st.hudSide === v} className={st.hudSide === v ? 'on' : ''} onClick={() => set({ hudSide: v })}>
+                <button key={v} role="radio" aria-checked={st.hudSide === v} className={st.hudSide === v ? 'on' : ''} onClick={() => bridge.snap(v === 'left' ? 3 : 4)}>
                   {v === 'left' ? 'Left' : 'Right'}
                 </button>
               ))}

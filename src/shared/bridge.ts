@@ -21,6 +21,12 @@ export interface Layout {
   side: 'left' | 'right'
   /** The window is being dragged by its tomato; nothing unfolds until it settles. */
   dragging: boolean
+  /**
+   * Windows: the tomato's bottom centre in the overlay's own pixels, wherever it was left.
+   * Null when the window is the pet (macOS) or nobody has said yet (the browser), where
+   * the pet sits at its home corner.
+   */
+  pet?: { x: number; y: number } | null
 }
 
 export interface DisplayInfo {
@@ -230,8 +236,10 @@ export interface Bridge {
   onClerkAsk(fn: (q: ClerkQuestion) => void): () => void
   /** Keyboard move: on, the pet window takes the keyboard; off, it gives it back. */
   setMoving(on: boolean): void
-  /** Move the tomato by this many points (macOS; the overlay ignores it elsewhere). */
+  /** Move the tomato by this many points. */
   nudge(dx: number, dy: number): void
+  /** Windows: the tomato was dragged to this point in the overlay's pixels (it may be past the edge, on another display). */
+  placePet(x: number, y: number): void
   /** Put the tomato in a corner of the work area: 1 top left, 2 top right, 3 bottom left, 4 bottom right. */
   snap(corner: 1 | 2 | 3 | 4): void
   /** The effects page: play this. */
@@ -295,6 +303,7 @@ export const IPC = {
   moving: 'mayorly:moving',
   nudge: 'mayorly:nudge',
   snap: 'mayorly:snap',
+  placePet: 'mayorly:place-pet',
   effect: 'mayorly:effect',
   effectDone: 'mayorly:effect-done',
   drawerClose: 'mayorly:drawer-close',

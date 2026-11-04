@@ -2,7 +2,8 @@ import {
   firstRunState, migrate, reduce, SLEEP_GAP_MS,
   type Action, type HudEvent, type MayorlyState,
 } from '@core/index'
-import type { Bridge, Command, UiMode } from '../../../shared/bridge'
+import type { Bridge, Command, Layout, UiMode } from '../../../shared/bridge'
+import { clampAnchor, cornerAnchor, homeAnchor, sideOf, type Point } from '../../../shared/pet'
 import { BUILD } from '../../../shared/build'
 import { horizonEndFor, machineZone, windowsFor } from '../../../shared/windows'
 import { physicalKey } from '../lib/keys'
@@ -127,6 +128,26 @@ export function createWebBridge(): Bridge {
     return () => void set.delete(fn)
   }
 
+  // The tab stands in for the Windows overlay: the window is the work area and the pet
+  // goes anywhere in it. Until it is moved it sits at home on the side the settings name.
+  let anchor: Point | null = null
+  const layoutSubs = new Set<(l: Layout) => void>()
+  const area = () => ({ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight })
+  const layout = (): Layout => {
+    const a = anchor ? clampAnchor(anchor, area(), state.settings.hudScale) : homeAnchor(area(), state.settings.hudScale, state.settings.hudSide)
+    return { compact: false, side: sideOf(area(), a), dragging: false, pet: a }
+  }
+  const place = (a: Point) => {
+    anchor = clampAnchor(a, area(), state.settings.hudScale)
+    const l = layout()
+    layoutSubs.forEach((f) => f(l))
+    if (state.settings.hudSide !== l.side) dispatch({ type: 'settings/update', patch: { hudSide: l.side } })
+  }
+  window.addEventListener('resize', () => {
+    const l = layout()
+    layoutSubs.forEach((f) => f(l))
+  })
+
   return {
     kind: 'web',
     alarms: {
@@ -143,8 +164,8 @@ export function createWebBridge(): Bridge {
     setHit: () => {},
     setCaption: () => {},
     onCaption: () => () => {},
-    getLayout: async () => ({ compact: false, side: 'right' as const, dragging: false }),
-    onLayout: () => () => {},
+    getLayout: async () => layout(),
+    onLayout: (fn) => sub(layoutSubs, fn),
     // The sample data has an account, so the parts of Settings that need one can be seen.
     accountsAvailable: async () => demo,
     getAccount: async () => (demo ? { email: 'you@example.com', name: 'You', avatarUrl: null } : null),
@@ -216,8 +237,12 @@ export function createWebBridge(): Bridge {
       return () => void eventSubs.delete(h)
     },
     setMoving: () => {},
-    nudge: () => {},
-    snap: () => {},
+    nudge: (dx, dy) => {
+      const a = layout().pet!
+      place({ x: a.x + dx, y: a.y + dy })
+    },
+    snap: (corner) => place(cornerAnchor(area(), corner, state.settings.hudScale)),
+    placePet: (x, y) => place({ x, y }),
     onEffect: () => () => {},
     effectDone: () => {},
     closeDrawer: () => {},

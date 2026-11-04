@@ -65,6 +65,7 @@ const bridge: Bridge = {
   setMoving: (on) => ipcRenderer.send(IPC.moving, on),
   nudge: (dx, dy) => ipcRenderer.send(IPC.nudge, dx, dy),
   snap: (corner) => ipcRenderer.send(IPC.snap, corner),
+  placePet: (x, y) => ipcRenderer.send(IPC.placePet, x, y),
   onEffect: (fn) => sub(IPC.effect, fn),
   effectDone: () => ipcRenderer.send(IPC.effectDone),
   closeDrawer: () => ipcRenderer.send(IPC.drawerClose),

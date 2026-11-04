@@ -2,6 +2,15 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The Windows HUD looks like the Mac's
+
+- On Windows the resting HUD is now just the tomato and its number, as on a Mac. The rotation strip at the top of the screen and the messages in the middle and on the right are gone.
+- Drag the tomato anywhere on the screen, onto your other monitor too. Alt+G, the arrows or hjkl move it, 1 to 4 put it in a corner. It stays where you leave it.
+- The line above the tomato, the quick drawer and the coins all hang off the tomato wherever it sits: the line drops below it near the top of the screen, the drawer opens under it or over it.
+- The quick drawer no longer dims the screen. A click anywhere else goes to that app and closes the drawer.
+- With an auto-hidden taskbar the tomato starts clear of where the taskbar slides up.
+- Side in Settings puts the tomato in that bottom corner.
+
 ## Gemini model requests
 
 - Gemini keys can now finish their check with newer Flash-Lite models and file captured tasks.
