@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import { CaretRight } from '@phosphor-icons/react'
 import { matchLedger, parseSuperset, prefixClerk, type Action, type MayorlyState } from '@core/index'
 import { askCalendar } from '../lib/calendarAsk'
-import { IS_MAC } from '../lib/keys'
+import { actionFor, keyLabel, keysFor, recordUse } from '../lib/keymap'
 import { aiOn, dispatch } from '../store'
 
 // The command line. Plain text is an entry for the clerk to file. A leading slash
@@ -13,7 +13,7 @@ interface Plan {
   tone: 'file' | 'tray' | 'order' | 'error' | 'idle'
   text: string
   run?: () => void
-  /** Cmd+Enter: file the line and put it on the desk now, the clock where it is. */
+  /** File the line and put it on the desk now, the clock where it is. */
   start?: () => void
 }
 
@@ -117,10 +117,14 @@ export function Capture({ s, close }: { s: MayorlyState; close: () => void }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing || e.repeat) return
             if (e.key === 'Escape') close()
-            else if (e.key === 'Enter') {
+            else {
+              const action = actionFor(e.nativeEvent, 'capture', s.settings)
+              if (!action) return
               e.preventDefault()
-              submit(e.shiftKey, e.metaKey || e.ctrlKey)
+              recordUse(action)
+              submit(action === 'capture.keep', action === 'capture.start')
             }
           }}
           placeholder="legal: reply to the landlord ~20"
@@ -129,9 +133,9 @@ export function Capture({ s, close }: { s: MayorlyState; close: () => void }) {
       <div className="capture-under">
         <p className={`capture-preview tone-${p.tone}`} aria-live="polite">{p.text}</p>
         <footer className="hint-row">
-          <span><i className="key">Enter</i> File</span>
-          <span><i className="key">{IS_MAC ? 'Cmd' : 'Ctrl'}</i><i className="key">Enter</i> Start now</span>
-          <span><i className="key">Shift</i><i className="key">Enter</i> Keep open</span>
+          <span><i className="key">{keysFor('capture.start', s.settings).map(keyLabel).join(' / ')}</i> File and start</span>
+          <span><i className="key">{keysFor('capture.file', s.settings).map(keyLabel).join(' / ')}</i> File only</span>
+          <span><i className="key">{keysFor('capture.keep', s.settings).map(keyLabel).join(' / ')}</i> Keep open</span>
           <span><i className="key">Esc</i> Close</span>
         </footer>
       </div>

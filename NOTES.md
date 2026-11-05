@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Capture keys you can change
+
+- Enter files a captured task and starts it immediately. Cmd+Enter on Mac, or Ctrl+Enter on Windows, files it without starting. Shift+Enter still files and keeps the box open.
+- Change these shortcuts in Controls. The capture box shows the keys you chose.
+
 ## Gemini model requests
 
 - Gemini keys can now finish their check with newer Flash-Lite models and file captured tasks.

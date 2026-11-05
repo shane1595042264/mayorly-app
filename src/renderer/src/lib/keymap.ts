@@ -58,9 +58,9 @@ export const KEYS: KeyDef[] = [
   { id: 'plus.deck', scope: 'plus', label: 'Open the deck', keys: ['Tab'] },
   { id: 'plus.close', scope: 'plus', label: 'Close the menu', keys: ['Escape'] },
 
-  { id: 'capture.file', scope: 'capture', label: 'File the line', keys: ['Enter'], fixed: true, note: 'To its ledger by prefix, else the clerk, else the tray' },
-  { id: 'capture.start', scope: 'capture', label: 'File it and start it now', keys: [IS_MAC ? 'Cmd+Enter' : 'Ctrl+Enter'], fixed: true, note: 'A running focus block swaps to it, the clock where it is; otherwise a pomodoro starts on it. The clerk files it after.' },
-  { id: 'capture.keep', scope: 'capture', label: 'File and keep the box open', keys: ['Shift+Enter'], fixed: true },
+  { id: 'capture.file', scope: 'capture', label: 'File the line without starting', keys: [IS_MAC ? 'Cmd+Enter' : 'Ctrl+Enter'], note: 'To its ledger by prefix, else the clerk, else the tray. The desk stays as it is.' },
+  { id: 'capture.start', scope: 'capture', label: 'File it and start it now', keys: ['Enter'], note: 'A running focus block swaps to it, the clock where it is; otherwise a pomodoro starts on it. The clerk files it after.' },
+  { id: 'capture.keep', scope: 'capture', label: 'File and keep the box open', keys: ['Shift+Enter'] },
 
   { id: 'deck.close', scope: 'deck', label: 'Close the deck', keys: ['Escape'] },
   { id: 'deck.prevTab', scope: 'deck', label: 'Previous tab', keys: ['q'] },
