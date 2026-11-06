@@ -2,8 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
-## The Windows HUD looks like the Mac's
+## Capture keys you can change, and the Mac's HUD on Windows
 
+- Enter files a captured task and starts it immediately. Cmd+Enter on Mac, or Ctrl+Enter on Windows, files it without starting. Shift+Enter still files and keeps the box open.
+- Change these shortcuts in Controls. The capture box shows the keys you chose.
+- Windows has the Account section in Settings again: sign in with Google to bring your data over from the Mac.
 - On Windows the resting HUD is now just the tomato and its number, as on a Mac. The rotation strip at the top of the screen and the messages in the middle and on the right are gone.
 - Drag the tomato anywhere on the screen, onto your other monitor too. Alt+G, the arrows or hjkl move it, 1 to 4 put it in a corner. It stays where you leave it.
 - The line above the tomato, the quick drawer and the coins all hang off the tomato wherever it sits: the line drops below it near the top of the screen, the drawer opens under it or over it.
