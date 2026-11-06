@@ -129,6 +129,110 @@ app.put('/sync/state', requireAuth, bodyLimit({ maxSize: STATE_LIMIT }), async (
   }
 })
 
+// The key vault: the user's AI keys, sealed on their computers before they arrive. The server
+// keeps blobs it cannot open under ids it cannot reverse, and merges by id: every distinct key
+// any computer sent is kept once, and a removal wins over an add that happened before it.
+
+const VAULT_ID_RE = /^[A-Za-z0-9_-]{16,64}$/
+const VAULT_TEXT_MAX = 4096
+const VAULT_ITEMS_MAX = 200
+
+interface VaultRow { salt: string; kdf: unknown; check_blob: string }
+interface ItemRow { id: string; blob: string; added_at: string; deleted_at: string | null }
+const vaultOut = (v: VaultRow) => ({ salt: v.salt, kdf: v.kdf, check: v.check_blob })
+const itemOut = (r: ItemRow) => ({ id: r.id, blob: r.blob, addedAt: Number(r.added_at), deletedAt: r.deleted_at === null ? null : Number(r.deleted_at) })
+const short = (v: unknown, max = VAULT_TEXT_MAX): v is string => typeof v === 'string' && v.length > 0 && v.length <= max
+
+async function vaultOf(userId: string) {
+  const { rows } = await pool.query<VaultRow>('SELECT salt, kdf, check_blob FROM key_vaults WHERE user_id = $1', [userId])
+  return rows[0] ?? null
+}
+
+app.get('/vault', requireAuth, async (c) => {
+  const userId = c.get('userId')
+  const vault = await vaultOf(userId)
+  if (!vault) return c.json({ vault: null, items: [] })
+  const { rows } = await pool.query<ItemRow>('SELECT id, blob, added_at, deleted_at FROM vault_items WHERE user_id = $1', [userId])
+  return c.json({ vault: vaultOut(vault), items: rows.map(itemOut) })
+})
+
+/** The first computer to set a passphrase makes the vault; a second gets the one that won. */
+app.post('/vault', requireAuth, bodyLimit({ maxSize: 16 * 1024 }), async (c) => {
+  const body = await c.req.json().catch(() => null) as { salt?: unknown; kdf?: unknown; check?: unknown } | null
+  if (!body || !short(body.salt, 128) || !short(body.check) || !body.kdf || typeof body.kdf !== 'object' || JSON.stringify(body.kdf).length > 512) {
+    return c.json({ error: 'salt, kdf and check required' }, 400)
+  }
+  const userId = c.get('userId')
+  const { rows } = await pool.query<VaultRow>(
+    `INSERT INTO key_vaults (user_id, salt, kdf, check_blob) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id) DO NOTHING RETURNING salt, kdf, check_blob`,
+    [userId, body.salt, JSON.stringify(body.kdf), body.check],
+  )
+  if (rows[0]) return c.json({ vault: vaultOut(rows[0]) })
+  const existing = await vaultOf(userId)
+  return c.json({ error: 'exists', vault: existing ? vaultOut(existing) : null }, 409)
+})
+
+/** A forgotten passphrase: the vault and every key in it go. The keys on each computer stay there. */
+app.delete('/vault', requireAuth, async (c) => {
+  await pool.query('DELETE FROM key_vaults WHERE user_id = $1', [c.get('userId')])
+  return c.json({ ok: true })
+})
+
+/**
+ * Upsert by id. Each time only moves forward, so sending the same rows twice changes nothing
+ * and the order two computers send them in does not matter. The check says which vault the
+ * rows were sealed for: rows sealed for a vault that has since been reset are refused.
+ */
+app.post('/vault/items', requireAuth, bodyLimit({ maxSize: 512 * 1024 }), async (c) => {
+  const body = await c.req.json().catch(() => null) as { check?: unknown; items?: unknown } | null
+  if (!body || !short(body.check) || !Array.isArray(body.items) || body.items.length > VAULT_ITEMS_MAX) return c.json({ error: 'check and items required' }, 400)
+  const ceiling = Date.now() + 60_000
+  const time = (v: unknown) => (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? Math.min(v, ceiling) : null)
+  const items: { id: string; blob: string; addedAt: number; deletedAt: number | null }[] = []
+  for (const raw of body.items as Record<string, unknown>[]) {
+    const addedAt = time(raw?.addedAt)
+    const deletedAt = raw?.deletedAt === null || raw?.deletedAt === undefined ? null : time(raw.deletedAt)
+    if (!raw || typeof raw.id !== 'string' || !VAULT_ID_RE.test(raw.id) || !short(raw.blob) || addedAt === null || (raw.deletedAt != null && deletedAt === null)) {
+      return c.json({ error: 'bad item' }, 400)
+    }
+    items.push({ id: raw.id, blob: raw.blob, addedAt, deletedAt })
+  }
+  const userId = c.get('userId')
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { rows: vaults } = await client.query<VaultRow>('SELECT salt, kdf, check_blob FROM key_vaults WHERE user_id = $1 FOR UPDATE', [userId])
+    const vault = vaults[0]
+    if (!vault || vault.check_blob !== body.check) {
+      await client.query('ROLLBACK')
+      return c.json({ error: 'vault-changed', vault: vault ? vaultOut(vault) : null }, 409)
+    }
+    for (const it of items) {
+      await client.query(
+        `INSERT INTO vault_items (user_id, id, blob, added_at, deleted_at) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (user_id, id) DO UPDATE SET
+           blob = CASE WHEN EXCLUDED.added_at > vault_items.added_at THEN EXCLUDED.blob ELSE vault_items.blob END,
+           added_at = GREATEST(vault_items.added_at, EXCLUDED.added_at),
+           deleted_at = GREATEST(vault_items.deleted_at, EXCLUDED.deleted_at)`,
+        [userId, it.id, it.blob, it.addedAt, it.deletedAt],
+      )
+    }
+    const { rows } = await client.query<ItemRow>('SELECT id, blob, added_at, deleted_at FROM vault_items WHERE user_id = $1', [userId])
+    if (rows.length > VAULT_ITEMS_MAX) {
+      await client.query('ROLLBACK')
+      return c.json({ error: 'too many keys' }, 413)
+    }
+    await client.query('COMMIT')
+    return c.json({ items: rows.map(itemOut) })
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
+})
+
 // The plan as a calendar feed. The address carries a secret token in place of a sign-in,
 // the way Google's own secret iCal address does: whoever has it can read the plan until it is
 // rotated. One token per account, made on request, never derived from anything.

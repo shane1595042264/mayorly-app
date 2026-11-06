@@ -21,7 +21,7 @@ function readSeen(): string | null {
     return null
   }
 }
-const NO_AI = { keys: [], preferredProvider: null, providers: { gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Anthropic Claude', xai: 'xAI Grok' }, usage: { days: 30, calls: 0, costMicroUsd: 0 } }
+const NO_AI = { keys: [], preferredProvider: null, providers: { gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Anthropic Claude', xai: 'xAI Grok' }, usage: { days: 30, calls: 0, costMicroUsd: 0 }, sync: { phase: 'off' as const, at: null, message: null } }
 
 export function createWebBridge(): Bridge {
   const newId = () => crypto.randomUUID()
@@ -206,6 +206,9 @@ export function createWebBridge(): Bridge {
       recheckKey: async () => NO_AI,
       setPreferredModel: async () => NO_AI,
       setPreferredProvider: async () => NO_AI,
+      syncSetup: async () => { throw new Error('Key sync lives in the desktop app') },
+      syncUnlock: async () => { throw new Error('Key sync lives in the desktop app') },
+      syncReset: async () => NO_AI,
       sweepTray: async () => {},
       pickGlyph: async () => null,
       // The preview has no clerk; ?demo shows a sample proposal so the card can be seen.

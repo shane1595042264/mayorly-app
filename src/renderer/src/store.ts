@@ -54,7 +54,7 @@ const subAccount = (f: () => void) => {
 export const useAccount = () => useSyncExternalStore(subAccount, () => account)
 
 // The AI clerk's public state: keys by hint, models, usage. Pushed after every change.
-let ai: AiPublic = { keys: [], preferredProvider: null, providers: { gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Anthropic Claude', xai: 'xAI Grok' }, usage: { days: 30, calls: 0, costMicroUsd: 0 } }
+let ai: AiPublic = { keys: [], preferredProvider: null, providers: { gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Anthropic Claude', xai: 'xAI Grok' }, usage: { days: 30, calls: 0, costMicroUsd: 0 }, sync: { phase: 'off', at: null, message: null } }
 const aiSubs = new Set<() => void>()
 void bridge.ai.get().then((a) => { ai = a; aiSubs.forEach((f) => f()) })
 bridge.onAi((a) => { ai = a; aiSubs.forEach((f) => f()) })

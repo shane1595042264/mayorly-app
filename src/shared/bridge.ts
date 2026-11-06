@@ -70,7 +70,8 @@ export interface AiKeyPublic {
   /** The cheapest model that answered the key check. */
   defaultModel: string
   preferredModel: string | null
-  status: 'ok' | 'failing'
+  /** checking: arrived from another computer and not yet tried on this one. */
+  status: 'ok' | 'failing' | 'checking'
   lastError: string | null
   lastCheckedAt: number
   createdAt: number
@@ -148,11 +149,22 @@ export interface ClerkNotice {
   text: string
 }
 
+/**
+ * Keys between this account's computers. off: signed out. none: no sync passphrase set yet.
+ * locked: one is set, not typed on this computer. on: syncing. message: the last problem.
+ */
+export interface AiKeySync {
+  phase: 'off' | 'checking' | 'none' | 'locked' | 'on'
+  at: number | null
+  message: string | null
+}
+
 export interface AiPublic {
   keys: AiKeyPublic[]
   preferredProvider: AiProvider | null
   providers: Record<AiProvider, string>
   usage: { days: number; calls: number; costMicroUsd: number }
+  sync: AiKeySync
 }
 
 export interface Bridge {
@@ -212,6 +224,12 @@ export interface Bridge {
     recheckKey(id: string): Promise<AiPublic>
     setPreferredModel(id: string, model: string | null): Promise<AiPublic>
     setPreferredProvider(provider: AiProvider | null): Promise<AiPublic>
+    /** Choose the sync passphrase, on the first computer. */
+    syncSetup(passphrase: string): Promise<AiPublic>
+    /** Type the sync passphrase on another computer. */
+    syncUnlock(passphrase: string): Promise<AiPublic>
+    /** Forget the synced keys on the server; every computer keeps its own. */
+    syncReset(): Promise<AiPublic>
     /** Send everything in the tray to the clerk now. */
     sweepTray(): Promise<void>
     /** The clerk picks a glyph name for a ledger from the catalogue, skipping names other ledgers wear. Null without a key or an answer. */
@@ -288,6 +306,9 @@ export const IPC = {
   aiRecheckKey: 'mayorly:ai-recheck-key',
   aiPreferredModel: 'mayorly:ai-preferred-model',
   aiPreferredProvider: 'mayorly:ai-preferred-provider',
+  aiSyncSetup: 'mayorly:ai-sync-setup',
+  aiSyncUnlock: 'mayorly:ai-sync-unlock',
+  aiSyncReset: 'mayorly:ai-sync-reset',
   aiSweep: 'mayorly:ai-sweep',
   aiPickGlyph: 'mayorly:ai-pick-glyph',
   aiArrange: 'mayorly:ai-arrange',

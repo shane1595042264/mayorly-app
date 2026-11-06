@@ -40,6 +40,27 @@ export async function migrate() {
       token text NOT NULL UNIQUE,
       created_at timestamptz NOT NULL DEFAULT now()
     );
+    -- AI keys, encrypted on the user's computers with a key made from their sync passphrase.
+    -- Nothing here can be read without it: the salt and scrypt settings let each computer make
+    -- the same key, the check is a known phrase sealed with it so a wrong passphrase is caught.
+    CREATE TABLE IF NOT EXISTS key_vaults (
+      user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      salt text NOT NULL,
+      kdf jsonb NOT NULL,
+      check_blob text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    );
+    -- One row per distinct key. The id is an HMAC of the key under the passphrase's key, so the
+    -- same key from two computers lands on one row and the server cannot tell what it is. A row
+    -- is live while added_at is later than deleted_at; both only ever move forward.
+    CREATE TABLE IF NOT EXISTS vault_items (
+      user_id uuid NOT NULL REFERENCES key_vaults(user_id) ON DELETE CASCADE,
+      id text NOT NULL,
+      blob text NOT NULL,
+      added_at bigint NOT NULL,
+      deleted_at bigint,
+      PRIMARY KEY (user_id, id)
+    );
   `)
 }
 

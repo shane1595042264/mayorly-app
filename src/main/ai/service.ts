@@ -4,16 +4,19 @@ import { ARRANGE_SYSTEM } from './arrange'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Filing, Ledger } from '@core/index'
-import type { AiKeyPublic, AiPublic } from '../../shared/bridge'
+import type { AiKeyPublic, AiKeySync, AiPublic } from '../../shared/bridge'
 import { costMicroUsd, rankModels } from './catalog'
 import { AI_PROVIDERS, PROVIDER_LABEL, detectProvider, keyHint, type AiProvider } from './detect'
 import { ProviderError, generate, listModels } from './providers'
+import type { VaultSecret } from './keysync'
+import type { LocalKey, LocalRemoval } from './vault'
 
-// The AI clerk. Keys are the user's own, one per provider, sealed with the OS
-// keychain in ai.bin beside the state file; they never sync and never leave the
-// machine except to call that provider. Adding a key proves it the shanejli.com
-// way: detect the provider from its shape, list its models, then spend one
-// token on the cheapest until one answers. Filing an entry is one small call.
+// The AI clerk. Keys are the user's own, any number per provider, sealed in ai.bin beside the
+// state file (seal.ts). They leave the machine only to call their provider, and, when the user
+// sets a sync passphrase, sealed again with a key made from it for their other computers
+// (keysync.ts); the server never sees a key. Adding a key proves it the shanejli.com way: detect
+// the provider from its shape, list its models, then spend one token on the cheapest until one
+// answers. Filing an entry is one small call.
 
 interface KeyRecord extends AiKeyPublic {
   key: string
@@ -33,7 +36,13 @@ interface Saved {
   keys: KeyRecord[]
   preferredProvider: AiProvider | null
   usage: UsageEvent[]
+  /** The sync passphrase's keys, once typed on this computer. Never the passphrase. */
+  vault: VaultSecret | null
+  /** Keys removed here that the server has not heard about yet. */
+  removed: LocalRemoval[]
 }
+
+const REMOVED_KEEP = 50
 
 const MAX_PROBES = 4
 const USAGE_KEEP = 500
@@ -48,11 +57,16 @@ export class KeyCheckError extends Error {
 
 export class AiClerk {
   private readonly file: string
-  private data: Saved = { keys: [], preferredProvider: null, usage: [] }
+  private data: Saved = { keys: [], preferredProvider: null, usage: [], vault: null, removed: [] }
+  private sync: AiKeySync = { phase: 'off', at: null, message: null }
+  /** Set by KeySync: a key was added or removed here. */
+  onKeysChanged: (() => void) | null = null
 
   constructor(dir: string, private readonly seal: Seal, private readonly onChange: (pub: AiPublic) => void) {
     this.file = join(dir, 'ai.bin')
     this.load()
+    // Keys that came from another computer and were still being checked when the app quit.
+    void this.checkArrivals(this.data.keys.filter((k) => k.status === 'checking').map((k) => k.id))
   }
 
   enabled(): boolean {
@@ -66,6 +80,7 @@ export class AiClerk {
       keys: this.data.keys.map(({ key: _k, ...pub }) => pub),
       preferredProvider: this.data.preferredProvider,
       providers: PROVIDER_LABEL,
+      sync: this.sync,
       usage: {
         days: 30,
         calls: recent.filter((u) => u.feature === 'file').length,
@@ -78,12 +93,15 @@ export class AiClerk {
     const key = raw.trim()
     const d = detectProvider(key)
     if (!d.provider) throw new KeyCheckError('unknown_provider', d.reason)
-    const { models, defaultModel } = await this.checkKey(d.provider, key)
+    const provider = d.provider
+    const { models, defaultModel } = await this.checkKey(provider, key)
     const now = Date.now()
-    const existing = this.data.keys.find((k) => k.provider === d.provider)
+    // The same key again is the same key, checked again. Another key, even for a provider that
+    // already has one, is kept beside it: the clerk moves on to it when the first one fails.
+    const existing = this.data.keys.find((k) => k.provider === provider && k.key === key)
     const record: KeyRecord = {
       id: existing?.id ?? randomUUID(),
-      provider: d.provider,
+      provider,
       key,
       keyHint: keyHint(key),
       models,
@@ -94,8 +112,10 @@ export class AiClerk {
       lastCheckedAt: now,
       createdAt: existing?.createdAt ?? now,
     }
-    this.data.keys = [...this.data.keys.filter((k) => k.provider !== d.provider), record]
+    this.data.keys = existing ? this.data.keys.map((k) => (k === existing ? record : k)) : [...this.data.keys, record]
+    this.data.removed = this.data.removed.filter((r) => !(r.provider === provider && r.key === key))
     this.save()
+    this.onKeysChanged?.()
     return this.public()
   }
 
@@ -113,9 +133,77 @@ export class AiClerk {
   }
 
   removeKey(id: string): AiPublic {
-    this.data.keys = this.data.keys.filter((k) => k.id !== id)
+    const gone = this.data.keys.find((k) => k.id === id)
+    if (!gone) return this.public()
+    this.data.keys = this.data.keys.filter((k) => k !== gone)
+    // Remembered until the server has it, so the key does not come back from another computer.
+    this.data.removed = [...this.data.removed, { provider: gone.provider, key: gone.key, at: Date.now() }].slice(-REMOVED_KEEP)
     this.save()
+    this.onKeysChanged?.()
     return this.public()
+  }
+
+  // ---- key sync (keysync.ts) ----
+
+  localKeys(): LocalKey[] {
+    return this.data.keys.map((k) => ({ provider: k.provider, key: k.key, addedAt: k.createdAt }))
+  }
+
+  pendingRemovals(): LocalRemoval[] {
+    return [...this.data.removed]
+  }
+
+  vaultSecret(): VaultSecret | null {
+    return this.data.vault
+  }
+
+  setVaultSecret(v: VaultSecret | null) {
+    this.data.vault = v
+    this.save()
+  }
+
+  keySync(): AiKeySync {
+    return this.sync
+  }
+
+  setKeySync(s: AiKeySync) {
+    this.sync = s
+    this.onChange(this.public())
+  }
+
+  /**
+   * The server's merged list, applied here: keys from other computers arrive and are checked
+   * on this one (their models and status are this computer's own), keys removed elsewhere go,
+   * and the removals the server now has are forgotten.
+   */
+  applySync(add: LocalKey[], drop: LocalKey[], told: LocalRemoval[]) {
+    if (add.length === 0 && drop.length === 0 && told.length === 0) return
+    const same = (a: { provider: AiProvider; key: string }, b: { provider: AiProvider; key: string }) => a.provider === b.provider && a.key === b.key
+    this.data.keys = this.data.keys.filter((k) => !drop.some((d) => same(d, k)))
+    const arrived: KeyRecord[] = add
+      .filter((a) => !this.data.keys.some((k) => same(a, k)))
+      .map((a) => ({
+        id: randomUUID(),
+        provider: a.provider,
+        key: a.key,
+        keyHint: keyHint(a.key),
+        models: [],
+        defaultModel: '',
+        preferredModel: null,
+        status: 'checking' as const,
+        lastError: null,
+        lastCheckedAt: 0,
+        createdAt: a.addedAt,
+      }))
+    this.data.keys = [...this.data.keys, ...arrived]
+    this.data.removed = this.data.removed.filter((r) => !told.some((t) => same(t, r) && t.at === r.at))
+    this.save()
+    void this.checkArrivals(arrived.map((k) => k.id))
+  }
+
+  /** One at a time, so a handful of arriving keys is a handful of tiny calls, not a burst. */
+  private async checkArrivals(ids: string[]) {
+    for (const id of ids) await this.recheckKey(id)
   }
 
   setPreferredModel(id: string, model: string | null): AiPublic {
@@ -322,6 +410,8 @@ export class AiClerk {
   // ---- internals ----
 
   private pick(): KeyRecord | null {
+    // With several keys for one provider, the first that still works; one that fails is marked
+    // failing, so the next call moves on to the next.
     const ok = this.data.keys.filter((k) => k.status === 'ok')
     return ok.find((k) => k.provider === this.data.preferredProvider) ?? ok[0] ?? null
   }
@@ -364,7 +454,13 @@ export class AiClerk {
       const opened = this.seal.open(readFileSync(this.file))
       if (!opened) return
       const d = JSON.parse(opened.text) as Partial<Saved>
-      this.data = { keys: Array.isArray(d.keys) ? d.keys : [], preferredProvider: d.preferredProvider ?? null, usage: Array.isArray(d.usage) ? d.usage : [] }
+      this.data = {
+        keys: Array.isArray(d.keys) ? d.keys : [],
+        preferredProvider: d.preferredProvider ?? null,
+        usage: Array.isArray(d.usage) ? d.usage : [],
+        vault: d.vault && typeof d.vault === 'object' ? d.vault : null,
+        removed: Array.isArray(d.removed) ? d.removed : [],
+      }
       // Sealed by the keychain before: move it to the local seal so it never asks again.
       if (opened.reseal) writeFileSync(this.file, this.seal.seal(JSON.stringify(this.data)))
     } catch (err) {

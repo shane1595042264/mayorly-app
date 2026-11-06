@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ArrowsClockwise, GoogleLogo, Keyboard, Play, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
 import { ALARM_TONES, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type MayorlyState, type PlanMode, type Settings } from '@core/index'
-import type { AiProvider, AppInfo } from '../../../shared/bridge'
+import type { AiKeySync, AiProvider, AppInfo } from '../../../shared/bridge'
 import { builtOn } from '../../../shared/build'
 import { bridge } from '../bridge'
 import { hotkeyLabel, IS_MAC } from '../lib/keys'
@@ -252,7 +252,8 @@ function DataSection({ kind, openNotes }: { kind: 'electron' | 'web'; openNotes:
  * Bring your own key, the shanejli.com way: paste a key, the provider is read off
  * its shape, its models are listed and the cheapest one is made to answer once.
  * The clerk then files every captured line with the cheapest model, or the one
- * you pick. Keys stay on this machine, sealed with the OS keychain.
+ * you pick. Keys are sealed on this machine and, with a sync passphrase, shared
+ * with the account's other computers, sealed with the passphrase first.
  */
 function AiSection() {
   const ai = useAi()
@@ -267,7 +268,7 @@ function AiSection() {
       await fn()
       return true
     } catch (e) {
-      setError((e instanceof Error ? e.message : String(e)).replace(/^Error: /, '').replace(/^[a-z_]+: /, ''))
+      setError(plainError(e).replace(/^[a-z_]+: /, ''))
       return false
     } finally {
       setBusy(null)
@@ -281,6 +282,7 @@ function AiSection() {
 
   const dollars = (micro: number) => (micro < 10_000 ? `$${(micro / 1_000_000).toFixed(4)}` : `$${(micro / 1_000_000).toFixed(2)}`)
   const working = ai.keys.filter((k) => k.status === 'ok')
+  const providers = [...new Set(working.map((k) => k.provider))]
 
   return (
     <section>
@@ -288,7 +290,7 @@ function AiSection() {
       <p className="field-help">
         Bring your own key. Paste it and the provider is read from the key itself; the cheapest text model that answers is chosen.
         The clerk then files whatever you capture: it picks the ledger from your criteria, trims the title and reads the estimate.
-        Keys stay on this machine. Without one, the clerk files by prefix and tag only.
+        Keys stay on this machine unless you sync them below. Without one, the clerk files by prefix and tag only.
       </p>
 
       {ai.keys.map((k) => (
@@ -296,7 +298,7 @@ function AiSection() {
           <div className="ai-key-head">
             <span className="caps">{ai.providers[k.provider]}</span>
             <span className="mono dim">…{k.keyHint}</span>
-            <span className={`ai-status caps ${k.status}`}>{k.status === 'ok' ? 'working' : 'failing'}</span>
+            <span className={`ai-status caps ${k.status}`}>{k.status === 'ok' ? 'working' : k.status === 'checking' ? 'checking' : 'failing'}</span>
             <span className="ai-key-actions">
               <button className="icon-btn" title="Check the key again" aria-label="Check again" disabled={busy !== null} onClick={() => void run(k.id, () => bridge.ai.recheckKey(k.id))}>
                 <ArrowsClockwise size={14} />
@@ -307,22 +309,23 @@ function AiSection() {
             </span>
           </div>
           {k.status === 'failing' && k.lastError && <span className="field-error">{k.lastError}</span>}
-          <label className="field">
+          {k.status === 'checking' && <span className="field-help">From your other computer. Checking it here.</span>}
+          {k.models.length > 0 && <label className="field">
             <span className="field-label caps">Model</span>
             <select value={k.preferredModel ?? ''} onChange={(e) => void bridge.ai.setPreferredModel(k.id, e.target.value || null)}>
               <option value="">Cheapest that answered ({k.defaultModel})</option>
               {k.models.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
-          </label>
+          </label>}
         </div>
       ))}
 
-      {working.length > 1 && (
+      {providers.length > 1 && (
         <label className="field">
           <span className="field-label caps">Prefer</span>
           <select value={ai.preferredProvider ?? ''} onChange={(e) => void bridge.ai.setPreferredProvider((e.target.value || null) as AiProvider | null)}>
             <option value="">First working key</option>
-            {working.map((k) => <option key={k.provider} value={k.provider}>{ai.providers[k.provider]}</option>)}
+            {providers.map((p) => <option key={p} value={p}>{ai.providers[p]}</option>)}
           </select>
         </label>
       )}
@@ -348,7 +351,120 @@ function AiSection() {
       {ai.usage.calls > 0 && (
         <span className="field-help">Last {ai.usage.days} days: {ai.usage.calls} filed by the clerk, about {dollars(ai.usage.costMicroUsd)}.</span>
       )}
+      <KeySyncBlock sync={ai.sync} />
     </section>
+  )
+}
+
+/** Electron wraps an error thrown in main: "Error invoking remote method 'x': Error: text". */
+function plainError(e: unknown): string {
+  return (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']*': /, '').replace(/^Error: /, '')
+}
+
+/**
+ * The keys on the account's other computers. The passphrase is typed here and turned into a
+ * key in the main process; it is never stored or sent, and neither is any API key in the clear.
+ */
+function KeySyncBlock({ sync }: { sync: AiKeySync }) {
+  const now = useNow(30_000)
+  const [available, setAvailable] = useState(false)
+  const [pass, setPass] = useState('')
+  const [again, setAgain] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [confirmReset, setConfirmReset] = useState(false)
+  // Opening Settings asks main for the AI state, which also looks for keys from another computer.
+  useEffect(() => {
+    void bridge.accountsAvailable().then(setAvailable)
+    void bridge.ai.get()
+  }, [])
+  useEffect(() => {
+    setError(null)
+    setConfirmReset(false)
+  }, [sync.phase])
+
+  const run = async (fn: () => Promise<unknown>) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await fn()
+      setPass('')
+      setAgain('')
+    } catch (e) {
+      setError(plainError(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const setup = () => {
+    if (pass !== again) return setError('The two passphrases are not the same.')
+    void run(() => bridge.ai.syncSetup(pass))
+  }
+  const unlock = () => void run(() => bridge.ai.syncUnlock(pass))
+  const reset = () => void run(() => bridge.ai.syncReset())
+
+  if (!available) return null
+  const field = (value: string, set: (v: string) => void, placeholder: string, onEnter: () => void) => (
+    <input
+      type="password"
+      placeholder={placeholder}
+      value={value}
+      autoComplete="new-password"
+      spellCheck={false}
+      onChange={(e) => set(e.target.value)}
+      onKeyDown={(e) => e.key === 'Enter' && onEnter()}
+      disabled={busy}
+    />
+  )
+  const resetRow = confirmReset ? (
+    <div className="form-actions">
+      <span className="field-help">This removes the synced copy from the server. Each computer keeps the keys it has, and you choose a new passphrase.</span>
+      <button className="btn warn" onClick={reset} disabled={busy}>Reset</button>
+      <button className="btn ghost" onClick={() => setConfirmReset(false)} disabled={busy}>Cancel</button>
+    </div>
+  ) : null
+  const ago = sync.at ? Math.round((now - sync.at) / 60_000) : null
+
+  return (
+    <div className="key-sync">
+      <span className="field-label caps">Sync between computers</span>
+      {sync.phase === 'off' && <p className="field-help">Sign in under Account to share these keys with your other computers.</p>}
+      {sync.phase === 'checking' && <p className="field-help">Checking key sync</p>}
+      {sync.phase === 'none' && (
+        <>
+          <p className="field-help">
+            Share these keys with your other computers. They are encrypted here with a passphrase before they leave, so the sync server cannot read them.
+            You type the passphrase once on each computer. Use at least 10 characters; a few words are easiest. If you forget it, you can reset and paste your keys again.
+          </p>
+          <div className="ai-add">
+            {field(pass, setPass, 'Sync passphrase', setup)}
+            {field(again, setAgain, 'Same again', setup)}
+            <button className="btn primary" onClick={setup} disabled={busy || !pass || !again}>{busy ? 'Encrypting' : 'Turn on'}</button>
+          </div>
+        </>
+      )}
+      {sync.phase === 'locked' && (
+        <>
+          <p className="field-help">Your other computer syncs its keys. Type the sync passphrase you chose there.</p>
+          <div className="ai-add">
+            {field(pass, setPass, 'Sync passphrase', unlock)}
+            <button className="btn primary" onClick={unlock} disabled={busy || !pass}>{busy ? 'Unlocking' : 'Unlock'}</button>
+          </div>
+          {!confirmReset && <button className="btn ghost" onClick={() => setConfirmReset(true)} disabled={busy}>Forgot it</button>}
+          {resetRow}
+        </>
+      )}
+      {sync.phase === 'on' && (
+        <>
+          <p className="field-help">
+            Keys sync with your other computers, encrypted with your passphrase.{ago === null ? '' : ago < 1 ? ' Synced just now.' : ` Synced ${ago} min ago.`}
+          </p>
+          {!confirmReset && <button className="btn ghost" onClick={() => setConfirmReset(true)} disabled={busy}>Reset sync</button>}
+          {resetRow}
+        </>
+      )}
+      {(error ?? sync.message) && <span className="field-error">{error ?? sync.message}</span>}
+    </div>
   )
 }
 

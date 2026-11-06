@@ -14,6 +14,7 @@ import { describeForClerk, draftCommands, fillDraft, parseAnswer, previewApply, 
 import { Seal } from './seal'
 import { SessionStore } from './session'
 import { Sync } from './sync'
+import { KeySync } from './ai/keysync'
 import { refusedAsOptionOnly, registerHotkeys } from './hotkeys'
 import { Overlay } from './overlay'
 import { Store } from './store'
@@ -160,6 +161,8 @@ function boot() {
   ipcMain.handle(IPC.calRemoveSource, (_e, id: string) => feeds.remove(String(id)))
   ipcMain.handle(IPC.calRefresh, () => feeds.refresh())
   const clerk = new AiClerk(dataDir, seal, (pub) => send(IPC.ai, pub))
+  // Its keys ride the account's sign-in to the other computers, sealed with the sync passphrase (ai/keysync.ts).
+  const keySync = new KeySync(config.apiUrl, clerk)
   const say = (n: ClerkNotice) => send(IPC.clerk, n)
   const short = (t: string) => (t.length > 36 ? `${t.slice(0, 35)}…` : t)
   // Everything still in the tray goes to the clerk in one call; what fits a ledger moves.
@@ -247,7 +250,11 @@ function boot() {
       throw err
     }
   }
-  ipcMain.handle(IPC.aiGet, () => clerk.public())
+  ipcMain.handle(IPC.aiGet, () => {
+    // Settings asking is a good moment to look for keys from another computer.
+    void keySync.sync()
+    return clerk.public()
+  })
   ipcMain.handle(IPC.aiSweep, () => sweepTray())
   // The clerk arranging the calendar: a request becomes a held proposal, previewed through pure
   // reduce; applying dispatches the real schedule/apply, which checks everything again.
@@ -303,6 +310,18 @@ function boot() {
     return pub
   }))
   ipcMain.handle(IPC.aiRemoveKey, (_e, id: string) => clerk.removeKey(String(id)))
+  ipcMain.handle(IPC.aiSyncSetup, (_e, passphrase: string) => aiCall(async () => {
+    await keySync.setup(String(passphrase))
+    return clerk.public()
+  }))
+  ipcMain.handle(IPC.aiSyncUnlock, (_e, passphrase: string) => aiCall(async () => {
+    await keySync.unlock(String(passphrase))
+    return clerk.public()
+  }))
+  ipcMain.handle(IPC.aiSyncReset, () => aiCall(async () => {
+    await keySync.reset()
+    return clerk.public()
+  }))
   ipcMain.handle(IPC.aiRecheckKey, (_e, id: string) => clerk.recheckKey(String(id)))
   ipcMain.handle(IPC.aiPreferredModel, (_e, id: string, model: string | null) => clerk.setPreferredModel(String(id), model))
   ipcMain.handle(IPC.aiPreferredProvider, (_e, provider: AiProvider | null) => clerk.setPreferredProvider(provider))
@@ -323,6 +342,7 @@ function boot() {
     if (s) sessions.save(s)
     else sessions.clear()
     sync.setSession(s?.token ?? null)
+    keySync.setSession(s?.token ?? null)
     send(IPC.account, s?.user ?? null)
   }
   sync.onExpired = () => setSession(null)
@@ -330,8 +350,12 @@ function boot() {
     if (!session) return
     session = { ...session, token }
     sessions.save(session)
+    keySync.setToken(token)
   }
-  if (session) sync.setSession(session.token)
+  if (session) {
+    sync.setSession(session.token)
+    keySync.setSession(session.token)
+  }
   overlay.win.webContents.on('did-finish-load', () => {
     send(IPC.account, session?.user ?? null)
     send(IPC.sync, sync.current())

@@ -469,6 +469,8 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .ai-status.failing { color: #ff9b8c; border-color: rgb(255 155 140 / 0.5); }
 .ai-add { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
 .ai-add input { flex: 1; min-width: 0; }
+.key-sync { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.key-sync .ai-add, .key-sync .form-actions { align-self: stretch; }
 
 /* ------------------------------------------------------------ inside a ledger */
 

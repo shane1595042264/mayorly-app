@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## AI keys on all your computers
+
+- Your AI clerk keys can now sync between your computers. Turn it on under Settings, AI clerk, with a sync passphrase, then type the same passphrase once on each other computer.
+- Keys are encrypted with the passphrase before they leave your computer, so the sync server cannot read them. The passphrase itself is never saved or sent.
+- Every different key you have on any computer is kept, and the same key on two computers counts once. A key you remove on one computer goes from the others.
+- You can keep more than one key per provider. When one stops working, the clerk moves on to the next.
+
 ## Capture keys you can change, and the Mac's HUD on Windows
 
 - Enter files a captured task and starts it immediately. Cmd+Enter on Mac, or Ctrl+Enter on Windows, files it without starting. Shift+Enter still files and keeps the box open.
