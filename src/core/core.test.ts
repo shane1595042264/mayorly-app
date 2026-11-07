@@ -23,7 +23,7 @@ function world(seed?: (s: MayorlyState) => void, prefix = '') {
     get now() { return now },
     events,
     do(action: Action) {
-      const r = reduce(state, action, { now, newId, random: () => 0.5 })
+      const r = reduce(state, action, { now, newId, random: () => 0.5, device: prefix || 'here' })
       state = r.state
       events.push(...r.events)
       return r
@@ -636,7 +636,7 @@ describe('sync', () => {
   it('a desk running on the other machine arrives paused', () => {
     const w = world()
     const other = structuredClone(w.s)
-    const r = reduce(other, { type: 'desk/deploy', mode: 'pomodoro', ledgerId: other.ledgers[0].id }, { now: T0, newId: () => 'o1', random: () => 0.5 })
+    const r = reduce(other, { type: 'desk/deploy', mode: 'pomodoro', ledgerId: other.ledgers[0].id }, { now: T0, newId: () => 'o1', random: () => 0.5, device: 'here' })
     expect(r.state.desk.status).toBe('running')
     w.do({ type: 'sync/replace', state: r.state })
     expect(w.s.desk.status).toBe('paused')
@@ -1315,7 +1315,7 @@ describe('the trash', () => {
     w.do({ type: 'trash/drop', id: b.id })
     expect(w.s.trash).toEqual([])
     w.do({ type: 'entry/delete', id: c.id })
-    const later = reduce(w.s, { type: 'entry/delete', id: w.entry('a').id }, { now: w.now + 31 * DAY, newId: () => 'x', random: () => 0.5 }).state
+    const later = reduce(w.s, { type: 'entry/delete', id: w.entry('a').id }, { now: w.now + 31 * DAY, newId: () => 'x', random: () => 0.5, device: 'here' }).state
     expect(later.trash.map((t) => t.title)).toEqual(['a'])
     w.do({ type: 'trash/empty' })
     expect(w.s.trash).toEqual([])
@@ -1327,25 +1327,75 @@ describe('the trash', () => {
     const e = w.entry('shared')
     const synced = w.now
     const here = w.s
-    const there = reduce(here, { type: 'entry/delete', id: e.id }, { now: synced + 1000, newId: () => 'x', random: () => 0.5 }).state
+    const there = reduce(here, { type: 'entry/delete', id: e.id }, { now: synced + 1000, newId: () => 'x', random: () => 0.5, device: 'here' }).state
     const merged = mergeStates(here, there, synced)
     expect(merged.entries.some((x) => x.id === e.id)).toBe(false)
     expect(merged.trash.map((t) => t.id)).toEqual([e.id])
     // Restored here after the deletion there: the restore is newer, so it is kept and the trash lets go.
-    const restored = reduce(merged, { type: 'entry/restore', id: e.id }, { now: synced + 5000, newId: () => 'y', random: () => 0.5 }).state
+    const restored = reduce(merged, { type: 'entry/restore', id: e.id }, { now: synced + 5000, newId: () => 'y', random: () => 0.5, device: 'here' }).state
     const again = mergeStates(restored, there, synced + 2000)
     expect(again.entries.some((x) => x.id === e.id)).toBe(true)
     expect(again.trash).toEqual([])
     // Deleted there after the restore here: the deletion is newer and wins.
-    const deletedAgain = reduce(restored, { type: 'entry/delete', id: e.id }, { now: synced + 9000, newId: () => 'z', random: () => 0.5 }).state
+    const deletedAgain = reduce(restored, { type: 'entry/delete', id: e.id }, { now: synced + 9000, newId: () => 'z', random: () => 0.5, device: 'here' }).state
     const third = mergeStates(restored, deletedAgain, synced + 2000)
     expect(third.entries.some((x) => x.id === e.id)).toBe(false)
     expect(third.trash.map((t) => t.id)).toEqual([e.id])
   })
 })
 
+describe('the active device', () => {
+  // Two computers on one account. A person's action claims the desk first, as engine.act does.
+  const two = () => {
+    const mac = world(undefined, 'mac')
+    const win = world(undefined, 'win')
+    const act = (w: typeof mac, name: string, a: Action) => { w.do({ type: 'desk/claim', name }); w.do(a) }
+    const wire = (w: typeof mac) => JSON.parse(JSON.stringify(w.s)) as unknown
+    const focusMs = (w: typeof mac) => w.s.segments.filter((x) => x.kind === 'focus').reduce((n, x) => n + (x.end ?? w.now) - x.start, 0)
+    act(mac, 'Mac', { type: 'settings/update', patch: { focusMin: 30 } })
+    act(mac, 'Mac', { type: 'desk/deploy', mode: 'pomodoro', ledgerId: mac.s.ledgers[0].id })
+    mac.wait(12 * MIN)
+    win.wait(12 * MIN)
+    // The other computer hears of it, holds it, and its copy goes back to the server.
+    win.do({ type: 'sync/replace', state: wire(mac) })
+    return { mac, win, act, wire, focusMs }
+  }
+
+  it('holds the desk on the other computer, and the active one ignores that copy', () => {
+    const { mac, win, wire } = two()
+    expect(win.s.desk).toMatchObject({ status: 'paused', device: { name: 'Mac' } })
+    expect(blockView(win.s, win.now)?.remainingMs).toBe(18 * MIN)
+    for (const type of ['sync/replace', 'sync/merge'] as const) {
+      const r = reduce(mac.s, type === 'sync/merge' ? { type, state: wire(win), syncedAt: T0 } : { type, state: wire(win) }, { now: mac.now, newId: () => 'x', random: () => 0.5, device: 'mac' }).state
+      expect(r.desk.status).toBe('running')
+      expect(blockView(r, mac.now)?.remainingMs).toBe(18 * MIN)
+      expect(r.segments.filter((x) => x.end === null)).toHaveLength(1)
+    }
+  })
+
+  it('anything a person does on the other computer takes it over, the clock carried on', () => {
+    const { mac, win, act, wire, focusMs } = two()
+    mac.wait(5 * MIN)
+    win.wait(5 * MIN)
+    act(win, 'PC', { type: 'entry/capture', text: 'a note, nothing to do with the desk' })
+    expect(win.s.desk).toMatchObject({ status: 'running', device: { name: 'PC' }, heldAt: null })
+    expect(blockView(win.s, win.now)?.remainingMs).toBe(13 * MIN)
+    // The Mac, which kept running until it heard, ends its run at the takeover and holds.
+    mac.wait(MIN)
+    win.wait(MIN)
+    mac.do({ type: 'sync/merge', state: wire(win), syncedAt: T0 })
+    expect(mac.s.desk).toMatchObject({ status: 'paused', device: { name: 'PC' } })
+    expect(focusMs(mac)).toBe(18 * MIN)
+    // The PC hears back from the Mac and loses nothing either: one 18 minute run, on two computers.
+    win.do({ type: 'sync/merge', state: wire(mac), syncedAt: T0 })
+    expect(win.s.desk.status).toBe('running')
+    expect(blockView(win.s, win.now)?.remainingMs).toBe(12 * MIN)
+    expect(focusMs(win)).toBe(18 * MIN)
+  })
+})
+
 describe('sync merge', () => {
-  const ctx = { now: T0 + 60 * MIN, newId: () => `m${Math.random()}`, random: () => 0.5 }
+  const ctx = { now: T0 + 60 * MIN, newId: () => `m${Math.random()}`, random: () => 0.5, device: 'here' }
   it('keeps work this machine did since its last sync and takes the server\'s version of what both have', () => {
     const a = world()
     a.do({ type: 'entry/capture', text: 'legal: shared one' })

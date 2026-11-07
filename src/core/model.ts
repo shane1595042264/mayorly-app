@@ -342,6 +342,24 @@ export interface Desk {
   /** The entry the desk was on before the last swap: the other half of the quick switch when nothing is parked. */
   previous: { entryId: Id | null; ledgerId: Id | null } | null
   restTask?: RestTask | null
+  /**
+   * The active device: the computer a person last used, and when. Only it runs the clock; sync
+   * keeps the desk claimed last. Null on a save from before devices, until someone acts.
+   */
+  device: DeskDevice | null
+  /**
+   * On a computer that is not the active one: when it held a desk that was running over there.
+   * Taking over carries the clock on from here as if it never stopped. Null on the active device.
+   */
+  heldAt: Epoch | null
+}
+
+export interface DeskDevice {
+  id: Id
+  /** What a person calls the computer: its host name. */
+  name: string
+  /** The last thing a person did there. */
+  at: Epoch
 }
 
 export interface TokenTx {
@@ -457,4 +475,6 @@ export interface Ctx {
   now: Epoch
   newId: () => Id
   random: () => number
+  /** This computer's id, so the desk knows whether it is the active device. */
+  device: Id
 }

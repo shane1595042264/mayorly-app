@@ -8,7 +8,7 @@ import type {
 import { advance, blitzBlock, entrySpentMs, firstBlock, firstOpenInLedger, focusForSlot, initialPlan, leisureBlock, nextInFlow, openFlow, type DeployOpts } from './planner'
 import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_BLOCK, tokensForTomato } from './rules'
 import { migrate } from './seed'
-import { mergeStates } from './merge'
+import { deskWinner, mergeStates, replaceState } from './merge'
 import { sanitiseAlarms } from './alarms'
 import { ledgerKey, ledgerTomatoes, unharvestedTomatoes, wholeTomatoes } from './accounting'
 import { completionHistory } from './history'
@@ -91,6 +91,8 @@ export type Action =
   /** A final Plus menu choice, applied once when the menu closes against the current desk. */
   | { type: 'desk/select'; entryId?: Id | null; ledgerId?: Id | null; leisureId?: Id | null; mode?: Mode; supersetId?: Id | null }
   | { type: 'desk/tick' }
+  /** A person did something on this computer: it becomes the active device. Sent ahead of every user action. */
+  | { type: 'desk/claim'; name: string }
   | { type: 'settings/update'; patch: Partial<Settings> }
   /** The account's state arrived from the sync server and replaces this copy. */
   | { type: 'sync/replace'; state: unknown }
@@ -122,28 +124,29 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
   // The heartbeat runs every second; only pay for a copy when something is due.
   if (action.type === 'desk/tick' && !tickDue(state, ctx.now)) return { state, events: [] }
 
-  if (action.type === 'sync/merge') {
+  // The server's document: taken whole (nothing changed here since the last sync) or merged.
+  // Either way the desk is the active device's, the computer a person used last (deskWinner).
+  if (action.type === 'sync/merge' || action.type === 'sync/replace') {
     const incoming = migrateSync(action.state, state)
     if (!incoming) return { state, events: [] }
-    const merged = mergeStates(state, incoming, action.syncedAt)
-    merged.settings = sanitiseSettings({ ...merged.settings, ...Object.fromEntries(DEVICE_SETTINGS.map((k) => [k, state.settings[k]])) })
-    // A desk taken from another machine is not running here: pause it where that copy last was.
-    if (merged.desk !== state.desk && merged.desk.status === 'running') {
-      return reduce(merged, { type: 'desk/pause', at: Math.min(ctx.now, merged.desk.runStartedAt ?? ctx.now) }, ctx, clerk)
-    }
-    return { state: merged, events: [] }
-  }
-
-  if (action.type === 'sync/replace') {
-    const incoming = migrateSync(action.state, state)
-    if (!incoming) return { state, events: [] }
-    incoming.settings = sanitiseSettings({ ...incoming.settings, ...Object.fromEntries(DEVICE_SETTINGS.map((k) => [k, state.settings[k]])) })
-    // A desk left running on another machine is not running here: time this
-    // machine could not see is not desk time. Pause it where that copy last was.
-    if (incoming.desk.status === 'running') {
-      return reduce(incoming, { type: 'desk/pause', at: Math.min(ctx.now, incoming.desk.runStartedAt ?? ctx.now) }, ctx, clerk)
-    }
-    return { state: incoming, events: [] }
+    const winner = deskWinner(state, incoming)
+    const taker = incoming.desk.device
+    // Someone used another computer since: this one's run ends the moment that one took over.
+    const local = winner === 'incoming' && taker !== null && taker.id !== ctx.device && state.desk.status === 'running'
+      ? reduce(state, { type: 'desk/pause', at: taker.at }, ctx, clerk).state
+      : state
+    const next = action.type === 'sync/merge' ? mergeStates(local, incoming, action.syncedAt) : replaceState(local, incoming)
+    next.settings = sanitiseSettings({ ...next.settings, ...Object.fromEntries(DEVICE_SETTINGS.map((k) => [k, state.settings[k]])) })
+    if (winner === 'local' || next.desk.status !== 'running' || taker?.id === ctx.device) return { state: next, events: [] }
+    // A desk running on the active device is held here, where it stands as it arrives: only that
+    // computer runs the clock, mints and rings. Anything a person does here takes it over.
+    const s = structuredClone(next)
+    closeSegment(s, ctx.now)
+    s.desk.bankMs += Math.max(0, ctx.now - (s.desk.runStartedAt ?? ctx.now))
+    s.desk.runStartedAt = null
+    s.desk.status = 'paused'
+    s.desk.heldAt = ctx.now
+    return { state: s, events: [] }
   }
 
   // The planner runs often and usually changes nothing: compute first, copy only when it did.
@@ -569,6 +572,21 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     case 'desk/tick':
       tick(s, ctx, ev)
       break
+    case 'desk/claim': {
+      const d = s.desk
+      // Held while the other computer ran it: the clock carries on here as if it never stopped,
+      // never past the end of the block. That computer's run closes at this moment when it hears.
+      if (d.heldAt !== null && d.status === 'paused' && d.block) {
+        const banked = d.bankMs + Math.max(0, now - d.heldAt)
+        d.bankMs = d.block.durationMs === null ? banked : Math.min(d.block.durationMs, banked)
+        d.status = 'running'
+        d.runStartedAt = now
+        openSegment(s, ctx, now)
+      }
+      d.heldAt = null
+      d.device = { id: ctx.device, name: action.name, at: now }
+      break
+    }
     case 'schedule/apply': {
       const commands = Array.isArray(action.commands) ? action.commands.slice(0, 10) : []
       let applied = 0
@@ -883,7 +901,7 @@ function endSitting(s: MayorlyState, at: number, ev: HudEvent[], reason: 'stood'
     ev.push({ type: 'sitting-end', at, reason, focusMs: sitting.focusMs, tomatoes: sitting.tomatoes, tokens: sitting.tokens })
   }
   const held = d.holster ? taskSession(s, d.holster) : null
-  s.desk = { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null }
+  s.desk = { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null, device: s.desk.device, heldAt: null }
   // The parked session comes back, paused where it was.
   if (held) restore(s, null, held, at, false)
 }

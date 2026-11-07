@@ -55,7 +55,7 @@ export function createWebBridge(): Bridge {
   }
 
   function dispatch(action: Action) {
-    const r = reduce(state, action, { now: Date.now(), newId, random: Math.random })
+    const r = reduce(state, action, { now: Date.now(), newId, random: Math.random, device: 'web' })
     const changed = r.state !== state
     state = r.state
     if (changed) {
@@ -174,7 +174,7 @@ export function createWebBridge(): Bridge {
     deleteAccount: async () => {},
     signOutEverywhere: async () => {},
     log: (level, message) => console[level](message),
-    getInfo: async () => ({ version: BUILD.version, platform: 'web', arch: '', dataDir: 'this browser', packaged: false, commit: BUILD.commit, builtAt: BUILD.builtAt }),
+    getInfo: async () => ({ version: BUILD.version, platform: 'web', arch: '', dataDir: 'this browser', packaged: false, commit: BUILD.commit, builtAt: BUILD.builtAt, device: 'web' }),
     getBuild: async () => BUILD,
     // ?demo&notes or ?fresh&notes shows the card; a real preview shows it once per build like the app.
     whatsNew: async () => (scratch ? params.has('notes') : readSeen() !== BUILD.commit),

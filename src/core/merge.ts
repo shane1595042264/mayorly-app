@@ -1,4 +1,4 @@
-import type { Id, MayorlyState } from './model'
+import type { Id, MayorlyState, Segment } from './model'
 import { CLERK_LOG_CAP } from './rules'
 import { reconcileTomatoes } from './accounting'
 
@@ -7,7 +7,7 @@ import { reconcileTomatoes } from './accounting'
 // Things that can be deleted (entries, ledgers, supersets, leisure, house rules) take the
 // server's version when both have them; this machine's own are kept when it made them since
 // its last sync, and dropped when they are older than that, because then they were deleted
-// elsewhere. The desk belongs to the machine that is running it.
+// elsewhere. The desk belongs to the active device: the computer a person used last.
 
 type WithId = { id: Id }
 
@@ -31,6 +31,42 @@ function mergeDeletable<T extends WithId>(mine: T[], theirs: T[], since: number,
   return out
 }
 
+/**
+ * Whose desk counts: the copy claimed later, since the computer a person used last is the active
+ * device and the others' copies of its desk are ignored. On a tie (the same claim on both sides)
+ * the active device's own copy beats one another computer holds; builds from before devices fall
+ * back to the desk that is running.
+ */
+export function deskWinner(local: MayorlyState, incoming: MayorlyState): 'local' | 'incoming' {
+  const mine = local.desk.device?.at ?? -1
+  const theirs = incoming.desk.device?.at ?? -1
+  if (mine !== theirs) return mine > theirs ? 'local' : 'incoming'
+  const localHeld = local.desk.heldAt !== null
+  if (localHeld !== (incoming.desk.heldAt !== null)) return localHeld ? 'incoming' : 'local'
+  return local.desk.status === 'running' ? 'local' : 'incoming'
+}
+
+/**
+ * One log of intervals. The run the kept desk is timing is the kept copy's, whatever another
+ * computer made of it; otherwise a closed interval beats an open one and the later end wins,
+ * because an interval only grows while it runs.
+ */
+function mergeSegments(local: MayorlyState, incoming: MayorlyState, kept: MayorlyState): Segment[] {
+  const run = kept.desk.status === 'running' ? kept.segments.find((x) => x.end === null && x.sittingId === kept.desk.sittingId)?.id : undefined
+  return unionLogs(local.segments, incoming.segments, (l, t) => {
+    if (l.id === run) return kept === local ? l : t
+    if (l.end === null) return t
+    if (t.end === null) return l
+    return t.end > l.end ? t : l
+  }, (x) => x.start)
+}
+
+/** The server's document taken whole, nothing here having changed since the last sync, except the desk and its intervals, which follow the active device. */
+export function replaceState(local: MayorlyState, incoming: MayorlyState): MayorlyState {
+  const kept = deskWinner(local, incoming) === 'local' ? local : incoming
+  return reconcileTomatoes({ ...incoming, desk: kept.desk, segments: mergeSegments(local, incoming, kept) })
+}
+
 /** The server's document and this machine's state as one. `syncedAt` is when this machine last matched the server, or null if never. */
 export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedAt: number | null): MayorlyState {
   const since = syncedAt ?? 0
@@ -40,7 +76,8 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
     const keys = new Set([...Object.keys(l.ledgerTomatoes ?? {}), ...Object.keys(t.ledgerTomatoes ?? {})])
     return { ...chosen, ledgerTomatoes: Object.fromEntries([...keys].map(key => [key, Math.max(l.ledgerTomatoes?.[key] ?? 0, t.ledgerTomatoes?.[key] ?? 0)])) }
   }, (x) => x.startedAt)
-  const segments = unionLogs(local.segments, incoming.segments, (l, t) => (l.end !== null ? l : t), (x) => x.start)
+  const kept = deskWinner(local, incoming) === 'local' ? local : incoming
+  const segments = mergeSegments(local, incoming, kept)
   const tokens = unionLogs(local.tokens, incoming.tokens, (l) => l, (x) => x.at)
   // A restore counts as a making: an entry put back since the last sync is kept, like a new one.
   const merged = mergeDeletable(local.entries, incoming.entries, since, (e) => Math.max(e.createdAt, e.restoredAt ?? 0), (l, t) => {
@@ -84,6 +121,5 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
     })
     .sort((a, b) => a.at - b.at)
     .slice(-CLERK_LOG_CAP)
-  const desk = local.desk.status === 'running' ? local.desk : incoming.desk
-  return reconcileTomatoes({ ...incoming, ledgers, entries, trash, supersets, leisure, houseRules, sittings, segments, tokens, clerkLog, desk, calendar })
+  return reconcileTomatoes({ ...incoming, ledgers, entries, trash, supersets, leisure, houseRules, sittings, segments, tokens, clerkLog, desk: kept.desk, calendar })
 }

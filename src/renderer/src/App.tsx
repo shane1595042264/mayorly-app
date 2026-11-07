@@ -232,6 +232,9 @@ export function App() {
     void bridge.getLayout().then(take)
     return bridge.onLayout(take)
   }, [])
+  // This computer's id: the pet says so when the desk is running on another one.
+  const [here, setHere] = useState<string | null>(null)
+  useEffect(() => void bridge.getInfo().then((info) => setHere(info.device)), [])
   const onDrag = useCallback((a: Point) => setDragAnchor(a), [])
   // While the tomato is held the overlay keeps the pointer, even where the pet cannot follow (a clamped edge, a fast flick).
   const grabbing = useRef(false)
@@ -429,6 +432,7 @@ export function App() {
       <Objectives s={s} mode={mode} />
       <Pet
         s={s}
+        here={here}
         away={petAway}
         moving={moving}
         open={setMode}

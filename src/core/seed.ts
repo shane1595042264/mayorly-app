@@ -51,7 +51,7 @@ export function emptyState(): MayorlyState {
     houseRules: [],
     leisure: [],
     trash: [],
-    desk: { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null },
+    desk: { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null, device: null, heldAt: null },
     settings: { ...DEFAULT_SETTINGS, hotkeys: { ...DEFAULT_HOTKEYS }, calendar: { ...DEFAULT_SETTINGS.calendar, hours: DEFAULT_SETTINGS.calendar.hours.map((d) => d.map((w) => ({ ...w }))) } },
     calendar: emptyCalendar(),
   }

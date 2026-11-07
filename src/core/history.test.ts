@@ -7,7 +7,7 @@ import { mergeStates } from './merge'
 describe('entry history', () => {
   it('keeps notes, checklist snapshots and every interval across clear, reopen and reload', () => {
     let s = emptyState(), now = 1000, id = 0
-    const act = (a: Action) => { s = reduce(s, a, { now: now++, newId: () => `id${++id}`, random: () => 0.5 }).state }
+    const act = (a: Action) => { s = reduce(s, a, { now: now++, newId: () => `id${++id}`, random: () => 0.5, device: 'here' }).state }
     act({ type: 'entry/capture', text: 'Practice a turn' })
     const entry = s.entries[0].id
     act({ type: 'entry/note', id: entry, text: 'First attempt' })
@@ -36,7 +36,7 @@ describe('entry history', () => {
   it('keeps a legacy zero-tomato completion when reopened, and sync cannot erase a newer reopen', () => {
     const s = emptyState()
     s.entries.push({ id: 'e', title: 'A quick task', ledgerId: null, createdAt: 1, doneAt: 100, estimateMin: null, order: 0, tomatoes: 0, notes: 'Keep this' })
-    const result = reduce(s, { type: 'entry/reopen', id: 'e' }, { now: 200, newId: () => 'reopen', random: () => 0.5 }).state
+    const result = reduce(s, { type: 'entry/reopen', id: 'e' }, { now: 200, newId: () => 'reopen', random: () => 0.5, device: 'here' }).state
     expect(completionHistory(result, result.entries[0]).map(h => h.kind)).toEqual(['reopened', 'cleared'])
     const merged = mergeStates(result, s, null)
     expect(merged.entries[0].doneAt).toBeNull()

@@ -8,7 +8,7 @@ export function demoState(now: number, newId: () => string): MayorlyState {
   let s = sampleState(now - 7 * 86_400_000, newId)
   let t = now - 7 * 86_400_000
   const run = (a: Parameters<typeof reduce>[1], at = t) => {
-    s = reduce(s, a, { now: at, newId, random: () => 0.42 }).state
+    s = reduce(s, a, { now: at, newId, random: () => 0.42, device: 'web' }).state
   }
 
   // A week of history so the record has something to show.

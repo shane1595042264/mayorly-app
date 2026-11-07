@@ -41,13 +41,15 @@ interface Props {
   onGrab: (held: boolean) => void
   /** Something the shell needs to say (a hotkey that failed); shown in place of the caption. */
   notice: string | null
+  /** This computer's id, null until the shell says; the desk may be running on another one. */
+  here: string | null
 }
 
 const MOVE_HINT = 'Arrows or hjkl move it, 1 to 4 pick a corner, Enter when done'
 /** A press that moves less than this is not a drag. */
 const DRAG_PX = 4
 
-export function Pet({ s, away, moving, open, side, dragging, compact, notice, anchor, area, onDrag, onPlace, onGrab }: Props) {
+export function Pet({ s, away, moving, open, side, dragging, compact, notice, here, anchor, area, onDrag, onPlace, onGrab }: Props) {
   // Idle, the pet only counts today's tomatoes; a clock is what needs the quarter second.
   const now = useNow(s.desk.status === 'idle' ? 10_000 : 250)
   const reduce = useReducedMotion()
@@ -82,6 +84,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, an
   const nextAt = next ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: s.settings.calendar.tz || undefined }).format(Math.max(next.start, now)) : ''
   const hint = !v
     ? nextEntry ? `Next: ${nextEntry.title}, ${nextAt}. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.` : `Desk idle. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.`
+    : s.desk.heldAt !== null && s.desk.device && s.desk.device.id !== here ? `Running on ${s.desk.device.name}. Anything you do here takes it over.`
     : back ? `${hotkeyLabel(s.settings.hotkeys.switch)}: back to ${back}` : ''
   const text = moving ? MOVE_HINT : (notice ?? hint)
   const showCaption = moving || !!notice || (hover && !dragging && hint !== '')

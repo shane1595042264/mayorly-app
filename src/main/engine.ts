@@ -8,6 +8,12 @@ import type { Store } from './store'
 type Listener = (state: MayorlyState, events: HudEvent[]) => void
 type ActionListener = (action: Action, changed: boolean) => void
 
+/** This computer as the desk knows it: an id kept beside the save, and its host name. */
+export interface Device {
+  id: string
+  name: string
+}
+
 export class Engine {
   state: MayorlyState
   /** The first launch on this machine: nothing saved yet. */
@@ -20,7 +26,7 @@ export class Engine {
   private beat: NodeJS.Timeout | null = null
   private lastPersistedBeat = 0
 
-  constructor(private store: Store) {
+  constructor(private store: Store, private device: Device) {
     const saved = store.load(randomUUID)
     this.state = saved.state
     this.fresh = !!saved.fresh
@@ -60,12 +66,31 @@ export class Engine {
     return () => this.actionListeners.delete(fn)
   }
 
+  /** Something the app does on its own: a tick, a replan, a sync, the clerk's filing, a pause for sleep. */
   dispatch(action: Action) {
-    const r = reduce(this.state, action, { now: Date.now(), newId: randomUUID, random: Math.random })
-    const changed = r.state !== this.state
-    this.state = r.state
+    this.run([action], action)
+  }
+
+  /**
+   * Something a person did on this computer. It becomes the active device first, in the same
+   * step, so the desk runs here and the other computers hold it when they hear.
+   */
+  act(action: Action) {
+    this.run([{ type: 'desk/claim', name: this.device.name }, action], action)
+  }
+
+  private run(actions: Action[], action: Action) {
+    const ctx = { now: Date.now(), newId: randomUUID, random: Math.random, device: this.device.id }
+    const before = this.state
+    const events: HudEvent[] = []
+    for (const a of actions) {
+      const r = reduce(this.state, a, ctx)
+      this.state = r.state
+      events.push(...r.events)
+    }
+    const changed = this.state !== before
     if (changed) this.store.save(this.state, this.lastBeat)
-    if (changed || r.events.length) for (const fn of this.listeners) fn(this.state, r.events)
+    if (changed || events.length) for (const fn of this.listeners) fn(this.state, events)
     for (const fn of this.actionListeners) fn(action, changed)
   }
 

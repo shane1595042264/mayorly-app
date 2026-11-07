@@ -6,7 +6,7 @@ describe('the plan described to the clerk', () => {
   it('includes the chosen mode, assumed length and events beyond the first week', () => {
     const now = Date.parse('2026-10-30T15:00:00Z')
     let n = 0
-    const ctx = { now, newId: () => `id${++n}`, random: () => 0.5 }
+    const ctx = { now, newId: () => `id${++n}`, random: () => 0.5, device: 'here' }
     let s = sampleState(now, ctx.newId)
     s = reduce(s, { type: 'settings/update', patch: { calendar: { ...s.settings.calendar, tz: 'UTC', horizonDays: 14, mode: 'rotate', defaultMin: 45 } } }, ctx).state
     s = reduce(s, { type: 'entry/capture', text: 'legal: Read the lease' }, ctx).state

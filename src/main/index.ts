@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
 import { migrate, type Action, type ClerkCommand, type Entry, type HudEvent, type Settings } from '@core/index'
@@ -51,7 +52,21 @@ function boot() {
   const dataDir = app.getPath('userData')
   installLog(dataDir)
   const store = new Store(dataDir)
-  const engine = new Engine(store)
+  // This computer's id for the desk: made once, kept beside the save. The id file is ours, so a
+  // missing or unreadable one is simply made again (this computer then counts as a new device).
+  const deviceFile = join(dataDir, 'device.json')
+  let deviceId = ''
+  try {
+    if (existsSync(deviceFile)) deviceId = String((JSON.parse(readFileSync(deviceFile, 'utf8')) as { id?: unknown }).id ?? '')
+  } catch (err) {
+    console.warn('[device] unreadable id, making a new one:', err instanceof Error ? err.message : String(err))
+  }
+  if (!deviceId) {
+    deviceId = randomUUID()
+    writeFileSync(deviceFile, JSON.stringify({ id: deviceId }))
+  }
+  const device = { id: deviceId, name: hostname().replace(/\.local$/, '') || (process.platform === 'darwin' ? 'Mac' : 'PC') }
+  const engine = new Engine(store, device)
   const overlay = new Overlay(dataDir)
   // The pet goes anywhere on both desktops. A first run on Windows starts it on the side the
   // settings name; after that, wherever it is decides `hudSide`, so Settings shows the truth.
@@ -133,7 +148,7 @@ function boot() {
   ipcMain.handle(IPC.alarmSave, (_e, kind: string, name: string, dataUrl: string) => {
     if (kind !== 'work' && kind !== 'rest') throw new Error('Unknown alarm')
     const choice = alarmFiles.save(name, dataUrl)
-    engine.dispatch({ type: 'settings/update', patch: { alarms: { ...engine.state.settings.alarms, [kind]: choice } } })
+    engine.act({ type: 'settings/update', patch: { alarms: { ...engine.state.settings.alarms, [kind]: choice } } })
   })
   ipcMain.on(IPC.setMode, (_e, mode: UiMode) => { if (mode !== 'field') opened = Date.now() })
   overlay.win.on('blur', () => {
@@ -141,8 +156,8 @@ function boot() {
   })
   const togglePause = () => {
     const st = engine.state.desk.status
-    if (st === 'running') engine.dispatch({ type: 'desk/pause' })
-    else if (st === 'paused' || st === 'ready') engine.dispatch({ type: 'desk/resume' })
+    if (st === 'running') engine.act({ type: 'desk/pause' })
+    else if (st === 'paused' || st === 'ready') engine.act({ type: 'desk/resume' })
   }
   // A locked screen or a sleeping machine is not a desk. The rule that time the app could not
   // see is not desk time, applied the moment it starts; the user resumes when they are back.
@@ -216,10 +231,10 @@ function boot() {
   }
   const captureLine = async (text: string, start = false) => {
     const action: Action = { type: 'entry/capture', text, start }
-    if (!clerk.enabled()) return engine.dispatch(action)
+    if (!clerk.enabled()) return engine.act(action)
     if (start) {
       const before = new Set(engine.state.entries.map((x) => x.id))
-      const r = engine.dispatch(action)
+      const r = engine.act(action)
       const added = engine.state.entries.find((x) => !before.has(x.id))
       if (added) void fileLater(added, text)
       return r
@@ -232,16 +247,17 @@ function boot() {
       // The provider is down or the key is bad: the line still lands, in the tray.
       console.warn('[clerk] could not file:', err instanceof Error ? err.message : String(err))
       say({ phase: 'done', text: `The clerk could not reach its model. '${short(text.trim())}' is in the tray.` })
-      return engine.dispatch(action)
+      return engine.act(action)
     }
-    const r = engine.dispatch(filing ? { ...action, filing } : action)
+    const r = engine.act(filing ? { ...action, filing } : action)
     const ledger = filing?.ledgerId ? engine.state.ledgers.find((l) => l.id === filing.ledgerId) : null
     const title = short(filing?.title ?? text.trim())
     say({ phase: 'done', text: filing?.leisure ? `'${title}' is entertainment: on the couch list` : ledger ? `'${title}' went to ${ledger.name}${filing?.confidence === 'unsure' ? ', best guess' : ''}` : `'${title}' stays in the tray` })
     void sweepTray()
     return r
   }
-  ipcMain.handle(IPC.dispatch, (_e, action: Action) => (action.type === 'entry/capture' ? captureLine(action.text, !!action.start) : engine.dispatch(action)))
+  // Everything the pages send is something a person did here.
+  ipcMain.handle(IPC.dispatch, (_e, action: Action) => (action.type === 'entry/capture' ? captureLine(action.text, !!action.start) : engine.act(action)))
   const aiCall = async (fn: () => Promise<unknown> | unknown) => {
     try {
       return await fn()
@@ -278,7 +294,7 @@ function boot() {
     const live = engine.state
     const drafts = draftCommands(parsed, live, now)
     const ready = drafts.map((d) => d.command).filter((c): c is ClerkCommand => !!c)
-    const ctx = { now, newId: () => randomUUID(), random: Math.random }
+    const ctx = { now, newId: () => randomUUID(), random: Math.random, device: device.id }
     const outcome = ready.length ? previewApply(live, ready, parsed.log, ctx) : { moved: 0, newLate: 0 }
     const id = randomUUID()
     proposals.set(id, { drafts, log: parsed.log || `clerk: arranged '${short(text)}'`, model: answer.model, at: now })
@@ -298,7 +314,7 @@ function boot() {
     }
     proposals.delete(String(id))
     if (commands.length === 0) return false
-    engine.dispatch({ type: 'schedule/apply', commands, log: p.log, model: p.model })
+    engine.act({ type: 'schedule/apply', commands, log: p.log, model: p.model })
     return true
   })
   ipcMain.on(IPC.aiDiscardArrangement, (_e, id: string) => void proposals.delete(String(id)))
@@ -399,7 +415,7 @@ function boot() {
     if (!res.ok && res.status !== 401) throw new Error(`The server answered ${res.status}`)
     setSession(null)
   })
-  ipcMain.handle(IPC.getInfo, () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, dataDir, packaged: app.isPackaged, commit: BUILD.commit, builtAt: BUILD.builtAt }))
+  ipcMain.handle(IPC.getInfo, () => ({ version: app.getVersion(), platform: process.platform, arch: process.arch, dataDir, packaged: app.isPackaged, commit: BUILD.commit, builtAt: BUILD.builtAt, device: device.id }))
   // What changed: once per build on this machine. notes.json beside the save remembers the
   // build last seen. A first run has nothing to compare with and is not an update.
   const notesFile = join(dataDir, 'notes.json')
@@ -492,7 +508,7 @@ function boot() {
 
   const clearDesk = () => {
     const id = engine.state.desk.block?.entryId
-    if (id) engine.dispatch({ type: 'entry/complete', id })
+    if (id) engine.act({ type: 'entry/complete', id })
     else say({ phase: 'done', text: 'Nothing on the desk to clear' })
   }
   const notify = (ev: HudEvent) => {
@@ -521,9 +537,9 @@ function boot() {
         capture: () => command('capture'),
         deck: () => command('deck'),
         pause: togglePause,
-        skipRest: () => engine.dispatch({ type: 'desk/skipRest' }),
+        skipRest: () => engine.act({ type: 'desk/skipRest' }),
         hide: () => overlay.toggleVisible(),
-        switch: () => engine.dispatch({ type: 'desk/switch' }),
+        switch: () => engine.act({ type: 'desk/switch' }),
         move: () => command('move'),
         // macOS: the drawer is the shell's own window beside the pet. Elsewhere the overlay draws it.
         drawer: () => (process.platform === 'darwin' ? overlay.toggleDrawer() : command('drawer')),

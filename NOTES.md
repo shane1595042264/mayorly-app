@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## One computer runs the timer
+
+- The timer no longer jumps back to the start when Mayorly is also open on another computer.
+- The computer you used last runs the timer. Your other computers hold it and say where it is running.
+- Do anything in Mayorly on another computer and the timer moves there, carrying on from where it was. The first computer holds it within a minute.
+- Time worked on either computer counts once, never twice and never lost.
+
 ## AI keys on all your computers
 
 - Your AI clerk keys can now sync between your computers. Turn it on under Settings, AI clerk, with a sync passphrase, then type the same passphrase once on each other computer.

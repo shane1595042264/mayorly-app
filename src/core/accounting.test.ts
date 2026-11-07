@@ -12,7 +12,7 @@ function world() {
   let s = emptyState()
   s.settings.focusMin = 30
   const act = (a: Action) => {
-    const r = reduce(s, a, { now, newId: () => `id${++id}`, random: () => 0.5 })
+    const r = reduce(s, a, { now, newId: () => `id${++id}`, random: () => 0.5, device: 'here' })
     s = r.state
     return r
   }

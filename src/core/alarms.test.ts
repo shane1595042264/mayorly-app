@@ -11,7 +11,7 @@ describe('alarm choices', () => {
     const s = emptyState()
     s.settings.alarms = { work: { tone: 'bell' }, rest: { tone: 'gentle' } }
     const other = emptyState()
-    const result = reduce(s, { type: 'sync/replace', state: other }, { now: 0, newId: () => 'id', random: () => 0.5 })
+    const result = reduce(s, { type: 'sync/replace', state: other }, { now: 0, newId: () => 'id', random: () => 0.5, device: 'here' })
     expect(result.state.settings.alarms).toEqual(s.settings.alarms)
   })
   it('rejects unknown sounds and custom paths while preserving a valid local upload', () => {

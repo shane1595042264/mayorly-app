@@ -127,6 +127,8 @@ export interface AppInfo {
   /** The commit this build came from, and when it was built. */
   commit: string
   builtAt: number
+  /** This computer's id, to tell the active device from this one. */
+  device: string
 }
 
 /** The top section of NOTES.md, stamped into the build. */
