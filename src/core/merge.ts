@@ -34,13 +34,17 @@ function mergeDeletable<T extends WithId>(mine: T[], theirs: T[], since: number,
 /**
  * Whose desk counts: the copy claimed later, since the computer a person used last is the active
  * device and the others' copies of its desk are ignored. On a tie (the same claim on both sides)
- * the active device's own copy beats one another computer holds; builds from before devices fall
- * back to the desk that is running.
+ * the active device is the only computer that moves its desk, so on that computer its own copy is
+ * the newest there is: a server copy with the same claim is an older push of itself, and taking it
+ * would wind the clock back (a finished rest came back running). Elsewhere, the active device's
+ * own copy beats one another computer holds; builds from before devices fall back to the desk
+ * that is running.
  */
-export function deskWinner(local: MayorlyState, incoming: MayorlyState): 'local' | 'incoming' {
+export function deskWinner(local: MayorlyState, incoming: MayorlyState, self?: string): 'local' | 'incoming' {
   const mine = local.desk.device?.at ?? -1
   const theirs = incoming.desk.device?.at ?? -1
   if (mine !== theirs) return mine > theirs ? 'local' : 'incoming'
+  if (self !== undefined && local.desk.device?.id === self) return 'local'
   const localHeld = local.desk.heldAt !== null
   if (localHeld !== (incoming.desk.heldAt !== null)) return localHeld ? 'incoming' : 'local'
   return local.desk.status === 'running' ? 'local' : 'incoming'
@@ -62,13 +66,13 @@ function mergeSegments(local: MayorlyState, incoming: MayorlyState, kept: Mayorl
 }
 
 /** The server's document taken whole, nothing here having changed since the last sync, except the desk and its intervals, which follow the active device. */
-export function replaceState(local: MayorlyState, incoming: MayorlyState): MayorlyState {
-  const kept = deskWinner(local, incoming) === 'local' ? local : incoming
+export function replaceState(local: MayorlyState, incoming: MayorlyState, self?: string): MayorlyState {
+  const kept = deskWinner(local, incoming, self) === 'local' ? local : incoming
   return reconcileTomatoes({ ...incoming, desk: kept.desk, segments: mergeSegments(local, incoming, kept) })
 }
 
 /** The server's document and this machine's state as one. `syncedAt` is when this machine last matched the server, or null if never. */
-export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedAt: number | null): MayorlyState {
+export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedAt: number | null, self?: string): MayorlyState {
   const since = syncedAt ?? 0
   const theirs = <T>(_l: T, t: T) => t
   const sittings = unionLogs(local.sittings, incoming.sittings, (l, t) => {
@@ -76,7 +80,7 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
     const keys = new Set([...Object.keys(l.ledgerTomatoes ?? {}), ...Object.keys(t.ledgerTomatoes ?? {})])
     return { ...chosen, ledgerTomatoes: Object.fromEntries([...keys].map(key => [key, Math.max(l.ledgerTomatoes?.[key] ?? 0, t.ledgerTomatoes?.[key] ?? 0)])) }
   }, (x) => x.startedAt)
-  const kept = deskWinner(local, incoming) === 'local' ? local : incoming
+  const kept = deskWinner(local, incoming, self) === 'local' ? local : incoming
   const segments = mergeSegments(local, incoming, kept)
   const tokens = unionLogs(local.tokens, incoming.tokens, (l) => l, (x) => x.at)
   // A restore counts as a making: an entry put back since the last sync is kept, like a new one.

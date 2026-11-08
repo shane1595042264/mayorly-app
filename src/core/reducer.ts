@@ -129,13 +129,13 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
   if (action.type === 'sync/merge' || action.type === 'sync/replace') {
     const incoming = migrateSync(action.state, state)
     if (!incoming) return { state, events: [] }
-    const winner = deskWinner(state, incoming)
+    const winner = deskWinner(state, incoming, ctx.device)
     const taker = incoming.desk.device
     // Someone used another computer since: this one's run ends the moment that one took over.
     const local = winner === 'incoming' && taker !== null && taker.id !== ctx.device && state.desk.status === 'running'
       ? reduce(state, { type: 'desk/pause', at: taker.at }, ctx, clerk).state
       : state
-    const next = action.type === 'sync/merge' ? mergeStates(local, incoming, action.syncedAt) : replaceState(local, incoming)
+    const next = action.type === 'sync/merge' ? mergeStates(local, incoming, action.syncedAt, ctx.device) : replaceState(local, incoming, ctx.device)
     next.settings = sanitiseSettings({ ...next.settings, ...Object.fromEntries(DEVICE_SETTINGS.map((k) => [k, state.settings[k]])) })
     if (winner === 'local' || next.desk.status !== 'running' || taker?.id === ctx.device) return { state: next, events: [] }
     // A desk running on the active device is held here, where it stands as it arrives: only that

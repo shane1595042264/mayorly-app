@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## A finished rest stays finished
+
+- When a rest ran out, the next sync could bring the rest back at 05:00. The computer running the timer now always keeps its own timer; the server only carries it to your other computers.
+
 ## One computer runs the timer
 
 - The timer no longer jumps back to the start when Mayorly is also open on another computer.

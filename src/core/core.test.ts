@@ -1373,6 +1373,36 @@ describe('the active device', () => {
     }
   })
 
+  it('the active computer never takes an older copy of its own desk from the server', () => {
+    // 2026-11-08: a rest ran out on the Mac, the desk moved to a focus block waiting to start,
+    // and the next sync brought back the Mac's own push from mid-rest. Same claim on both, since
+    // the clock advancing claims nothing; the tie went to the copy that was running.
+    const mac = world(undefined, 'mac')
+    const wire = () => JSON.parse(JSON.stringify(mac.s)) as unknown
+    mac.do({ type: 'desk/claim', name: 'Mac' })
+    mac.do({ type: 'settings/update', patch: { focusMin: 25, shortRestMin: 5, autoStartFocus: false, autoStartRest: true } })
+    mac.do({ type: 'desk/claim', name: 'Mac' })
+    mac.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: mac.s.ledgers[0].id })
+    mac.wait(25 * MIN + 1000)
+    expect(mac.s.desk.block?.kind).toBe('rest')
+    mac.wait(2 * MIN)
+    const midRest = wire()
+    mac.wait(3 * MIN + 1000)
+    expect(mac.s.desk).toMatchObject({ status: 'ready', block: { kind: 'focus' } })
+    const before = mac.s.desk
+    for (const type of ['sync/replace', 'sync/merge'] as const) {
+      const r = reduce(mac.s, type === 'sync/merge' ? { type, state: midRest, syncedAt: T0 } : { type, state: midRest }, { now: mac.now, newId: () => 'x', random: () => 0.5, device: 'mac' }).state
+      expect(r.desk).toEqual(before)
+      expect(r.segments.filter((x) => x.kind === 'rest' && x.end === null)).toHaveLength(0)
+    }
+    // A copy of the same desk on another computer still takes the newer state from the server.
+    const winCtx = { now: mac.now, newId: () => 'y', random: () => 0.5, device: 'win' }
+    const held = reduce(world(undefined, 'win').s, { type: 'sync/replace', state: midRest }, winCtx).state
+    expect(held.desk).toMatchObject({ status: 'paused', block: { kind: 'rest' } })
+    const other = reduce(held, { type: 'sync/replace', state: wire() }, winCtx).state
+    expect(other.desk).toMatchObject({ status: 'ready', block: { kind: 'focus' } })
+  })
+
   it('anything a person does on the other computer takes it over, the clock carried on', () => {
     const { mac, win, act, wire, focusMs } = two()
     mac.wait(5 * MIN)
