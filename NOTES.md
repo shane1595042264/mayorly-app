@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Auto picks a colour too
+
+- Auto in the ledger editor now also gives the ledger a colour no other ledger wears, the one that stands farthest from theirs. Once all twelve are taken it picks the least used.
+- Colours another ledger already wears are dimmed in the picker, like icons.
+
 ## A finished rest stays finished
 
 - When a rest ran out, the next sync could bring the rest back at 05:00. The computer running the timer now always keeps its own timer; the server only carries it to your other computers.

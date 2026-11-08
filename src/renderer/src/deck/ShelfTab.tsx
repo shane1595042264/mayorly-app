@@ -5,7 +5,7 @@ import {
 } from '@core/index'
 import { Glyph, GLYPH_NAMES, glyphKey, localGlyph } from '../lib/glyphs'
 import { bridge } from '../bridge'
-import { ledgerVars, THEME_COLORS } from '../lib/themes'
+import { distinctTheme, ledgerVars, THEME_COLORS } from '../lib/themes'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { cycleLedger, useListKeys } from '../lib/listkeys'
 import { noteOrigin } from '../lib/origin'
@@ -300,8 +300,11 @@ function LedgerForm({ s, ledger, done }: { s: MayorlyState; ledger: Ledger | nul
   const [picking, setPicking] = useState(false)
   const worn = s.ledgers.filter((l) => l.id !== ledger?.id).map((l) => glyphKey(l.glyph)).filter((g): g is string => !!g)
   const shown = GLYPH_NAMES.filter((g) => !glyphQuery.trim() || g.includes(glyphQuery.trim().toLowerCase().replace(/\s+/g, '-')))
+  const wornThemes = s.ledgers.filter((l) => l.id !== ledger?.id).map((l) => l.theme ?? 'amber')
   // Auto: the clerk picks a name from the catalogue; without a key, the words of the ledger do.
+  // The colour is the one that stands apart from the other ledgers', chosen here, not by the clerk.
   const auto = async () => {
+    setTheme(distinctTheme(wornThemes))
     setPicking(true)
     try {
       const byClerk = await bridge.ai.pickGlyph(name, criterion, GLYPH_NAMES, worn).catch(() => null)
@@ -349,7 +352,7 @@ function LedgerForm({ s, ledger, done }: { s: MayorlyState; ledger: Ledger | nul
       <div className="glyph-head">
         <span className="glyph-now"><Glyph name={glyph} size={18} /><span className="mono dim">{glyph}</span></span>
         <input className="glyph-search" value={glyphQuery} onChange={(e) => setGlyphQuery(e.target.value)} placeholder="Search icons" aria-label="Search icons" />
-        <button type="button" className="btn ghost" onClick={() => void auto()} disabled={picking || !name.trim()} title="The clerk picks an icon for this ledger; without a key, its words do">
+        <button type="button" className="btn ghost" onClick={() => void auto()} disabled={picking || !name.trim()} title="Picks an icon for this ledger and a colour no other ledger wears. The clerk chooses the icon; without a key, its words do">
           {picking ? 'Picking' : 'Auto'}
         </button>
       </div>
@@ -364,7 +367,7 @@ function LedgerForm({ s, ledger, done }: { s: MayorlyState; ledger: Ledger | nul
       <div className="form-row ledger-extras">
         <div className="theme-pick" role="radiogroup" aria-label="Colour">
           {LEDGER_THEMES.map((t) => (
-            <button type="button" key={t} role="radio" aria-checked={t === theme} className={t === theme ? 'on' : ''} style={{ background: THEME_COLORS[t] }} onClick={() => setTheme(t)} aria-label={t} title={t} />
+            <button type="button" key={t} role="radio" aria-checked={t === theme} className={`${t === theme ? 'on' : ''} ${wornThemes.includes(t) ? 'taken' : ''}`} style={{ background: THEME_COLORS[t] }} onClick={() => setTheme(t)} aria-label={t} title={wornThemes.includes(t) ? `${t} (another ledger wears it)` : t} />
           ))}
         </div>
         <label className="check" title="Off for work you are paid for in money: tomatoes still count, no coin is minted, nothing is charged.">
