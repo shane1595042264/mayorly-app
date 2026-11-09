@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Updates that ask first
+
+- When a new version is out, Mayorly downloads it quietly and asks whether to update. Say yes and it restarts into the new version; say later and it updates the next time you quit.
+- It never asks in the middle of a running focus block.
+- On a Mac this starts once the app is signed with an Apple Developer ID.
+
 ## Find a task and start it, and quieter syncing
 
 - Alt+F (Option+F on a Mac) searches your open tasks. Type to narrow it down, use the arrows to choose, and press Enter to start.

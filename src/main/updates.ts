@@ -2,21 +2,25 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import { log } from './log'
 
-// Updates for the direct-download build: GitHub releases, checked after launch and every six
-// hours, downloaded quietly, installed when the user says so from the menu bar. The Mac App
-// Store build updates through the store, and a Mac build without a Developer ID signature
-// cannot be updated at all (Squirrel refuses it), so failures here are logged, never shown.
+// Updates for the direct-download build: every push to main publishes a GitHub release, checked
+// after launch and every half hour, downloaded quietly, installed when the user says so. The
+// shell does the asking. The Mac App Store build updates through the store, and a Mac build
+// without a Developer ID signature cannot be updated at all (Squirrel refuses it), so failures
+// here are logged, never shown.
 
 export interface Updates {
   /** The version downloaded and waiting, or null. */
   ready: () => string | null
   onReady: (fn: (version: string) => void) => void
-  install: () => void
+  /** Set by the shell: what has to happen before the app goes down. */
+  beforeInstall: (() => Promise<void>) | null
+  install: () => Promise<void>
 }
 
 const CHECK_AFTER_MS = 30_000
-const CHECK_EVERY_MS = 6 * 3_600_000
+const CHECK_EVERY_MS = 30 * 60_000
 
 export function installUpdates(): Updates {
   let ready: string | null = null
@@ -24,7 +28,12 @@ export function installUpdates(): Updates {
   const updates: Updates = {
     ready: () => ready,
     onReady: (fn) => void subs.add(fn),
-    install: () => autoUpdater.quitAndInstall(),
+    beforeInstall: null,
+    install: async () => {
+      await updates.beforeInstall?.()
+      // Silent, and back up afterwards: the installer's own pages are for a first install.
+      autoUpdater.quitAndInstall(true, true)
+    },
   }
   // The portable Windows exe is packed from the same folder as the installer and so carries the
   // feed; left alone it would download the setup and run it on quit. Portable means portable.
@@ -35,7 +44,9 @@ export function installUpdates(): Updates {
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.logger = null
   autoUpdater.on('error', (err) => console.warn('[updates]', err.message))
+  autoUpdater.on('update-available', (info) => log.info('[updates] downloading', info.version))
   autoUpdater.on('update-downloaded', (info) => {
+    log.info('[updates] ready', info.version)
     ready = info.version
     for (const fn of subs) fn(info.version)
   })

@@ -4,14 +4,14 @@ There is no staging. The founder runs the installed app, so a change is done whe
 
 ## Versions
 
-`npm version patch` (or `minor`) bumps `package.json`, commits and tags `vX.Y.Z`. Pushing the tag runs `.github/workflows/dist.yml`, which builds Windows and macOS, attaches the installers to the GitHub release, and attaches `latest.yml` and `latest-mac.yml`, which installed apps read to find updates. On the Mac the build number (`CFBundleVersion`) is the workflow run number, so every build is higher than the last, which the App Store insists on; the Windows exe keeps the package version as its file version.
+Every push to `main` that touches the app runs `.github/workflows/dist.yml` (pushes that only change `server/`, `docs/`, `README.md` or `CLAUDE.md` do not). The version is `0.1.<run number>`, set in the workflow, so `package.json` stays at 0.1.0 and a local build is always offered the latest release. It runs the tests, builds Windows and macOS, attaches the installers to the GitHub release, and attaches `latest.yml` and `latest-mac.yml`, which installed apps read to find updates. On the Mac the build number (`CFBundleVersion`) is the workflow run number, so every build is higher than the last, which the App Store insists on; the Windows exe keeps the package version as its file version.
 
 ## What the app does for a release already
 
 - One log a user can send: `logs/mayorly.log` in the data folder (Open data folder in the tray, or the menu bar on a Mac). Uncaught errors are written there, and a renderer that dies is reloaded.
 - Backups: `backups/` beside the save, one copy a day (14 kept) and one before a sync or an import replaces the state (6 kept). A save that cannot be read falls back to the newest backup that can.
 - Export and import in Settings, account deletion in Settings (Apple guideline 5.1.1(v)), and the server removes the account's document the moment it is asked.
-- Updates: the direct-download build checks GitHub releases after launch and every six hours, downloads quietly, and offers Restart to update in the tray (the menu bar on a Mac). Only a Developer ID signed build can be updated on a Mac. The portable Windows exe never checks: it would install the setup on quit.
+- Updates: the direct-download build checks GitHub releases after launch and every half hour, downloads quietly, then asks Update now or Later (never over a running focus block). Later leaves Restart to update in the tray (the menu bar on a Mac), and it installs on quit. Only a Developer ID signed build can be updated on a Mac. The portable Windows exe never checks: it would install the setup on quit.
 - `mayorly://capture?text=...`, `mayorly://deck`, `plus`, `capture`, `pause`, `clear`, `switch` for Shortcuts, Raycast and browsers.
 
 ## Direct download (first)
@@ -40,7 +40,7 @@ What only the founder can do:
 
 mayorly-api deploys from `server/` with the Railway CLI (`RAILWAY_API_TOKEN` in `.env.local`, the folder linked to the `mayorly` project): `railway up --detach`, then `curl https://mayorly-api-production.up.railway.app/health`. Production needs `JWT_SECRET` (32 characters or more), `GOOGLE_CLIENT_IDS` and `DATABASE_URL`; the schema brings itself up to date on boot. A client on an older build cannot overwrite a newer document (the server refuses a lower schema), and Sign out everywhere bumps the account's token version.
 
-## Checks before a tag
+## Checks before pushing to main
 
 ```
 npm test

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
-import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
+import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type MessageBoxOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
 import { migrate, type Action, type ClerkCommand, type Entry, type HudEvent, type Settings } from '@core/index'
 import { IPC, type AiProvider, type Arrangement, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
@@ -565,8 +565,42 @@ function boot() {
   engine.on((state) => applySettings(state.settings))
 
   const updates = installUpdates()
-  const bar = process.platform === 'darwin' ? 'menu bar' : 'tray'
-  updates.onReady((v) => say({ phase: 'done', text: `Mayorly ${v} is ready. Restart from the ${bar} tomato to update.` }))
+  updates.beforeInstall = async () => {
+    engine.stop()
+    await sync.flush()
+    flushed = true
+  }
+  // "There's a new update, want it?" Asked once per version, and never over a running focus
+  // block: it waits for the block to stop. Later leaves it in the tray, and it installs on quit.
+  let offered: string | null = null
+  const offerUpdate = async () => {
+    const version = updates.ready()
+    if (!version || version === offered || dialogOpen) return
+    const { status, block } = engine.state.desk
+    if (status === 'running' && block?.kind === 'focus') return
+    offered = version
+    dialogOpen = true
+    try {
+      const options: MessageBoxOptions = {
+        type: 'info',
+        title: 'Mayorly update',
+        message: `Mayorly ${version} is ready`,
+        detail: 'Update now? Mayorly restarts and comes straight back.',
+        buttons: ['Update now', 'Later'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      }
+      // A menu bar app is not frontmost by itself, and off macOS only a dialog the overlay owns stays above it.
+      if (process.platform === 'darwin') app.focus({ steal: true })
+      const { response } = await (process.platform === 'darwin' ? dialog.showMessageBox(options) : dialog.showMessageBox(overlay.win, options))
+      if (response === 0) await updates.install()
+    } finally {
+      dialogOpen = false
+    }
+  }
+  updates.onReady(() => void offerUpdate())
+  engine.on(() => void offerUpdate())
   createTray(engine, overlay, { command, togglePause, dataDir, updates })
   overlay.load()
   // The first launch opens the deck, which starts on the shelf and says what the keys are.
