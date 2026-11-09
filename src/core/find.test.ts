@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_HOTKEYS, emptyState, findEntries, migrate, type Entry, type Ledger, type MayorlyState, type Segment, type Sitting } from './index'
+import { DEFAULT_HOTKEYS, emptyState, findTasks, migrate, type Entry, type FoundTask, type Ledger, type MayorlyState, type Segment, type Sitting } from './index'
 
 const entry = (id: string, title: string, order: number, more: Partial<Entry> = {}) =>
   ({ id, title, order, ledgerId: null, estimateMin: null, doneAt: null, createdAt: 0, tomatoes: 0, ...more }) as Entry
 
 const withEntries = (entries: Entry[], ledgers: Ledger[] = []): MayorlyState => ({ ...emptyState(), entries, ledgers })
-const titles = (es: Entry[]) => es.map((e) => e.title)
+const titles = (es: FoundTask[]) => es.map((x) => (x.kind === 'entry' ? x.entry.title : x.item.title))
 
 describe('finding a task', () => {
   const legal = { id: 'l', name: 'Legal', code: 'LAW' } as Ledger
@@ -21,28 +21,28 @@ describe('finding a task', () => {
   )
 
   it('with no search, shows the top of the flow', () => {
-    expect(titles(findEntries(s, '  '))).toEqual(['reply to the landlord', 'Report the bug', 'write the quarterly report', 'prepare taxes'])
+    expect(titles(findTasks(s, '  '))).toEqual(['reply to the landlord', 'Report the bug', 'write the quarterly report', 'prepare taxes'])
   })
 
   it('puts a title that starts with the search first, and ignores case', () => {
-    expect(titles(findEntries(s, 'REP'))).toEqual(['reply to the landlord', 'Report the bug', 'write the quarterly report', 'prepare taxes'])
-    expect(titles(findEntries(s, 'report'))[0]).toBe('Report the bug')
+    expect(titles(findTasks(s, 'REP'))).toEqual(['reply to the landlord', 'Report the bug', 'write the quarterly report', 'prepare taxes'])
+    expect(titles(findTasks(s, 'report'))[0]).toBe('Report the bug')
   })
 
   it('needs every word, in any order', () => {
-    expect(titles(findEntries(s, 'landlord reply'))).toEqual(['reply to the landlord'])
-    expect(findEntries(s, 'landlord taxes')).toEqual([])
+    expect(titles(findTasks(s, 'landlord reply'))).toEqual(['reply to the landlord'])
+    expect(findTasks(s, 'landlord taxes')).toEqual([])
   })
 
   it('finds tasks by their ledger, after title matches', () => {
-    expect(titles(findEntries(s, 'law'))).toEqual(['reply to the landlord', 'prepare taxes'])
+    expect(titles(findTasks(s, 'law'))).toEqual(['reply to the landlord', 'prepare taxes'])
     const mixed = withEntries([entry('x', 'taxes', 1, { ledgerId: 'l' }), entry('y', 'legal review', 2)], [legal])
-    expect(titles(findEntries(mixed, 'legal'))).toEqual(['legal review', 'taxes'])
+    expect(titles(findTasks(mixed, 'legal'))).toEqual(['legal review', 'taxes'])
   })
 
   it('leaves out finished tasks and stops at the limit', () => {
-    expect(titles(findEntries(s, 'last year'))).toEqual([])
-    expect(findEntries(s, '', 2)).toHaveLength(2)
+    expect(titles(findTasks(s, 'last year'))).toEqual([])
+    expect(findTasks(s, '', 2)).toHaveLength(2)
   })
 
   it('has a default key, and an older save gains it', () => {

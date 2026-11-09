@@ -3,7 +3,7 @@ import { plan, type Placement, type PlanTask } from './schedule'
 import { DEFAULT_SETTINGS } from './seed'
 import { deriveCode, prefixClerk, type Clerk, type Filing } from './clerk'
 import type {
-  Block, Ctx, Entry, GlyphName, HeldSession, HudEvent, Id, Ledger, MayorlyState, Mode, Settings, Superset,
+  Block, Ctx, Entry, GlyphName, HeldSession, HudEvent, Id, Ledger, LeisureItem, MayorlyState, Mode, Settings, Superset,
 } from './model'
 import { advance, blitzBlock, entrySpentMs, firstBlock, firstOpenInLedger, focusForSlot, initialPlan, leisureBlock, nextInFlow, openFlow, type DeployOpts } from './planner'
 import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_BLOCK, tokensForTomato } from './rules'
@@ -80,7 +80,7 @@ export type Action =
   /** The quick switch: park the current session with its clock where it is and pick up the parked one where it was. */
   | { type: 'desk/switch' }
   /** The clerk says a tray entry is entertainment: it becomes a couch item and leaves the flow. */
-  | { type: 'entry/toLeisure'; id: Id; log?: string }
+  | { type: 'entry/toLeisure'; id: Id; log?: string; start?: boolean }
   | { type: 'desk/pause'; at?: number }
   | { type: 'desk/resume' }
   | { type: 'desk/skip' }
@@ -166,12 +166,11 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const byClerk = !!(action.filing && validFiling(s, action.filing))
       const filing = byClerk ? action.filing! : clerk.file(text, s.ledgers)
       if (!filing.title) break
-      if (byClerk && filing.leisure) {
+      if (filing.leisure) {
         // Entertainment never enters the flow: it goes straight to the couch list.
-        if (!s.leisure.some((x) => x.archivedAt === null && x.title.toLowerCase() === filing.title.toLowerCase())) {
-          s.leisure.push({ id: ctx.newId(), title: filing.title, createdAt: now, archivedAt: null, cues: [] })
-        }
+        const item = couchItem(s, ctx, filing.title)
         log(s, now, filing.log)
+        if (action.start) deploy(s, ctx, ev, { mode: 'couch', supersetId: null, entryId: null, ledgerId: null, leisureId: item.id })
         break
       }
       const e = addEntry(s, ctx, filing.title, filing.ledgerId, filing.estimateMin)
@@ -191,7 +190,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       break
     }
     case 'entry/note': {
-      const e = s.entries.find((x) => x.id === action.id)
+      const e = taskOf(s, action.id)
       if (!e) break
       const text = action.text.trim().slice(0, 2000)
       if (text) e.notes = text
@@ -199,27 +198,27 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       break
     }
     case 'entry/subtask-add': {
-      const e = s.entries.find((x) => x.id === action.id)
+      const e = taskOf(s, action.id)
       const text = action.text.trim().slice(0, 160)
       if (!e || !text) break
       e.subtasks = [...(e.subtasks ?? []), { id: ctx.newId(), text, done: false }]
       break
     }
     case 'entry/subtask-edit': {
-      const e = s.entries.find((x) => x.id === action.id)
+      const e = taskOf(s, action.id)
       const text = action.text.trim().slice(0, 160)
       if (!e || !text) break
       e.subtasks = (e.subtasks ?? []).map((t) => (t.id === action.subId ? { ...t, text } : t))
       break
     }
     case 'entry/subtask-toggle': {
-      const e = s.entries.find((x) => x.id === action.id)
+      const e = taskOf(s, action.id)
       if (!e) break
       e.subtasks = (e.subtasks ?? []).map((t) => (t.id === action.subId ? { ...t, done: !t.done } : t))
       break
     }
     case 'entry/subtask-delete': {
-      const e = s.entries.find((x) => x.id === action.id)
+      const e = taskOf(s, action.id)
       if (!e) break
       e.subtasks = (e.subtasks ?? []).filter((t) => t.id !== action.subId)
       break
@@ -504,12 +503,16 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     case 'entry/toLeisure': {
       const e = s.entries.find((x) => x.id === action.id)
       if (!e || e.doneAt !== null) break
-      if (!s.leisure.some((x) => x.archivedAt === null && x.title.toLowerCase() === e.title.toLowerCase())) {
-        s.leisure.push({ id: ctx.newId(), title: e.title, createdAt: now, archivedAt: null, cues: [] })
-      }
-      if (s.desk.block?.entryId === e.id) swapTo(s, ctx, ev, null, s.desk.block.ledgerId)
+      const item = couchItem(s, ctx, e.title, e)
+      const onDesk = s.desk.block?.entryId === e.id
+      // Started a moment ago and only now read as entertainment: the desk goes back to what it
+      // was on, so that is what the couch parks.
+      const back = action.start ? s.desk.previous : null
+      if (onDesk && action.start && !back) endSitting(s, now, ev, 'stood')
+      else if (onDesk) swapTo(s, ctx, ev, back?.entryId ?? null, back?.ledgerId ?? s.desk.block?.ledgerId ?? null)
       s.entries = s.entries.filter((x) => x.id !== e.id)
       log(s, now, action.log?.trim() || `couch '${e.title.length > 40 ? e.title.slice(0, 39) + '…' : e.title}': entertainment, not a ledger`)
+      if (onDesk && action.start) deploy(s, ctx, ev, { mode: 'couch', supersetId: null, entryId: null, ledgerId: null, leisureId: item.id })
       break
     }
     case 'desk/pause': {
@@ -1184,6 +1187,19 @@ function openSegment(s: MayorlyState, ctx: Ctx, at: number) {
     start: at,
     end: null,
   })
+}
+
+/** What the drawer writes under: an entry or a couch item, the same notes and checklist. */
+const taskOf = (s: MayorlyState, id: Id) => s.entries.find((x) => x.id === id) ?? s.leisure.find((x) => x.id === id)
+
+/** The couch list's item with this title, made if there is none. */
+function couchItem(s: MayorlyState, ctx: Ctx, title: string, from?: Entry): LeisureItem {
+  const key = title.toLowerCase()
+  const have = s.leisure.find((x) => x.archivedAt === null && x.title.toLowerCase() === key)
+  if (have) return have
+  const item: LeisureItem = { id: ctx.newId(), title, createdAt: ctx.now, archivedAt: null, cues: [], notes: from?.notes, subtasks: from?.subtasks }
+  s.leisure.push(item)
+  return item
 }
 
 function closeSegment(s: MayorlyState, at: number) {

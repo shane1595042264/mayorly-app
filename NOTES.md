@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The couch works like your tasks
+
+- Start a line with `couch:` or `leisure:` (or add `#couch`) and it goes to the couch list. Enter sits you down with it right away, for a coin, just like starting a task.
+- Alt+F finds couch items too. Enter starts them.
+- If the AI clerk reads a line you just started as entertainment, it now moves it to the couch instead of leaving it on your desk.
+- Couch items can be renamed, and the quick drawer now has notes and a checklist for them.
+
 ## Updates that ask first
 
 - When a new version is out, Mayorly downloads it quietly and asks whether to update. Say yes and it restarts into the new version; say later and it updates the next time you quit.

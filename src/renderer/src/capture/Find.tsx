@@ -1,17 +1,18 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import { MagnifyingGlass, Plus } from '@phosphor-icons/react'
-import { findEntries, type Entry, type MayorlyState } from '@core/index'
+import { balance, findTasks, LEISURE_TOKENS_PER_BLOCK, type FoundTask, type MayorlyState } from '@core/index'
 import { actionFor, keyLabel, keysFor, recordUse } from '../lib/keymap'
 import { dispatch } from '../store'
 import { plan } from './Capture'
 
-// Search and capture in one line. Typing narrows the open tasks; Enter starts the one
-// selected. A line nothing matches is a new task, read the way the capture box reads it.
+// Search and capture in one line. Typing narrows the open tasks and the couch list; Enter starts
+// the one selected. A line nothing matches is a new task, read the way the capture box reads it.
 
-type Row = { kind: 'entry'; entry: Entry } | { kind: 'new' }
+type Row = FoundTask | { kind: 'new' }
 
 const rowId = (i: number) => `find-row-${i}`
+const titleOf = (f: FoundTask) => (f.kind === 'entry' ? f.entry.title : f.item.title)
 
 export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
   const [text, setText] = useState('')
@@ -20,15 +21,16 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
   const create = useMemo(() => plan(text, s), [text, s])
   const rows = useMemo<Row[]>(() => {
     if (query.startsWith('/')) return [{ kind: 'new' }]
-    const found = findEntries(s, query)
-    const exact = found.some((e) => e.title.toLowerCase() === query.toLowerCase())
-    return [...found.map((entry): Row => ({ kind: 'entry', entry })), ...(query && !exact ? [{ kind: 'new' } as const] : [])]
+    const found = findTasks(s, query)
+    const exact = found.some((f) => titleOf(f).toLowerCase() === query.toLowerCase())
+    return [...found, ...(query && !exact ? [{ kind: 'new' } as const] : [])]
   }, [s, query])
   const at = Math.min(picked, Math.max(0, rows.length - 1))
 
   const start = (row: Row | undefined) => {
     if (!row) return
     if (row.kind === 'entry') dispatch({ type: 'desk/select', entryId: row.entry.id, ledgerId: row.entry.ledgerId })
+    else if (row.kind === 'leisure') dispatch({ type: 'desk/select', leisureId: row.item.id })
     else {
       const go = create.start ?? create.run
       if (!go) return
@@ -49,6 +51,7 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
   }
 
   const label = (id: string) => keysFor(id, s.settings).map(keyLabel).join(' / ')
+  const coins = balance(s)
 
   return (
     <motion.div
@@ -85,7 +88,7 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
         ) : (
           <ul className="find-list" id="find-list" role="listbox" aria-label="Tasks">
             {rows.map((row, i) => {
-              const key = row.kind === 'entry' ? row.entry.id : 'new'
+              const key = row.kind === 'entry' ? row.entry.id : row.kind === 'leisure' ? row.item.id : 'new'
               const props = {
                 id: rowId(i),
                 role: 'option' as const,
@@ -100,6 +103,18 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
                     <Plus size={14} weight="bold" className="find-code" aria-hidden />
                     <span className="find-title">{query.startsWith('/') ? 'Run' : 'Create and start'}</span>
                     <span className={`find-meta tone-${create.tone}`}>{create.text}</span>
+                  </li>
+                )
+              }
+              if (row.kind === 'leisure') {
+                const onCouch = s.desk.block?.leisureId === row.item.id
+                return (
+                  <li key={key} {...props}>
+                    <span className="find-code">COUCH</span>
+                    <span className="find-title">{row.item.title}</span>
+                    <span className={`find-meta ${coins < LEISURE_TOKENS_PER_BLOCK ? 'tone-error' : ''}`}>
+                      {onCouch ? 'On the desk' : coins < LEISURE_TOKENS_PER_BLOCK ? 'No coin' : `${LEISURE_TOKENS_PER_BLOCK} coin`}
+                    </span>
                   </li>
                 )
               }

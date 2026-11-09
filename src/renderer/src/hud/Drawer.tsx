@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { motion } from 'motion/react'
 import { Check, Plus, X } from '@phosphor-icons/react'
-import { blockView, type MayorlyState } from '@core/index'
+import { blockView, type Entry, type MayorlyState } from '@core/index'
 import { bridge } from '../bridge'
 import { dispatch, useMayorly } from '../store'
 
@@ -58,6 +58,7 @@ export function Drawer({ s, close, style }: { s: MayorlyState; close: () => void
             onEdit={(i, text) => dispatch({ type: 'leisure/cue-edit', id: leisure.id, index: i, text })}
             onDelete={(i) => dispatch({ type: 'leisure/cue-delete', id: leisure.id, index: i })}
           />
+          <NotesAndSteps task={leisure} />
         </>
       ) : entry ? (
         <>
@@ -65,17 +66,7 @@ export function Drawer({ s, close, style }: { s: MayorlyState; close: () => void
             <span className="drawer-kicker caps">{ledger?.code ?? 'Tray'}</span>
             <h2 className="drawer-title">{entry.title}</h2>
           </header>
-          <Notes key={entry.id} id={entry.id} text={entry.notes ?? ''} />
-          <p className="drawer-label caps">Checklist</p>
-          <Lines
-            items={(entry.subtasks ?? []).map((t) => t.text)}
-            done={(entry.subtasks ?? []).map((t) => t.done)}
-            placeholder="A step"
-            onAdd={(text) => dispatch({ type: 'entry/subtask-add', id: entry.id, text })}
-            onEdit={(i, text) => dispatch({ type: 'entry/subtask-edit', id: entry.id, subId: entry.subtasks![i].id, text })}
-            onToggle={(i) => dispatch({ type: 'entry/subtask-toggle', id: entry.id, subId: entry.subtasks![i].id })}
-            onDelete={(i) => dispatch({ type: 'entry/subtask-delete', id: entry.id, subId: entry.subtasks![i].id })}
-          />
+          <NotesAndSteps task={entry} />
         </>
       ) : (
         <>
@@ -91,6 +82,25 @@ export function Drawer({ s, close, style }: { s: MayorlyState; close: () => void
         <span><i className="key">Esc</i> Close</span>
       </footer>
     </motion.section>
+  )
+}
+
+/** Notes and a checklist, the same under an entry and a couch item. */
+function NotesAndSteps({ task }: { task: Pick<Entry, 'id' | 'notes' | 'subtasks'> }) {
+  return (
+    <>
+      <Notes key={task.id} id={task.id} text={task.notes ?? ''} />
+      <p className="drawer-label caps">Checklist</p>
+      <Lines
+        items={(task.subtasks ?? []).map((t) => t.text)}
+        done={(task.subtasks ?? []).map((t) => t.done)}
+        placeholder="A step"
+        onAdd={(text) => dispatch({ type: 'entry/subtask-add', id: task.id, text })}
+        onEdit={(i, text) => dispatch({ type: 'entry/subtask-edit', id: task.id, subId: task.subtasks![i].id, text })}
+        onToggle={(i) => dispatch({ type: 'entry/subtask-toggle', id: task.id, subId: task.subtasks![i].id })}
+        onDelete={(i) => dispatch({ type: 'entry/subtask-delete', id: task.id, subId: task.subtasks![i].id })}
+      />
+    </>
   )
 }
 

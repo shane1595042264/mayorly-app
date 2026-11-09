@@ -1,31 +1,35 @@
-import type { Block, Entry, Id, Ledger, MayorlyState, Ms, TokenTx } from './model'
+import type { Block, Entry, Id, Ledger, LeisureItem, MayorlyState, Ms, TokenTx } from './model'
 import { openFlow, supersetOf } from './planner'
 import { restSession, switchBack, switchSession } from './reducer'
 
 
+export type FoundTask = { kind: 'entry'; entry: Entry } | { kind: 'leisure'; item: LeisureItem }
+
 /**
- * Open entries for a search, best first. Every word has to appear in the title or in the name or
- * code of the entry's ledger. A title that starts with the search comes first, then titles where
- * every word starts a word, then any title holding them, then ledger matches; flow order within
- * each. With no search, the top of the flow.
+ * Open tasks for a search, best first: the flow, then the couch list. Every word has to appear in
+ * the title or in the name of what the task belongs to, its ledger or the couch. A title that
+ * starts with the search comes first, then titles where every word starts a word, then any
+ * title holding them, then matches on the group alone; list order within each. No search: the
+ * top of the list.
  */
-export function findEntries(s: MayorlyState, query: string, limit = 8): Entry[] {
+export function findTasks(s: MayorlyState, query: string, limit = 8): FoundTask[] {
   const q = query.trim().toLowerCase()
-  const flow = openFlow(s)
-  if (!q) return flow.slice(0, limit)
-  const words = q.split(/\s+/)
   const ledgers = new Map(s.ledgers.map((l) => [l.id, `${l.name} ${l.code}`.toLowerCase()]))
+  const all = [
+    ...openFlow(s).map((entry) => ({ found: { kind: 'entry', entry } as FoundTask, title: entry.title.toLowerCase(), group: entry.ledgerId ? (ledgers.get(entry.ledgerId) ?? '') : '' })),
+    ...leisureList(s).map((item) => ({ found: { kind: 'leisure', item } as FoundTask, title: item.title.toLowerCase(), group: 'couch leisure' })),
+  ]
+  if (!q) return all.slice(0, limit).map((x) => x.found)
+  const words = q.split(/\s+/)
   const startsWord = (text: string, w: string) => text.startsWith(w) || text.includes(` ${w}`)
-  return flow
-    .flatMap((e) => {
-      const title = e.title.toLowerCase()
-      const ledger = e.ledgerId ? (ledgers.get(e.ledgerId) ?? '') : ''
-      if (!words.every((w) => title.includes(w) || ledger.includes(w))) return []
-      const rank = title.startsWith(q) ? 0 : words.every((w) => startsWord(title, w)) ? 1 : words.every((w) => title.includes(w)) ? 2 : 3
-      return [{ e, rank }]
+  return all
+    .flatMap((x) => {
+      if (!words.every((w) => x.title.includes(w) || x.group.includes(w))) return []
+      const rank = x.title.startsWith(q) ? 0 : words.every((w) => startsWord(x.title, w)) ? 1 : words.every((w) => x.title.includes(w)) ? 2 : 3
+      return [{ found: x.found, rank }]
     })
     .sort((a, b) => a.rank - b.rank)
-    .map((x) => x.e)
+    .map((x) => x.found)
     .slice(0, limit)
 }
 

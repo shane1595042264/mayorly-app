@@ -384,6 +384,9 @@ export interface LeisureItem {
   title: string
   createdAt: Epoch
   archivedAt: Epoch | null
+  /** The quick drawer, as on an entry. */
+  notes?: string
+  subtasks?: Subtask[]
   /** Context switch rules: cues, in your words, for when to leave this and go do something else. No logic, just the reminder. */
   cues: string[]
 }

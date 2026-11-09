@@ -17,6 +17,7 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
   const onCouch = v?.block.kind === 'leisure' ? v : null
   const [draft, setDraft] = useState('')
   const [open, setOpen] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
   const price = LEISURE_TOKENS_PER_BLOCK
   const onItem = onCouch ? items.find((x) => x.id === onCouch.block.leisureId) : null
 
@@ -39,6 +40,7 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
       if (have >= price && !live) dispatch({ type: 'desk/deploy', mode: 'couch', leisureId: it.id })
     } else if (action === 'list.delete') dispatch({ type: 'leisure/delete', id: it.id })
     else if (action === 'list.cues') setOpen((o) => (o === it.id ? null : it.id))
+    else if (action === 'list.rename') setRenaming(it.id)
     else return false
     return true
   })
@@ -98,10 +100,14 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
                   <button className="icon-btn" aria-expanded={expanded} aria-label={expanded ? 'Hide context switch rules' : 'Show context switch rules'} title="Context switch rules" onClick={() => setOpen(expanded ? null : it.id)}>
                     {expanded ? <CaretDown size={14} /> : <CaretRight size={14} />}
                   </button>
-                  <span className="row-title ellipsis">
-                    {it.title}
-                    {it.cues.length > 0 && <span className="row-cue-count mono num dim">{it.cues.length} {it.cues.length === 1 ? 'cue' : 'cues'}</span>}
-                  </span>
+                  {renaming === it.id ? (
+                    <Rename item={it} done={() => setRenaming(null)} />
+                  ) : (
+                    <span className="row-title ellipsis" onDoubleClick={() => setRenaming(it.id)} title="Double-click to rename">
+                      {it.title}
+                      {it.cues.length > 0 && <span className="row-cue-count mono num dim">{it.cues.length} {it.cues.length === 1 ? 'cue' : 'cues'}</span>}
+                    </span>
+                  )}
                   <span className="row-time mono num">
                     {spent >= 60_000 ? span(spent) : ''}
                     {tokens > 0 ? `${tokens} ${tokens === 1 ? 'coin' : 'coins'}` : ''}
@@ -129,6 +135,29 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
         )}
       </section>
     </div>
+  )
+}
+
+function Rename({ item, done }: { item: LeisureItem; done: () => void }) {
+  const [title, setTitle] = useState(item.title)
+  return (
+    <input
+      className="row-edit"
+      autoFocus
+      value={title}
+      onChange={(ev) => setTitle(ev.target.value)}
+      onBlur={() => {
+        done()
+        if (title.trim() && title !== item.title) dispatch({ type: 'leisure/update', id: item.id, patch: { title } })
+      }}
+      onKeyDown={(ev) => {
+        if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur()
+        if (ev.key === 'Escape') {
+          setTitle(item.title)
+          done()
+        }
+      }}
+    />
   )
 }
 

@@ -26,6 +26,13 @@ const ESTIMATE = /(?:^|\s)~\s*(\d+(?:\.\d+)?)\s*(h|hr|hrs|m|min|mins)?(?=\s|$)/i
 const PREFIX = /^\s*([a-z][\w-]{0,23})\s*:\s*/i
 const TAG = /(?:^|\s)#([a-z][\w-]{0,23})(?=\s|$)/i
 
+/** The words for the couch list, as a prefix or a tag. A ledger with exactly that name keeps it. */
+const COUCH_WORDS = new Set(['couch', 'leisure'])
+const isCouch = (word: string, ledgers: Ledger[]) => {
+  const w = word.toLowerCase()
+  return COUCH_WORDS.has(w) && !ledgers.some((l) => l.name.toLowerCase() === w || l.code.toLowerCase() === w)
+}
+
 export function matchLedger(word: string, ledgers: Ledger[]): Ledger | null {
   const w = word.toLowerCase()
   return (
@@ -53,9 +60,13 @@ export const prefixClerk: Clerk = {
     let title = rest
     let ledger: Ledger | null = null
     let how = ''
+    let leisure = false
 
     const prefix = title.match(PREFIX)
-    if (prefix) {
+    if (prefix && isCouch(prefix[1], ledgers)) {
+      leisure = true
+      title = title.slice(prefix[0].length)
+    } else if (prefix) {
       const hit = matchLedger(prefix[1], ledgers)
       if (hit) {
         ledger = hit
@@ -63,9 +74,12 @@ export const prefixClerk: Clerk = {
         title = title.slice(prefix[0].length)
       }
     }
-    if (!ledger) {
+    if (!ledger && !leisure) {
       const tag = title.match(TAG)
-      if (tag) {
+      if (tag && isCouch(tag[1], ledgers)) {
+        leisure = true
+        title = title.replace(tag[0], ' ')
+      } else if (tag) {
         const hit = matchLedger(tag[1], ledgers)
         if (hit) {
           ledger = hit
@@ -78,6 +92,7 @@ export const prefixClerk: Clerk = {
     title = tidy(title)
     const quoted = `'${title.length > 40 ? title.slice(0, 39) + '…' : title}'`
     const est = minutes ? ` est ${minutes}m` : ''
+    if (leisure) return { title, ledgerId: null, estimateMin: minutes, log: `couch ${quoted}: named`, leisure: true }
     const log = ledger
       ? `filed ${quoted} -> ${ledger.code} (${how})${est}`
       : `tray ${quoted}: no ledger named${est}`

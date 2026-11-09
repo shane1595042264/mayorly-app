@@ -19,7 +19,7 @@ interface Plan {
 
 export function plan(raw: string, s: MayorlyState): Plan {
   const text = raw.trim()
-  if (!text) return { tone: 'idle', text: 'Type an entry. Prefix a ledger like legal: and add ~30 for an estimate.' }
+  if (!text) return { tone: 'idle', text: 'Type an entry. Prefix a ledger like legal:, or couch: for the couch list, and add ~30 for an estimate.' }
 
   if (text.startsWith('/')) {
     const [cmd, ...rest] = text.slice(1).split(/\s+/)
@@ -72,6 +72,14 @@ export function plan(raw: string, s: MayorlyState): Plan {
   }
 
   const f = prefixClerk.file(text, s.ledgers)
+  if (f.leisure) {
+    return {
+      tone: 'file',
+      text: `Couch   ${f.title}`,
+      run: () => dispatch({ type: 'entry/capture', text }),
+      start: () => dispatch({ type: 'entry/capture', text, start: true }),
+    }
+  }
   const ledger = s.ledgers.find((l) => l.id === f.ledgerId)
   const est = f.estimateMin ? `   est ${f.estimateMin}m` : ''
   // With a key, the clerk reads the line itself; the prefix is the floor, not the answer.

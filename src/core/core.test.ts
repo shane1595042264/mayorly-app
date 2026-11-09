@@ -5,7 +5,7 @@ import {
   plannedMs,
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
-  mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
+  findTasks, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
 } from './index'
 
 const MIN = 60_000
@@ -1550,5 +1550,82 @@ describe('skip rest shortcut', () => {
     expect(loaded.settings.hotkeys.skipRest).toBe('Alt+R')
     loaded.settings.hotkeys.skipRest = 'Alt+F8'
     expect(migrate(loaded)?.settings.hotkeys.skipRest).toBe('Alt+F8')
+  })
+})
+
+describe('the couch works like the flow', () => {
+  const rich = () => world((s) => { s.tokens.push({ id: 'seed', at: T0, amount: 5, reason: 'tomato', sittingId: null } as never) })
+
+  it('takes couch: and leisure: as a prefix and #couch as a tag', () => {
+    const { ledgers } = world().s
+    for (const line of ['couch: play civ', 'Leisure: play civ', 'play civ #couch']) {
+      expect(prefixClerk.file(line, ledgers)).toMatchObject({ title: 'play civ', ledgerId: null, leisure: true })
+    }
+  })
+
+  it('leaves the words to a ledger that really has that name', () => {
+    const couch = { ...world().s.ledgers[0], name: 'Couch', code: 'CCH' }
+    expect(prefixClerk.file('couch: sofa repairs', [couch])).toMatchObject({ ledgerId: couch.id })
+    expect(prefixClerk.file('couch: sofa repairs', [couch]).leisure).toBeUndefined()
+  })
+
+  it('files to the couch list, and Enter sits down with it for a coin', () => {
+    const w = rich()
+    w.do({ type: 'entry/capture', text: 'couch: young sheldon' })
+    expect(w.s.leisure.filter((x) => x.title === 'young sheldon')).toHaveLength(1)
+    expect(w.s.entries.map((e) => e.title)).not.toContain('young sheldon')
+    expect(w.s.desk.status).toBe('idle')
+    w.do({ type: 'entry/capture', text: 'couch: young sheldon', start: true })
+    expect(w.s.leisure.filter((x) => x.title === 'young sheldon')).toHaveLength(1)
+    expect(w.s.desk).toMatchObject({ status: 'running', block: { kind: 'leisure', label: 'young sheldon' } })
+  })
+
+  it('keeps the item when there is no coin to start it', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'couch: young sheldon', start: true })
+    expect(w.s.leisure.map((x) => x.title)).toContain('young sheldon')
+    expect(w.s.desk.status).toBe('idle')
+    expect(w.events.some((e) => e.type === 'notice' && e.text.startsWith('No coins'))).toBe(true)
+  })
+
+  it('moves a task just started to the couch when the clerk reads it as entertainment', () => {
+    const w = rich()
+    w.do({ type: 'entry/capture', text: 'play civ', start: true })
+    const e = w.entry('play civ')
+    expect(w.s.desk.block?.entryId).toBe(e.id)
+    w.do({ type: 'entry/toLeisure', id: e.id, start: true })
+    expect(w.s.entries.some((x) => x.id === e.id)).toBe(false)
+    expect(w.s.desk).toMatchObject({ status: 'running', block: { kind: 'leisure', label: 'play civ' } })
+  })
+
+  it('gives a task swapped in over another its place back before the couch parks it', () => {
+    const w = rich()
+    w.do({ type: 'entry/capture', text: 'legal: real work' })
+    const real = w.entry('real work')
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', entryId: real.id })
+    w.wait(2 * MIN)
+    w.do({ type: 'entry/capture', text: 'play civ', start: true })
+    w.do({ type: 'entry/toLeisure', id: w.entry('play civ').id, start: true })
+    expect(w.s.desk.block).toMatchObject({ kind: 'leisure', label: 'play civ' })
+    expect(w.s.desk.holster?.block.entryId).toBe(real.id)
+  })
+
+  it('takes notes and a checklist like an entry does', () => {
+    const w = world()
+    w.do({ type: 'leisure/add', title: 'civ' })
+    const id = w.s.leisure.find((x) => x.title === 'civ')!.id
+    w.do({ type: 'entry/note', id, text: 'one game' })
+    w.do({ type: 'entry/subtask-add', id, text: 'win' })
+    const subId = w.s.leisure.find((x) => x.id === id)!.subtasks![0].id
+    w.do({ type: 'entry/subtask-toggle', id, subId })
+    expect(w.s.leisure.find((x) => x.id === id)).toMatchObject({ notes: 'one game', subtasks: [{ text: 'win', done: true }] })
+  })
+
+  it('is found by search, by title or by the word couch', () => {
+    const w = world()
+    w.do({ type: 'leisure/add', title: 'civilization 6' })
+    const names = (q: string) => findTasks(w.s, q).map((x) => (x.kind === 'entry' ? x.entry.title : x.item.title))
+    expect(names('civ')).toContain('civilization 6')
+    expect(names('couch')).toContain('civilization 6')
   })
 })

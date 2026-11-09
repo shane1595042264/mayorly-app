@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type MessageBoxOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
-import { migrate, type Action, type ClerkCommand, type Entry, type HudEvent, type Settings } from '@core/index'
+import { migrate, prefixClerk, type Action, type ClerkCommand, type Entry, type HudEvent, type Settings } from '@core/index'
 import { IPC, type AiProvider, type Arrangement, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from './ai/service'
@@ -222,7 +222,12 @@ function boot() {
       say({ phase: 'done', text: `The clerk could not reach its model. '${short(e.title)}' stays where it is.` })
       return
     }
-    if (filing && !filing.leisure && filing.ledgerId && filing.ledgerId !== e.ledgerId) {
+    if (filing?.leisure) {
+      engine.dispatch({ type: 'entry/toLeisure', id: e.id, log: filing.log, start: true })
+      say({ phase: 'done', text: `'${short(e.title)}' is entertainment: on the couch` })
+      return
+    }
+    if (filing && filing.ledgerId && filing.ledgerId !== e.ledgerId) {
       engine.dispatch({ type: 'entry/file', id: e.id, ledgerId: filing.ledgerId, estimateMin: filing.estimateMin, log: filing.log, model: filing.model, confidence: filing.confidence })
     }
     const now = engine.state.entries.find((x) => x.id === e.id)
@@ -231,7 +236,8 @@ function boot() {
   }
   const captureLine = async (text: string, start = false) => {
     const action: Action = { type: 'entry/capture', text, start }
-    if (!clerk.enabled()) return engine.act(action)
+    // Named for the couch in so many words: there is nothing for the clerk to read.
+    if (!clerk.enabled() || prefixClerk.file(text, engine.state.ledgers).leisure) return engine.act(action)
     if (start) {
       const before = new Set(engine.state.entries.map((x) => x.id))
       const r = engine.act(action)
