@@ -15,6 +15,9 @@ export const pool = new pg.Pool({
   ssl: url.includes('railway.internal') || url.includes('localhost') || url.includes('127.0.0.1') ? undefined : { rejectUnauthorized: false },
 })
 
+// A connection that drops while idle is the pool's to replace. Unheard, this event takes the whole API down.
+pool.on('error', (err) => console.error('[db] lost an idle connection:', err.message))
+
 /** The schema, created and brought up to date on boot; every statement is safe to run again. */
 export async function migrate() {
   await pool.query(`

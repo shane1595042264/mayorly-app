@@ -1,5 +1,5 @@
 import { createMiddleware } from 'hono/factory'
-import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose'
+import { createRemoteJWKSet, jwtVerify, SignJWT, type JWTPayload } from 'jose'
 import { pool } from './db.js'
 
 // The same shape as shanejli.com: the client brings a Google ID token, the server
@@ -88,19 +88,28 @@ export type AuthVars = { userId: string; tokenVersion: number }
 export const requireAuth = createMiddleware<{ Variables: AuthVars }>(async (c, next) => {
   const header = c.req.header('Authorization')
   if (!header?.startsWith('Bearer ')) return c.json({ error: 'Authentication required' }, 401)
+  let payload: JWTPayload
   try {
-    const { payload } = await jwtVerify(header.slice(7).trim(), JWT_SECRET, { algorithms: ['HS256'], issuer: ISSUER, clockTolerance: '60s' })
-    const userId = payload.userId as string | undefined
-    if (!userId) return c.json({ error: 'Authentication required' }, 401)
-    // A deleted account's token is still a valid signature; the row is what counts, and so is
-    // the version: a sign-out everywhere moves it past every token issued before.
-    const { rows } = await pool.query<{ token_version: number }>('SELECT token_version FROM users WHERE id = $1', [userId])
-    const row = rows[0]
-    if (!row || (typeof payload.v === 'number' ? payload.v : 0) !== row.token_version) return c.json({ error: 'Authentication required' }, 401)
-    c.set('userId', userId)
-    c.set('tokenVersion', row.token_version)
+    ;({ payload } = await jwtVerify(header.slice(7).trim(), JWT_SECRET, { algorithms: ['HS256'], issuer: ISSUER, clockTolerance: '60s' }))
   } catch {
     return c.json({ error: 'Authentication required' }, 401)
   }
+  const userId = payload.userId as string | undefined
+  if (!userId) return c.json({ error: 'Authentication required' }, 401)
+  // A 401 makes the app forget the sign-in, so it has to mean the session is really over. A
+  // database that cannot answer says nothing about the token: that is a 503, and the app retries.
+  let row: { token_version: number } | undefined
+  try {
+    const { rows } = await pool.query<{ token_version: number }>('SELECT token_version FROM users WHERE id = $1', [userId])
+    row = rows[0]
+  } catch (err) {
+    console.error('[auth] could not check the session:', err)
+    return c.json({ error: 'Try again shortly' }, 503)
+  }
+  // A deleted account's token is still a valid signature; the row is what counts, and so is
+  // the version: a sign-out everywhere moves it past every token issued before.
+  if (!row || (typeof payload.v === 'number' ? payload.v : 0) !== row.token_version) return c.json({ error: 'Authentication required' }, 401)
+  c.set('userId', userId)
+  c.set('tokenVersion', row.token_version)
   await next()
 })
