@@ -36,9 +36,9 @@ interface Props {
   area: { width: number; height: number }
   /** A drag of the tomato in this window: each point on the way, then where it was let go. */
   onDrag: (a: Point) => void
-  onPlace: (a: Point) => void
+  onPlace: (a: Point, onScreen: Point) => void
   /** The tomato is held (Windows): the overlay must keep the pointer until it is let go, wherever it goes. */
-  onGrab: (held: boolean) => void
+  onGrab: (held: boolean, carrying?: boolean) => void
   /** The resize handle was dragged to this HUD scale. */
   onScale: (scale: number) => void
   /** Something the shell needs to say (a hotkey that failed); shown in place of the caption. */
@@ -108,51 +108,62 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, he
       : { left: box.x + INSET.x, bottom: area.height - (box.y + box.height - INSET.y) }
     : {}
 
-  // Windows: the page drags the tomato. On a Mac it is the window's drag region instead.
-  const grab = useRef<{ id: number; x: number; y: number; from: Point; last: Point; moved: boolean } | null>(null)
-  const at = (e: React.PointerEvent, g: NonNullable<typeof grab.current>): Point => ({ x: g.from.x + e.clientX - g.x, y: g.from.y + e.clientY - g.y })
+  // Windows: the page drags the tomato. On a Mac it is the window's drag region instead. The drag is
+  // kept in desktop coordinates and followed on the window, not the element: the overlay moves
+  // between displays under the pointer, and the mouse capture does not always survive the border.
+  const grab = useRef<{ stop: () => void } | null>(null)
+  useEffect(() => () => grab.current?.stop(), [])
   const drag = compact || !tomatoAt
     ? {}
     : {
         onPointerDown: (e: React.PointerEvent) => {
           if (e.button !== 0) return
           e.preventDefault()
-          // The overlay keeps the pointer through the drag, even past its edge onto another display.
           try {
             e.currentTarget.setPointerCapture(e.pointerId)
           } catch {
             /* the pointer is already gone: the drag still follows the moves that arrive */
           }
-          grab.current = { id: e.pointerId, x: e.clientX, y: e.clientY, from: tomatoAt, last: tomatoAt, moved: false }
-          onGrab(true)
-        },
-        onPointerMove: (e: React.PointerEvent) => {
-          const g = grab.current
-          if (!g || g.id !== e.pointerId) return
-          if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) < DRAG_PX) return
-          g.moved = true
-          g.last = at(e, g)
-          onDrag(g.last)
-        },
-        onPointerUp: (e: React.PointerEvent) => {
-          const g = grab.current
-          grab.current = null
-          onGrab(false)
-          if (g?.moved && g.id === e.pointerId) onPlace(at(e, g))
-        },
-        // Cancelled or the capture lost: the tomato stays where it was last seen.
-        onPointerCancel: () => {
-          const g = grab.current
-          grab.current = null
-          onGrab(false)
-          if (g?.moved) onPlace(g.last)
-        },
-        onLostPointerCapture: (e: React.PointerEvent) => {
-          const g = grab.current
-          if (!g || g.id !== e.pointerId) return
-          grab.current = null
-          onGrab(false)
-          if (g.moved) onPlace(g.last)
+          const id = e.pointerId
+          const down = { x: e.screenX, y: e.screenY }
+          const start = { x: tomatoAt.x + e.screenX - e.clientX, y: tomatoAt.y + e.screenY - e.clientY }
+          let moved = false
+          let page: Point = tomatoAt
+          let desk: Point = start
+          const track = (ev: PointerEvent) => {
+            desk = { x: start.x + ev.screenX - down.x, y: start.y + ev.screenY - down.y }
+            page = { x: desk.x - (ev.screenX - ev.clientX), y: desk.y - (ev.screenY - ev.clientY) }
+          }
+          const stop = () => {
+            window.removeEventListener('pointermove', onMove)
+            window.removeEventListener('pointerup', onUp)
+            window.removeEventListener('pointercancel', finish)
+            grab.current = null
+            onGrab(false)
+          }
+          function finish() {
+            stop()
+            if (moved) onPlace(page, desk)
+          }
+          function onMove(ev: PointerEvent) {
+            if (ev.pointerId !== id) return
+            // The button came up somewhere no event reached.
+            if (ev.buttons === 0) return finish()
+            if (!moved && Math.hypot(ev.screenX - down.x, ev.screenY - down.y) < DRAG_PX) return
+            moved = true
+            track(ev)
+            onDrag(page)
+          }
+          function onUp(ev: PointerEvent) {
+            if (ev.pointerId !== id) return
+            if (moved) track(ev)
+            finish()
+          }
+          window.addEventListener('pointermove', onMove)
+          window.addEventListener('pointerup', onUp)
+          window.addEventListener('pointercancel', finish)
+          grab.current = { stop }
+          onGrab(true, true)
         },
       }
 

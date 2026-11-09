@@ -5,6 +5,7 @@ The top section is what the app shows once per build, the first time that build 
 ## Resize the tomato
 
 - Press Alt+G (Option+G on a Mac), then + or - to make the tomato bigger or smaller, or drag the small square on its corner.
+- On Windows, dragging the tomato now carries it across monitors like a window.
 
 ## The couch works like your tasks
 

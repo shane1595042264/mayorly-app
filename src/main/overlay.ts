@@ -25,6 +25,8 @@ const debug = process.env.MAYORLY_DEBUG ? (...a: unknown[]) => console.error('[o
 // src/shared/pet.ts, shared with the page, which draws the same boxes in the Windows overlay.
 /** How often the cursor is sampled for hover on macOS. */
 const HOVER_POLL_MS = 40
+/** How often a held tomato checks which display the pointer is on. */
+const HELD_POLL_MS = 16
 /** The poll rate while the pointer is far from the pet: enough to notice it coming. */
 const HOVER_IDLE_MS = 250
 const HOVER_NEAR_PX = 160
@@ -59,6 +61,7 @@ export class Overlay {
   private effectsClose: NodeJS.Timeout | null = null
   private fitting = false
   private settle: NodeJS.Timeout | null = null
+  private heldTimer: NodeJS.Timeout | null = null
   private readonly anchorFile: string
   /** The user has put the pet somewhere (a saved place); a first run takes its side from the settings instead. */
   private placed = false
@@ -374,11 +377,40 @@ export class Overlay {
   }
 
   /**
-   * Windows: the page dragged the tomato to this point, in the overlay's own pixels. The
-   * point may be past the overlay's edge, on another display; the overlay follows it there.
+   * Windows: the tomato is being carried. The overlay covers one display, so it goes to whichever
+   * one the pointer is on: the tomato crosses as a window would, and the pointer is always over
+   * this window, so its release arrives even if the mouse capture slipped at the border.
    */
-  placeAt(x: number, y: number) {
-    if (mac || !Number.isFinite(x) || !Number.isFinite(y)) return
+  setHeld(held: boolean) {
+    if (mac) return
+    if (this.heldTimer) clearInterval(this.heldTimer)
+    this.heldTimer = held ? setInterval(() => this.followPointer(), HELD_POLL_MS) : null
+  }
+
+  private pointerDisplay(): Display {
+    return screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+  }
+
+  private followPointer() {
+    if (this.win.isDestroyed()) return
+    const under = this.pointerDisplay()
+    if (under.id === this.displayId) return
+    this.displayId = under.id
+    this.fit()
+  }
+
+  /**
+   * Windows: the tomato was let go. The desktop point says where, and the pointer says on which
+   * display: the tomato can hang a few pixels over a border the pointer has already crossed.
+   */
+  placeAt(x: number, y: number, screenX: number, screenY: number) {
+    if (mac) return
+    this.setHeld(false)
+    if (Number.isFinite(screenX) && Number.isFinite(screenY)) {
+      this.place({ x: screenX, y: screenY }, this.pointerDisplay())
+      return
+    }
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return
     const wa = this.display().workArea
     this.place({ x: wa.x + x, y: wa.y + y })
   }
@@ -391,12 +423,12 @@ export class Overlay {
   }
 
   /** The tomato's new place, by keyboard or a drag: hang the window around it, remember it, tell the page. */
-  private place(a: Anchor) {
+  private place(a: Anchor, on?: Display) {
     if (this.settle) {
       clearTimeout(this.settle)
       this.settle = null
     }
-    const nearest = screen.getDisplayNearestPoint(a)
+    const nearest = on ?? screen.getDisplayNearestPoint(a)
     this.displayId = nearest.id
     this.anchor = this.clampAnchor(a, nearest.workArea)
     this.placed = true

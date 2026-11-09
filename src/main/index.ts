@@ -492,7 +492,8 @@ function boot() {
   ipcMain.on(IPC.drawerClose, () => overlay.closeDrawer())
   ipcMain.on(IPC.moving, (_e, on: boolean) => overlay.setMoving(!!on))
   ipcMain.on(IPC.nudge, (_e, dx: number, dy: number) => overlay.nudge(Number(dx) || 0, Number(dy) || 0))
-  ipcMain.on(IPC.placePet, (_e, x: number, y: number) => overlay.placeAt(Number(x), Number(y)))
+  ipcMain.on(IPC.placePet, (_e, x: number, y: number, sx?: number, sy?: number) => overlay.placeAt(Number(x), Number(y), Number(sx), Number(sy)))
+  ipcMain.on(IPC.petHeld, (_e, held: boolean) => overlay.setHeld(!!held))
   ipcMain.on(IPC.snap, (_e, corner: number) => {
     if (corner === 1 || corner === 2 || corner === 3 || corner === 4) overlay.snap(corner)
   })

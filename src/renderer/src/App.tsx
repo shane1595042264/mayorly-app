@@ -229,10 +229,13 @@ export function App() {
   // A drag of the tomato in this window (Windows): its live place, until the shell answers with where it settled.
   const [dragAnchor, setDragAnchor] = useState<Point | null>(null)
   const dragClear = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // While the tomato is held the overlay keeps the pointer, even where the pet cannot follow (a clamped edge, a fast flick).
+  const grabbing = useRef(false)
   useEffect(() => {
     const take = (l: Layout) => {
       setLayout(l)
-      setDragAnchor(null)
+      // Mid-carry the overlay may change displays; the tomato stays with the pointer.
+      if (!grabbing.current) setDragAnchor(null)
     }
     void bridge.getLayout().then(take)
     return bridge.onLayout(take)
@@ -241,16 +244,15 @@ export function App() {
   const [here, setHere] = useState<string | null>(null)
   useEffect(() => void bridge.getInfo().then((info) => setHere(info.device)), [])
   const onDrag = useCallback((a: Point) => setDragAnchor(a), [])
-  // While the tomato is held the overlay keeps the pointer, even where the pet cannot follow (a clamped edge, a fast flick).
-  const grabbing = useRef(false)
   const onScale = useCallback((hudScale: number) => dispatch({ type: 'settings/update', patch: { hudScale } }), [])
-  const onGrab = useCallback((held: boolean) => {
+  const onGrab = useCallback((held: boolean, carrying = false) => {
     grabbing.current = held
     if (held) bridge.setHit(true)
+    bridge.setPetHeld(held && carrying)
   }, [])
-  const onPlace = useCallback((a: Point) => {
+  const onPlace = useCallback((a: Point, onScreen: Point) => {
     setDragAnchor(a)
-    bridge.placePet(a.x, a.y)
+    bridge.placePet(a.x, a.y, onScreen.x, onScreen.y)
     // The shell's layout clears it; if no answer comes, the pet does not stay stuck on the drag.
     if (dragClear.current) clearTimeout(dragClear.current)
     dragClear.current = setTimeout(() => setDragAnchor(null), 1500)

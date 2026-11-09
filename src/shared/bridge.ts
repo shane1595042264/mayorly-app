@@ -259,7 +259,10 @@ export interface Bridge {
   /** Move the tomato by this many points. */
   nudge(dx: number, dy: number): void
   /** Windows: the tomato was dragged to this point in the overlay's pixels (it may be past the edge, on another display). */
-  placePet(x: number, y: number): void
+  /** A drag of the tomato ended: where in this window, and where on the whole desktop when known. */
+  placePet(x: number, y: number, screenX?: number, screenY?: number): void
+  /** The tomato is held and being carried: the overlay follows the pointer between displays. */
+  setPetHeld(held: boolean): void
   /** Put the tomato in a corner of the work area: 1 top left, 2 top right, 3 bottom left, 4 bottom right. */
   snap(corner: 1 | 2 | 3 | 4): void
   /** The effects page: play this. */
@@ -327,6 +330,7 @@ export const IPC = {
   nudge: 'mayorly:nudge',
   snap: 'mayorly:snap',
   placePet: 'mayorly:place-pet',
+  petHeld: 'mayorly:pet-held',
   effect: 'mayorly:effect',
   effectDone: 'mayorly:effect-done',
   drawerClose: 'mayorly:drawer-close',

@@ -246,6 +246,7 @@ export function createWebBridge(): Bridge {
     },
     snap: (corner) => place(cornerAnchor(area(), corner, state.settings.hudScale)),
     placePet: (x, y) => place({ x, y }),
+    setPetHeld: () => {},
     onEffect: () => () => {},
     effectDone: () => {},
     closeDrawer: () => {},
