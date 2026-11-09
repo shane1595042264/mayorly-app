@@ -58,6 +58,15 @@ export function settleLegacyCoins(s: MayorlyState): MayorlyState {
 }
 
 /** Rebuild derived counts from closed intervals on load/merge, never replay old payments. */
+/** A sitting's focus time is what its closed intervals add up to: the log is the record, this only sums it. */
+export function focusFromLog(s: MayorlyState): MayorlyState {
+  const spent = new Map<Id, number>()
+  for (const seg of s.segments) {
+    if (seg.kind === 'focus') spent.set(seg.sittingId, (spent.get(seg.sittingId) ?? 0) + (seg.end === null ? 0 : seg.end - seg.start))
+  }
+  return { ...s, sittings: s.sittings.map((x) => (spent.has(x.id) ? { ...x, focusMs: spent.get(x.id)! } : x)) }
+}
+
 export function reconcileTomatoes(s: MayorlyState): MayorlyState {
   const closed = { ...s, segments: s.segments.filter(seg => seg.end !== null) }
   return {

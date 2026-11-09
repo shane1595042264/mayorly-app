@@ -5,6 +5,7 @@ import type { Command, Layout, UiMode } from '../../shared/bridge'
 import { drawerBox, homeAnchor, petBox, sideOf, type Point } from '../../shared/pet'
 import { bridge } from './bridge'
 import { Capture } from './capture/Capture'
+import { Find } from './capture/Find'
 import { ClerkAsk } from './deck/ClerkAsk'
 import { Deck } from './deck/Deck'
 import { Drawer } from './hud/Drawer'
@@ -420,7 +421,7 @@ export function App() {
         {shown !== 'field' && shown !== 'drawer' && (
           <motion.div
             key="vignette"
-            className={`vignette ${shown === 'capture' ? 'light' : ''}`}
+            className={`vignette ${shown === 'capture' || shown === 'find' ? 'light' : ''}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -453,6 +454,7 @@ export function App() {
         {shown === 'plus' && <PlusMenu key="plus" s={s} close={close} open={setMode} stage={stagePlus} />}
         {shown === 'deck' && <Deck key="deck" s={s} close={close} kind={bridge.kind} />}
         {shown === 'capture' && <Capture key="capture" s={s} close={close} />}
+        {shown === 'find' && <Find key="find" s={s} close={close} />}
         {shown === 'drawer' && <Drawer key="drawer" s={s} close={close} style={drawerAt} />}
       </AnimatePresence>
 

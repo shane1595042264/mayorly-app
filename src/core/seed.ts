@@ -1,11 +1,12 @@
 import type { Calendar, HoursWindow } from './model'
 import type { HotkeyAction, MayorlyState, Settings } from './model'
 import { DEFAULT_ALARMS, sanitiseAlarms } from './alarms'
-import { reconcileTomatoes, settleLegacyCoins } from './accounting'
+import { focusFromLog, reconcileTomatoes, settleLegacyCoins } from './accounting'
 
 export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   plus: 'Alt+T',
   capture: 'Alt+N',
+  find: 'Alt+F',
   deck: 'Alt+M',
   pause: 'Alt+P',
   skipRest: 'Alt+R',
@@ -106,7 +107,7 @@ export function migrate(raw: unknown): MayorlyState | null {
   const x = raw as Partial<MayorlyState>
   if (x.schema !== 1) return null
   const base = emptyState()
-  return reconcileTomatoes(settleLegacyCoins({
+  return focusFromLog(reconcileTomatoes(settleLegacyCoins({
     ...base,
     ...x,
     desk: { ...base.desk, ...x.desk },
@@ -115,5 +116,5 @@ export function migrate(raw: unknown): MayorlyState | null {
     trash: (Array.isArray(x.trash) ? x.trash : []).filter((t) => t && typeof t.id === 'string' && Number.isFinite(t.deletedAt)).map((t) => ({ ...t, tomatoes: Number.isFinite(t.tomatoes) ? t.tomatoes : 0 })),
     settings: { ...base.settings, ...x.settings, alarms: sanitiseAlarms(x.settings?.alarms), hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys }, calendar: { ...base.settings.calendar, ...x.settings?.calendar } },
     calendar: { ...emptyCalendar(), ...x.calendar },
-  } as MayorlyState))
+  } as MayorlyState)))
 }

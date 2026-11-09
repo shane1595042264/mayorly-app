@@ -4,7 +4,7 @@
 import type { HotkeyAction, Settings } from '@core/index'
 import { IS_MAC, MODIFIER_KEYS, physicalKey } from './keys'
 
-export type Scope = 'global' | 'plus' | 'capture' | 'deck' | 'list' | 'shelf' | 'cal' | 'move' | 'keymap'
+export type Scope = 'global' | 'plus' | 'capture' | 'find' | 'deck' | 'list' | 'shelf' | 'cal' | 'move' | 'keymap'
 
 export interface KeyDef {
   id: string
@@ -24,6 +24,7 @@ export const SCOPES: { id: Scope; title: string; blurb: string }[] = [
   { id: 'global', title: 'Anywhere', blurb: 'System-wide, with a modifier, so no other app sees them.' },
   { id: 'plus', title: 'Swap menu', blurb: 'While the swap menu is open, with the swap key\'s modifier still held or not. Keys by position.' },
   { id: 'capture', title: 'Capture box', blurb: 'While typing a line.' },
+  { id: 'find', title: 'Find or start', blurb: 'While searching your tasks.' },
   { id: 'deck', title: 'Deck', blurb: 'While the deck is open.' },
   { id: 'list', title: 'Lists', blurb: 'The flow, a ledger, the supersets, the couch list. Keys act on the selected row.' },
   { id: 'shelf', title: 'Shelf', blurb: 'The nine bays.' },
@@ -35,6 +36,7 @@ export const SCOPES: { id: Scope; title: string; blurb: string }[] = [
 export const GLOBAL_ACTIONS: [HotkeyAction, string][] = [
   ['plus', 'Swap menu'],
   ['capture', 'Capture'],
+  ['find', 'Find a task, or start a new one'],
   ['deck', 'Deck'],
   ['pause', 'Hold and resume'],
   ['skipRest', 'Skip rest and return to the task'],
@@ -61,6 +63,10 @@ export const KEYS: KeyDef[] = [
   { id: 'capture.file', scope: 'capture', label: 'File the line without starting', keys: [IS_MAC ? 'Cmd+Enter' : 'Ctrl+Enter'], note: 'To its ledger by prefix, else the clerk, else the tray. The desk stays as it is.' },
   { id: 'capture.start', scope: 'capture', label: 'File it and start it now', keys: ['Enter'], note: 'A running focus block swaps to it, the clock where it is; otherwise a pomodoro starts on it. The clerk files it after.' },
   { id: 'capture.keep', scope: 'capture', label: 'File and keep the box open', keys: ['Shift+Enter'] },
+
+  { id: 'find.start', scope: 'find', label: 'Start the selected task', keys: ['Enter'], note: 'A line nothing matches is created and started. A running focus block swaps to the task, the clock where it is; otherwise a pomodoro starts on it.' },
+  { id: 'find.down', scope: 'find', label: 'Next result', keys: ['ArrowDown'] },
+  { id: 'find.up', scope: 'find', label: 'Previous result', keys: ['ArrowUp'] },
 
   { id: 'deck.close', scope: 'deck', label: 'Close the deck', keys: ['Escape'] },
   { id: 'deck.prevTab', scope: 'deck', label: 'Previous tab', keys: ['q'] },

@@ -28,6 +28,7 @@ Global, from any app. All of them can be changed in Deck, Settings. On a Mac, Al
 |---|---|
 | **Alt+T** | Plus menu. Tap to toggle, or hold to peek and release to close. |
 | **Alt+N** | Capture. Type, Enter, it lands in the flow. |
+| **Alt+F** | Find a task: type to search, arrows to choose, Enter to start it. If nothing matches, Enter creates it and starts it. |
 | **Alt+M** | Deck: flow, shelf, supersets, record, settings. **Q / E** switch tabs. |
 | **Alt+P** | Hold and resume the desk. |
 | **Alt+H** | Hide or show the HUD. |

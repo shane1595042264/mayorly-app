@@ -535,6 +535,7 @@ function boot() {
           if (overlay.mode !== 'plus') armsOn()
         },
         capture: () => command('capture'),
+        find: () => command('find'),
         deck: () => command('deck'),
         pause: togglePause,
         skipRest: () => engine.act({ type: 'desk/skipRest' }),

@@ -365,6 +365,23 @@ body.drawer-page .drawer { position: fixed; inset: 4px; width: auto; height: aut
   color: var(--ink-2);
   text-shadow: var(--shadow-text);
 }
+.capture.find { bottom: auto; top: 18%; }
+.find-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.find-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) minmax(0, max-content);
+  align-items: center;
+  gap: 12px;
+  min-height: 38px;
+  padding: 0 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.find-row.is-on { background: var(--accent-3); color: var(--ink); box-shadow: inset 2px 0 0 var(--accent); }
+.find-code { font-family: var(--font-data); font-size: 12px; color: var(--ink-2); }
+.find-title { min-width: 0; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.find-meta { min-width: 0; max-width: 340px; font-family: var(--font-data); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 .tone-file { color: var(--ink); }
 .tone-order { color: var(--accent); }
 .tone-error { color: #ff9b8c; }

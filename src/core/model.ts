@@ -403,7 +403,7 @@ export interface ClerkLine {
   text: string
 }
 
-export type HotkeyAction = 'plus' | 'capture' | 'deck' | 'pause' | 'skipRest' | 'hide' | 'switch' | 'clear' | 'move' | 'drawer'
+export type HotkeyAction = 'plus' | 'capture' | 'find' | 'deck' | 'pause' | 'skipRest' | 'hide' | 'switch' | 'clear' | 'move' | 'drawer'
 
 export interface Settings {
   /** Focus length, and the tomato interval. */

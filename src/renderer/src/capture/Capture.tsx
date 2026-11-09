@@ -17,7 +17,7 @@ interface Plan {
   start?: () => void
 }
 
-function plan(raw: string, s: MayorlyState): Plan {
+export function plan(raw: string, s: MayorlyState): Plan {
   const text = raw.trim()
   if (!text) return { tone: 'idle', text: 'Type an entry. Prefix a ledger like legal: and add ~30 for an estimate.' }
 

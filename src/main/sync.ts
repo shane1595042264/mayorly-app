@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { MayorlyState } from '@core/index'
+import { migrate, planContent, syncContent, type MayorlyState } from '@core/index'
 import type { SyncStatus } from '../shared/bridge'
 import type { Engine } from './engine'
 
@@ -13,13 +13,16 @@ import type { Engine } from './engine'
 // changed, the server's copy is taken; something changed, the reducer merges the two and the
 // merge is pushed. A document this build cannot read blocks syncing until the app is updated,
 // instead of being overwritten. A failed push is retried with a growing wait, and the session
-// is renewed before it runs out.
+// is renewed before it runs out. A push only goes when this machine has something the server
+// does not (syncContent): a replan, or a desk another computer owns, is no reason to write.
 
 /** Wait this long after a change before pushing, so a burst of edits is one push. */
 const PUSH_DEBOUNCE_MS = 2_500
 /** Never push more often than this; the heartbeat changes state while a block runs. */
 const PUSH_MIN_MS = 20_000
 const POLL_MS = 60_000
+/** The plan moves as the clock does. It has to reach the calendar feed, which is read this often anyway. */
+const PLAN_PUSH_MS = 15 * 60_000
 const RETRY_MS = [30_000, 60_000, 120_000, 300_000]
 /** The server issues 30-day sessions; renew when less than this is left. */
 const REFRESH_WITHIN_MS = 10 * 24 * 3_600_000
@@ -28,13 +31,11 @@ interface Mark {
   revision: number
   /** When this machine last matched the server. */
   syncedAt: number | null
-  /** The state as it was then. */
+  /** What the state had to say then (syncContent), hashed. */
   hash: string | null
   /** A name for this machine on the server: platform and a random tag, never the hostname. */
   device: string
 }
-
-const hashOf = (state: MayorlyState) => createHash('sha1').update(JSON.stringify(state)).digest('hex')
 
 /** The seconds-since-epoch expiry inside a JWT, or null. */
 function expiryOf(token: string): number | null {
@@ -53,6 +54,9 @@ export class Sync {
   private pushTimer: NodeJS.Timeout | null = null
   private pollTimer: NodeJS.Timeout | null = null
   private retryTimer: NodeJS.Timeout | null = null
+  private planTimer: NodeJS.Timeout | null = null
+  private planSent: string | null = null
+  private planPushedAt = 0
   private retries = 0
   private busy = false
   private pushAgain = false
@@ -107,7 +111,7 @@ export class Sync {
     this.pushTimer = null
     const until = Date.now() + timeoutMs
     while (this.busy && Date.now() < until) await new Promise((r) => setTimeout(r, 50))
-    await Promise.race([this.push(true), new Promise((r) => setTimeout(r, Math.max(0, until - Date.now())))])
+    await Promise.race([this.push(false), new Promise((r) => setTimeout(r, Math.max(0, until - Date.now())))])
   }
 
   private set(s: SyncStatus) {
@@ -122,6 +126,26 @@ export class Sync {
       this.pushTimer = null
       void this.push(false)
     }, wait)
+  }
+
+  private hashOf(state: MayorlyState) {
+    return createHash('sha1').update(syncContent(state, this.engine.deviceId)).digest('hex')
+  }
+
+  /** Nothing the server lacks. The plan alone goes from the active device, and not often. */
+  private nothingToSend(state: MayorlyState): boolean {
+    if (this.hashOf(state) !== this.mark.hash) return false
+    if (planContent(state) === this.planSent) return true
+    if (state.desk.device && state.desk.device.id !== this.engine.deviceId) return true
+    const wait = this.planPushedAt + PLAN_PUSH_MS - Date.now()
+    if (wait <= 0) return false
+    if (!this.planTimer) {
+      this.planTimer = setTimeout(() => {
+        this.planTimer = null
+        void this.push(false)
+      }, wait)
+    }
+    return true
   }
 
   private headers() {
@@ -161,7 +185,7 @@ export class Sync {
       return
     }
     const state = this.engine.state
-    if (!force && state === this.syncedState) return
+    if (!force && (state === this.syncedState || this.nothingToSend(state))) return
     this.busy = true
     this.set({ ...this.status, phase: 'syncing' })
     try {
@@ -184,6 +208,7 @@ export class Sync {
       const data = (await res.json()) as { revision: number }
       this.mark.revision = data.revision
       this.remember(state)
+      this.planPushedAt = Date.now()
       this.ok()
     } catch (err) {
       this.fail(err)
@@ -203,11 +228,11 @@ export class Sync {
   /**
    * The server's document arrives. Taken whole when this machine changed nothing since it last
    * matched the server; merged with this machine's work otherwise. Either way a copy of what
-   * was here goes to backups first.
+   * was here goes to backups first. A merge is only pushed back if it says more than the server did.
    */
   private adopt(revision: number, doc: unknown): 'taken' | 'merged' | 'blocked' {
     const local = this.engine.state
-    const changedHere = this.mark.hash !== null ? hashOf(local) !== this.mark.hash : local.entries.length > 0 || local.sittings.length > 0 || local.ledgers.length > 0
+    const changedHere = this.mark.hash !== null ? this.hashOf(local) !== this.mark.hash : local.entries.length > 0 || local.sittings.length > 0 || local.ledgers.length > 0
     this.engine.snapshot('before-sync')
     this.engine.dispatch(changedHere ? { type: 'sync/merge', state: doc, syncedAt: this.mark.syncedAt } : { type: 'sync/replace', state: doc })
     if (this.engine.state === local) {
@@ -217,7 +242,8 @@ export class Sync {
       return 'blocked'
     }
     this.mark.revision = revision
-    if (changedHere) {
+    const theirs = migrate(doc)
+    if (changedHere && (!theirs || this.hashOf(this.engine.state) !== this.hashOf(theirs))) {
       this.saveMark()
       return 'merged'
     }
@@ -228,7 +254,8 @@ export class Sync {
   /** This machine matches the server as of now. */
   private remember(state: MayorlyState) {
     this.syncedState = state
-    this.mark.hash = hashOf(state)
+    this.planSent = planContent(state)
+    this.mark.hash = this.hashOf(state)
     this.mark.syncedAt = Date.now()
     this.saveMark()
   }
@@ -277,8 +304,8 @@ export class Sync {
   }
 
   private clearTimers() {
-    for (const t of [this.pushTimer, this.pollTimer, this.retryTimer]) if (t) clearTimeout(t)
-    this.pushTimer = this.pollTimer = this.retryTimer = null
+    for (const t of [this.pushTimer, this.pollTimer, this.retryTimer, this.planTimer]) if (t) clearTimeout(t)
+    this.pushTimer = this.pollTimer = this.retryTimer = this.planTimer = null
     this.retries = 0
     this.pushAgain = false
   }

@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Find a task and start it, and quieter syncing
+
+- Alt+F (Option+F on a Mac) searches your open tasks. Type to narrow it down, use the arrows to choose, and press Enter to start.
+- If nothing matches, Enter creates the task and starts it, just like capture. `legal: reply ~20` works there too.
+- With Mayorly open on two computers, the one not running the timer no longer writes to the server every minute, and focus time no longer piles up. A session that was already inflated corrects itself.
+
 ## Auto picks a colour too
 
 - Auto in the ledger editor now also gives the ledger a colour no other ledger wears, the one that stands farthest from theirs. Once all twelve are taken it picks the least used.

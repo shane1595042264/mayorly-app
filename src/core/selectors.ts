@@ -3,6 +3,32 @@ import { openFlow, supersetOf } from './planner'
 import { restSession, switchBack, switchSession } from './reducer'
 
 
+/**
+ * Open entries for a search, best first. Every word has to appear in the title or in the name or
+ * code of the entry's ledger. A title that starts with the search comes first, then titles where
+ * every word starts a word, then any title holding them, then ledger matches; flow order within
+ * each. With no search, the top of the flow.
+ */
+export function findEntries(s: MayorlyState, query: string, limit = 8): Entry[] {
+  const q = query.trim().toLowerCase()
+  const flow = openFlow(s)
+  if (!q) return flow.slice(0, limit)
+  const words = q.split(/\s+/)
+  const ledgers = new Map(s.ledgers.map((l) => [l.id, `${l.name} ${l.code}`.toLowerCase()]))
+  const startsWord = (text: string, w: string) => text.startsWith(w) || text.includes(` ${w}`)
+  return flow
+    .flatMap((e) => {
+      const title = e.title.toLowerCase()
+      const ledger = e.ledgerId ? (ledgers.get(e.ledgerId) ?? '') : ''
+      if (!words.every((w) => title.includes(w) || ledger.includes(w))) return []
+      const rank = title.startsWith(q) ? 0 : words.every((w) => startsWord(title, w)) ? 1 : words.every((w) => title.includes(w)) ? 2 : 3
+      return [{ e, rank }]
+    })
+    .sort((a, b) => a.rank - b.rank)
+    .map((x) => x.e)
+    .slice(0, limit)
+}
+
 export interface BlockView {
   block: Block
   ledger: Ledger | null

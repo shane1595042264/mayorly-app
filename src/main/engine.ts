@@ -39,6 +39,11 @@ export class Engine {
     }
   }
 
+  /** This computer's id, the one desk.device names. */
+  get deviceId(): string {
+    return this.device.id
+  }
+
   start() {
     this.beat = setInterval(() => this.heartbeat(), 1000)
   }
