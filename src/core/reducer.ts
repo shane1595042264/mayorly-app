@@ -772,7 +772,7 @@ function startBlock(s: MayorlyState, ctx: Ctx, ev: HudEvent[], block: Block, at:
     endSitting(s, at, ev, 'complete')
     return
   }
-  const auto = force || block.kind === 'leisure' || (block.kind === 'focus' ? s.settings.autoStartFocus : s.settings.autoStartRest)
+  const auto = force || (block.kind === 'rest' ? s.settings.autoStartRest : s.settings.autoStartFocus)
   s.desk.block = block
   if (block.kind !== 'rest') s.desk.restTask = null
   s.desk.bankMs = 0

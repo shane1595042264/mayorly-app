@@ -1702,3 +1702,38 @@ describe('recent tasks', () => {
     expect(switchToAction(w.s, find('a'))).toMatchObject({ type: 'desk/select', entryId: w.entry('a').id })
   })
 })
+
+describe('the next couch block after a rest', () => {
+  const couch = (autoStartFocus: boolean) => {
+    const w = world((s) => {
+      s.tokens.push({ id: 'seed', at: T0, amount: 5, reason: 'tomato', sittingId: null } as never)
+      s.settings.autoStartFocus = autoStartFocus
+      s.settings.autoStartRest = true
+    })
+    w.do({ type: 'leisure/add', title: 'civ' })
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: w.s.leisure.find((x) => x.title === 'civ')!.id })
+    w.wait((w.s.settings.focusMin + w.s.settings.shortRestMin) * MIN + 2_000)
+    return w
+  }
+
+  it('waits for you when the setting is off', () => {
+    const w = couch(false)
+    expect(w.s.desk).toMatchObject({ status: 'ready', block: { kind: 'leisure', label: 'civ' }, runStartedAt: null })
+    expect(w.s.segments.filter((x) => x.kind === 'leisure' && x.end === null)).toHaveLength(0)
+    w.do({ type: 'desk/resume' })
+    expect(w.s.desk).toMatchObject({ status: 'running', block: { kind: 'leisure' } })
+  })
+
+  it('carries on by itself when the setting is on', () => {
+    expect(couch(true).s.desk).toMatchObject({ status: 'running', block: { kind: 'leisure' } })
+  })
+
+  it('still starts at once when you ask for it', () => {
+    const w = world((s) => {
+      s.tokens.push({ id: 'seed', at: T0, amount: 5, reason: 'tomato', sittingId: null } as never)
+      s.settings.autoStartFocus = false
+    })
+    w.do({ type: 'entry/capture', text: 'couch: civ', start: true })
+    expect(w.s.desk).toMatchObject({ status: 'running', block: { kind: 'leisure', label: 'civ' } })
+  })
+})

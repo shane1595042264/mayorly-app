@@ -31,7 +31,7 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
           <Num label="Long rest every" help="focus blocks" value={st.longRestEvery} min={1} max={12} onChange={(longRestEvery) => set({ longRestEvery })} />
         </div>
         <div className="checks">
-          <Check label="Start the next focus block on its own" value={st.autoStartFocus} onChange={(autoStartFocus) => set({ autoStartFocus })} />
+          <Check label="Start the next focus or couch block on its own" value={st.autoStartFocus} onChange={(autoStartFocus) => set({ autoStartFocus })} />
           <Check label="Start rests on their own" value={st.autoStartRest} onChange={(autoStartRest) => set({ autoStartRest })} />
           <Check label="Sound cues" value={st.sound} onChange={(sound) => set({ sound })} />
           {kind === 'electron' && <Check label="Open at login" value={st.openAtLogin} onChange={(openAtLogin) => set({ openAtLogin })} />}
