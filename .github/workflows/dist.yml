@@ -50,6 +50,8 @@ jobs:
       # Authenticode signing happens when a Windows certificate is set; an empty WIN_CSC_LINK means none.
       - name: Package (Windows)
         if: runner.os == 'Windows'
+        # Bash, not the runner's default PowerShell, which splits -c.extraMetadata at the dot.
+        shell: bash
         env:
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
