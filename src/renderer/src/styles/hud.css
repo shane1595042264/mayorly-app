@@ -366,6 +366,21 @@ body.drawer-page .drawer { position: fixed; inset: 4px; width: auto; height: aut
   text-shadow: var(--shadow-text);
 }
 .capture.find { bottom: auto; top: 18%; }
+.find-section { padding: 6px 12px 2px; font-size: 11px; color: var(--ink-2); }
+.switcher {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: min(560px, 88vw);
+  z-index: var(--z-modal);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 70px rgb(0 0 0 / 0.4);
+}
 .find-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
 .find-row {
   display: grid;

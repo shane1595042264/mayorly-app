@@ -1,24 +1,64 @@
 import type { Block, Entry, Id, Ledger, LeisureItem, MayorlyState, Ms, TokenTx } from './model'
 import { openFlow, supersetOf } from './planner'
-import { restSession, switchBack, switchSession } from './reducer'
+import { restSession, switchBack, switchSession, type Action } from './reducer'
 
 
 export type FoundTask = { kind: 'entry'; entry: Entry } | { kind: 'leisure'; item: LeisureItem }
+
+const idOf = (f: FoundTask): Id => (f.kind === 'entry' ? f.entry.id : f.item.id)
+
+/** The tasks last worked on, newest first, read off the interval log. Finished or removed ones are left out. */
+export function recentTasks(s: MayorlyState, limit = 10): FoundTask[] {
+  const out: FoundTask[] = []
+  const seen = new Set<Id>()
+  for (let i = s.segments.length - 1; i >= 0 && out.length < limit; i--) {
+    const seg = s.segments[i]
+    const id = seg.kind === 'leisure' ? seg.leisureId : seg.kind === 'focus' ? seg.entryId : null
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    if (seg.kind === 'leisure') {
+      const item = s.leisure.find((x) => x.id === id && x.archivedAt === null)
+      if (item) out.push({ kind: 'leisure', item })
+    } else {
+      const entry = s.entries.find((x) => x.id === id && x.doneAt === null)
+      if (entry) out.push({ kind: 'entry', entry })
+    }
+  }
+  return out
+}
+
+/** The task the desk is on, the one behind a rest included. */
+export function onDeskId(s: MayorlyState): Id | null {
+  const block = restSession(s)?.block ?? s.desk.block
+  return (block?.kind === 'leisure' ? block.leisureId : block?.entryId) ?? null
+}
+
+/** What going to this task means: nothing if the desk is on it, the quick switch if that is where it leads, so the clock comes back, otherwise picking it. */
+export function switchToAction(s: MayorlyState, f: FoundTask): Action | null {
+  const id = idOf(f)
+  if (id === onDeskId(s)) return null
+  const back = switchBack(s)
+  const held = back ? null : switchSession(s)
+  if (back?.entryId === id || held?.block.entryId === id || held?.block.leisureId === id) return { type: 'desk/switch' }
+  return f.kind === 'entry' ? { type: 'desk/select', entryId: id, ledgerId: f.entry.ledgerId } : { type: 'desk/select', leisureId: id }
+}
 
 /**
  * Open tasks for a search, best first: the flow, then the couch list. Every word has to appear in
  * the title or in the name of what the task belongs to, its ledger or the couch. A title that
  * starts with the search comes first, then titles where every word starts a word, then any
- * title holding them, then matches on the group alone; list order within each. No search: the
- * top of the list.
+ * title holding them, then matches on the group alone; most recently used first within each.
+ * No search: what was used last, then the top of the list.
  */
 export function findTasks(s: MayorlyState, query: string, limit = 8): FoundTask[] {
   const q = query.trim().toLowerCase()
+  const recent = new Map(recentTasks(s).map((f, i) => [idOf(f), i]))
+  const soonest = (f: FoundTask) => recent.get(idOf(f)) ?? recent.size
   const ledgers = new Map(s.ledgers.map((l) => [l.id, `${l.name} ${l.code}`.toLowerCase()]))
   const all = [
     ...openFlow(s).map((entry) => ({ found: { kind: 'entry', entry } as FoundTask, title: entry.title.toLowerCase(), group: entry.ledgerId ? (ledgers.get(entry.ledgerId) ?? '') : '' })),
     ...leisureList(s).map((item) => ({ found: { kind: 'leisure', item } as FoundTask, title: item.title.toLowerCase(), group: 'couch leisure' })),
-  ]
+  ].sort((a, b) => soonest(a.found) - soonest(b.found))
   if (!q) return all.slice(0, limit).map((x) => x.found)
   const words = q.split(/\s+/)
   const startsWord = (text: string, w: string) => text.startsWith(w) || text.includes(` ${w}`)

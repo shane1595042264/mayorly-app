@@ -32,7 +32,7 @@ Global, from any app. All of them can be changed in Deck, Settings. On a Mac, Al
 | **Alt+M** | Deck: flow, shelf, supersets, record, settings. **Q / E** switch tabs. |
 | **Alt+P** | Hold and resume the desk. |
 | **Alt+H** | Hide or show the HUD. |
-| **Alt+Q** | Quick switch: park what you are on and pick up the previous session where its clock stopped. Press again to come back. |
+| **Alt+Q** | Task switcher, like Alt+Tab. Tap it to go back to the last task where its clock stopped. Hold Alt to see your last 10 tasks: Q steps down the list, the mouse picks one, and letting go switches. |
 | **Alt+C** | Clear the entry on the desk. Its tomatoes pay out, and the desk moves to the next entry on its own. |
 | **Alt+G** | Move or resize the tomato: arrows or hjkl nudge it, Shift goes far, 1 to 4 jump to a corner, + and - or the corner handle resize it, Enter when done. |
 

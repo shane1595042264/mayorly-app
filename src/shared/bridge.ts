@@ -6,13 +6,13 @@ import type { Action, AlarmKind, HudEvent, MayorlyState } from '../core/index'
 
 /** field: the passive HUD, clicks fall through to your apps. The rest take focus. */
 /** drawer: the quick drawer beside the pet, for what is on the desk. On a Mac it is the shell's own window (?drawer), never this one. */
-export type UiMode = 'field' | 'plus' | 'deck' | 'capture' | 'find' | 'drawer'
+export type UiMode = 'field' | 'plus' | 'deck' | 'capture' | 'find' | 'switcher' | 'drawer'
 
 /** Hotkey-driven requests from the shell to the HUD. `close` returns to field mode (the window lost focus). */
 /** Option+digit while the Plus menu is open: pick that number in the arm you are on; 0 is the couch. */
 export type PickCommand = `pick-${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
 /** arm-* and pick-*: Option+arrow or digit while the Plus menu is open, taken by the shell so they land even before the window has the keyboard. */
-export type Command = 'plus' | 'capture' | 'find' | 'deck' | 'drawer' | 'close' | 'move' | 'arm-up' | 'arm-down' | 'arm-left' | 'arm-right' | PickCommand
+export type Command = 'plus' | 'capture' | 'find' | 'switcher' | 'deck' | 'drawer' | 'close' | 'move' | 'arm-up' | 'arm-down' | 'arm-left' | 'arm-right' | PickCommand
 
 /** How the shell lays the HUD out. Compact: the window is only the pet and what it unfolds (macOS). */
 export interface Layout {

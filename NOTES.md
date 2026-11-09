@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Alt+Q works like Alt+Tab, and search starts with what you used last
+
+- Tap Alt+Q to go back to your last task, same as before.
+- Hold Alt after pressing Q to see your last 10 tasks. Press Q again to step down the list, or use the mouse, and let go of Alt to switch. Esc cancels.
+- Alt+F now opens with your recently used tasks at the top.
+
 ## Resize the tomato
 
 - Press Alt+G (Option+G on a Mac), then + or - to make the tomato bigger or smaller, or drag the small square on its corner.

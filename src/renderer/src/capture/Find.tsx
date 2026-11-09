@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import { MagnifyingGlass, Plus } from '@phosphor-icons/react'
-import { balance, findTasks, LEISURE_TOKENS_PER_BLOCK, type FoundTask, type MayorlyState } from '@core/index'
+import { balance, findTasks, LEISURE_TOKENS_PER_BLOCK, recentTasks, type FoundTask, type MayorlyState } from '@core/index'
 import { actionFor, keyLabel, keysFor, recordUse } from '../lib/keymap'
 import { dispatch } from '../store'
 import { plan } from './Capture'
@@ -26,6 +26,8 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
     return [...found, ...(query && !exact ? [{ kind: 'new' } as const] : [])]
   }, [s, query])
   const at = Math.min(picked, Math.max(0, rows.length - 1))
+  // With nothing typed the list starts with what was used last, and says so.
+  const recent = query ? 0 : recentTasks(s).length
 
   const start = (row: Row | undefined) => {
     if (!row) return
@@ -97,6 +99,13 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
                 onPointerMove: () => setPicked(i),
                 onClick: () => start(row),
               }
+              const heading = recent === 0 ? null : i === 0 ? 'Recent' : i === recent ? 'Flow' : null
+              const titled = (li: React.ReactNode) => (
+                <Fragment key={key}>
+                  {heading && <li role="presentation" className="find-section caps">{heading}</li>}
+                  {li}
+                </Fragment>
+              )
               if (row.kind === 'new') {
                 return (
                   <li key={key} {...props}>
@@ -108,24 +117,24 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
               }
               if (row.kind === 'leisure') {
                 const onCouch = s.desk.block?.leisureId === row.item.id
-                return (
-                  <li key={key} {...props}>
+                return titled(
+                  <li {...props}>
                     <span className="find-code">COUCH</span>
                     <span className="find-title">{row.item.title}</span>
                     <span className={`find-meta ${coins < LEISURE_TOKENS_PER_BLOCK ? 'tone-error' : ''}`}>
                       {onCouch ? 'On the desk' : coins < LEISURE_TOKENS_PER_BLOCK ? 'No coin' : `${LEISURE_TOKENS_PER_BLOCK} coin`}
                     </span>
-                  </li>
+                  </li>,
                 )
               }
               const ledger = s.ledgers.find((l) => l.id === row.entry.ledgerId)
               const onDesk = s.desk.block?.entryId === row.entry.id
-              return (
-                <li key={key} {...props}>
+              return titled(
+                <li {...props}>
                   <span className="find-code">{ledger?.code ?? 'TRAY'}</span>
                   <span className="find-title">{row.entry.title}</span>
                   <span className="find-meta">{onDesk ? 'On the desk' : row.entry.estimateMin ? `${row.entry.estimateMin}m` : ''}</span>
-                </li>
+                </li>,
               )
             })}
           </ul>

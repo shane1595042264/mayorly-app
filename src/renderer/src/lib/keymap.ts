@@ -4,7 +4,7 @@
 import type { HotkeyAction, Settings } from '@core/index'
 import { IS_MAC, MODIFIER_KEYS, physicalKey } from './keys'
 
-export type Scope = 'global' | 'plus' | 'capture' | 'find' | 'deck' | 'list' | 'shelf' | 'cal' | 'move' | 'keymap'
+export type Scope = 'global' | 'plus' | 'capture' | 'find' | 'switcher' | 'deck' | 'list' | 'shelf' | 'cal' | 'move' | 'keymap'
 
 export interface KeyDef {
   id: string
@@ -25,6 +25,7 @@ export const SCOPES: { id: Scope; title: string; blurb: string }[] = [
   { id: 'plus', title: 'Swap menu', blurb: 'While the swap menu is open, with the swap key\'s modifier still held or not. Keys by position.' },
   { id: 'capture', title: 'Capture box', blurb: 'While typing a line.' },
   { id: 'find', title: 'Find or start', blurb: 'While searching your tasks.' },
+  { id: 'switcher', title: 'Task switcher', blurb: 'While holding the switch key. Press its letter again to step down the list; let go to switch.' },
   { id: 'deck', title: 'Deck', blurb: 'While the deck is open.' },
   { id: 'list', title: 'Lists', blurb: 'The flow, a ledger, the supersets, the couch list. Keys act on the selected row.' },
   { id: 'shelf', title: 'Shelf', blurb: 'The nine bays.' },
@@ -41,7 +42,7 @@ export const GLOBAL_ACTIONS: [HotkeyAction, string][] = [
   ['pause', 'Hold and resume'],
   ['skipRest', 'Skip rest and return to the task'],
   ['hide', 'Hide the HUD'],
-  ['switch', 'Switch to the other session'],
+  ['switch', 'Switch tasks: tap for the last one, hold for the list'],
   ['clear', 'Clear the entry on the desk'],
   ['move', 'Move the tomato by keyboard'],
   ['drawer', 'Quick drawer for what is on the desk'],
@@ -67,6 +68,10 @@ export const KEYS: KeyDef[] = [
   { id: 'find.start', scope: 'find', label: 'Start the selected task', keys: ['Enter'], note: 'A line nothing matches is created and started. A running focus block swaps to the task, the clock where it is; otherwise a pomodoro starts on it.' },
   { id: 'find.down', scope: 'find', label: 'Next result', keys: ['ArrowDown'] },
   { id: 'find.up', scope: 'find', label: 'Previous result', keys: ['ArrowUp'] },
+
+  { id: 'switcher.down', scope: 'switcher', label: 'Older task', keys: ['ArrowDown'] },
+  { id: 'switcher.up', scope: 'switcher', label: 'Newer task', keys: ['ArrowUp'] },
+  { id: 'switcher.pick', scope: 'switcher', label: 'Switch to the highlighted task', keys: ['Enter'] },
 
   { id: 'deck.close', scope: 'deck', label: 'Close the deck', keys: ['Escape'] },
   { id: 'deck.prevTab', scope: 'deck', label: 'Previous tab', keys: ['q'] },

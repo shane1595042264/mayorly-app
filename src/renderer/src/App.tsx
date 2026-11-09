@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import type { Action, HudEvent } from '@core/index'
+import type { Action, FoundTask, HudEvent } from '@core/index'
 import type { Command, Layout, UiMode } from '../../shared/bridge'
 import { clampScale, drawerBox, homeAnchor, petBox, sideOf, type Point } from '../../shared/pet'
 import { bridge } from './bridge'
 import { Capture } from './capture/Capture'
 import { Find } from './capture/Find'
+import { Switcher } from './hud/Switcher'
 import { ClerkAsk } from './deck/ClerkAsk'
 import { Deck } from './deck/Deck'
 import { Drawer } from './hud/Drawer'
@@ -21,7 +22,7 @@ import { setSoundEnabled, sfx } from './lib/sound'
 import { onCalendarAsk } from './lib/calendarAsk'
 import { ARM_OF_ACTION, ARM_OF_COMMAND, isPick, onArm, pointArm, pointPick, takeArmHint, takePickHint } from './plus/arms'
 import { PlusMenu } from './plus/PlusMenu'
-import { balance } from '@core/index'
+import { balance, onDeskId, recentTasks, switchTarget, switchToAction } from '@core/index'
 import { current, dispatch, useHudEvents, useMayorly } from './store'
 
 /** How long the swap hotkey must be held before releasing it closes the menu (hold to peek). */
@@ -164,8 +165,11 @@ export function App() {
   const setMode = useCallback((m: UiMode) => {
     if (modeRef.current === m) return
     const leavingPlus = modeRef.current === 'plus'
-    if (m === 'field') sfx.close()
-    else sfx.open()
+    // The switcher is a key held for a moment, not a panel opening.
+    if (m !== 'switcher' && modeRef.current !== 'switcher') {
+      if (m === 'field') sfx.close()
+      else sfx.open()
+    }
     modeRef.current = m
     setModeState(m)
     if (leavingPlus) {
@@ -180,7 +184,7 @@ export function App() {
       pending.current = null
     }
     // The drawer keeps the pet in view (Windows and the browser: it is drawn beside the pet in this window).
-    const away = m !== 'field' && m !== 'drawer'
+    const away = m !== 'field' && m !== 'drawer' && m !== 'switcher'
     const windowIsBig = shellMode.current !== 'field'
     if (!layoutRef.current.compact || (m !== 'field' && windowIsBig)) {
       // Windows, or moving between panels: the window does not change size, nothing to wait for.
@@ -277,6 +281,71 @@ export function App() {
     document.body.classList.toggle('side-right', petSide === 'right')
   }, [layout, petSide])
 
+  // The task switcher, Alt+Tab for tasks. Its keys live here because a quick tap can be over
+  // before the list has mounted: the list is only a picture of this.
+  const [switcher, setSwitcherState] = useState<{ rows: FoundTask[]; start: number; at: number } | null>(null)
+  const switcherRef = useRef<typeof switcher>(null)
+  const switcherStep = useRef(0)
+  const setSwitcher = (v: typeof switcher) => {
+    switcherRef.current = v
+    setSwitcherState(v)
+  }
+  const stepSwitcher = (by: number) => {
+    const v = switcherRef.current
+    if (v) setSwitcher({ ...v, at: (v.at + by + v.rows.length) % v.rows.length })
+  }
+  const pointSwitcher = (at: number) => {
+    const v = switcherRef.current
+    if (v && v.at !== at) setSwitcher({ ...v, at })
+  }
+  const finishSwitcher = useCallback((go: boolean, at?: number) => {
+    const v = switcherRef.current
+    const st = current()
+    if (!v) return
+    switcherRef.current = null
+    setMode('field')
+    if (!go || !st) return
+    const to = at ?? v.at
+    // Left where it started: the plain quick switch, which also knows places that are not tasks.
+    const action = to === v.start && switchTarget(st) ? ({ type: 'desk/switch' } as const) : switchToAction(st, v.rows[to])
+    if (action) void dispatch(action)
+  }, [setMode])
+  useEffect(() => {
+    if (mode === 'switcher') return
+    switcherRef.current = null
+    setSwitcherState(null)
+  }, [mode])
+  // Always listening, and gated on the ref: a tap's release can arrive before React has drawn the list.
+  useEffect(() => {
+    const NAMES: Record<string, string> = { alt: 'Alt', option: 'Alt', ctrl: 'Control', control: 'Control', shift: 'Shift', cmd: 'Meta', command: 'Meta', super: 'Meta', meta: 'Meta', commandorcontrol: 'Control', cmdorctrl: 'Control' }
+    const mods = () => (current()?.settings.hotkeys.switch ?? 'Alt+Q').split('+').slice(0, -1).map((m) => NAMES[m.toLowerCase()] ?? m)
+    // The release. A mouse move catches one that happened before this window had the keyboard.
+    const check = (e: KeyboardEvent | MouseEvent) => {
+      if (!switcherRef.current) return
+      const m = mods()
+      if (m.length && !m.some((x) => e.getModifierState(x))) finishSwitcher(true)
+    }
+    const key = (e: KeyboardEvent) => {
+      if (!switcherRef.current || MODIFIER_KEYS.has(e.key)) return
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.key === 'Escape') return finishSwitcher(false)
+      const st = current()
+      const a = st ? actionFor(e, 'switcher', st.settings, { ignoreAlt: true }) : null
+      if (a === 'switcher.pick') finishSwitcher(true)
+      else if (a === 'switcher.down') stepSwitcher(1)
+      else if (a === 'switcher.up') stepSwitcher(-1)
+    }
+    window.addEventListener('keydown', key, true)
+    window.addEventListener('keyup', check, true)
+    window.addEventListener('mousemove', check, true)
+    return () => {
+      window.removeEventListener('keydown', key, true)
+      window.removeEventListener('keyup', check, true)
+      window.removeEventListener('mousemove', check, true)
+    }
+  }, [finishSwitcher])
+
   // Hotkeys from the shell. Holding the swap key auto-repeats, so ignore repeats until it is released.
   useEffect(
     () =>
@@ -295,6 +364,30 @@ export function App() {
         }
         if (isPick(cmd)) {
           if (cur === 'plus') pointPick(Number(cmd.slice(5)))
+          return
+        }
+        if (cmd === 'switcher') {
+          recordUse('global.switch')
+          const now = Date.now()
+          if (cur === 'switcher') {
+            // A held key repeats: step at a readable pace, as Alt+Tab does.
+            if (now - switcherStep.current < 130) return
+            switcherStep.current = now
+            stepSwitcher(1)
+            return
+          }
+          const st = current()
+          if (!st) return
+          const rows = recentTasks(st, 10)
+          const start = rows[0] && (rows[0].kind === 'entry' ? rows[0].entry.id : rows[0].item.id) === onDeskId(st) ? 1 : 0
+          // Nowhere in the list to go: the plain switch still knows a parked place, or says there is none.
+          if (start >= rows.length) {
+            void dispatch({ type: 'desk/switch' })
+            return
+          }
+          switcherStep.current = now
+          setSwitcher({ rows, start, at: start })
+          setMode('switcher')
           return
         }
         recordUse(`global.${cmd}`)
@@ -417,7 +510,7 @@ export function App() {
   // A click outside the open interface closes it, like clicking away from a menu.
   const onStageDown = (e: React.PointerEvent) => {
     if (modeRef.current === 'field') return
-    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .capture, .clerk-ask, .drawer, .pet, .pet-caption-box')
+    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .capture, .switcher, .clerk-ask, .drawer, .pet, .pet-caption-box')
     if (!inside) close()
   }
 
@@ -425,7 +518,7 @@ export function App() {
     <main className="stage" onPointerDownCapture={onStageDown}>
       <AnimatePresence>
         {/* The drawer is a small panel by the pet, as on a Mac where it is its own window: nothing dims. */}
-        {shown !== 'field' && shown !== 'drawer' && (
+        {shown !== 'field' && shown !== 'drawer' && shown !== 'switcher' && (
           <motion.div
             key="vignette"
             className={`vignette ${shown === 'capture' || shown === 'find' ? 'light' : ''}`}
@@ -463,10 +556,11 @@ export function App() {
         {shown === 'deck' && <Deck key="deck" s={s} close={close} kind={bridge.kind} />}
         {shown === 'capture' && <Capture key="capture" s={s} close={close} />}
         {shown === 'find' && <Find key="find" s={s} close={close} />}
+        {shown === 'switcher' && switcher && <Switcher key="switcher" s={s} rows={switcher.rows} at={switcher.at} point={pointSwitcher} pick={(i) => finishSwitcher(true, i)} />}
         {shown === 'drawer' && <Drawer key="drawer" s={s} close={close} style={drawerAt} />}
       </AnimatePresence>
 
-      {shown !== 'field' && <ClerkAsk />}
+      {shown !== 'field' && shown !== 'switcher' && <ClerkAsk />}
       {cashIn && <CashIn key={cashIn.seq} amount={cashIn.amount} balance={cashIn.balance} from={cashIn.from} onDone={() => setCashIn(null)} />}
 
     </main>

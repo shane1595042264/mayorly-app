@@ -550,7 +550,7 @@ function boot() {
         pause: togglePause,
         skipRest: () => engine.act({ type: 'desk/skipRest' }),
         hide: () => overlay.toggleVisible(),
-        switch: () => engine.act({ type: 'desk/switch' }),
+        switch: () => command('switcher'),
         move: () => command('move'),
         // macOS: the drawer is the shell's own window beside the pet. Elsewhere the overlay draws it.
         drawer: () => (process.platform === 'darwin' ? overlay.toggleDrawer() : command('drawer')),

@@ -6,7 +6,7 @@ import {
   plannedMs,
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
-  findTasks, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
+  findTasks, onDeskId, recentTasks, switchToAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
 } from './index'
 
 const MIN = 60_000
@@ -1650,5 +1650,55 @@ describe('resizing the tomato', () => {
     expect(isDeviceOnly({ type: 'settings/update', patch: { hudScale: 1.2 } })).toBe(true)
     expect(isDeviceOnly({ type: 'settings/update', patch: { hudScale: 1.2, focusMin: 30 } })).toBe(false)
     expect(isDeviceOnly({ type: 'desk/pause' })).toBe(false)
+  })
+})
+
+describe('recent tasks', () => {
+  const titles = (w: ReturnType<typeof world>) => recentTasks(w.s).map((x) => (x.kind === 'entry' ? x.entry.title : x.item.title))
+  const three = () => {
+    const w = world((s) => { s.tokens.push({ id: 'seed', at: T0, amount: 5, reason: 'tomato', sittingId: null } as never) })
+    for (const t of ['a', 'b', 'c']) w.do({ type: 'entry/capture', text: `legal: ${t}` })
+    const go = (t: string) => { w.do({ type: 'desk/select', entryId: w.entry(t).id, ledgerId: w.entry(t).ledgerId }); w.wait(MIN) }
+    return { w, go }
+  }
+
+  it('lists what ran, newest first, each once', () => {
+    const { w, go } = three()
+    go('a'); go('b'); go('c'); go('a')
+    expect(titles(w).slice(0, 3)).toEqual(['a', 'c', 'b'])
+    expect(onDeskId(w.s)).toBe(w.entry('a').id)
+  })
+
+  it('leaves out a task once it is finished, and stops at the limit', () => {
+    const { w, go } = three()
+    go('a'); go('b'); go('c')
+    w.do({ type: 'entry/complete', id: w.entry('b').id })
+    expect(titles(w)).not.toContain('b')
+    expect(recentTasks(w.s, 1)).toHaveLength(1)
+  })
+
+  it('includes the couch', () => {
+    const { w, go } = three()
+    go('a')
+    w.do({ type: 'entry/capture', text: 'couch: civ', start: true })
+    w.wait(MIN)
+    expect(titles(w)[0]).toBe('civ')
+  })
+
+  it('puts them first in an empty search, and ahead of equal matches', () => {
+    const { w, go } = three()
+    go('c')
+    const names = (q: string) => findTasks(w.s, q).map((x) => (x.kind === 'entry' ? x.entry.title : x.item.title))
+    expect(names('')[0]).toBe('c')
+    expect(names('legal')[0]).toBe('c')
+  })
+
+  it('goes back through the quick switch, so the clock returns, and picks anything older', () => {
+    const { w, go } = three()
+    go('a'); go('b'); go('c')
+    const find = (t: string) => recentTasks(w.s).find((x) => x.kind === 'entry' && x.entry.title === t)!
+    expect(switchToAction(w.s, find('c'))).toBeNull()
+    expect(switchToAction(w.s, find('b'))).toEqual({ type: 'desk/switch' })
+    expect(switchToAction(w.s, find('a'))).toMatchObject({ type: 'desk/select', entryId: w.entry('a').id })
   })
 })
