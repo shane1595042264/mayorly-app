@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Resize the tomato
+
+- Press Alt+G (Option+G on a Mac), then + or - to make the tomato bigger or smaller, or drag the small square on its corner.
+
 ## The couch works like your tasks
 
 - Start a line with `couch:` or `leisure:` (or add `#couch`) and it goes to the couch list. Enter sits you down with it right away, for a coin, just like starting a task.

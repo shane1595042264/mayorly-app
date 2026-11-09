@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Action, HudEvent } from '@core/index'
 import type { Command, Layout, UiMode } from '../../shared/bridge'
-import { drawerBox, homeAnchor, petBox, sideOf, type Point } from '../../shared/pet'
+import { clampScale, drawerBox, homeAnchor, petBox, sideOf, type Point } from '../../shared/pet'
 import { bridge } from './bridge'
 import { Capture } from './capture/Capture'
 import { Find } from './capture/Find'
@@ -74,6 +74,10 @@ export function App() {
       const a = st ? actionFor(e, 'move', st.settings, { ignoreShift: true }) : null
       if (a) recordUse(a)
       const k = physicalKey(e).toLowerCase()
+      if (st && (a === 'move.bigger' || a === 'move.smaller')) {
+        dispatch({ type: 'settings/update', patch: { hudScale: clampScale(st.settings.hudScale + (a === 'move.bigger' ? 0.1 : -0.1)) } })
+        return
+      }
       const d = a ? DIRS[a] : undefined
       if (d) {
         const step = e.shiftKey ? FAR : STEP
@@ -239,6 +243,7 @@ export function App() {
   const onDrag = useCallback((a: Point) => setDragAnchor(a), [])
   // While the tomato is held the overlay keeps the pointer, even where the pet cannot follow (a clamped edge, a fast flick).
   const grabbing = useRef(false)
+  const onScale = useCallback((hudScale: number) => dispatch({ type: 'settings/update', patch: { hudScale } }), [])
   const onGrab = useCallback((held: boolean) => {
     grabbing.current = held
     if (held) bridge.setHit(true)
@@ -446,6 +451,7 @@ export function App() {
         onDrag={onDrag}
         onPlace={onPlace}
         onGrab={onGrab}
+        onScale={onScale}
       />
       <Feed />
       <Callout quiet={mode !== 'field'} />

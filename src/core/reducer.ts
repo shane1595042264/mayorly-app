@@ -16,6 +16,10 @@ import { completionHistory } from './history'
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
 export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'alarms', 'trayTimer', 'text'] as const
 
+/** Only settings that belong to this computer: changing them says nothing about who is at the desk. */
+export const isDeviceOnly = (a: Action): boolean =>
+  a.type === 'settings/update' && Object.keys(a.patch).every((k) => (DEVICE_SETTINGS as readonly string[]).includes(k))
+
 export type Action =
   /**
    * `filing` is the AI clerk's answer, when there is one; the reducer checks it and otherwise files by prefix.

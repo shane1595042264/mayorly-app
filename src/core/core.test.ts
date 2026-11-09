@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_HOTKEYS, firstRunState, migrate } from './seed'
-import { DEVICE_SETTINGS } from './reducer'
+import { DEVICE_SETTINGS, isDeviceOnly } from './reducer'
+import { clampScale, dragScale } from '../shared/pet'
 import {
   plannedMs,
   type Action, type HudEvent, type MayorlyState,
@@ -1627,5 +1628,27 @@ describe('the couch works like the flow', () => {
     const names = (q: string) => findTasks(w.s, q).map((x) => (x.kind === 'entry' ? x.entry.title : x.item.title))
     expect(names('civ')).toContain('civilization 6')
     expect(names('couch')).toContain('civilization 6')
+  })
+})
+
+describe('resizing the tomato', () => {
+  it('keeps the scale inside the range, in steps of five percent', () => {
+    expect(clampScale(1.23)).toBe(1.25)
+    expect(clampScale(0.1)).toBe(0.7)
+    expect(clampScale(9)).toBe(1.6)
+  })
+
+  it('grows when the handle is pulled out and up, on either side', () => {
+    // The handle's own path: half a tomato sideways and a whole one up is one unit of scale.
+    expect(dragScale(1, -12, -24, 'right')).toBe(1.5)
+    expect(dragScale(1, 12, -24, 'left')).toBe(1.5)
+    expect(dragScale(1, 12, 24, 'right')).toBe(0.7)
+    expect(dragScale(1, 0, 0, 'right')).toBe(1)
+  })
+
+  it('takes no claim on the desk, since the size belongs to this computer', () => {
+    expect(isDeviceOnly({ type: 'settings/update', patch: { hudScale: 1.2 } })).toBe(true)
+    expect(isDeviceOnly({ type: 'settings/update', patch: { hudScale: 1.2, focusMin: 30 } })).toBe(false)
+    expect(isDeviceOnly({ type: 'desk/pause' })).toBe(false)
   })
 })

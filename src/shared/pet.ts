@@ -41,6 +41,20 @@ const HOME = { right: 64, bottom: 28 }
 
 const half = (scale: number) => (TOMATO / 2) * scale
 
+/** A HUD scale the settings accept: 70% to 160%, in steps of 5. */
+export const clampScale = (scale: number): number => Math.min(1.6, Math.max(0.7, Math.round(scale * 20) / 20))
+
+/**
+ * The scale a resize drag has reached, from where it started and how far the pointer has gone.
+ * The tomato grows around its bottom centre, so the handle on its inner top corner travels half
+ * a tomato sideways and a whole tomato up per unit of scale; the pointer is projected on that line.
+ */
+export function dragScale(from: number, dx: number, dy: number, side: Side): number {
+  const ux = ((side === 'right' ? -1 : 1) * TOMATO) / 2
+  const uy = -TOMATO
+  return clampScale(from + (dx * ux + dy * uy) / (ux * ux + uy * uy))
+}
+
 /** The edge the tomato is nearer: the sign's column hangs toward the centre. */
 export function sideOf(area: Rect, a: Point): Side {
   return a.x < area.x + area.width / 2 ? 'left' : 'right'

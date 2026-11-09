@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { blockView, clock, dayStats, nextBlock, startOfDay, switchTarget, type MayorlyState } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
-import { INSET, anchorInBox, captionBox, petBox, type Point } from '../../../shared/pet'
+import { INSET, anchorInBox, captionBox, dragScale, petBox, type Point } from '../../../shared/pet'
 import tomato from '../assets/tomato@1x.png'
 import { bridge } from '../bridge'
 import { hotkeyLabel } from '../lib/keys'
@@ -39,17 +39,19 @@ interface Props {
   onPlace: (a: Point) => void
   /** The tomato is held (Windows): the overlay must keep the pointer until it is let go, wherever it goes. */
   onGrab: (held: boolean) => void
+  /** The resize handle was dragged to this HUD scale. */
+  onScale: (scale: number) => void
   /** Something the shell needs to say (a hotkey that failed); shown in place of the caption. */
   notice: string | null
   /** This computer's id, null until the shell says; the desk may be running on another one. */
   here: string | null
 }
 
-const MOVE_HINT = 'Arrows or hjkl move it, 1 to 4 pick a corner, Enter when done'
+const MOVE_HINT = 'Arrows move, + and - resize, 1 to 4 corners, Enter when done'
 /** A press that moves less than this is not a drag. */
 const DRAG_PX = 4
 
-export function Pet({ s, away, moving, open, side, dragging, compact, notice, here, anchor, area, onDrag, onPlace, onGrab }: Props) {
+export function Pet({ s, away, moving, open, side, dragging, compact, notice, here, anchor, area, onDrag, onPlace, onGrab, onScale }: Props) {
   // Idle, the pet only counts today's tomatoes; a clock is what needs the quarter second.
   const now = useNow(s.desk.status === 'idle' ? 10_000 : 250)
   const reduce = useReducedMotion()
@@ -154,13 +156,50 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, he
         },
       }
 
+  // The resize handle. Screen coordinates, because on a Mac the window resizes under the pointer.
+  const sizing = useRef<{ id: number; x: number; y: number; from: number; last: number } | null>(null)
+  const stopSizing = () => {
+    if (!sizing.current) return
+    sizing.current = null
+    onGrab(false)
+  }
+  const handle = {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      e.stopPropagation()
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId)
+      } catch {
+        /* the pointer is already gone */
+      }
+      sizing.current = { id: e.pointerId, x: e.screenX, y: e.screenY, from: scale, last: scale }
+      onGrab(true)
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      e.stopPropagation()
+      const r = sizing.current
+      if (!r || r.id !== e.pointerId) return
+      const next = dragScale(r.from, e.screenX - r.x, e.screenY - r.y, side)
+      if (next === r.last) return
+      r.last = next
+      onScale(next)
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      e.stopPropagation()
+      stopSizing()
+    },
+    onPointerCancel: stopSizing,
+    onLostPointerCapture: stopSizing,
+  }
+
   return (
     <>
       <AnimatePresence>
         {showCaption && !compact && cap && (
           <motion.div
             key="caption"
-            className={`pet-caption-box side-${side}`}
+            className={`pet-caption-box side-${side} ${moving ? 'is-over' : ''}`}
             style={{ left: cap.x, top: cap.y, width: cap.width, height: cap.height }}
             initial={{ opacity: 0, y: cap.below ? -6 : 6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -211,6 +250,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, he
             }
           >
             <img className="pet-sprite" src={tomato} alt="" draggable={false} />
+            {moving && <span className="pet-resize" title="Drag to resize" aria-hidden {...handle} />}
           </motion.div>
         </div>
       </motion.div>

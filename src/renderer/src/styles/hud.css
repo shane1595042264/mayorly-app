@@ -396,12 +396,29 @@ body.caption { background: transparent; }
 .caption-float { margin: 0; }
 /* Windows: the same box in the overlay, hugging the tomato's side; it never takes the pointer. */
 .pet-caption-box { position: absolute; z-index: var(--z-hud); display: flex; align-items: center; padding: 0 4px; pointer-events: none; }
+.pet-caption-box.is-over { z-index: calc(var(--z-hud) + 1); }
 .pet-caption-box.side-right { justify-content: flex-end; }
 .pet-caption-box.side-left { justify-content: flex-start; }
 .pet-caption-box .pet-sign.is-caption { margin: 0; }
 
 /* The keyboard is moving the tomato: a dashed selection box, like an object picked up in an editor. */
 .pet-body.is-moving { outline: 2px dashed var(--accent); outline-offset: 3px; }
+/* On the corner toward the sign, where a Mac's window has room for it. */
+.pet-body { position: relative; }
+.pet-resize {
+  position: absolute;
+  top: -11px;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6);
+  touch-action: none;
+  -webkit-app-region: no-drag;
+}
+/* A bigger target than it looks: the tomato breathes under it. */
+.pet-resize::after { content: ""; position: absolute; inset: -5px; }
+.pet-right .pet-resize { left: -11px; cursor: nwse-resize; }
+.pet-left .pet-resize { right: -11px; cursor: nesw-resize; }
 
 /* ------------------------------------------------------------ the harvest, cashing in
    Coins fly from the tomato to a counter in the top right. Nothing here takes the pointer. */

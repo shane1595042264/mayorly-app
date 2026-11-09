@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type MessageBoxOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
-import { migrate, prefixClerk, type Action, type ClerkCommand, type Entry, type HudEvent, type Settings } from '@core/index'
+import { isDeviceOnly, migrate, prefixClerk, type Action, type ClerkCommand, type Entry, type HudEvent, type Settings } from '@core/index'
 import { IPC, type AiProvider, type Arrangement, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from './ai/service'
@@ -263,7 +263,10 @@ function boot() {
     return r
   }
   // Everything the pages send is something a person did here.
-  ipcMain.handle(IPC.dispatch, (_e, action: Action) => (action.type === 'entry/capture' ? captureLine(action.text, !!action.start) : engine.act(action)))
+  ipcMain.handle(IPC.dispatch, (_e, action: Action) => {
+    if (action.type === 'entry/capture') return captureLine(action.text, !!action.start)
+    return isDeviceOnly(action) ? engine.dispatch(action) : engine.act(action)
+  })
   const aiCall = async (fn: () => Promise<unknown> | unknown) => {
     try {
       return await fn()

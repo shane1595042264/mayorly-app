@@ -116,6 +116,8 @@ export const KEYS: KeyDef[] = [
   { id: 'move.down', scope: 'move', label: 'Down', keys: ['j', 'ArrowDown'], note: 'Shift goes far' },
   { id: 'move.up', scope: 'move', label: 'Up', keys: ['k', 'ArrowUp'], note: 'Shift goes far' },
   { id: 'move.right', scope: 'move', label: 'Right', keys: ['l', 'ArrowRight'], note: 'Shift goes far' },
+  { id: 'move.bigger', scope: 'move', label: 'Bigger', keys: ['+', '='] },
+  { id: 'move.smaller', scope: 'move', label: 'Smaller', keys: ['-', '_'] },
   { id: 'move.corner', scope: 'move', label: 'A corner', keys: ['1', '4'], fixed: true, range: true, note: 'Top left, top right, bottom left, bottom right' },
   { id: 'move.done', scope: 'move', label: 'Done', keys: ['Enter', 'Escape'], note: 'So does any key not listed here' },
 
