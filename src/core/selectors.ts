@@ -40,7 +40,7 @@ export function switchToAction(s: MayorlyState, f: FoundTask): Action | null {
   if (id === onDeskId(s)) return null
   const back = switchBack(s)
   const held = back ? null : switchSession(s)
-  if (back?.entryId === id || held?.block.entryId === id || held?.block.leisureId === id) return { type: 'desk/switch' }
+  if (back?.entryId === id || back?.leisureId === id || held?.block.entryId === id || held?.block.leisureId === id) return { type: 'desk/switch' }
   return f.kind === 'entry' ? { type: 'desk/select', entryId: id, ledgerId: f.entry.ledgerId } : { type: 'desk/select', leisureId: id }
 }
 
@@ -159,6 +159,7 @@ export { entryTomatoes } from './accounting'
 /** What the quick switch brings back: the entry before the last swap, else the parked session. Null when nothing. */
 export function switchTarget(s: MayorlyState): string | null {
   const back = switchBack(s)
+  if (back?.leisureId) return s.leisure.find((x) => x.id === back.leisureId)?.title ?? null
   if (back) {
     const e = back.entryId ? s.entries.find((x) => x.id === back.entryId) : null
     return e?.title ?? s.ledgers.find((l) => l.id === back.ledgerId)?.name ?? null

@@ -1599,7 +1599,7 @@ describe('the couch works like the flow', () => {
     expect(w.s.desk).toMatchObject({ status: 'running', block: { kind: 'leisure', label: 'play civ' } })
   })
 
-  it('gives a task swapped in over another its place back before the couch parks it', () => {
+  it('moves a task just started to the couch on the same clock, and Alt+Q still goes back to the real task', () => {
     const w = rich()
     w.do({ type: 'entry/capture', text: 'legal: real work' })
     const real = w.entry('real work')
@@ -1608,7 +1608,9 @@ describe('the couch works like the flow', () => {
     w.do({ type: 'entry/capture', text: 'play civ', start: true })
     w.do({ type: 'entry/toLeisure', id: w.entry('play civ').id, start: true })
     expect(w.s.desk.block).toMatchObject({ kind: 'leisure', label: 'play civ' })
-    expect(w.s.desk.holster?.block.entryId).toBe(real.id)
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(w.s.settings.focusMin * MIN - 2 * MIN)
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', entryId: real.id })
   })
 
   it('takes notes and a checklist like an entry does', () => {
@@ -1772,5 +1774,93 @@ describe('the tomatoes beside the clock', () => {
 
   it('never rounds up', () => {
     expect([0, 0.09, 0.1, 0.99, 2, 2.75].map(tomatoLabel)).toEqual(['0', '0', '0.1', '0.9', '2', '2.7'])
+  })
+})
+
+describe('tasks and the couch share one clock', () => {
+  const setup = (coins = 5) => {
+    const w = world((s) => {
+      if (coins) s.tokens.push({ id: 'seed', at: T0, amount: coins, reason: 'tomato', sittingId: null } as never)
+      s.settings.focusMin = 30
+    })
+    w.do({ type: 'entry/capture', text: 'legal: brief' })
+    w.do({ type: 'leisure/add', title: 'civ' })
+    const brief = w.entry('brief')
+    const civ = w.s.leisure.find((x) => x.title === 'civ')!
+    w.do({ type: 'desk/select', entryId: brief.id, ledgerId: brief.ledgerId })
+    w.wait(13 * MIN)
+    return { w, brief, civ, left: () => blockView(w.s, w.now)?.remainingMs }
+  }
+  const coins = (w: ReturnType<typeof world>) => balance(w.s)
+
+  it('switching to the couch keeps the time, the sitting and the parked session as they were', () => {
+    const { w, civ, left } = setup()
+    const sitting = w.s.desk.sittingId
+    expect(left()).toBe(17 * MIN)
+    w.do({ type: 'desk/select', leisureId: civ.id })
+    expect(w.s.desk).toMatchObject({ status: 'running', block: { kind: 'leisure', label: 'civ' }, sittingId: sitting, holster: null })
+    expect(left()).toBe(17 * MIN)
+    w.wait(2 * MIN)
+    expect(left()).toBe(15 * MIN)
+    expect(w.s.segments.filter((x) => x.sittingId === sitting).map((x) => [x.kind, x.end === null])).toEqual([['focus', false], ['leisure', true]])
+  })
+
+  it('Alt+Q goes back to the task on the same clock, and back again', () => {
+    const { w, brief, civ, left } = setup()
+    w.do({ type: 'desk/select', leisureId: civ.id })
+    w.wait(MIN)
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', entryId: brief.id })
+    expect(left()).toBe(16 * MIN)
+    w.do({ type: 'desk/switch' })
+    expect(w.s.desk.block).toMatchObject({ kind: 'leisure', leisureId: civ.id })
+    expect(left()).toBe(16 * MIN)
+  })
+
+  it('a block that finishes on the couch costs its coin, and the task keeps the tomato time it earned', () => {
+    const { w, brief, civ } = setup()
+    const before = coins(w)
+    w.do({ type: 'desk/select', leisureId: civ.id })
+    w.wait(18 * MIN)
+    expect(coins(w)).toBe(before - 1)
+    expect(entryTomatoes(w.s, brief.id, w.now)).toBeCloseTo(13 / 30, 5)
+    expect(w.s.desk.block?.kind).toBe('rest')
+  })
+
+  it('a block left before the end costs nothing, and the next block after a rest is the same kind', () => {
+    const { w, brief, civ } = setup()
+    const before = coins(w)
+    w.do({ type: 'desk/select', leisureId: civ.id })
+    w.wait(5 * MIN)
+    w.do({ type: 'desk/select', entryId: brief.id, ledgerId: brief.ledgerId })
+    w.wait(13 * MIN)
+    expect(coins(w)).toBe(before)
+    w.wait((w.s.settings.shortRestMin + 1) * MIN)
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', entryId: brief.id })
+  })
+
+  it('in a superset the slot turns into the couch on the same clock, and the round goes on', () => {
+    const w = world((s) => { s.tokens.push({ id: 'seed', at: T0, amount: 5, reason: 'tomato', sittingId: null } as never) })
+    w.do({ type: 'leisure/add', title: 'civ' })
+    const civ = w.s.leisure.find((x) => x.title === 'civ')!
+    const ss = parseSuperset(`${w.s.ledgers[0].code} 20, ${w.s.ledgers[1].code} 20`, w.s.ledgers, () => 'ss1')
+    if (!ss.ok) throw new Error(ss.error)
+    w.do({ type: 'superset/save', superset: ss.superset })
+    w.do({ type: 'desk/deploy', mode: 'superset', supersetId: 'ss1' })
+    w.wait(5 * MIN)
+    w.do({ type: 'desk/select', leisureId: civ.id })
+    expect(w.s.desk).toMatchObject({ plan: { mode: 'superset' }, block: { kind: 'leisure', label: 'civ' } })
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(15 * MIN)
+    const before = balance(w.s)
+    w.wait(15 * MIN + 1_000)
+    expect(balance(w.s)).toBe(before - 1)
+    expect(w.s.desk.plan?.mode).toBe('superset')
+  })
+
+  it('needs a coin to sit down, and says so', () => {
+    const { w, civ } = setup(0)
+    const r = w.do({ type: 'desk/select', leisureId: civ.id })
+    expect(w.s.desk.block?.kind).toBe('focus')
+    expect(r.events.some((e) => e.type === 'notice' && e.text.startsWith('No coins'))).toBe(true)
   })
 })

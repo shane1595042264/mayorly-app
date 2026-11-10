@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## One timer for tasks and the couch
+
+- Switching from a task to something on the couch, or back, keeps the timer where it is. If a task was at 17:00, the couch item carries on at 17:00. Only the title, the colour and the tomato count change.
+- A block that finishes on the couch costs one coin, as before. Leave the couch before the block ends and it costs nothing.
+- This works in a pomodoro and in a superset. Blitz still starts the couch on its own timer, since there the timer is the task's estimate.
+
 ## Thousands of alarm sounds
 
 - Settings, Alarms now has a search box. Suggestions show up as you type, from about 1,900 short sounds that come with the app. Play any result and press Work or Break to make it that alarm. It downloads on the spot.

@@ -339,8 +339,8 @@ export interface Desk {
   bankMs: Ms
   /** The previous session, parked by the quick switch, its clock stopped where it was. */
   holster: HeldSession | null
-  /** The entry the desk was on before the last swap: the other half of the quick switch when nothing is parked. */
-  previous: { entryId: Id | null; ledgerId: Id | null } | null
+  /** The entry (or couch item) the desk was on before the last swap: the other half of the quick switch when nothing is parked. */
+  previous: { entryId: Id | null; ledgerId: Id | null; leisureId?: Id | null } | null
   restTask?: RestTask | null
   /**
    * The active device: the computer a person last used, and when. Only it runs the clock; sync

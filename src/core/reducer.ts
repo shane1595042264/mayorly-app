@@ -174,7 +174,10 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
         // Entertainment never enters the flow: it goes straight to the couch list.
         const item = couchItem(s, ctx, filing.title)
         log(s, now, filing.log)
-        if (action.start) deploy(s, ctx, ev, { mode: 'couch', supersetId: null, entryId: null, ledgerId: null, leisureId: item.id })
+        if (action.start && sharesClock(s)) {
+          if (s.desk.block?.leisureId === item.id) { if (s.desk.status !== 'running') resumeDesk(s, ctx, ev) }
+          else swapAcross(s, ctx, ev, { entryId: null, ledgerId: null, leisureId: item.id })
+        } else if (action.start) deploy(s, ctx, ev, { mode: 'couch', supersetId: null, entryId: null, ledgerId: null, leisureId: item.id })
         break
       }
       const e = addEntry(s, ctx, filing.title, filing.ledgerId, filing.estimateMin)
@@ -474,7 +477,8 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const back = switchBack(s)
       if (back) {
         leaveRest(s, ctx, ev, false)
-        swapTo(s, ctx, ev, back.entryId, back.ledgerId, true)
+        if (back.leisureId || s.desk.block?.kind === 'leisure') swapAcross(s, ctx, ev, back)
+        else swapTo(s, ctx, ev, back.entryId, back.ledgerId, true)
         ev.push({ type: 'switch', at: now, label: s.desk.block?.label ?? '', parked: null })
         break
       }
@@ -509,8 +513,17 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       if (!e || e.doneAt !== null) break
       const item = couchItem(s, ctx, e.title, e)
       const onDesk = s.desk.block?.entryId === e.id
-      // Started a moment ago and only now read as entertainment: the desk goes back to what it
-      // was on, so that is what the couch parks.
+      // Started a moment ago and only now read as entertainment: the block moves to the couch on
+      // the same clock, and the swap-back stays where it was before this line was started.
+      if (onDesk && action.start && sharesClock(s)) {
+        const keep = s.desk.previous
+        swapAcross(s, ctx, ev, { entryId: null, ledgerId: null, leisureId: item.id })
+        s.desk.previous = keep
+        s.entries = s.entries.filter((x) => x.id !== e.id)
+        log(s, now, action.log?.trim() || `couch '${e.title.length > 40 ? e.title.slice(0, 39) + '…' : e.title}': entertainment, not a ledger`)
+        break
+      }
+      // Elsewhere (a superset, blitz): the desk goes back to what it was on, so that is what the couch parks.
       const back = action.start ? s.desk.previous : null
       if (onDesk && action.start && !back) endSitting(s, now, ev, 'stood')
       else if (onDesk) swapTo(s, ctx, ev, back?.entryId ?? null, back?.ledgerId ?? s.desk.block?.ledgerId ?? null)
@@ -556,6 +569,23 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       if (action.type === 'desk/select') {
         if (action.entryId && !s.entries.some(e => e.id === action.entryId && e.doneAt === null)) break
         if (action.ledgerId && !s.ledgers.some(l => l.id === action.ledgerId)) break
+        if (action.leisureId && !s.leisure.some(x => x.id === action.leisureId && x.archivedAt === null)) break
+        // A task and the couch run on one clock: picking one while the other runs changes only what the block is on.
+        if (!action.mode && sharesClock(s) && (action.leisureId || s.desk.block?.kind === 'leisure')) {
+          if (action.leisureId && s.desk.block?.leisureId === action.leisureId) {
+            if (s.desk.status !== 'running') resumeDesk(s, ctx, ev)
+            break
+          }
+          if (action.leisureId) swapAcross(s, ctx, ev, { entryId: null, ledgerId: null, leisureId: action.leisureId })
+          else {
+            const e = action.entryId ? s.entries.find((x) => x.id === action.entryId && x.doneAt === null) : undefined
+            const ledgerId = e ? e.ledgerId : action.ledgerId ?? null
+            const entryId = e ? e.id : ledgerId ? firstOpenInLedger(s, ledgerId)?.id ?? null : null
+            if (!entryId && !ledgerId) break
+            swapAcross(s, ctx, ev, { entryId, ledgerId, leisureId: null })
+          }
+          break
+        }
         if (action.mode || action.leisureId || s.desk.block?.kind !== 'focus') {
           deploy(s, ctx, ev, { ...action, mode: action.leisureId ? 'couch' : action.mode ?? 'pomodoro' })
           break
@@ -802,6 +832,73 @@ function resumeDesk(s: MayorlyState, ctx: Ctx, ev: HudEvent[]) {
  * act instead of two. Swaps the desk makes on its own (the next entry after a clear) leave
  * a hold alone.
  */
+/**
+ * Tasks and the couch share one clock. While a block is on (not a rest), a couch item can take a
+ * task's place, or the other way round, without a new block: the time already run stays, only what
+ * it is on changes. In a superset the slot keeps its place in the round. Blitz times the entry
+ * itself, so it deploys the couch apart.
+ */
+export function sharesClock(s: MayorlyState): boolean {
+  const { plan, block, status } = s.desk
+  return status !== 'idle' && !!plan && !!block && plan.mode !== 'blitz' && (block.kind === 'focus' || block.kind === 'leisure')
+}
+
+/**
+ * The block changes between a task and a couch item where it stands, the clock untouched. The
+ * plan follows, so the next block after a rest is the same kind of thing. A block that finishes
+ * on the couch costs its coin as any couch block does; one left before the end costs nothing.
+ */
+function swapAcross(s: MayorlyState, ctx: Ctx, ev: HudEvent[], to: { entryId: Id | null; ledgerId: Id | null; leisureId?: Id | null }) {
+  const d = s.desk
+  const block = d.block
+  const plan = d.plan
+  if (!block || !plan) return
+  const item = to.leisureId ? s.leisure.find((x) => x.id === to.leisureId && x.archivedAt === null) : undefined
+  if (to.leisureId && !item) return
+  if (item && balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
+    ev.push({ type: 'notice', at: ctx.now, text: 'No coins: a tomato at the desk buys a block on the couch' })
+    return
+  }
+  const now = ctx.now
+  const running = d.status === 'running'
+  const starting = !running && (d.status === 'paused' || d.status === 'ready')
+  if (running) closeSegment(s, now)
+  mint(s, now, ev)
+  d.previous = block.kind === 'leisure'
+    ? { entryId: null, ledgerId: null, leisureId: block.leisureId ?? null }
+    : block.entryId || block.ledgerId ? { entryId: block.entryId, ledgerId: block.ledgerId } : null
+  if (item) {
+    block.kind = 'leisure'
+    block.leisureId = item.id
+    block.entryId = null
+    block.ledgerId = null
+    block.label = item.title
+    // A pomodoro becomes the couch's cadence and back; a superset keeps its round and slot.
+    if (plan.mode !== 'superset') {
+      plan.mode = 'couch'
+      plan.leisureId = item.id
+    }
+  } else {
+    block.kind = 'focus'
+    delete block.leisureId
+    block.entryId = to.entryId
+    block.ledgerId = to.ledgerId
+    block.label = ledgerLabel(s, to.ledgerId)
+    if (plan.mode !== 'superset') {
+      plan.mode = 'pomodoro'
+      plan.leisureId = null
+      plan.anchorEntryId = to.entryId
+      plan.anchorLedgerId = to.ledgerId
+    }
+  }
+  if (starting) {
+    d.status = 'running'
+    d.runStartedAt = now
+  }
+  if (running || starting) openSegment(s, ctx, now)
+  ev.push({ type: 'swap', at: now, ledgerId: block.ledgerId, entryId: block.entryId })
+}
+
 function swapTo(s: MayorlyState, ctx: Ctx, ev: HudEvent[], entryId: Id | null, ledgerId: Id | null, resume = false) {
   const d = s.desk
   const block = d.block
@@ -924,11 +1021,18 @@ function validTheme(t: unknown): LedgerTheme {
 }
 
 /** Where a swap-back would go: the entry before the last swap, or its ledger when that entry is gone. Null when there is none. */
-export function switchBack(s: MayorlyState): { entryId: Id | null; ledgerId: Id | null } | null {
+export function switchBack(s: MayorlyState): { entryId: Id | null; ledgerId: Id | null; leisureId?: Id | null } | null {
   const d = s.desk
   const p = d.previous ?? null
   const block = restSession(s)?.block ?? d.block
-  if (!p || !block || block.kind !== 'focus') return null
+  if (!p || !block) return null
+  // The couch and a task trade places on one clock (sharesClock); a rest resolves to its task first.
+  const oneClock = !!d.plan && d.plan.mode !== 'blitz' && (block.kind === 'focus' || block.kind === 'leisure')
+  if (p.leisureId) {
+    const item = s.leisure.find((x) => x.id === p.leisureId && x.archivedAt === null)
+    return oneClock && item && block.leisureId !== item.id ? { entryId: null, ledgerId: null, leisureId: item.id } : null
+  }
+  if (block.kind !== 'focus' && !(oneClock && block.kind === 'leisure')) return null
   let entryId: Id | null = null
   let ledgerId: Id | null = null
   const e = p.entryId ? s.entries.find((x) => x.id === p.entryId && x.doneAt === null) : undefined
