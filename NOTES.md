@@ -2,9 +2,9 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
-## Today's tomatoes beside the clock
+## This task's tomatoes beside the clock
 
-- While a block runs, the small number next to the clock is how many tomatoes you have finished today.
+- While a block runs, the small number next to the clock is how many tomatoes you have finished on that task, all time. On the couch it counts the blocks you finished on that item.
 
 ## The couch waits for you too
 

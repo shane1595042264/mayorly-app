@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { blockView, clock, dayStats, nextBlock, startOfDay, switchTarget, type MayorlyState } from '@core/index'
+import { blockView, clock, dayStats, nextBlock, startOfDay, switchTarget, taskTomatoes, type MayorlyState } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
 import { INSET, anchorInBox, captionBox, dragScale, petBox, type Point } from '../../../shared/pet'
 import tomato from '../assets/tomato@1x.png'
@@ -10,7 +10,8 @@ import { ledgerVars } from '../lib/themes'
 import { useNow } from '../store'
 
 // The resting HUD is the founder's tomato holding one sign: the clock while a block
-// runs, with today's tomatoes in a small number beside it, and those tomatoes alone when the desk is idle. Hover it and it hops and the sign
+// runs, with the tomatoes finished on that task in a small number beside it, and today's
+// tomatoes when the desk is idle. Hover it and it hops and the sign
 // says in one line what the desk is on. Everything else is a hotkey; the sign opens
 // the swap menu. On macOS the tomato is the window's drag handle, the window is exactly
 // the pet, and the caption is the shell's own click-through window beside it. Nothing
@@ -68,9 +69,10 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, he
   let tone: 'idle' | 'live' | 'hold' | 'rest' | 'ready' | 'couch'
   /** The line above the sign: what the desk is on, up to two lines of the column. */
   let task = ''
-  const today = dayStats(s, startOfDay(now), now).tomatoes
+  // The current task's own count, beside the clock. Idle, the sign itself is today's.
+  const done = v ? taskTomatoes(s, now) : null
   if (!v) {
-    sign = String(today)
+    sign = String(dayStats(s, startOfDay(now), now).tomatoes)
     tone = 'idle'
   } else {
     task = v.block.kind === 'leisure' ? v.block.label : v.block.kind === 'rest' ? v.block.label : v.entry ? `${v.ledger?.code ?? 'FREE'}  ${v.entry.title}` : v.block.label
@@ -237,9 +239,9 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, he
           <div className="pet-col">
             {task && <span className={`pet-task clamp tone-${tone}`} title={task}>{task}</span>}
             <div className="pet-sign-row">
-              {v && (
-                <span className="pet-count num" title="Tomatoes finished today" aria-label={`${today} ${today === 1 ? 'tomato' : 'tomatoes'} today`}>
-                  {today}
+              {done !== null && (
+                <span className="pet-count num" title="Tomatoes finished on this task" aria-label={`${done} ${done === 1 ? 'tomato' : 'tomatoes'} on this task`}>
+                  {done}
                 </span>
               )}
               <button

@@ -106,7 +106,7 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
 }
 .pet-sign:hover { border-color: var(--ink-2); }
-/* Today's tomatoes beside the clock, on the sign's inner side: the column is fixed, so nothing resizes. */
+/* The task's tomatoes beside the clock, on the sign's outer side: the column is fixed, so nothing resizes. */
 .pet-sign-row { display: flex; align-items: flex-end; gap: 4px; }
 .pet-left .pet-sign-row { flex-direction: row-reverse; }
 .pet-count {

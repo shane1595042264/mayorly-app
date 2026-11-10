@@ -1,4 +1,5 @@
 import type { Block, Entry, Id, Ledger, LeisureItem, MayorlyState, Ms, TokenTx } from './model'
+import { entryTomatoes, wholeTomatoes } from './accounting'
 import { openFlow, supersetOf } from './planner'
 import { restSession, switchBack, switchSession, type Action } from './reducer'
 
@@ -268,6 +269,18 @@ export function leisureSpentMs(s: MayorlyState, leisureId: Id, now: number): Ms 
 /** Coins paid for one entertainment, net of refunds. */
 export function leisureTokensSpent(s: MayorlyState, leisureId: Id): number {
   return -s.tokens.filter((t) => t.leisureId === leisureId).reduce((n, t) => n + t.amount, 0)
+}
+
+/**
+ * Whole tomatoes finished on the task the desk is on, over its whole life: an entry's focus time in
+ * tomatoes, the open block's included; a couch item's completed blocks. A rest counts for the task it
+ * follows. Null when the desk is on no task (idle, or ledger time with no entry).
+ */
+export function taskTomatoes(s: MayorlyState, now: number): number | null {
+  const block = restSession(s)?.block ?? s.desk.block
+  if (!block || block.kind === 'rest') return null
+  if (block.kind === 'leisure') return block.leisureId ? leisureTokensSpent(s, block.leisureId) || 0 : null
+  return block.entryId ? wholeTomatoes(entryTomatoes(s, block.entryId, now)) : null
 }
 
 /** Entertainment on the list, newest first. */

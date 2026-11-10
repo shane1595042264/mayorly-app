@@ -6,7 +6,7 @@ import {
   plannedMs,
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
-  findTasks, onDeskId, recentTasks, switchToAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
+  findTasks, taskTomatoes, onDeskId, recentTasks, switchToAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
 } from './index'
 
 const MIN = 60_000
@@ -1735,5 +1735,31 @@ describe('the next couch block after a rest', () => {
     })
     w.do({ type: 'entry/capture', text: 'couch: civ', start: true })
     expect(w.s.desk).toMatchObject({ status: 'running', block: { kind: 'leisure', label: 'civ' } })
+  })
+})
+
+describe('the tomatoes beside the clock', () => {
+  it('counts whole tomatoes on the task, across sittings, and goes with the task when you swap', () => {
+    const w = world((s) => { s.settings.focusMin = 25 })
+    for (const t of ['a', 'b']) w.do({ type: 'entry/capture', text: `legal: ${t}` })
+    expect(taskTomatoes(w.s, w.now)).toBeNull()
+    w.do({ type: 'desk/select', entryId: w.entry('a').id, ledgerId: w.entry('a').ledgerId })
+    expect(taskTomatoes(w.s, w.now)).toBe(0)
+    w.wait(24 * MIN)
+    expect(taskTomatoes(w.s, w.now)).toBe(0)
+    w.wait(2 * MIN)
+    expect(taskTomatoes(w.s, w.now)).toBe(1)
+    w.do({ type: 'desk/select', entryId: w.entry('b').id, ledgerId: w.entry('b').ledgerId })
+    expect(taskTomatoes(w.s, w.now)).toBe(0)
+    w.do({ type: 'desk/select', entryId: w.entry('a').id, ledgerId: w.entry('a').ledgerId })
+    expect(taskTomatoes(w.s, w.now)).toBe(1)
+  })
+
+  it('counts the blocks finished on a couch item', () => {
+    const w = world((s) => { s.tokens.push({ id: 'seed', at: T0, amount: 5, reason: 'tomato', sittingId: null } as never) })
+    w.do({ type: 'entry/capture', text: 'couch: civ', start: true })
+    expect(taskTomatoes(w.s, w.now)).toBe(0)
+    w.wait(w.s.settings.focusMin * MIN + 1_000)
+    expect(taskTomatoes(w.s, w.now)).toBe(1)
   })
 })
