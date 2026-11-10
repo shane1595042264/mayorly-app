@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Today's tomatoes beside the clock
+
+- While a block runs, the small number next to the clock is how many tomatoes you have finished today.
+
 ## The couch waits for you too
 
 - With "Start the next focus or couch block on its own" turned off, a couch block no longer starts by itself when a rest ends. It waits for you, like a focus block.

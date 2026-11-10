@@ -106,6 +106,24 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
   clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
 }
 .pet-sign:hover { border-color: var(--ink-2); }
+/* Today's tomatoes beside the clock, on the sign's inner side: the column is fixed, so nothing resizes. */
+.pet-sign-row { display: flex; align-items: flex-end; gap: 4px; }
+.pet-left .pet-sign-row { flex-direction: row-reverse; }
+.pet-count {
+  min-width: 22px;
+  margin-bottom: 8px;
+  padding: 3px 5px 2px;
+  text-align: center;
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-2);
+  background: var(--glass);
+  border: 1px solid var(--line);
+  clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+}
 .pet-sign:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 .pet-sign.tone-live { color: var(--ledger, var(--accent)); border-color: var(--ledger-2, var(--accent-2)); }
 .pet-sign.tone-rest { color: var(--ink-2); }
