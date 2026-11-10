@@ -1,6 +1,12 @@
 const pad = (n: number) => String(n).padStart(2, '0')
 
 /** 1499000 -> "24:59", 3720000 -> "1:02:00". Rounds up so a countdown never shows 00:00 early. */
+/** Tomatoes to the tenth, never rounded up: "2", "2.7", "0.1". */
+export function tomatoLabel(n: number): string {
+  const tenths = Math.max(0, Math.floor(n * 10 + 1e-6))
+  return tenths % 10 === 0 ? String(tenths / 10) : (tenths / 10).toFixed(1)
+}
+
 export function clock(ms: number, roundUp = true): string {
   const total = Math.max(0, roundUp ? Math.ceil(ms / 1000) : Math.floor(ms / 1000))
   const h = Math.floor(total / 3600)

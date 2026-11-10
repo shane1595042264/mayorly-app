@@ -1,3 +1,4 @@
+import { tomatoLabel } from '@core/index'
 import tomato from '../assets/tomato@1x.png'
 
 /**
@@ -5,9 +6,8 @@ import tomato from '../assets/tomato@1x.png'
  * ripens under the desk. Nothing shows until the first tenth.
  */
 export function Tomatoes({ n, showZero = false }: { n: number; showZero?: boolean }) {
-  const tenths = Math.floor(n * 10 + 1e-6)
-  if (tenths < 1 && !showZero) return null
-  const label = tenths % 10 === 0 ? String(tenths / 10) : (tenths / 10).toFixed(1)
+  const label = tomatoLabel(n)
+  if (label === '0' && !showZero) return null
   return (
     <span className="row-tomatoes num" title="Tomatoes from this entry's recorded focus time">
       {label}

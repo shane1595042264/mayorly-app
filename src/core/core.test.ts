@@ -6,7 +6,7 @@ import {
   plannedMs,
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
-  findTasks, taskTomatoes, onDeskId, recentTasks, switchToAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
+  findTasks, taskTomatoes, tomatoLabel, onDeskId, recentTasks, switchToAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
 } from './index'
 
 const MIN = 60_000
@@ -1739,27 +1739,38 @@ describe('the next couch block after a rest', () => {
 })
 
 describe('the tomatoes beside the clock', () => {
-  it('counts whole tomatoes on the task, across sittings, and goes with the task when you swap', () => {
+  const label = (w: ReturnType<typeof world>) => {
+    const n = taskTomatoes(w.s, w.now)
+    return n === null ? null : tomatoLabel(n)
+  }
+
+  it('counts the tomatoes on the task to the tenth, across sittings, and goes with the task when you swap', () => {
     const w = world((s) => { s.settings.focusMin = 25 })
     for (const t of ['a', 'b']) w.do({ type: 'entry/capture', text: `legal: ${t}` })
-    expect(taskTomatoes(w.s, w.now)).toBeNull()
+    expect(label(w)).toBeNull()
     w.do({ type: 'desk/select', entryId: w.entry('a').id, ledgerId: w.entry('a').ledgerId })
-    expect(taskTomatoes(w.s, w.now)).toBe(0)
-    w.wait(24 * MIN)
-    expect(taskTomatoes(w.s, w.now)).toBe(0)
+    expect(label(w)).toBe('0')
+    w.wait(3 * MIN)
+    expect(label(w)).toBe('0.1')
+    w.wait(21 * MIN)
+    expect(label(w)).toBe('0.9')
     w.wait(2 * MIN)
-    expect(taskTomatoes(w.s, w.now)).toBe(1)
+    expect(label(w)).toBe('1')
     w.do({ type: 'desk/select', entryId: w.entry('b').id, ledgerId: w.entry('b').ledgerId })
-    expect(taskTomatoes(w.s, w.now)).toBe(0)
+    expect(label(w)).toBe('0')
     w.do({ type: 'desk/select', entryId: w.entry('a').id, ledgerId: w.entry('a').ledgerId })
-    expect(taskTomatoes(w.s, w.now)).toBe(1)
+    expect(label(w)).toBe('1')
   })
 
-  it('counts the blocks finished on a couch item', () => {
+  it('counts a couch item in blocks', () => {
     const w = world((s) => { s.tokens.push({ id: 'seed', at: T0, amount: 5, reason: 'tomato', sittingId: null } as never) })
     w.do({ type: 'entry/capture', text: 'couch: civ', start: true })
-    expect(taskTomatoes(w.s, w.now)).toBe(0)
+    expect(label(w)).toBe('0')
     w.wait(w.s.settings.focusMin * MIN + 1_000)
-    expect(taskTomatoes(w.s, w.now)).toBe(1)
+    expect(label(w)).toBe('1')
+  })
+
+  it('never rounds up', () => {
+    expect([0, 0.09, 0.1, 0.99, 2, 2.75].map(tomatoLabel)).toEqual(['0', '0', '0.1', '0.9', '2', '2.7'])
   })
 })

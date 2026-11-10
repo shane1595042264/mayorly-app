@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { blockView, clock, dayStats, nextBlock, startOfDay, switchTarget, taskTomatoes, type MayorlyState } from '@core/index'
+import { blockView, clock, dayStats, nextBlock, startOfDay, switchTarget, taskTomatoes, tomatoLabel, type MayorlyState } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
 import { INSET, anchorInBox, captionBox, dragScale, petBox, type Point } from '../../../shared/pet'
 import tomato from '../assets/tomato@1x.png'
@@ -70,7 +70,8 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, he
   /** The line above the sign: what the desk is on, up to two lines of the column. */
   let task = ''
   // The current task's own count, beside the clock. Idle, the sign itself is today's.
-  const done = v ? taskTomatoes(s, now) : null
+  const grown = v ? taskTomatoes(s, now) : null
+  const done = grown === null ? null : tomatoLabel(grown)
   if (!v) {
     sign = String(dayStats(s, startOfDay(now), now).tomatoes)
     tone = 'idle'
@@ -240,7 +241,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, he
             {task && <span className={`pet-task clamp tone-${tone}`} title={task}>{task}</span>}
             <div className="pet-sign-row">
               {done !== null && (
-                <span className="pet-count num" title="Tomatoes finished on this task" aria-label={`${done} ${done === 1 ? 'tomato' : 'tomatoes'} on this task`}>
+                <span className="pet-count num" title="Tomatoes finished on this task" aria-label={`${done} ${done === '1' ? 'tomato' : 'tomatoes'} on this task`}>
                   {done}
                 </span>
               )}

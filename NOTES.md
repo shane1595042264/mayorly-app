@@ -4,7 +4,7 @@ The top section is what the app shows once per build, the first time that build 
 
 ## This task's tomatoes beside the clock
 
-- While a block runs, the small number next to the clock is how many tomatoes you have finished on that task, all time. On the couch it counts the blocks you finished on that item.
+- While a block runs, the small number next to the clock is how many tomatoes you have grown on that task, all time, to the tenth: 0.1 shows as 0.1. On the couch it counts that item's time in blocks.
 
 ## The couch waits for you too
 
