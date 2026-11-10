@@ -446,7 +446,7 @@ describe('the calendar', () => {
     expect(w.s.settings.calendar).toMatchObject({ mode: 'done', defaultMin: 60, horizonDays: 2 })
   })
 
-  it('a mode change keeps the block already in progress', () => {
+  it('a mode change keeps the block already in progress, grown to hold what is left rather than leaving a scrap', () => {
     const w = world()
     for (const text of ['legal: a ~60', 'legal: b ~30', 'dance: c ~30']) w.do({ type: 'entry/capture', text })
     replan(w)
@@ -454,7 +454,8 @@ describe('the calendar', () => {
     w.wait(10 * MIN)
     w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, mode: 'rotate' } } })
     replan(w)
-    expect(w.s.calendar.blocks[0]).toMatchObject({ entryId: current.entryId, start: w.now, end: current.end })
+    expect(w.s.calendar.blocks[0]).toMatchObject({ entryId: current.entryId, start: w.now, end: w.now + 60 * MIN })
+    expect(w.s.calendar.blocks.filter((b) => b.entryId === current.entryId)).toHaveLength(1)
   })
 
   it('a block dragged to another time pins there, never before now, and planned time is summed', () => {

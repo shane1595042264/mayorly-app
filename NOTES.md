@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## A calendar you can read
+
+- The week view is taller, so a half-hour block holds its name on one line. Blocks no longer overlap, and a very short one is a thin bar with its name when you point at it.
+- The plan no longer breaks tasks into five-minute scraps as the day goes by. A task you have not started yet moves along with the clock in one piece.
+
 ## One timer for tasks and the couch
 
 - Switching from a task to something on the couch, or back, keeps the timer where it is. If a task was at 17:00, the couch item carries on at 17:00. Only the title, the colour and the tomato count change.

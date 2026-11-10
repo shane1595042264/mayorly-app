@@ -148,6 +148,25 @@ describe('the planner', () => {
     expect(r.placements.map(span)).toEqual([[at(0, 9), at(0, 9, 30)], [at(0, 9, 30), at(0, 10)]])
   })
 
+  it('lets go of a kept piece the clock has worn below one chunk, and places the task whole', () => {
+    // A 30 minute task planned at 8:40; at 9:00 only 10 minutes of it are left in progress.
+    const previous = [{ taskId: 'a', start: at(0, 8, 40), end: at(0, 9, 10), late: false }]
+    const r = plan(input([task('a', 30)], { previous }))
+    expect(r.placements.map(span)).toEqual([[at(0, 9), at(0, 9, 30)]])
+  })
+
+  it('a minute-by-minute replan of a task nobody starts never leaves scraps', () => {
+    let previous: ReturnType<typeof plan>['placements'] = []
+    const tasks = [task('a', 30), task('b', 30, { order: 1 }), task('c', 30, { order: 2 })]
+    for (let m = 0; m <= 120; m++) {
+      const now = NOW + m * MIN
+      const r = plan(input(tasks, { now, previous, windows: windows(10, 9, 17).map((w) => ({ ...w, start: Math.max(w.start, NOW) })) }))
+      previous = r.placements
+      for (const p of r.placements) expect(p.end - p.start).toBeGreaterThanOrEqual(25 * MIN)
+      for (const t of tasks) expect(r.placements.filter((p) => p.taskId === t.id).reduce((n, p) => n + p.end - p.start, 0)).toBe(30 * MIN)
+    }
+  })
+
   it('stickiness yields to a deadline it would make late', () => {
     const previous = [{ taskId: 'y', start: at(0, 9), end: at(0, 12), late: false }]
     const tasks = [task('x', 180, { order: 0, due: at(0, 12) }), task('y', 180, { order: 1 })]

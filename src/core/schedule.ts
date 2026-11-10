@@ -228,7 +228,20 @@ function run(input: PlanInput, previous: Placement[]): PlanResult {
     }
     const minutes = Math.ceil((end - start) / MIN)
     if (minutes <= 0) continue
-    const used = Math.min(minutes, rem)
+    let used = Math.min(minutes, rem)
+    // The clock eats into a chunk as it passes, and what it leaves must still be a chunk. A piece
+    // shorter than one goes, and the task is placed again whole below. A piece that would leave a
+    // tail shorter than one grows to hold the tail if there is room, else gives the tail a chunk's
+    // worth. Kept as they were, these piled up as five-minute scraps.
+    const floor = Math.min(Math.max(t.minChunkMin ?? input.minChunkMin, input.gridMin), rem)
+    if (used < floor) continue
+    if (rem - used > 0 && rem - used < floor) {
+      if (containedIn(free, { start, end: start + rem * MIN })) used = rem
+      else {
+        used = rem - floor
+        if (used < floor) continue
+      }
+    }
     end = start + used * MIN
     take({ taskId: t.id, start, end, late: t.due !== null && end > t.due })
     remaining.set(t.id, rem - used)

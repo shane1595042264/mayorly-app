@@ -20,7 +20,11 @@ const SNAP = 15 * MIN
 /** A press that moves less than this is a click. */
 const DRAG_PX = 4
 const DAY = 24 * 60 * MIN
-const HOUR_PX = 44
+/** Tall enough that a half-hour block holds a readable line. */
+const HOUR_PX = 60
+/** A short block shows its title on one line; below this it is a bar with the title on hover. */
+const ONE_LINE_PX = 38
+const BAR_PX = 16
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 type Item =
@@ -238,7 +242,8 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
             const w = wallClock(d + DAY / 2, tz)
             const windows = s.settings.calendar.hours[w.weekday] ?? []
             const top = (t: number) => ((Math.max(t, d) - d) / MIN / 60 - firstHour) * HOUR_PX
-            const height = (a: number, b: number) => Math.max(14, ((Math.min(b, dayEnd) - Math.max(a, d)) / MIN / 60) * HOUR_PX)
+            // The true height less a hairline, so neighbours never overlap; a floor only so a five-minute block can be seen and grabbed.
+            const height = (a: number, b: number) => Math.max(4, ((Math.min(b, dayEnd) - Math.max(a, d)) / MIN / 60) * HOUR_PX - 2)
             return (
               <div key={d} className={`cal-day ${d === todayStart ? 'today' : ''} ${d < todayStart ? 'past' : ''}`}>
                 {windows.map((h, i) => (
@@ -259,7 +264,7 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
                     const l = ledgerOf(e?.ledgerId ?? null)
                     const live = s.desk.block?.entryId === it.block.entryId && s.desk.status !== 'idle'
                     return (
-                      <div key={it.id} className={`cal-item cal-block ${style.height < 38 ? 'compact' : ''} ${isSel ? 'is-selected' : ''} ${it.block.late ? 'late' : ''} ${live ? 'live' : ''} ${it.block.assumed ? 'assumed' : ''} ${lifted}`} style={{ ...style, ...ledgerVars(l) }} data-row={it.id} title={`${e?.title ?? ''} ${fmt(it.start)} to ${fmt(it.end)}.${it.block.assumed ? ' No estimate yet; placed at the default length.' : ''} Drag to pin it elsewhere.`} onPointerDown={(ev) => grabItem(ev, it, 'move')}>
+                      <div key={it.id} className={`cal-item cal-block ${style.height < BAR_PX ? 'bar' : style.height < ONE_LINE_PX ? 'compact' : ''} ${isSel ? 'is-selected' : ''} ${it.block.late ? 'late' : ''} ${live ? 'live' : ''} ${it.block.assumed ? 'assumed' : ''} ${lifted}`} style={{ ...style, ...ledgerVars(l) }} data-row={it.id} title={`${e?.title ?? ''} ${fmt(it.start)} to ${fmt(it.end)}.${it.block.assumed ? ' No estimate yet; placed at the default length.' : ''} Drag to pin it elsewhere.`} onPointerDown={(ev) => grabItem(ev, it, 'move')}>
                         <span className="cal-item-t mono num">{fmt(it.start)}{it.block.assumed ? ' ~' : ''}</span>
                         <span className="cal-item-title">{it.block.assumed && <span className="cal-assumed-mark">~ </span>}{l && <b className="mono">{l.code} </b>}{e?.title ?? '(gone)'}</span>
                         {it.block.of > 1 && <span className="cal-item-n mono num">{it.block.chunk}/{it.block.of}</span>}

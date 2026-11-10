@@ -325,6 +325,9 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .cal-block.compact .cal-item-title { order: -1; flex-shrink: 0; }
 .cal-block.compact .cal-item-t, .cal-block.compact .cal-item-n { display: none; }
 .cal-block.compact .cal-assumed-mark { display: inline; }
+.cal-block.compact { justify-content: center; padding-block: 0; }
+.cal-block.bar { padding: 0; }
+.cal-block.bar > * { display: none; }
 .cal-block.late .cal-item-icon { color: var(--accent); }
 .cal-block.live { background: rgb(240 174 60 / 0.16); }
 .cal-event { background: rgb(163 173 181 / 0.14); border-color: rgb(163 173 181 / 0.5); box-shadow: inset 3px 0 0 var(--ink-2); }
