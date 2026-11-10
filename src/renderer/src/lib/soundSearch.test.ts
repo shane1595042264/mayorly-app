@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { licenseLabel, soundName, toFound } from './soundSearch'
+import { licenseLabel, rankSounds, soundName, toFound, unpack } from './soundSearch'
 
 const hit = (over: Record<string, unknown> = {}) => ({
   id: 'a1',
@@ -37,5 +37,31 @@ describe('the sound library', () => {
   it('names licences the way they are written, and keeps the credit in the alarm name', () => {
     expect(['cc0', 'by', 'by-nc', 'by-nc-sa', ''].map(licenseLabel)).toEqual(['CC0', 'CC BY', 'CC BY-NC', 'CC BY-NC-SA', 'CC'])
     expect(soundName(toFound([hit()])[0])).toBe('Reception bell by someone (CC BY)')
+  })
+})
+
+describe('the catalogue that ships with the app', () => {
+  const sounds = [
+    { i: '1', t: 'Reception bell', c: 'a', l: 'by', d: 6000, u: '1.mp3', p: null, g: ['bell', 'desk'] },
+    { i: '2', t: 'Bell, Candle Damper', c: 'b', l: 'cc0', d: 3000, u: '2.mp3', p: null, g: ['bell'] },
+    { i: '3', t: 'Morning birds', c: 'c', l: 'by-nc', d: 9000, u: '3.mp3', p: null, g: ['birds', 'dawn', 'chirp'] },
+    { i: '4', t: 'Gong hit', c: 'd', l: 'by', d: 4000, u: '4.mp3', p: null, g: ['gong', 'temple'] },
+  ].map(unpack)
+  const ids = (q: string) => rankSounds(sounds, q).map((s) => s.id)
+
+  it('finds a half-typed word, title starts first, then shorter clips', () => {
+    expect(ids('be')).toEqual(['2', '1'])
+    expect(ids('bell')).toEqual(['2', '1'])
+  })
+
+  it('matches tags too, and needs every word', () => {
+    expect(ids('dawn')).toEqual(['3'])
+    expect(ids('temple gong')).toEqual(['4'])
+    expect(ids('bell gong')).toEqual([])
+    expect(ids('  ')).toEqual([])
+  })
+
+  it('gives back sounds the alarms can download', () => {
+    expect(rankSounds(sounds, 'gong')[0]).toEqual({ id: '4', title: 'Gong hit', creator: 'd', license: 'CC BY', durationMs: 4000, url: 'https://cdn.freesound.org/previews/4.mp3', page: null })
   })
 })

@@ -1,24 +1,37 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MagnifyingGlass, Play, Stop } from '@phosphor-icons/react'
 import type { AlarmKind } from '@core/index'
 import { bridge } from '../bridge'
 import { playDataUrl, stopAlarm } from '../lib/sound'
-import { downloadSound, searchSounds, soundName, type FoundSound } from '../lib/soundSearch'
+import { downloadSound, findLocal, searchSounds, soundName, type FoundSound } from '../lib/soundSearch'
 
-// Shop for an alarm: search the library, hear a sound, and make it the work or break alarm. The
-// file is downloaded once and kept for the preview, then saved like an uploaded one.
+// Shop for an alarm: suggestions from the catalogue that ships with the app appear as you type,
+// and the whole library is asked after a pause when the catalogue has little to offer (or on
+// Enter). That search is slow and rationed, so it waits, never runs twice for one word, and keeps
+// three seconds between calls. A sound starts downloading when the pointer reaches it, so the
+// play button is quick; once downloaded it is kept for the preview, then saved like an upload.
 
 const seconds = (ms: number | null) => (ms === null ? '' : `${Math.max(1, Math.round(ms / 1000))}s`)
+/** Ask the network when the catalogue has fewer matches than this. */
+const ENOUGH = 8
+const PAUSE_MS = 700
+const GAP_MS = 3_500
 
 export function SoundSearch({ canSave }: { canSave: boolean }) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<FoundSound[] | null>(null)
+  const key = query.trim().toLowerCase()
+  const local = useMemo(() => findLocal(query), [query])
+  const [remote, setRemote] = useState<{ key: string; list: FoundSound[] } | null>(null)
   const [searching, setSearching] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [playing, setPlaying] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const files = useRef(new Map<string, Promise<string>>())
+  const answers = useRef(new Map<string, FoundSound[]>())
+  const lastCall = useRef(0)
+  const latest = useRef('')
+  latest.current = key
 
   const file = (s: FoundSound) => {
     let f = files.current.get(s.id)
@@ -29,20 +42,44 @@ export function SoundSearch({ canSave }: { canSave: boolean }) {
     }
     return f
   }
+  // The pointer on a row is the moment to start fetching it.
+  const warm = (s: FoundSound) => void file(s).catch(() => {})
 
-  const search = async () => {
-    if (!query.trim() || searching) return
-    setSearching(true)
-    setError(null)
-    setDone(null)
-    try {
-      setResults(await searchSounds(query))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setSearching(false)
+  const askLibrary = useCallback(async (k: string) => {
+    const known = answers.current.get(k)
+    if (known) {
+      setRemote({ key: k, list: known })
+      return
     }
-  }
+    const wait = lastCall.current + GAP_MS - Date.now()
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait))
+    if (latest.current !== k) return
+    lastCall.current = Date.now()
+    setSearching(true)
+    try {
+      const list = await searchSounds(k)
+      answers.current.set(k, list)
+      if (latest.current === k) setRemote({ key: k, list })
+    } catch (e) {
+      if (latest.current === k) setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (latest.current === k) setSearching(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    setSearching(false)
+    setError(null)
+    if (key.length < 3 || local.length >= ENOUGH) return
+    const t = setTimeout(() => void askLibrary(key), PAUSE_MS)
+    return () => clearTimeout(t)
+  }, [key, local.length, askLibrary])
+
+  const shown = useMemo(() => {
+    const extra = remote?.key === key ? remote.list : []
+    const seen = new Set(local.map((s) => s.id))
+    return [...local, ...extra.filter((s) => !seen.has(s.id))]
+  }, [local, remote, key])
 
   const preview = async (s: FoundSound) => {
     setError(null)
@@ -84,31 +121,35 @@ export function SoundSearch({ canSave }: { canSave: boolean }) {
         className="sound-search-row"
         onSubmit={(e) => {
           e.preventDefault()
-          void search()
+          if (key) void askLibrary(key)
         }}
       >
+        <MagnifyingGlass size={16} className="sound-search-icon" aria-hidden />
         <input
           type="search"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setDone(null)
+          }}
           placeholder="Find a sound: bell, gong, birds, chime"
           aria-label="Search the sound library"
           spellCheck={false}
         />
-        <button className="btn" type="submit" disabled={!query.trim() || searching}>
-          <MagnifyingGlass size={14} /> {searching ? 'Searching' : 'Search'}
-        </button>
       </form>
-      {results && results.length === 0 && <p className="field-help">Nothing short enough for an alarm. Try another word.</p>}
-      {results && results.length > 0 && (
+      {key && shown.length === 0 && (
+        <p className="field-help">{searching ? 'Searching the whole library.' : 'Nothing here yet. Press Enter to search the whole library.'}</p>
+      )}
+      {shown.length > 0 && (
         <ul className="sound-results" aria-label="Sounds">
-          {results.map((s) => (
-            <li key={s.id} className="sound-row">
+          {shown.map((s) => (
+            <li key={s.id} className="sound-row" onPointerEnter={() => warm(s)}>
               <button
                 className="icon-btn"
                 type="button"
                 aria-label={playing === s.id ? `Stop ${s.title}` : `Play ${s.title}`}
                 disabled={busy !== null && busy !== s.id}
+                onFocus={() => warm(s)}
                 onClick={() => void preview(s)}
               >
                 {playing === s.id ? <Stop size={14} /> : <Play size={14} />}
@@ -132,7 +173,8 @@ export function SoundSearch({ canSave }: { canSave: boolean }) {
           ))}
         </ul>
       )}
-      <p className="field-help">From Freesound through Openverse, under Creative Commons. The alarm keeps the creator's name. Your search words go to Openverse.</p>
+      {key && shown.length > 0 && <p className="field-help">{searching ? 'Searching the whole library for more.' : 'Enter searches the whole library for more.'}</p>}
+      <p className="field-help">From Freesound through Openverse, under Creative Commons. The alarm keeps the creator's name. Words you search the whole library for go to Openverse.</p>
       {done && <p className="field-help" role="status">{done}</p>}
       {error && <p className="field-error" role="alert">{error}</p>}
     </div>

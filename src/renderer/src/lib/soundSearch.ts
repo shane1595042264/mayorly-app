@@ -1,8 +1,12 @@
 // Sounds from the open web, for the alarms. Openverse indexes Creative Commons audio and needs
 // no key; Freesound is the source, because it holds sound effects rather than songs, and its
-// "shortest" clips run a few seconds, the length of an alarm. Anonymous use is limited (about
-// 20 searches a minute, 200 a day), so a search runs when asked for, never per keystroke.
+// "shortest" clips run a few seconds, the length of an alarm. Openverse takes seconds to answer
+// and allows anonymous callers about 20 searches a minute and 200 a day, so the app ships a
+// catalogue of such clips (sound-index.json, from scripts/sound-index.mjs) and searches that as
+// you type; the network is asked only for words the catalogue barely covers.
 // Both hosts are named in the page's Content-Security-Policy, and nothing else is fetched.
+
+import catalogue from './sound-index.json'
 
 const API = 'https://api.openverse.org/v1/audio/'
 const FILE_HOST = 'cdn.freesound.org'
@@ -113,6 +117,67 @@ export async function downloadSound(sound: FoundSound): Promise<string> {
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
   return `data:${mime};base64,${btoa(bin)}`
 }
+
+const PREVIEWS = 'https://cdn.freesound.org/previews/'
+
+interface Packed {
+  i: string
+  t: string
+  c: string
+  l: string
+  d: number | null
+  u: string
+  p: string | null
+  g: string[]
+}
+
+export interface IndexedSound extends FoundSound {
+  /** Words to match on, the tags included. */
+  tags: string[]
+}
+
+export const unpack = (x: Packed): IndexedSound => ({
+  id: x.i,
+  title: x.t,
+  creator: x.c,
+  license: licenseLabel(x.l),
+  durationMs: x.d,
+  url: PREVIEWS + x.u,
+  page: x.p,
+  tags: x.g,
+})
+
+const INDEX: IndexedSound[] = (catalogue as { sounds: Packed[] }).sounds.map(unpack)
+
+const tokens = (text: string) => text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+
+/**
+ * The catalogue's best matches, at once. Every word has to start a word of the title or a tag, so
+ * a half-typed word already finds things. A title that starts with the search comes first, then
+ * titles that hold every word, then tag matches; shorter clips first within each.
+ */
+export function rankSounds(list: IndexedSound[], query: string, limit = 30): FoundSound[] {
+  const words = tokens(query)
+  if (!words.length) return []
+  const q = query.trim().toLowerCase()
+  const scored: { s: IndexedSound; rank: number }[] = []
+  for (const s of list) {
+    const title = tokens(s.title)
+    const tags = s.tags.flatMap(tokens)
+    if (!words.every((w) => title.some((t) => t.startsWith(w)) || tags.some((t) => t.startsWith(w)))) continue
+    const rank = s.title.toLowerCase().startsWith(q) ? 0 : words.every((w) => title.some((t) => t.startsWith(w))) ? 1 : 2
+    scored.push({ s, rank })
+  }
+  return scored
+    .sort((a, b) => a.rank - b.rank || (a.s.durationMs ?? 1e9) - (b.s.durationMs ?? 1e9))
+    .slice(0, limit)
+    .map(({ s: { tags: _tags, ...found } }) => found)
+}
+
+export const findLocal = (query: string, limit = 30) => rankSounds(INDEX, query, limit)
+
+/** How many sounds ship with the app. */
+export const catalogueSize = INDEX.length
 
 /** The name the alarm keeps, with the credit Creative Commons asks for. */
 export const soundName = (s: FoundSound) => `${s.title} by ${s.creator} (${s.license})`.slice(0, 120)
