@@ -6,6 +6,7 @@ The top section is what the app shows once per build, the first time that build 
 
 - The week view is taller, so a half-hour block holds its name on one line. Blocks no longer overlap, and a very short one is a thin bar with its name when you point at it.
 - The plan no longer breaks tasks into five-minute scraps as the day goes by. A task you have not started yet moves along with the clock in one piece.
+- Every block on the calendar is now one pomodoro, as long as yours (30 minutes if that is what you set), with your rest after it. Estimates round up to whole pomodoros, and a task with no estimate gets one.
 
 ## One timer for tasks and the couch
 

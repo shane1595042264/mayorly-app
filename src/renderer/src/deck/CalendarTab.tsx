@@ -361,13 +361,7 @@ function Knobs({ s, entryId, tz }: { s: MayorlyState; entryId: string; tz: strin
         <input type="datetime-local" value={e.notBefore ? toLocal(e.notBefore, tz) : ''} onChange={(ev) => up({ notBefore: ev.target.value ? fromLocal(ev.target.value, tz) : null })} />
       </label>
       <label className="check"><input type="checkbox" checked={!!e.rush} onChange={(ev) => up({ rush: ev.target.checked })} /><span className="check-box" aria-hidden /><span>Up next, ahead of every due</span></label>
-      <label className="check"><input type="checkbox" checked={e.splittable !== false} onChange={(ev) => up({ splittable: ev.target.checked })} /><span className="check-box" aria-hidden /><span>May be split into chunks</span></label>
-      {e.splittable !== false && (
-        <div className="form-row">
-          <label className="field"><span className="field-label caps">Chunk min</span><input type="number" min={5} max={1440} step={5} value={e.minChunkMin ?? ''} placeholder={String(s.settings.calendar.minChunkMin)} onChange={(ev) => up({ minChunkMin: ev.target.value === '' ? undefined : Number(ev.target.value) })} /></label>
-          <label className="field"><span className="field-label caps">Chunk max</span><input type="number" min={5} max={1440} step={5} value={e.maxChunkMin ?? ''} placeholder="none" onChange={(ev) => up({ maxChunkMin: ev.target.value === '' ? undefined : Number(ev.target.value) })} /></label>
-        </div>
-      )}
+      <label className="check"><input type="checkbox" checked={e.splittable !== false} onChange={(ev) => up({ splittable: ev.target.checked })} /><span className="check-box" aria-hidden /><span>May be split into separate pomodoros</span></label>
       <label className="check"><input type="checkbox" checked={!!e.offCalendar} onChange={(ev) => up({ offCalendar: ev.target.checked })} /><span className="check-box" aria-hidden /><span>Keep off the calendar</span></label>
     </div>
   )

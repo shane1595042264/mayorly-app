@@ -307,15 +307,17 @@ describe('capture and start', () => {
 
 describe('the calendar', () => {
   const windows = (w: typeof world extends (...a: never[]) => infer R ? R : never) => [{ start: w.now, end: w.now + 8 * 60 * MIN }, { start: w.now + 24 * 60 * MIN, end: w.now + 32 * 60 * MIN }]
+  // The calendar plans in pomodoros; these tests use a 30 minute one, the founder's.
+  const calWorld = () => world((s) => { s.settings.focusMin = 30 })
   const replan = (w: ReturnType<typeof world>) => w.do({ type: 'schedule/replan', windows: windows(w), horizonEnd: w.now + 14 * 24 * 60 * MIN })
 
-  it('plans entries with estimates into the windows, and a quiet replan returns the same state', () => {
-    const w = world()
+  it('plans entries in whole pomodoros with a rest between, and a quiet replan returns the same state', () => {
+    const w = calWorld()
     w.do({ type: 'entry/capture', text: 'legal: a ~90' })
     w.do({ type: 'entry/capture', text: 'dance: b ~30' })
     replan(w)
     const blocks = w.s.calendar.blocks
-    expect(blocks.map((b) => [b.entryId === w.entry('a').id ? 'a' : 'b', (b.end - b.start) / MIN])).toEqual([['a', 90], ['b', 30]])
+    expect(blocks.map((b) => [b.entryId === w.entry('a').id ? 'a' : 'b', (b.end - b.start) / MIN])).toEqual([['a', 30], ['a', 30], ['a', 30], ['b', 30]])
     expect(blocks[0].id).toBe(`${w.entry('a').id}#1`)
     expect(blocks[1].start).toBe(blocks[0].end + 5 * MIN)
     const before = w.s
@@ -324,7 +326,7 @@ describe('the calendar', () => {
   })
 
   it('a pin is busy to the planner and credit to its entry; a cleared entry leaves the calendar', () => {
-    const w = world()
+    const w = calWorld()
     w.do({ type: 'entry/capture', text: 'legal: a ~90' })
     const a = w.entry('a')
     w.do({ type: 'calendar/event-add', title: '', start: w.now + 60 * MIN, end: w.now + 120 * MIN, entryId: a.id })
@@ -340,7 +342,7 @@ describe('the calendar', () => {
   })
 
   it('refuses a backwards event, an empty one, and a stale pin; editing bumps the sequence', () => {
-    const w = world()
+    const w = calWorld()
     w.do({ type: 'calendar/event-add', title: 'x', start: w.now + MIN, end: w.now })
     w.do({ type: 'calendar/event-add', title: '   ', start: w.now, end: w.now + MIN })
     expect(w.s.calendar.events).toHaveLength(0)
@@ -355,8 +357,8 @@ describe('the calendar', () => {
   })
 
   it('a block can be pinned, and the due and not-before knobs are checked', () => {
-    const w = world()
-    w.do({ type: 'entry/capture', text: 'legal: a ~60' })
+    const w = calWorld()
+    w.do({ type: 'entry/capture', text: 'legal: a ~30' })
     const a = w.entry('a')
     w.do({ type: 'entry/update', id: a.id, patch: { due: w.now + 2 * 60 * MIN, notBefore: w.now + 3 * 60 * MIN } })
     expect(w.entry('a').due).toBe(w.now + 2 * 60 * MIN)
@@ -369,16 +371,17 @@ describe('the calendar', () => {
     expect(w.s.calendar.blocks).toEqual([])
   })
 
-  it('an entry without an estimate is placed at the default length and marked assumed; the range may be one day', () => {
-    const w = world()
+  it('an entry without an estimate gets one pomodoro and is marked assumed; an estimate rounds up to whole ones; the range may be one day', () => {
+    const w = calWorld()
     w.do({ type: 'entry/capture', text: 'legal: no number' })
     w.do({ type: 'entry/capture', text: 'legal: with ~50' })
     replan(w)
     const a = w.s.calendar.blocks.find((b) => b.entryId === w.entry('no number').id)!
     const b = w.s.calendar.blocks.find((b) => b.entryId === w.entry('with').id)!
     expect(a.assumed).toBe(true)
-    expect(a.end - a.start).toBe(w.s.settings.calendar.defaultMin * MIN)
+    expect(a.end - a.start).toBe(w.s.settings.focusMin * MIN)
     expect(b.assumed).toBe(false)
+    expect(w.s.calendar.blocks.filter((x) => x.entryId === w.entry('with').id).map((x) => (x.end - x.start) / MIN)).toEqual([30, 30])
     w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, horizonDays: 1, defaultMin: 45, mode: 'rotate' } } })
     expect(w.s.settings.calendar).toMatchObject({ horizonDays: 1, defaultMin: 45, mode: 'rotate' })
     w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, mode: 'sideways' as never, horizonDays: -3 } } })
@@ -386,7 +389,7 @@ describe('the calendar', () => {
   })
 
   it('an assumed length remains on the plan after more than that much desk time', () => {
-    const w = world()
+    const w = calWorld()
     w.do({ type: 'settings/update', patch: { focusMin: 60 } })
     w.do({ type: 'entry/capture', text: 'legal: ongoing', start: true })
     const id = w.entry('ongoing').id
@@ -396,7 +399,7 @@ describe('the calendar', () => {
     const blocks = w.s.calendar.blocks.filter((b) => b.entryId === id)
     expect(blocks.length).toBeGreaterThan(0)
     expect(blocks.every((b) => b.assumed)).toBe(true)
-    expect(blocks.reduce((sum, b) => sum + b.end - b.start, 0)).toBe(30 * MIN)
+    expect(blocks.reduce((sum, b) => sum + b.end - b.start, 0)).toBe(60 * MIN)
     expect(w.entry('ongoing').doneAt).toBeNull()
     w.do({ type: 'entry/complete', id })
     replan(w)
@@ -404,7 +407,7 @@ describe('the calendar', () => {
   })
 
   it('changing mode reorders future blocks without resetting feed sequences or moving events', () => {
-    const w = world()
+    const w = calWorld()
     for (const text of ['legal: a ~30', 'legal: b ~30', 'dance: c ~30']) w.do({ type: 'entry/capture', text })
     w.do({ type: 'calendar/event-add', title: 'Appointment', start: w.now + 180 * MIN, end: w.now + 210 * MIN })
     replan(w)
@@ -427,7 +430,7 @@ describe('the calendar', () => {
   })
 
   it.each(['sync/replace', 'sync/merge'] as const)('%s preserves planner controls stripped by an older build, and accepts current ones', (type) => {
-    const w = world()
+    const w = calWorld()
     w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, mode: 'rotate', defaultMin: 45, horizonDays: 1 } } })
     const old = structuredClone(w.s)
     const oldCalendar = old.settings.calendar as Partial<typeof old.settings.calendar>
@@ -446,20 +449,21 @@ describe('the calendar', () => {
     expect(w.s.settings.calendar).toMatchObject({ mode: 'done', defaultMin: 60, horizonDays: 2 })
   })
 
-  it('a mode change keeps the block already in progress, grown to hold what is left rather than leaving a scrap', () => {
-    const w = world()
+  it('a mode change keeps the task in progress at the front, in whole pomodoros, never a scrap', () => {
+    const w = calWorld()
     for (const text of ['legal: a ~60', 'legal: b ~30', 'dance: c ~30']) w.do({ type: 'entry/capture', text })
     replan(w)
     const current = w.s.calendar.blocks[0]
     w.wait(10 * MIN)
     w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, mode: 'rotate' } } })
     replan(w)
-    expect(w.s.calendar.blocks[0]).toMatchObject({ entryId: current.entryId, start: w.now, end: w.now + 60 * MIN })
-    expect(w.s.calendar.blocks.filter((b) => b.entryId === current.entryId)).toHaveLength(1)
+    expect(w.s.calendar.blocks[0]).toMatchObject({ entryId: current.entryId, start: w.now, end: w.now + 30 * MIN })
+    expect(w.s.calendar.blocks.filter((b) => b.entryId === current.entryId).map((b) => (b.end - b.start) / MIN)).toEqual([30, 30])
+    expect(w.s.calendar.blocks.every((b) => b.end - b.start === 30 * MIN)).toBe(true)
   })
 
   it('a block dragged to another time pins there, never before now, and planned time is summed', () => {
-    const w = world()
+    const w = calWorld()
     w.do({ type: 'entry/capture', text: 'legal: a ~60' })
     replan(w)
     const b = w.s.calendar.blocks[0]

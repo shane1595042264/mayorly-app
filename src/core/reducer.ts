@@ -1610,10 +1610,14 @@ function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: num
   ]
   const tasks: PlanTask[] = []
   const assumedIds = new Set<Id>()
+  // The unit of planned time is the pomodoro: every block is one focus block as long as the
+  // desk's, with the short rest after it, and a task's time rounds up to whole ones. On the
+  // five-minute grid, so a block always lands on it.
+  const pomo = Math.max(5, Math.round(state.settings.focusMin / 5) * 5)
   for (const e of openFlow(state)) {
     if (e.offCalendar) continue
-    // No estimate: placed at the default length, so the plan never waits for a number.
-    const estimate = e.estimateMin || settings.defaultMin
+    // No estimate: one pomodoro, so the plan never waits for a number.
+    const estimate = e.estimateMin || pomo
     if (!e.estimateMin) assumedIds.add(e.id)
     const spent = Math.floor(entrySpentMs(state, e.id, now) / 60_000)
     let pinned = 0
@@ -1623,8 +1627,9 @@ function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: num
     }
     // A real estimate is a budget desk time uses up; an assumed one is only a length, so an
     // entry without a number stays on the plan until it is cleared.
-    const needMin = e.estimateMin ? estimate - spent - pinned : estimate - pinned
-    if (needMin <= 0) continue
+    const raw = e.estimateMin ? estimate - spent - pinned : estimate - pinned
+    if (raw <= 0) continue
+    const needMin = Math.ceil(raw / pomo) * pomo
     tasks.push({
       id: e.id,
       needMin,
@@ -1633,8 +1638,9 @@ function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: num
       rush: !!e.rush,
       order: e.order,
       splittable: e.splittable !== false,
-      minChunkMin: e.minChunkMin ?? null,
-      maxChunkMin: e.maxChunkMin ?? null,
+      // One pomodoro a block; an entry that may not be split gets its pomodoros back to back.
+      minChunkMin: pomo,
+      maxChunkMin: e.splittable === false ? null : pomo,
       group: e.ledgerId,
     })
   }
@@ -1644,7 +1650,7 @@ function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: num
   const previous: Placement[] = cal.blocks
     .filter((b) => !modeChanged || (b.start < now && now < b.end))
     .map((b) => ({ taskId: b.entryId, start: b.start, end: b.end, late: b.late }))
-  const r = plan({ now, horizonEnd, windows: windowsIn, busy, tasks, previous, minChunkMin: settings.minChunkMin, gridMin: 5, breakMin: settings.breakMin, spill: settings.spill, mode: settings.mode })
+  const r = plan({ now, horizonEnd, windows: windowsIn, busy, tasks, previous, minChunkMin: pomo, gridMin: 5, breakMin: Math.max(0, state.settings.shortRestMin), spill: settings.spill, mode: settings.mode })
   // Chunks numbered per entry by start; ids stable per chunk number so a moved chunk keeps its feed UID.
   const byTask = new Map<Id, Placement[]>()
   for (const p of r.placements) byTask.set(p.taskId, [...(byTask.get(p.taskId) ?? []), p])

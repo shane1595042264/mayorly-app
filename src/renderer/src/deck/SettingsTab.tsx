@@ -618,11 +618,9 @@ function CalendarSection({ s }: { s: MayorlyState }) {
           <span className="field-help">{c.mode === 'rotate' ? 'One entry per ledger in turn, then the rest. Up next goes first. Rotation can delay a due; Get it done puts deadlines first.' : 'Earliest due first, up next ahead of all, the flow\'s order after.'}</span>
         </div>
       </div>
-      <div className="rules" style={{ marginTop: 14 }}>
-        <Num step={5} label="No estimate" help="minutes an entry is placed at until it has one" value={c.defaultMin} min={5} max={240} onChange={(defaultMin) => set({ defaultMin })} />
-        <Num step={5} label="Break" help="minutes after each block" value={c.breakMin} min={0} max={60} onChange={(breakMin) => set({ breakMin })} />
-        <Num step={5} label="Smallest chunk" help="minutes; a tomato is 25" value={c.minChunkMin} min={5} max={240} onChange={(minChunkMin) => set({ minChunkMin })} />
-      </div>
+      <p className="field-help" style={{ marginTop: 14 }}>
+        Every block on the calendar is one pomodoro: {s.settings.focusMin} minutes of focus, then a {s.settings.shortRestMin} minute rest. Estimates round up to whole pomodoros, and an entry without one gets one. Change the lengths under Pomodoro above.
+      </p>
       <div className="rules">
         <label className="check" title="On, work keeps being placed past its due and is marked late. Off, nothing is placed past a due and the rest is reported as no room.">
           <input type="checkbox" checked={c.spill} onChange={(e) => set({ spill: e.target.checked })} />
