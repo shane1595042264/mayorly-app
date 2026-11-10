@@ -4,7 +4,8 @@ The top section is what the app shows once per build, the first time that build 
 
 ## Thousands of alarm sounds
 
-- Settings, Alarms now has a search box. Type a word like bell or gong, play any result, and press Work or Break to make it that alarm. It downloads on the spot.
+- Settings, Alarms now has a search box. Suggestions show up as you type, from about 1,900 short sounds that come with the app. Play any result and press Work or Break to make it that alarm. It downloads on the spot.
+- A word with few matches searches the whole online library by itself after a short pause, or press Enter.
 - The sounds come from Freesound, under Creative Commons, and each alarm keeps its creator's name.
 
 ## This task's tomatoes beside the clock
