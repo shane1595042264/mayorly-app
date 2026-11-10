@@ -42,3 +42,5 @@ If this policy changes, the change is recorded in the Mayorly repository with th
 Open an issue in the Mayorly repository on GitHub.
 
 *Last updated 2026-10-27.*
+
+**Finding alarm sounds.** The sound search in Settings sends the words you type to Openverse (api.openverse.org), and the sound you play or choose is downloaded from Freesound (cdn.freesound.org). Nothing else about you goes with them, and nothing is sent until you press Search. A sound you choose is kept beside your other alarms on this computer.

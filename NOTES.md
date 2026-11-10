@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Thousands of alarm sounds
+
+- Settings, Alarms now has a search box. Type a word like bell or gong, play any result, and press Work or Break to make it that alarm. It downloads on the spot.
+- The sounds come from Freesound, under Creative Commons, and each alarm keeps its creator's name.
+
 ## This task's tomatoes beside the clock
 
 - While a block runs, the small number next to the clock is how many tomatoes you have grown on that task, all time, to the tenth: 0.1 shows as 0.1. On the couch it counts that item's time in blocks.

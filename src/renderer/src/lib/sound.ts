@@ -36,6 +36,28 @@ export async function decodeAlarm(dataUrl: string): Promise<AudioBuffer> {
   } catch { throw new Error('This file could not be played. Try an MP3 or WAV file.') }
 }
 
+/** Stop whatever alarm or preview is sounding. */
+export function stopAlarm() {
+  if (playing) { try { playing.stop() } catch { /* already ended */ } playing = null }
+}
+
+/** A sound not saved yet, heard the way an alarm plays it: from the start, for 15 seconds at most. */
+export async function playDataUrl(dataUrl: string, onEnd?: () => void): Promise<void> {
+  const a = ac(true)
+  if (!a) throw new Error('Audio is unavailable on this device.')
+  const buffer = await decodeAlarm(dataUrl)
+  stopAlarm()
+  const source = a.createBufferSource()
+  source.buffer = buffer
+  source.connect(a.destination)
+  source.start(0, 0, Math.min(buffer.duration, 15))
+  playing = source
+  source.onended = () => {
+    if (playing === source) playing = null
+    onEnd?.()
+  }
+}
+
 /** Preview is explicit and can be heard even when automatic sound cues are muted. */
 export async function playAlarm(choice: AlarmChoice, preview = false): Promise<void> {
   const a = ac(preview)

@@ -8,6 +8,7 @@ import { hotkeyLabel, IS_MAC } from '../lib/keys'
 import { GLOBAL_ACTIONS } from '../lib/keymap'
 import { dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
 import { decodeAlarm, playAlarm } from '../lib/sound'
+import { SoundSearch } from './SoundSearch'
 
 const EXAMPLE = IS_MAC ? 'Option+T' : 'Alt+T'
 /** Electron's accelerator grammar, every modifier spelling it accepts, one key. */
@@ -137,6 +138,7 @@ function AlarmSection({ s, kind }: { s: MayorlyState; kind: 'electron' | 'web' }
       </div>
       <p className="field-help">MP3, WAV, OGG, M4A, AAC or FLAC, up to 5 MB. Custom alarms play up to 15 seconds.</p>
       {error && <p className="field-error" role="alert">{error}</p>}
+      <SoundSearch canSave={kind === 'electron'} />
     </section>
   )
 }
