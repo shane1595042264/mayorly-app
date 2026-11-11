@@ -574,11 +574,21 @@ function boot() {
   applySettings(engine.state.settings)
   engine.on((state) => applySettings(state.settings))
 
-  const updates = installUpdates()
+  // Set once the last push is done, so the quit that follows does not wait for it again.
+  let flushed = false
+  const updates = installUpdates(dataDir)
   updates.beforeInstall = async () => {
     engine.stop()
     await sync.flush()
     flushed = true
+  }
+  // An update put off with Later on a Mac goes in now, before anything is on screen. Nothing has
+  // run yet, so there is nothing to save: stopping the engine here would stamp a heartbeat now
+  // and count the hours the app was closed as desk time.
+  if (updates.atLaunch) {
+    updates.beforeInstall = null
+    void updates.install()
+    return
   }
   // "There's a new update, want it?" Asked once per version, and never over a running focus
   // block: it waits for the block to stop. Later leaves it in the tray, and it installs on quit.
@@ -652,7 +662,6 @@ function boot() {
   })
   // macOS: opening the app again from Finder or Launchpad arrives here, not as a second instance.
   app.on('activate', () => command('deck'))
-  let flushed = false
   app.on('before-quit', (e) => {
     engine.stop()
     if (flushed || sync.current().phase === 'off') return

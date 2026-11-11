@@ -3,12 +3,13 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { log } from './log'
+import { installMacUpdates, signedWithDeveloperId } from './macupdate'
 
 // Updates for the direct-download build: every push to main publishes a GitHub release, checked
 // after launch and every half hour, downloaded quietly, installed when the user says so. The
 // shell does the asking. The Mac App Store build updates through the store, and a Mac build
-// without a Developer ID signature cannot be updated at all (Squirrel refuses it), so failures
-// here are logged, never shown.
+// without a Developer ID signature, which Squirrel refuses, updates through macupdate.ts.
+// Failures are logged, never shown.
 
 export interface Updates {
   /** The version downloaded and waiting, or null. */
@@ -17,12 +18,14 @@ export interface Updates {
   /** Set by the shell: what has to happen before the app goes down. */
   beforeInstall: (() => Promise<void>) | null
   install: () => Promise<void>
+  /** An update put off at the last launch, to install before this one gets going (Mac). */
+  atLaunch?: boolean
 }
 
 const CHECK_AFTER_MS = 30_000
 const CHECK_EVERY_MS = 30 * 60_000
 
-export function installUpdates(): Updates {
+export function installUpdates(dataDir: string): Updates {
   let ready: string | null = null
   const subs = new Set<(version: string) => void>()
   const updates: Updates = {
@@ -38,6 +41,9 @@ export function installUpdates(): Updates {
   // The portable Windows exe is packed from the same folder as the installer and so carries the
   // feed; left alone it would download the setup and run it on quit. Portable means portable.
   if (!app.isPackaged || process.mas || process.env.PORTABLE_EXECUTABLE_DIR) return updates
+  // A Mac build without a Developer ID (every build until the certificate exists, and every
+  // ship:mac) updates itself from the same releases: see macupdate.ts.
+  if (process.platform === 'darwin' && !signedWithDeveloperId()) return installMacUpdates(dataDir)
   // A build installed by ship:mac carries no app-update.yml: there is no feed to ask.
   if (!existsSync(join(process.resourcesPath, 'app-update.yml'))) return updates
   autoUpdater.autoDownload = true

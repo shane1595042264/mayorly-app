@@ -68,13 +68,15 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx electron-builder --mac --publish never -c.mac.hardenedRuntime=true -c.mac.notarize=true -c.buildVersion=${{ github.run_number }} -c.extraMetadata.version=${{ env.MAYORLY_VERSION }}
-      # Ad-hoc builds can be downloaded but never updated (Squirrel refuses them), so the update
-      # feed is left out: an installed Mac app is not sent after a download it cannot use.
+      # Squirrel refuses an ad-hoc build, so its feed is renamed out of electron-updater's way:
+      # the app's own updater (src/main/macupdate.ts) reads mayorly-mac.yml, stamped with the
+      # commit so a Mac already on that commit is not offered it again.
       - name: Package (macOS, ad-hoc)
         if: runner.os == 'macOS' && env.MAC_SIGNED != 'true'
         run: |
           npx electron-builder --mac --publish never -c.mac.identity=- -c.buildVersion=${{ github.run_number }} -c.extraMetadata.version=${{ env.MAYORLY_VERSION }}
-          rm -f dist/latest-mac.yml
+          mv dist/latest-mac.yml dist/mayorly-mac.yml
+          echo "commit: ${GITHUB_SHA::7}" >> dist/mayorly-mac.yml
       - uses: actions/upload-artifact@v4
         with:
           name: mayorly-${{ matrix.os }}
@@ -84,6 +86,7 @@ jobs:
             dist/*.zip
             dist/*.blockmap
             dist/latest*.yml
+            dist/mayorly-mac.yml
   publish:
     needs: dist
     runs-on: ubuntu-latest

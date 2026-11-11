@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The Mac updates itself
+
+- Every push to GitHub now reaches this Mac on its own, as on Windows. Mayorly checks every half hour, downloads the new version quietly, and asks Update now or Later, never during a running focus block.
+- Later keeps it in the menu bar, and it goes in the next time Mayorly starts.
+
 ## A calendar you can read
 
 - The week view is taller, so a half-hour block holds its name on one line. Blocks no longer overlap, and a very short one is a thin bar with its name when you point at it.
