@@ -5,6 +5,7 @@ import { StatusBar, Style } from '@capacitor/status-bar'
 import { PhoneEngine } from './engine'
 import { startAccount } from './account'
 import { scheduleAlarms } from './notify'
+import { Capacitor } from '@capacitor/core'
 import { native } from './platform'
 import { setEngine } from './store'
 import { applyStagedAtLaunch, checkForUpdate, markBooted } from './updater'
@@ -14,6 +15,8 @@ import './phone.css'
 async function boot() {
   // A bundle downloaded last session goes in first; the page reloads into it.
   if (applyStagedAtLaunch()) return
+  // One line in the device log saying what this bundle can reach natively, for diagnosing an install.
+  if (native) console.log('[phone] native plugins', JSON.stringify(((window as { Capacitor?: { PluginHeaders?: { name: string }[] } }).Capacitor?.PluginHeaders ?? []).map((h) => h.name)), 'AuthSession', Capacitor.isPluginAvailable('AuthSession'))
   const engine = await PhoneEngine.boot()
   setEngine(engine)
   if (native) void StatusBar.setStyle({ style: Style.Dark }).catch(() => {})

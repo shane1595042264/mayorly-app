@@ -38,6 +38,9 @@ interface Staged {
   commit: string
   version: string
   path: string
+  /** The native shell it was built for, and when: checked again at launch against this install. */
+  shell?: string
+  builtAt?: number
 }
 
 interface Ota {
@@ -91,6 +94,13 @@ export function applyStagedAtLaunch(): boolean {
   if (!native) return false
   const o = load()
   if (!o.staged || o.trial) return false
+  // Downloaded under an earlier install, or older than the bundle this install came with: it
+  // would roll the app back, so it goes.
+  if (o.staged.shell !== SHELL || (o.staged.builtAt ?? 0) <= BUILD.builtAt) {
+    delete o.staged
+    save(o)
+    return false
+  }
   void apply(o)
   return true
 }
@@ -180,7 +190,7 @@ export async function checkForUpdate(): Promise<void> {
       await Filesystem.writeFile({ path: `${root}/${name}`, data: bytesToB64(data), directory: Directory.Library, recursive: true })
     }
     const uri = (await Filesystem.getUri({ path: root, directory: Directory.Library })).uri
-    o.staged = { commit: m.commit, version: m.version, path: decodeURIComponent(uri.replace(/^file:\/\//, '')) }
+    o.staged = { commit: m.commit, version: m.version, path: decodeURIComponent(uri.replace(/^file:\/\//, '')), shell: m.shell, builtAt: m.builtAt }
     save(o)
     set({ phase: 'ready', version: m.version, at: Date.now() })
   } catch (err) {

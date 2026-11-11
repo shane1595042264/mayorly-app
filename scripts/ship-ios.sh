@@ -26,12 +26,14 @@ DERIVED=mobile/ios/DerivedData
 BUILD_NO=$(date +%s)
 
 if [ -n "${IOS_SIM:-}" ]; then
+  SIM=$(xcrun simctl list devices booted | awk -F'[()]' '/Booted/ {print $2; exit}')
+  [ -n "$SIM" ] || { echo "ship-ios: boot a simulator first (open -a Simulator)" >&2; exit 1; }
   xcodebuild -quiet -packageAuthorizationProvider netrc -project "$PROJECT" -scheme App -configuration Debug -sdk iphonesimulator \
-    -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -derivedDataPath "$DERIVED" \
+    -destination "platform=iOS Simulator,id=$SIM" -derivedDataPath "$DERIVED" \
     CURRENT_PROJECT_VERSION="$BUILD_NO" build
   APP="$DERIVED/Build/Products/Debug-iphonesimulator/App.app"
-  xcrun simctl install booted "$APP"
-  xcrun simctl launch booted app.mayorly >/dev/null
+  xcrun simctl install "$SIM" "$APP"
+  xcrun simctl launch "$SIM" app.mayorly >/dev/null
   echo "ship-ios: installed and launched in the booted simulator"
   exit 0
 fi
