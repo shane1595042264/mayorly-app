@@ -4,6 +4,7 @@ import { Haptics, ImpactStyle } from '@capacitor/haptics'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import { PhoneEngine } from './engine'
 import { startAccount } from './account'
+import { startClerk } from './ai'
 import { scheduleAlarms } from './notify'
 import { Capacitor } from '@capacitor/core'
 import { native } from './platform'
@@ -35,6 +36,7 @@ async function boot() {
     </StrictMode>,
   )
   await startAccount(engine)
+  await startClerk(engine)
   markBooted()
   void checkForUpdate()
 }

@@ -22,7 +22,8 @@ public class AuthSessionPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthentication
             call.reject("url and callbackScheme are required")
             return
         }
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             let session = ASWebAuthenticationSession(url: url, callbackURLScheme: scheme) { [weak self] callback, error in
                 self?.session = nil
                 if let callback = callback {
@@ -53,5 +54,6 @@ public class AuthSessionPlugin: CAPPlugin, CAPBridgedPlugin, ASWebAuthentication
 class MainViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(AuthSessionPlugin())
+        bridge?.registerPluginInstance(DictationPlugin())
     }
 }

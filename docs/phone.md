@@ -37,6 +37,15 @@ the consent screen is in testing, only its test users can sign in. The fallback 
 computer (Settings, Account, Link a phone): eight characters, ten minutes, once, only its hash on the
 server, traded at `/auth/link/claim`. Either way the phone gets its own 30-day session.
 
+**The clerk and the inbox.** The clerk is `src/shared/ai`, the same code the computers run, with
+keys in `ai.json` in the app's Library folder. The keys come from the computers through the key vault:
+type the sync passphrase once in Settings, AI clerk (scrypt makes the same keys from it as on the
+computers; `vault.fixture.json` holds the code to the bytes the first version made). A key pasted on
+the phone goes to the computers the same way. Capture is the white button in the middle of the tab
+bar: type a line or tap the microphone and say it (`Dictation.swift`, `SFSpeechRecognizer`, on-device
+when the phone supports it); Add files it through `src/shared/capture.ts`, Add and start puts it on the
+desk and lets the clerk move it after.
+
 **Native code of the app's own** is listed in `NATIVE_FILES` in `vite.phone.config.ts`, so a change
 there changes the shell id and an older install waits for `ship:ios` instead of taking a bundle that
 calls a plugin it does not have.

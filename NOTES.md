@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The clerk on your iPhone
+
+- The white button in the middle of the phone's tab bar opens Capture: type a task, or tap the microphone and say it. The clerk files it into a ledger, or onto the couch.
+- Settings, AI clerk on the phone: type your sync passphrase once and your AI keys come over from your computers. A key pasted on the phone reaches your computers too.
+
 ## Mayorly on your iPhone
 
 - Settings, Account has a Link a phone button: it shows a one-time code to type into Mayorly on your phone, which then syncs with this account like another computer.

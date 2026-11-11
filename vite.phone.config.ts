@@ -9,7 +9,7 @@ import { buildInfo } from './build-info'
 // (and later Android). `npm run phone` serves it at localhost:5200 for a browser (?demo for
 // sample data); `npm run ship:ios` builds it into the app on the phone.
 /** The app's own native code: plugins that live in the iOS project rather than in a package. */
-const NATIVE_FILES = ['mobile/ios/App/App/AuthSession.swift', 'mobile/ios/App/App/SceneDelegate.swift']
+const NATIVE_FILES = ['mobile/ios/App/App/AuthSession.swift', 'mobile/ios/App/App/Dictation.swift', 'mobile/ios/App/App/SceneDelegate.swift', 'mobile/ios/App/App/Info.plist']
 
 /**
  * Which native shell this web layer needs: the Capacitor packages and their versions, and the

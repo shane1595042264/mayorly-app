@@ -6,6 +6,7 @@ import {
 } from '@core/index'
 import { Glyph } from '../../renderer/src/lib/glyphs'
 import { act, useMayorly, useNow } from '../store'
+import { captureLine } from '../ai'
 import { LedgerDot, Sheet } from './parts'
 
 // Picking what the desk is on: every ledger's open entries, the tray, the couch, the saved
@@ -45,7 +46,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const add = () => {
     const text = q.trim()
     if (!text) return
-    act({ type: 'entry/capture', text, start: true })
+    void captureLine(text, true)
     onClose()
   }
   const saveSuperset = () => {

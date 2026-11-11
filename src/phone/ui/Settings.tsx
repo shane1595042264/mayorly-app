@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ArrowsClockwise, GoogleLogo, SignOut } from '@phosphor-icons/react'
+import { ArrowsClockwise, GoogleLogo, SignOut, X } from '@phosphor-icons/react'
+import { addKey, removeKey, setupKeys, unlockKeys, useClerk } from '../ai'
 import { type Settings as S } from '@core/index'
 import { BUILD } from '../../shared/build'
 import { accountsAvailable, linkWithCode, signInWithGoogle, signOut, useAccount } from '../account'
@@ -20,6 +21,7 @@ export function Settings() {
     <>
       <h1 className="title">Settings</h1>
       <Account />
+      <Clerk />
       <h2 className="section-title">Timer</h2>
       <div className="list">
         <SettingRow title="Focus"><Stepper label="focus minutes" value={s.settings.focusMin} min={5} max={120} step={5} unit="min" onChange={(n) => set({ focusMin: n })} /></SettingRow>
@@ -110,6 +112,76 @@ function Account() {
           {error && <p className="error">{error}</p>}
         </>
       )}
+    </>
+  )
+}
+
+// The clerk's keys. With an account, the keys on the computers come over once the sync passphrase
+// set there is typed here; a key pasted here goes to them the same way.
+function Clerk() {
+  const { ai } = useClerk()
+  const { account } = useAccount()
+  const [pass, setPass] = useState('')
+  const [key, setKey] = useState('')
+  const [busy, setBusy] = useState<'pass' | 'key' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  if (!ai) return null
+  const run = async (what: 'pass' | 'key', fn: () => Promise<void>) => {
+    setBusy(what)
+    setError(null)
+    try {
+      await fn()
+      if (what === 'pass') setPass('')
+      else setKey('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+  const phase = ai.sync.phase
+  return (
+    <>
+      <h2 className="section-title">AI clerk</h2>
+      {account && (phase === 'locked' || phase === 'none') && (
+        <>
+          <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>
+            {phase === 'locked'
+              ? 'Your computers keep their AI keys behind a sync passphrase. Type it once here and the keys come to this phone.'
+              : 'No computer has set a sync passphrase yet. Choose one here, at least ten characters, and type the same on your computers to share keys.'}
+          </p>
+          <input className="field" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Sync passphrase" aria-label="Sync passphrase" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="go" onKeyDown={(e) => e.key === 'Enter' && pass && void run('pass', () => (phase === 'locked' ? unlockKeys(pass) : setupKeys(pass)))} />
+          <div className="btn-row">
+            <button type="button" className="btn white" disabled={!pass || busy !== null} onClick={() => void run('pass', () => (phase === 'locked' ? unlockKeys(pass) : setupKeys(pass)))}>
+              {busy === 'pass' ? 'Opening the keys' : phase === 'locked' ? 'Bring my keys' : 'Set the passphrase'}
+            </button>
+          </div>
+          {busy === 'pass' && <p className="help">This takes a few seconds on purpose: it is what keeps the passphrase hard to guess.</p>}
+        </>
+      )}
+      {!account && <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Sign in above to bring the AI keys from your computers, or paste one here.</p>}
+      {account && phase === 'on' && <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Keys sync with your computers.</p>}
+      {ai.keys.length > 0 && (
+        <div className="list" style={{ marginBottom: 10 }}>
+          {ai.keys.map((k) => (
+            <div key={k.id} className="row">
+              <span className="row-main">
+                <span className="row-title">{ai.providers[k.provider]}, ending {k.keyHint}</span>
+                <span className="row-sub" style={k.status === 'failing' ? { color: 'var(--danger)' } : undefined}>
+                  {k.status === 'ok' ? `Files with ${k.preferredModel ?? k.defaultModel}` : k.status === 'checking' ? 'Checking on this phone' : k.lastError ?? 'Not working'}
+                </span>
+              </span>
+              <button type="button" className="btn" style={{ height: 36, width: 36, padding: 0, justifyContent: 'center' }} aria-label={`Remove the ${ai.providers[k.provider]} key ending ${k.keyHint}`} onClick={() => removeKey(k.id)}><X size={16} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      <input className="field" value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder="Paste an API key" aria-label="API key" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="done" onKeyDown={(e) => e.key === 'Enter' && key && void run('key', () => addKey(key))} />
+      <div className="btn-row">
+        <button type="button" className="btn" disabled={!key || busy !== null} onClick={() => void run('key', () => addKey(key))}>{busy === 'key' ? 'Checking the key' : 'Add key'}</button>
+      </div>
+      <p className="help">Gemini, OpenAI, Anthropic or xAI. The clerk uses the cheapest model that answers. Keys stay on your devices and go only to their provider.</p>
+      {error && <p className="error">{error}</p>}
     </>
   )
 }

@@ -32,6 +32,15 @@ const set = (patch: Partial<View>) => {
 let client: SyncClient | null = null
 let session: Session | null = null
 
+/** Who else needs the session: the key vault rides the same sign-in. renewed: same account, new token. */
+type TokenListener = (token: string | null, renewed: boolean) => void
+const tokenListeners = new Set<TokenListener>()
+export function onSessionToken(fn: TokenListener) {
+  tokenListeners.add(fn)
+  fn(session?.token ?? null, false)
+}
+const tellToken = (token: string | null, renewed = false) => tokenListeners.forEach((f) => f(token, renewed))
+
 export const accountsAvailable = !!API_URL
 
 export async function startAccount(engine: PhoneEngine): Promise<void> {
@@ -49,6 +58,7 @@ export async function startAccount(engine: PhoneEngine): Promise<void> {
     if (!session) return
     session = { ...session, token }
     void writeJson(SESSION, session)
+    tellToken(token, true)
   }
   engine.onForeground = (front) => {
     if (front) client?.poke()
@@ -74,6 +84,7 @@ async function signInWith(path: string, body: unknown): Promise<void> {
   await writeJson(SESSION, session)
   set({ account: session.user })
   client.setSession(session.token)
+  tellToken(session.token)
 }
 
 /** Google, in iOS's sign-in sheet. */
@@ -91,6 +102,7 @@ export async function signOut(): Promise<void> {
   await removeFile(SESSION)
   client?.setSession(null)
   set({ account: null })
+  tellToken(null)
 }
 
 export function useAccount(): View {
