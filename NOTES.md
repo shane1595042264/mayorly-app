@@ -2,10 +2,15 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## No passphrase, and a search in Settings
+
+- AI keys now sync with your account on their own. Sign in on a computer or your phone and your keys are there; there is no sync passphrase to choose or type. The sync server holds the key that opens them.
+- Settings has a search box at the top (press / on a computer). Type any word, such as passphrase, sound or Google, and choose a result: Settings scrolls to it and rings it.
+
 ## The clerk on your iPhone
 
 - The white button in the middle of the phone's tab bar opens Capture: type a task, or tap the microphone and say it. The clerk files it into a ledger, or onto the couch.
-- Settings, AI clerk on the phone: type your sync passphrase once and your AI keys come over from your computers. A key pasted on the phone reaches your computers too.
+- Your AI keys come over from your computers on their own once the phone is signed in. A key pasted on the phone reaches your computers too.
 
 ## Mayorly on your iPhone
 

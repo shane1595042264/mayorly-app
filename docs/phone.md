@@ -38,10 +38,9 @@ computer (Settings, Account, Link a phone): eight characters, ten minutes, once,
 server, traded at `/auth/link/claim`. Either way the phone gets its own 30-day session.
 
 **The clerk and the inbox.** The clerk is `src/shared/ai`, the same code the computers run, with
-keys in `ai.json` in the app's Library folder. The keys come from the computers through the key vault:
-type the sync passphrase once in Settings, AI clerk (scrypt makes the same keys from it as on the
-computers; `vault.fixture.json` holds the code to the bytes the first version made). A key pasted on
-the phone goes to the computers the same way. Capture is the white button in the middle of the tab
+keys in `ai.json` in the app's Library folder. The keys come from the computers through the key vault
+on their own after sign-in: the server holds the vault's key (`/vault/escrow`), so there is no
+passphrase to type. A key pasted on the phone goes to the computers the same way. Capture is the white button in the middle of the tab
 bar: type a line or tap the microphone and say it (`Dictation.swift`, `SFSpeechRecognizer`, on-device
 when the phone supports it); Add files it through `src/shared/capture.ts`, Add and start puts it on the
 desk and lets the clerk move it after.

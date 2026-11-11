@@ -309,3 +309,38 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 16px; resize: non
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 }
+
+/* ---- Settings search: find a setting by any word on it, jump there, ring it. ---- */
+.settings-search { position: sticky; top: calc(var(--safe-t) * -1 - 4px); z-index: 5; display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px; margin: 0 0 6px; border-radius: var(--r-row); background: var(--surface); box-shadow: 0 -12px 0 var(--ground); }
+.settings-search:focus-within { background: var(--raised); }
+.settings-search-icon { color: var(--meta); flex: none; }
+.settings-search input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--text); font: 17px var(--ui); -webkit-appearance: none; }
+.settings-search input::placeholder { color: var(--meta); }
+.settings-search input::-webkit-search-cancel-button { display: none; }
+.settings-search-clear { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--press); color: var(--text); }
+.settings-search-results { position: absolute; left: 0; right: 0; top: calc(100% + 6px); margin: 0; padding: 4px; list-style: none; border-radius: var(--r-row); background: var(--raised); box-shadow: 0 16px 40px rgb(0 0 0 / 0.55); max-height: 50dvh; overflow-y: auto; }
+.settings-search-results button { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; width: 100%; min-height: 48px; padding: 10px 12px; border-radius: 10px; font-size: 16px; text-align: left; }
+.settings-search-results li[aria-selected='true'] button { background: var(--press); }
+.settings-search-label b { color: var(--accent); font-weight: 600; }
+.settings-search-section { font-size: 13px; color: var(--meta); white-space: nowrap; }
+.settings-search-none { padding: 14px 12px; color: var(--muted); font-size: 15px; }
+
+/* The ring drawn around a setting the search jumped to: it closes in, pulses once, and goes. */
+.setting-flash { position: relative; }
+.setting-flash::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 18px;
+  border: 2px solid var(--accent);
+  background: rgb(240 174 60 / 0.1);
+  pointer-events: none;
+  animation: setting-flash 1.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes setting-flash {
+  0% { opacity: 0; transform: scale(1.06); }
+  16% { opacity: 1; transform: scale(1); }
+  38% { opacity: 0.45; }
+  58% { opacity: 1; }
+  100% { opacity: 0; transform: scale(1); }
+}

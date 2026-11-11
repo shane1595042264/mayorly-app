@@ -64,6 +64,14 @@ export async function migrate() {
     -- One row per distinct key. The id is an HMAC of the key under the passphrase's key, so the
     -- same key from two computers lands on one row and the server cannot tell what it is. A row
     -- is live while added_at is later than deleted_at; both only ever move forward.
+    -- The vault's own keys, so a device that signs in gets them without a passphrase. Sealed with a
+    -- key the server makes from its own secret: the database alone does not open them, the running
+    -- server does. Made by the first device that has the keys; gone with the vault.
+    CREATE TABLE IF NOT EXISTS vault_escrow (
+      user_id uuid PRIMARY KEY REFERENCES key_vaults(user_id) ON DELETE CASCADE,
+      blob text NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    );
     CREATE TABLE IF NOT EXISTS vault_items (
       user_id uuid NOT NULL REFERENCES key_vaults(user_id) ON DELETE CASCADE,
       id text NOT NULL,

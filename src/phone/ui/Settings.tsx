@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { SettingsSearch } from '../../renderer/src/lib/settingsSearch'
 import { ArrowsClockwise, GoogleLogo, SignOut, X } from '@phosphor-icons/react'
-import { addKey, removeKey, setupKeys, unlockKeys, useClerk } from '../ai'
+import { addKey, removeKey, unlockKeys, useClerk } from '../ai'
 import { type Settings as S } from '@core/index'
 import { BUILD } from '../../shared/build'
 import { accountsAvailable, linkWithCode, signInWithGoogle, signOut, useAccount } from '../account'
@@ -17,12 +18,15 @@ const when = (t: number) => new Intl.DateTimeFormat(undefined, { month: 'short',
 export function Settings() {
   const s = useMayorly()
   const set = (patch: Partial<S>) => act({ type: 'settings/update', patch })
+  const page = useRef<HTMLDivElement>(null)
   return (
-    <>
+    <div ref={page}>
       <h1 className="title">Settings</h1>
+      <SettingsSearch root={page} />
       <Account />
       <Clerk />
-      <h2 className="section-title">Timer</h2>
+      <section>
+      <h2 className="section-title" data-setting="Timer, focus, rest, pomodoro, cadence, auto start">Timer</h2>
       <div className="list">
         <SettingRow title="Focus"><Stepper label="focus minutes" value={s.settings.focusMin} min={5} max={120} step={5} unit="min" onChange={(n) => set({ focusMin: n })} /></SettingRow>
         <SettingRow title="Short rest"><Stepper label="short rest minutes" value={s.settings.shortRestMin} min={1} max={30} unit="min" onChange={(n) => set({ shortRestMin: n })} /></SettingRow>
@@ -32,8 +36,9 @@ export function Settings() {
         <SettingRow title="Start rests on its own" sub="After a focus block ends"><Toggle label="Start rests on its own" on={s.settings.autoStartRest} onChange={(on) => set({ autoStartRest: on })} /></SettingRow>
       </div>
       <p className="help">These are the same settings as on your computers. The phone rings at the end of each block, also when locked.</p>
+      </section>
       <About />
-    </>
+    </div>
   )
 }
 
@@ -78,8 +83,8 @@ function Account() {
     line = m < 1 ? 'Synced just now' : `Synced ${m} min ago`
   }
   return (
-    <>
-      <h2 className="section-title">Account</h2>
+    <section>
+      <h2 className="section-title" data-setting="Account, Google, sign in, sign out, sync, code">Account</h2>
       {account ? (
         <div className="list">
           <div className="row">
@@ -112,18 +117,19 @@ function Account() {
           {error && <p className="error">{error}</p>}
         </>
       )}
-    </>
+    </section>
   )
 }
 
-// The clerk's keys. With an account, the keys on the computers come over once the sync passphrase
-// set there is typed here; a key pasted here goes to them the same way.
+// The clerk's keys. With an account they come over from the computers on their own (the server
+// keeps the vault's key); a key pasted here goes to them the same way.
 function Clerk() {
   const { ai } = useClerk()
   const { account } = useAccount()
   const [pass, setPass] = useState('')
   const [key, setKey] = useState('')
   const [busy, setBusy] = useState<'pass' | 'key' | null>(null)
+  const [withPass, setWithPass] = useState(false)
   const [error, setError] = useState<string | null>(null)
   if (!ai) return null
   const run = async (what: 'pass' | 'key', fn: () => Promise<void>) => {
@@ -141,26 +147,26 @@ function Clerk() {
   }
   const phase = ai.sync.phase
   return (
-    <>
-      <h2 className="section-title">AI clerk</h2>
-      {account && (phase === 'locked' || phase === 'none') && (
+    <section>
+      <h2 className="section-title" data-setting="AI clerk, API key, keys, passphrase, Gemini, OpenAI, Anthropic, Claude, xAI">AI clerk</h2>
+      {!account && <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Sign in above and the AI keys from your computers come here on their own, or paste one here.</p>}
+      {account && phase === 'on' && <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Keys sync with your computers through your account.</p>}
+      {account && (phase === 'checking' || phase === 'none') && <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Checking for your keys</p>}
+      {account && phase === 'locked' && (
         <>
-          <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>
-            {phase === 'locked'
-              ? 'Your computers keep their AI keys behind a sync passphrase. Type it once here and the keys come to this phone.'
-              : 'No computer has set a sync passphrase yet. Choose one here, at least ten characters, and type the same on your computers to share keys.'}
-          </p>
-          <input className="field" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Sync passphrase" aria-label="Sync passphrase" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="go" onKeyDown={(e) => e.key === 'Enter' && pass && void run('pass', () => (phase === 'locked' ? unlockKeys(pass) : setupKeys(pass)))} />
-          <div className="btn-row">
-            <button type="button" className="btn white" disabled={!pass || busy !== null} onClick={() => void run('pass', () => (phase === 'locked' ? unlockKeys(pass) : setupKeys(pass)))}>
-              {busy === 'pass' ? 'Opening the keys' : phase === 'locked' ? 'Bring my keys' : 'Set the passphrase'}
-            </button>
-          </div>
-          {busy === 'pass' && <p className="help">This takes a few seconds on purpose: it is what keeps the passphrase hard to guess.</p>}
+          <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Your keys come here as soon as a computer that has them opens Mayorly. Nothing to type.</p>
+          {!withPass ? (
+            <button type="button" className="help" style={{ padding: '0 4px 12px' }} onClick={() => setWithPass(true)}>Use my old sync passphrase instead</button>
+          ) : (
+            <>
+              <input className="field" type="password" value={pass} onChange={(e) => setPass(e.target.value)} placeholder="Old sync passphrase" aria-label="Old sync passphrase" autoCapitalize="none" autoCorrect="off" spellCheck={false} enterKeyHint="go" onKeyDown={(e) => e.key === 'Enter' && pass && void run('pass', () => unlockKeys(pass))} />
+              <div className="btn-row" style={{ marginBottom: 12 }}>
+                <button type="button" className="btn white" disabled={!pass || busy !== null} onClick={() => void run('pass', () => unlockKeys(pass))}>{busy === 'pass' ? 'Opening the keys' : 'Unlock'}</button>
+              </div>
+            </>
+          )}
         </>
       )}
-      {!account && <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Sign in above to bring the AI keys from your computers, or paste one here.</p>}
-      {account && phase === 'on' && <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Keys sync with your computers.</p>}
       {ai.keys.length > 0 && (
         <div className="list" style={{ marginBottom: 10 }}>
           {ai.keys.map((k) => (
@@ -182,7 +188,7 @@ function Clerk() {
       </div>
       <p className="help">Gemini, OpenAI, Anthropic or xAI. The clerk uses the cheapest model that answers. Keys stay on your devices and go only to their provider.</p>
       {error && <p className="error">{error}</p>}
-    </>
+    </section>
   )
 }
 
@@ -196,8 +202,8 @@ function About() {
   else if (u.phase === 'install') line = `${u.version} needs a new install from the computer`
   else if (u.phase === 'error') line = `Update failed: ${u.message}`
   return (
-    <>
-      <h2 className="section-title">This app</h2>
+    <section>
+      <h2 className="section-title" data-setting="This app, build, version, update">This app</h2>
       <div className="list">
         <div className="row">
           <span className="row-main">
@@ -211,6 +217,6 @@ function About() {
           ))}
         </div>
       </div>
-    </>
+    </section>
   )
 }

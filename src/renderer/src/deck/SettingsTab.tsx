@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowsClockwise, GoogleLogo, Keyboard, Play, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
 import { ALARM_TONES, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type MayorlyState, type PlanMode, type Settings } from '@core/index'
 import type { AiKeySync, AiProvider, AppInfo } from '../../../shared/bridge'
@@ -9,6 +9,7 @@ import { GLOBAL_ACTIONS } from '../lib/keymap'
 import { dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
 import { decodeAlarm, playAlarm } from '../lib/sound'
 import { SoundSearch } from './SoundSearch'
+import { SettingsSearch } from '../lib/settingsSearch'
 
 const EXAMPLE = IS_MAC ? 'Option+T' : 'Alt+T'
 /** Electron's accelerator grammar, every modifier spelling it accepts, one key. */
@@ -20,9 +21,11 @@ const normalise = (v: string) => v.trim().replace(/\bOption\b/gi, 'Alt')
 export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyState; kind: 'electron' | 'web'; openKeymap: () => void; openNotes: () => void }) {
   const st = s.settings
   const set = (patch: Partial<Settings>) => dispatch({ type: 'settings/update', patch })
+  const page = useRef<HTMLDivElement>(null)
 
   return (
-    <div className="settings">
+    <div className="settings" ref={page}>
+      <SettingsSearch root={page} placeholder="Search settings, or press /" />
       <section>
         <h3 className="side-title caps">Desk</h3>
         <div className="rules">
@@ -114,7 +117,7 @@ function AlarmSection({ s, kind }: { s: MayorlyState; kind: 'electron' | 'web' }
   }
   return (
     <section>
-      <h3 className="side-title caps">Alarms</h3>
+      <h3 className="side-title caps" data-setting="Alarms, sound, tone, bell, chime, audio, upload">Alarms</h3>
       <p className="field-help">Work and break sounds on this machine. Sound cues must be on for alarms; Preview always plays.</p>
       <div className="rules">
         {(['work', 'rest'] as const).map(alarm => {
@@ -198,7 +201,7 @@ function AccountSection() {
 
   return (
     <section>
-      <h3 className="side-title caps">Account</h3>
+      <h3 className="side-title caps" data-setting="Account, Google, sign in, sign out, sync, link a phone, code, delete account">Account</h3>
       {!available ? (
         <p className="field-help">This build has no sync server configured.</p>
       ) : account ? (
@@ -216,7 +219,7 @@ function AccountSection() {
             </button>
           </div>
           {error && <span className="field-error">{error}</span>}
-          <div className="link-phone">
+          <div className="link-phone" data-setting="Link a phone, iPhone, code">
             <button className="btn ghost" onClick={() => void linkPhone()}>{link && linkLeft > 0 ? 'New code' : 'Link a phone'}</button>
             {link && linkLeft > 0 ? (
               <span className="link-code-line">
@@ -309,7 +312,7 @@ function AiSection() {
 
   return (
     <section>
-      <h3 className="side-title caps">AI clerk</h3>
+      <h3 className="side-title caps" data-setting="AI clerk, API key, keys, passphrase, key sync, Gemini, OpenAI, Anthropic, Claude, xAI, Grok, model, filing">AI clerk</h3>
       <p className="field-help">
         Bring your own key. Paste it and the provider is read from the key itself; the cheapest text model that answers is chosen.
         The clerk then files whatever you capture: it picks the ledger from your criteria, trims the title and reads the estimate.
@@ -385,105 +388,60 @@ function plainError(e: unknown): string {
 }
 
 /**
- * The keys on the account's other computers. The passphrase is typed here and turned into a
- * key in the main process; it is never stored or sent, and neither is any API key in the clear.
+ * The keys on the account's other devices. They sync with the sign-in: the vault's key is kept by
+ * the server, so no device asks for a passphrase (shared/ai/keysync.ts). A passphrase is asked for
+ * only for an old vault no device has handed over yet, and the field for it stays out of the way.
  */
 function KeySyncBlock({ sync }: { sync: AiKeySync }) {
   const now = useNow(30_000)
   const [available, setAvailable] = useState(false)
   const [pass, setPass] = useState('')
-  const [again, setAgain] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [confirmReset, setConfirmReset] = useState(false)
-  // Opening Settings asks main for the AI state, which also looks for keys from another computer.
+  const [withPass, setWithPass] = useState(false)
+  // Opening Settings asks main for the AI state, which also looks for keys from another device.
   useEffect(() => {
     void bridge.accountsAvailable().then(setAvailable)
     void bridge.ai.get()
   }, [])
-  useEffect(() => {
-    setError(null)
-    setConfirmReset(false)
-  }, [sync.phase])
+  useEffect(() => setError(null), [sync.phase])
 
-  const run = async (fn: () => Promise<unknown>) => {
+  const unlock = async () => {
     setBusy(true)
     setError(null)
     try {
-      await fn()
+      await bridge.ai.syncUnlock(pass)
       setPass('')
-      setAgain('')
     } catch (e) {
       setError(plainError(e))
     } finally {
       setBusy(false)
     }
   }
-  const setup = () => {
-    if (pass !== again) return setError('The two passphrases are not the same.')
-    void run(() => bridge.ai.syncSetup(pass))
-  }
-  const unlock = () => void run(() => bridge.ai.syncUnlock(pass))
-  const reset = () => void run(() => bridge.ai.syncReset())
 
   if (!available) return null
-  const field = (value: string, set: (v: string) => void, placeholder: string, onEnter: () => void) => (
-    <input
-      type="password"
-      placeholder={placeholder}
-      value={value}
-      autoComplete="new-password"
-      spellCheck={false}
-      onChange={(e) => set(e.target.value)}
-      onKeyDown={(e) => e.key === 'Enter' && onEnter()}
-      disabled={busy}
-    />
-  )
-  const resetRow = confirmReset ? (
-    <div className="form-actions">
-      <span className="field-help">This removes the synced copy from the server. Each computer keeps the keys it has, and you choose a new passphrase.</span>
-      <button className="btn warn" onClick={reset} disabled={busy}>Reset</button>
-      <button className="btn ghost" onClick={() => setConfirmReset(false)} disabled={busy}>Cancel</button>
-    </div>
-  ) : null
   const ago = sync.at ? Math.round((now - sync.at) / 60_000) : null
-
   return (
-    <div className="key-sync">
-      <span className="field-label caps">Sync between computers</span>
-      {sync.phase === 'off' && <p className="field-help">Sign in under Account to share these keys with your other computers.</p>}
-      {sync.phase === 'checking' && <p className="field-help">Checking key sync</p>}
-      {sync.phase === 'none' && (
-        <>
-          <p className="field-help">
-            Share these keys with your other computers. They are encrypted here with a passphrase before they leave, so the sync server cannot read them.
-            You type the passphrase once on each computer. Use at least 10 characters; a few words are easiest. If you forget it, you can reset and paste your keys again.
-          </p>
-          <div className="ai-add">
-            {field(pass, setPass, 'Sync passphrase', setup)}
-            {field(again, setAgain, 'Same again', setup)}
-            <button className="btn primary" onClick={setup} disabled={busy || !pass || !again}>{busy ? 'Encrypting' : 'Turn on'}</button>
-          </div>
-        </>
+    <div className="key-sync" data-setting="Key sync, AI keys between devices, passphrase">
+      <span className="field-label caps">Sync between devices</span>
+      {sync.phase === 'off' && <p className="field-help">Sign in under Account and these keys reach your other computers and your phone.</p>}
+      {(sync.phase === 'checking' || sync.phase === 'none') && <p className="field-help">Checking key sync</p>}
+      {sync.phase === 'on' && (
+        <p className="field-help">
+          Keys sync with your other computers and your phone through your account.{ago === null ? '' : ago < 1 ? ' Synced just now.' : ` Synced ${ago} min ago.`}
+        </p>
       )}
       {sync.phase === 'locked' && (
         <>
-          <p className="field-help">Your other computer syncs its keys. Type the sync passphrase you chose there.</p>
-          <div className="ai-add">
-            {field(pass, setPass, 'Sync passphrase', unlock)}
-            <button className="btn primary" onClick={unlock} disabled={busy || !pass}>{busy ? 'Unlocking' : 'Unlock'}</button>
-          </div>
-          {!confirmReset && <button className="btn ghost" onClick={() => setConfirmReset(true)} disabled={busy}>Forgot it</button>}
-          {resetRow}
-        </>
-      )}
-      {sync.phase === 'on' && (
-        <>
-          <p className="field-help">
-            Keys sync with your other computers, encrypted with your passphrase.{ago === null ? '' : ago < 1 ? ' Synced just now.' : ` Synced ${ago} min ago.`}
-          </p>
-          {!confirmReset && <button className="btn ghost" onClick={() => setConfirmReset(true)} disabled={busy}>Reset sync</button>}
-          {resetRow}
+          <p className="field-help">Your keys come over as soon as a device that has them opens Mayorly. Nothing to type.</p>
+          {!withPass ? (
+            <button className="btn ghost" onClick={() => setWithPass(true)}>Use my old sync passphrase instead</button>
+          ) : (
+            <div className="ai-add">
+              <input type="password" placeholder="Old sync passphrase" value={pass} autoComplete="current-password" spellCheck={false} onChange={(e) => setPass(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && pass && void unlock()} disabled={busy} />
+              <button className="btn primary" onClick={() => void unlock()} disabled={busy || !pass}>{busy ? 'Unlocking' : 'Unlock'}</button>
+            </div>
+          )}
         </>
       )}
       {(error ?? sync.message) && <span className="field-error">{error ?? sync.message}</span>}

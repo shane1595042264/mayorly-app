@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes, randomInt } from 'node:crypto'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { pool } from './db.js'
@@ -212,6 +212,60 @@ app.post('/vault', requireAuth, bodyLimit({ maxSize: 16 * 1024 }), async (c) => 
   if (rows[0]) return c.json({ vault: vaultOut(rows[0]) })
   const existing = await vaultOf(userId)
   return c.json({ error: 'exists', vault: existing ? vaultOut(existing) : null }, 409)
+})
+
+// The vault's keys held by the server, so no device asks for a passphrase. A device that has the
+// keys sends them once; the server checks they open this vault's check, then keeps them sealed
+// under a key made from its own secret (HKDF of ESCROW_SECRET, else JWT_SECRET). Any signed-in
+// device of the account gets them back. This trades the end-to-end promise for no passphrase:
+// whoever runs the server could open the AI keys. The vault's own check still says which vault
+// the keys are for, so keys for a vault made again elsewhere are refused.
+
+const ESCROW_KEY = hkdfSync('sha256', process.env.ESCROW_SECRET ?? process.env.JWT_SECRET ?? 'dev-secret-change-in-production', 'mayorly', 'vault escrow v1', 32) as ArrayBuffer
+const VAULT_CHECK = 'mayorly key vault v1'
+const b64 = (s: string) => Buffer.from(s, 'base64')
+
+function sealEscrow(text: string): string {
+  const iv = randomBytes(12)
+  const c = createCipheriv('aes-256-gcm', Buffer.from(ESCROW_KEY), iv)
+  const body = Buffer.concat([c.update(text, 'utf8'), c.final()])
+  return Buffer.concat([iv, body, c.getAuthTag()]).toString('base64url')
+}
+function openWith(key: Buffer, blob: string): string | null {
+  try {
+    const raw = Buffer.from(blob, 'base64url')
+    if (raw.length < 28) return null
+    const d = createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12))
+    d.setAuthTag(raw.subarray(raw.length - 16))
+    return Buffer.concat([d.update(raw.subarray(12, raw.length - 16)), d.final()]).toString('utf8')
+  } catch {
+    return null
+  }
+}
+
+app.get('/vault/escrow', requireAuth, async (c) => {
+  const { rows } = await pool.query<{ blob: string }>('SELECT blob FROM vault_escrow WHERE user_id = $1', [c.get('userId')])
+  const text = rows[0] ? openWith(Buffer.from(ESCROW_KEY), rows[0].blob) : null
+  if (!text) return c.json({ keys: null })
+  const keys = JSON.parse(text) as { enc: string; id: string }
+  return c.json({ keys })
+})
+
+app.put('/vault/escrow', requireAuth, bodyLimit({ maxSize: 4 * 1024 }), async (c) => {
+  const body = await c.req.json().catch(() => null) as { enc?: unknown; id?: unknown } | null
+  if (!body || !short(body.enc, 128) || !short(body.id, 128)) return c.json({ error: 'enc and id required' }, 400)
+  const enc = b64(body.enc as string)
+  if (enc.length !== 32 || b64(body.id as string).length !== 32) return c.json({ error: 'bad keys' }, 400)
+  const userId = c.get('userId')
+  const vault = await vaultOf(userId)
+  if (!vault) return c.json({ error: 'no vault' }, 409)
+  // Only the keys that open this vault's check are kept: a device cannot plant someone else's.
+  if (openWith(enc, vault.check_blob) !== VAULT_CHECK) return c.json({ error: 'keys do not open this vault' }, 409)
+  await pool.query(
+    `INSERT INTO vault_escrow (user_id, blob) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET blob = EXCLUDED.blob, updated_at = now()`,
+    [userId, sealEscrow(JSON.stringify({ enc: body.enc, id: body.id }))],
+  )
+  return c.json({ ok: true })
 })
 
 /** A forgotten passphrase: the vault and every key in it go. The keys on each computer stay there. */
