@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { ArrowsClockwise, SignOut } from '@phosphor-icons/react'
+import { ArrowsClockwise, GoogleLogo, SignOut } from '@phosphor-icons/react'
 import { type Settings as S } from '@core/index'
 import { BUILD } from '../../shared/build'
-import { accountsAvailable, linkWithCode, signOut, useAccount } from '../account'
+import { accountsAvailable, linkWithCode, signInWithGoogle, signOut, useAccount } from '../account'
+import { googleAvailable } from '../google'
 import { checkForUpdate, restartIntoUpdate, useUpdates } from '../updater'
 import { native } from '../platform'
 import { act, useMayorly, useNow } from '../store'
@@ -40,7 +41,21 @@ function Account() {
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const google = googleAvailable()
+  const [withCode, setWithCode] = useState(!google)
   if (!accountsAvailable) return null
+  const signIn = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await signInWithGoogle()
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e)
+      if (m !== 'cancelled') setError(m)
+    } finally {
+      setBusy(false)
+    }
+  }
   const link = async () => {
     setBusy(true)
     setError(null)
@@ -75,13 +90,24 @@ function Account() {
         </div>
       ) : (
         <>
-          <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>On your computer, open Settings, Account, Link a phone, and type the code here. Your ledgers, entries and the desk then sync with your computers.</p>
+          <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Sign in with the Google account your computers use. Your ledgers, entries and the desk then sync with them, and what is on this phone now is kept.</p>
+          {google && (
+            <button type="button" className="primary" style={{ width: '100%' }} disabled={busy} onClick={() => void signIn()}>
+              <GoogleLogo size={20} weight="bold" aria-hidden />
+              {busy && !withCode ? 'Signing in' : 'Sign in with Google'}
+            </button>
+          )}
+          {google && !withCode && (
+            <button type="button" className="help" style={{ display: 'block', margin: '10px auto 0', padding: 8 }} onClick={() => setWithCode(true)}>Use a code from a computer instead</button>
+          )}
+          {withCode && <>
+          {google && <p className="help" style={{ paddingTop: 16, paddingBottom: 10 }}>On a computer, open Settings, Account, Link a phone, and type the code here.</p>}
           <input className="field link-code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))} onKeyDown={(e) => e.key === 'Enter' && code.length === 8 && void link()} placeholder="Code" aria-label="Code from your computer" autoCapitalize="characters" autoCorrect="off" spellCheck={false} inputMode="text" enterKeyHint="go" />
           <div className="btn-row">
             <button type="button" className="btn white" disabled={code.length !== 8 || busy} onClick={() => void link()}>{busy ? 'Linking' : 'Link this phone'}</button>
           </div>
+          </>}
           {error && <p className="error">{error}</p>}
-          <p className="help">What is on this phone now is kept and merged with the account.</p>
         </>
       )}
     </>

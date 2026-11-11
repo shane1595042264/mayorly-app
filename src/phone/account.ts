@@ -2,10 +2,11 @@ import { useSyncExternalStore } from 'react'
 import type { Account, SyncStatus } from '../shared/bridge'
 import { SyncClient, type SyncMark } from '../shared/sync-client'
 import type { PhoneEngine } from './engine'
+import { googleIdToken } from './google'
 import { API_URL, hash, platformName, readJson, removeFile, writeJson } from './platform'
 
-// The phone's account: a session token from a one-time code made on a computer (Settings,
-// Account, Link a phone), and the same sync loop the desktop runs. The token lives in the app's
+// The phone's account: Google sign-in through iOS's sheet (google.ts), or a one-time code made
+// on a computer (Settings, Account, Link a phone); then the same sync loop the desktop runs. The token lives in the app's
 // Library folder, which iOS encrypts while the phone is locked; there is nothing else secret here.
 
 const SESSION = 'session.json'
@@ -59,13 +60,13 @@ export async function startAccount(engine: PhoneEngine): Promise<void> {
   }
 }
 
-/** The code from the computer, as typed: case, spaces and dashes do not matter. */
-export async function linkWithCode(code: string): Promise<void> {
+/** A sign-in the server accepted: the session is kept and syncing starts. */
+async function signInWith(path: string, body: unknown): Promise<void> {
   if (!client) throw new Error('This build has no sync server.')
-  const res = await fetch(`${API_URL}/auth/link/claim`, {
+  const res = await fetch(`${API_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify(body),
   })
   const data = (await res.json().catch(() => ({}))) as { token?: string; user?: Account; error?: string }
   if (!res.ok || !data.token || !data.user) throw new Error(data.error ?? `The server answered ${res.status}`)
@@ -73,6 +74,16 @@ export async function linkWithCode(code: string): Promise<void> {
   await writeJson(SESSION, session)
   set({ account: session.user })
   client.setSession(session.token)
+}
+
+/** Google, in iOS's sign-in sheet. */
+export async function signInWithGoogle(): Promise<void> {
+  await signInWith('/auth/google', { credential: await googleIdToken() })
+}
+
+/** The code from the computer, as typed: case, spaces and dashes do not matter. */
+export async function linkWithCode(code: string): Promise<void> {
+  await signInWith('/auth/link/claim', { code })
 }
 
 export async function signOut(): Promise<void> {

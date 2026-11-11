@@ -8,15 +8,20 @@ import { buildInfo } from './build-info'
 // The phone app's web layer: src/phone, built into mobile/www, which Capacitor wraps for iOS
 // (and later Android). `npm run phone` serves it at localhost:5200 for a browser (?demo for
 // sample data); `npm run ship:ios` builds it into the app on the phone.
+/** The app's own native code: plugins that live in the iOS project rather than in a package. */
+const NATIVE_FILES = ['mobile/ios/App/App/AuthSession.swift']
+
 /**
- * Which native shell this web layer needs: the Capacitor packages and their versions. A bundle
- * sent over the air only goes to a phone whose installed app has the same; anything else waits
- * for an install (npm run ship:ios).
+ * Which native shell this web layer needs: the Capacitor packages and their versions, and the
+ * app's own native code. A bundle sent over the air only goes to a phone whose installed app has
+ * the same; anything else waits for an install (npm run ship:ios).
  */
 function shell(): string {
   const pkg = JSON.parse(readFileSync('package.json', 'utf8')) as { devDependencies: Record<string, string> }
   const native = Object.entries(pkg.devDependencies).filter(([name]) => name.startsWith('@capacitor/') && name !== '@capacitor/cli').sort().map(([n, v]) => `${n}@${v}`).join(',')
-  return createHash('sha256').update(native).digest('hex').slice(0, 12)
+  const h = createHash('sha256').update(native)
+  for (const f of NATIVE_FILES) h.update(readFileSync(f))
+  return h.digest('hex').slice(0, 12)
 }
 
 export default defineConfig(({ mode }) => {

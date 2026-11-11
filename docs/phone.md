@@ -28,12 +28,18 @@ locked in a pocket for most of every block and the person still means the timer 
 phone never pauses on its own. When it comes back, the tick replays every block end at the moment
 it fell (the reducer already chains them), and the notifications rang each one meanwhile.
 
-**Sign-in.** Google refuses OAuth inside a web view, and a native Google client needs its own
-registration in the Cloud console. So a phone signs in through a computer that already is: Settings,
-Account, Link a phone on the computer shows an eight-character code (ten minutes, once, only its hash
-on the server), and the phone sends it to `/auth/link/claim` for its own 30-day session, renewed as
-the desktop's is. A Google button on the phone later needs an iOS OAuth client id added to
-`GOOGLE_CLIENT_IDS` on the server.
+**Sign-in.** Google refuses OAuth inside a web view, so the phone signs in through iOS's own sheet
+(`ASWebAuthenticationSession`, in `mobile/ios/App/App/AuthSession.swift`, registered by
+`MainViewController`): the code flow with PKCE against the "Mayorly iPhone" iOS client in the Cloud
+project (bundle id `app.mayorly`, its id in `src/phone/google.ts`, and in `GOOGLE_CLIENT_IDS` on the
+server beside the desktop's). Google's ID token goes to `/auth/google` as the desktop's does. While
+the consent screen is in testing, only its test users can sign in. The fallback is a code from a
+computer (Settings, Account, Link a phone): eight characters, ten minutes, once, only its hash on the
+server, traded at `/auth/link/claim`. Either way the phone gets its own 30-day session.
+
+**Native code of the app's own** is listed in `NATIVE_FILES` in `vite.phone.config.ts`, so a change
+there changes the shell id and an older install waits for `ship:ios` instead of taking a bundle that
+calls a plugin it does not have.
 
 **The active device.** The phone is a device like any computer: anything done on it claims the desk,
 and a desk running elsewhere shows here as "Running on MacBook" with that device's clock, until Take
