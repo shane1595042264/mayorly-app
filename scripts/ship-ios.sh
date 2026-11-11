@@ -61,7 +61,8 @@ except Exception:
     devices = []
 for d in devices:
     hw, cp, dp = d.get("hardwareProperties", {}), d.get("connectionProperties", {}), d.get("deviceProperties", {})
-    if hw.get("platform") != "iOS" or cp.get("pairingState") != "paired":
+    # Xcode 27 lists the simulators here too, as paired iPhones; only a real phone will do.
+    if hw.get("platform") != "iOS" or hw.get("reality") == "simulated" or cp.get("pairingState") != "paired":
         continue
     name = dp.get("name", "")
     if want and want not in (name.lower(), d.get("identifier", "").lower(), hw.get("udid", "").lower()):
