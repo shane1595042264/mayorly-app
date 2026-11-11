@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { AiProvider } from './detect'
 
-// The four providers behind one shape: list the key's models, and answer one
+// The four providers behind one shape, for the desktop's main process and the phone alike: list the key's models, and answer one
 // prompt. Anthropic goes through its SDK; the others through their HTTP APIs.
 // Every call has a deadline and every failure becomes a ProviderError with a
 // kind the key check and the settings page can act on.
@@ -67,7 +67,9 @@ async function call(url: string, init: RequestInit): Promise<unknown> {
 
 const bearer = (key: string) => ({ Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' })
 const geminiHeaders = (key: string) => ({ 'x-goog-api-key': key, 'Content-Type': 'application/json' })
-const anthropic = (key: string) => new Anthropic({ apiKey: key, timeout: TIMEOUT_MS, maxRetries: 1 })
+// On the phone the clerk runs in the app's web view, which the SDK treats as a browser. The key
+// is the user's own and never leaves their device except to call Anthropic, so it is allowed there.
+const anthropic = (key: string) => new Anthropic({ apiKey: key, timeout: TIMEOUT_MS, maxRetries: 1, dangerouslyAllowBrowser: typeof window !== 'undefined' })
 
 /** The SDK's typed errors, mapped to the same kinds as the HTTP providers. */
 async function viaSdk<T>(fn: () => Promise<T>): Promise<T> {

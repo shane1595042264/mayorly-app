@@ -5,17 +5,18 @@ import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, 
 import { isDeviceOnly, migrate, prefixClerk, type Action, type ClerkCommand, type Entry, type HudEvent, type Settings } from '@core/index'
 import { IPC, type AiProvider, type Arrangement, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
-import { AiClerk, KeyCheckError } from './ai/service'
+import { AiClerk, KeyCheckError } from '../shared/ai/service'
+import { sealedClerkStore } from './ai/store'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
 import { Engine } from './engine'
 import { installLog, log } from './log'
 import { randomUUID } from 'node:crypto'
-import { describeForClerk, draftCommands, fillDraft, parseAnswer, previewApply, PROPOSAL_TTL_MS, toArrangement, type Draft } from './ai/arrange'
+import { describeForClerk, draftCommands, fillDraft, parseAnswer, previewApply, PROPOSAL_TTL_MS, toArrangement, type Draft } from '../shared/ai/arrange'
 import { Seal } from './seal'
 import { SessionStore } from './session'
 import { Sync } from './sync'
-import { KeySync } from './ai/keysync'
+import { KeySync } from '../shared/ai/keysync'
 import { refusedAsOptionOnly, registerHotkeys } from './hotkeys'
 import { Overlay } from './overlay'
 import { Store } from './store'
@@ -175,7 +176,7 @@ function boot() {
   ipcMain.handle(IPC.calAddSource, (_e, url: string, label: string, titles: boolean) => feeds.add(String(url ?? ''), String(label ?? ''), !!titles))
   ipcMain.handle(IPC.calRemoveSource, (_e, id: string) => feeds.remove(String(id)))
   ipcMain.handle(IPC.calRefresh, () => feeds.refresh())
-  const clerk = new AiClerk(dataDir, seal, (pub) => send(IPC.ai, pub))
+  const clerk = new AiClerk(sealedClerkStore(dataDir, seal), (pub) => send(IPC.ai, pub))
   // Its keys ride the account's sign-in to the other computers, sealed with the sync passphrase (ai/keysync.ts).
   const keySync = new KeySync(config.apiUrl, clerk)
   const say = (n: ClerkNotice) => send(IPC.clerk, n)

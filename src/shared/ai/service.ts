@@ -1,18 +1,15 @@
-import { randomUUID } from 'node:crypto'
-import type { Seal } from '../seal'
 import { ARRANGE_SYSTEM } from './arrange'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import type { Filing, Ledger } from '@core/index'
-import type { AiKeyPublic, AiKeySync, AiPublic } from '../../shared/bridge'
+import type { AiKeyPublic, AiKeySync, AiPublic } from '../bridge'
 import { costMicroUsd, rankModels } from './catalog'
 import { AI_PROVIDERS, PROVIDER_LABEL, detectProvider, keyHint, type AiProvider } from './detect'
 import { ProviderError, generate, listModels } from './providers'
 import type { VaultSecret } from './keysync'
 import type { LocalKey, LocalRemoval } from './vault'
 
-// The AI clerk. Keys are the user's own, any number per provider, sealed in ai.bin beside the
-// state file (seal.ts). They leave the machine only to call their provider, and, when the user
+// The AI clerk, the same on every platform. Keys are the user's own, any number per provider,
+// kept where the platform's ClerkStore puts them: on a computer sealed in ai.bin beside the state
+// file (src/main/ai/store.ts, seal.ts), on the phone in the app's Library folder. They leave the machine only to call their provider, and, when the user
 // sets a sync passphrase, sealed again with a key made from it for their other computers
 // (keysync.ts); the server never sees a key. Adding a key proves it the shanejli.com way: detect
 // the provider from its shape, list its models, then spend one token on the cheapest until one
@@ -48,6 +45,15 @@ const MAX_PROBES = 4
 const USAGE_KEEP = 500
 const FILE_TIMEOUT_MS = 9_000
 
+/** Where the clerk's keys and usage live. The text is the clerk's own JSON; the store seals it. */
+export interface ClerkStore {
+  /** What was saved, or null; `reseal` asks for it to be written again in the store's current form. */
+  load(): { text: string; reseal?: boolean } | null
+  /** False when nothing can keep a secret here: the keys then live for this run only. */
+  available(): boolean
+  save(text: string): void
+}
+
 export class KeyCheckError extends Error {
   constructor(readonly code: 'unknown_provider' | 'auth' | 'quota' | 'no_models' | 'unreachable', message: string) {
     super(message)
@@ -56,14 +62,12 @@ export class KeyCheckError extends Error {
 }
 
 export class AiClerk {
-  private readonly file: string
   private data: Saved = { keys: [], preferredProvider: null, usage: [], vault: null, removed: [] }
   private sync: AiKeySync = { phase: 'off', at: null, message: null }
   /** Set by KeySync: a key was added or removed here. */
   onKeysChanged: (() => void) | null = null
 
-  constructor(dir: string, private readonly seal: Seal, private readonly onChange: (pub: AiPublic) => void) {
-    this.file = join(dir, 'ai.bin')
+  constructor(private readonly store: ClerkStore, private readonly onChange: (pub: AiPublic) => void) {
     this.load()
     // Keys that came from another computer and were still being checked when the app quit.
     void this.checkArrivals(this.data.keys.filter((k) => k.status === 'checking').map((k) => k.id))
@@ -100,7 +104,7 @@ export class AiClerk {
     // already has one, is kept beside it: the clerk moves on to it when the first one fails.
     const existing = this.data.keys.find((k) => k.provider === provider && k.key === key)
     const record: KeyRecord = {
-      id: existing?.id ?? randomUUID(),
+      id: existing?.id ?? globalThis.crypto.randomUUID(),
       provider,
       key,
       keyHint: keyHint(key),
@@ -183,7 +187,7 @@ export class AiClerk {
     const arrived: KeyRecord[] = add
       .filter((a) => !this.data.keys.some((k) => same(a, k)))
       .map((a) => ({
-        id: randomUUID(),
+        id: globalThis.crypto.randomUUID(),
         provider: a.provider,
         key: a.key,
         keyHint: keyHint(a.key),
@@ -450,8 +454,7 @@ export class AiClerk {
 
   private load() {
     try {
-      if (!existsSync(this.file)) return
-      const opened = this.seal.open(readFileSync(this.file))
+      const opened = this.store.load()
       if (!opened) return
       const d = JSON.parse(opened.text) as Partial<Saved>
       this.data = {
@@ -462,7 +465,7 @@ export class AiClerk {
         removed: Array.isArray(d.removed) ? d.removed : [],
       }
       // Sealed by the keychain before: move it to the local seal so it never asks again.
-      if (opened.reseal) writeFileSync(this.file, this.seal.seal(JSON.stringify(this.data)))
+      if (opened.reseal) this.store.save(JSON.stringify(this.data))
     } catch (err) {
       console.error('[clerk] could not read the AI keys:', err)
     }
@@ -471,12 +474,12 @@ export class AiClerk {
   private save() {
     try {
       const text = JSON.stringify(this.data)
-      if (!this.seal.available()) {
+      if (!this.store.available()) {
         // Keys in the clear on disk would break the promise in Settings; they live for this run only.
         console.warn('[ai] nothing to seal with; keys are kept for this run only')
         return
       }
-      writeFileSync(this.file, this.seal.seal(text))
+      this.store.save(text)
     } catch (err) {
       console.error('[clerk] could not save the AI keys:', err)
     }

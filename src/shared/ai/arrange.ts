@@ -1,6 +1,6 @@
 import { entrySpentMs, openFlow, reduce, type ClerkCommand, type Ctx, type Id, type MayorlyState } from '@core/index'
-import type { Arrangement, ArrangementLine } from '../../shared/bridge'
-import { horizonEndFor, wallClock, windowsFor, zonedEpoch } from '../../shared/windows'
+import type { Arrangement, ArrangementLine } from '../bridge'
+import { horizonEndFor, wallClock, windowsFor, zonedEpoch } from '../windows'
 
 // The clerk listening: a request in words becomes typed commands the reducer checks. The
 // model sees the plan in plain lines and answers JSON naming entries by title; this file

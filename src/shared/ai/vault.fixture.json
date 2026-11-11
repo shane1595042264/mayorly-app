@@ -1,0 +1,32 @@
+{
+  "salt": "bWF5b3JseS1maXh0dXJl",
+  "passphrase": "correct horse battery staple",
+  "fast": {
+    "kdf": {
+      "name": "scrypt",
+      "N": 4096,
+      "r": 8,
+      "p": 1
+    },
+    "enc": "k0FazLK7hQhmJKTxEDPD54kIdGNYc1y20wCiG6Ik8og=",
+    "id": "2b/LTEhbltJgbPzOqBDCK2yyu6lhdRF/TRaaoz9UgbM=",
+    "check": "QPS6vieB-aRiVXzg-tz2WZt0zrBnW-nuOUfU12p5wL3unacBWak1w9kuEJ123uJb",
+    "ok": true,
+    "keyId": "dkM_JLotAYQJAR3qhe_v-Z5_cwTeS7Q8",
+    "blob": "5QN37R75kbeJpqVNXBiCJpzhcN-f0PUje2QTH33bKL7zbe1eTwHhiSZs1HymnneGxmc5sepr7oBamyqSXZfyBYEuzIj6PtGURUlKj4iN4PGoVl17FBM"
+  },
+  "app": {
+    "kdf": {
+      "name": "scrypt",
+      "N": 131072,
+      "r": 8,
+      "p": 1
+    },
+    "enc": "Hxy0EBjWgMIrCqoLZ/BawXJtOou2LVwOre5s+g3VQWA=",
+    "id": "HlNfakHwv7m+64ga27eAgK06oC6x6exjwdzxlZmYFOc=",
+    "check": "pKjigB9rUHRQhWnBZoW12nAt5igZHzuVjcLhGQlvjhjR40E1gyuURaB-qvl0jZFn",
+    "ok": true,
+    "keyId": "d37F4XhAPXYedkrWk9TNMNlOp9jKQZbJ",
+    "blob": "p1LGY7EJMdac-5OwnV28lctZ4HqwX70TmfKs48QU3xPu1V3C16aB29w11vzbq3miZwILsInmJNxt46pmbabH7fkUQtWN6v75XH3ktVlX0w3_JxR4S3E"
+  }
+}

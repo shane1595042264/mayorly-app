@@ -1,6 +1,6 @@
-import type { AiKeySync } from '../../shared/bridge'
+import type { AiKeySync } from '../bridge'
 import type { AiClerk } from './service'
-import { checks, deriveKeys, incoming, KDF, kdfOk, makeCheck, newSalt, outgoing, PASSPHRASE_MIN, type Kdf, type VaultInfo, type VaultItem, type VaultKeys } from './vault'
+import { checks, deriveKeys, fromBase64, incoming, KDF, kdfOk, makeCheck, newSalt, outgoing, PASSPHRASE_MIN, toBase64, type Kdf, type VaultInfo, type VaultItem, type VaultKeys } from './vault'
 
 // AI keys between a user's computers. The passphrase is typed on each computer once; the keys
 // made from it are sealed in ai.bin with the API keys themselves, and the passphrase is never
@@ -35,7 +35,7 @@ export class KeySync {
 
   constructor(private readonly apiUrl: string, private readonly clerk: AiClerk) {
     const s = clerk.vaultSecret()
-    if (s) this.keys = { enc: Buffer.from(s.enc, 'base64'), id: Buffer.from(s.id, 'base64') }
+    if (s) this.keys = { enc: fromBase64(s.enc), id: fromBase64(s.id) }
     clerk.onKeysChanged = () => void this.sync()
     this.set({ phase: 'off', at: null, message: null })
   }
@@ -70,7 +70,7 @@ export class KeySync {
     }
     const salt = newSalt()
     const keys = await deriveKeys(passphrase, salt, KDF)
-    const check = makeCheck(keys)
+    const check = await makeCheck(keys)
     try {
       await this.call('POST', '/vault', { salt, kdf: KDF, check })
     } catch (err) {
@@ -93,7 +93,7 @@ export class KeySync {
     }
     if (!kdfOk(vault.kdf)) throw new Error('The server sent settings this app will not use.')
     const keys = await deriveKeys(passphrase, vault.salt, vault.kdf)
-    if (!checks(keys, vault.check)) throw new Error('That passphrase does not match the one set on your other computer.')
+    if (!(await checks(keys, vault.check))) throw new Error('That passphrase does not match the one set on your other computer.')
     this.remember(keys, vault)
     await this.sync()
   }
@@ -140,7 +140,7 @@ export class KeySync {
       }
       const keys = this.keys
       const removed = this.clerk.pendingRemovals()
-      const sent = outgoing(keys, this.clerk.localKeys(), removed)
+      const sent = await outgoing(keys, this.clerk.localKeys(), removed)
       const have = new Map(items.map((r) => [r.id, r]))
       const news = sent.some((s) => {
         const cur = have.get(s.id)
@@ -161,7 +161,7 @@ export class KeySync {
       }
       // Read this computer again: a key removed while the request was out must not come back.
       const pending = this.clerk.pendingRemovals()
-      const { add, drop } = incoming(keys, this.clerk.localKeys(), merged)
+      const { add, drop } = await incoming(keys, this.clerk.localKeys(), merged)
       const fresh = add.filter((k) => !pending.some((r) => r.provider === k.provider && r.key === k.key))
       this.clerk.applySync(fresh, drop, news ? removed : [])
       this.set({ phase: 'on', at: Date.now(), message: null })
@@ -174,7 +174,7 @@ export class KeySync {
 
   private remember(keys: VaultKeys, vault: VaultInfo) {
     this.keys = keys
-    this.clerk.setVaultSecret({ salt: vault.salt, kdf: vault.kdf, check: vault.check, enc: keys.enc.toString('base64'), id: keys.id.toString('base64') })
+    this.clerk.setVaultSecret({ salt: vault.salt, kdf: vault.kdf, check: vault.check, enc: toBase64(keys.enc), id: toBase64(keys.id) })
   }
 
   private forget() {
