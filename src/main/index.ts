@@ -418,6 +418,16 @@ function boot() {
     return body.token ? `${config.apiUrl}/cal/${body.token}.ics` : null
   })
   ipcMain.on(IPC.log, (_e, level: string, message: string) => (level === 'error' ? log.error : log.warn)('[renderer]', String(message).slice(0, 2000)))
+  ipcMain.handle(IPC.linkPhone, async () => {
+    if (!session) throw new Error('Sign in first')
+    const res = await fetch(`${config.apiUrl}/auth/link`, { method: 'POST', headers: { Authorization: `Bearer ${session.token}` } })
+    if (res.status === 401) {
+      setSession(null)
+      throw new Error('The session has ended. Sign in again.')
+    }
+    if (!res.ok) throw new Error(`The server answered ${res.status}`)
+    return (await res.json()) as { code: string; expiresAt: string }
+  })
   ipcMain.handle(IPC.deleteAccount, async () => {
     if (!session) return
     const res = await fetch(`${config.apiUrl}/account`, { method: 'DELETE', headers: { Authorization: `Bearer ${session.token}` } })

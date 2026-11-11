@@ -202,6 +202,8 @@ export interface Bridge {
   deleteAccount(): Promise<void>
   /** Every session of the account stops working, this one included. */
   signOutEverywhere(): Promise<void>
+  /** A one-time code that signs a phone in to this account: eight characters, ten minutes. */
+  linkPhone(): Promise<{ code: string; expiresAt: string }>
   /** A line for the shell's log file: the renderer has no file of its own. */
   log(level: 'warn' | 'error', message: string): void
   /** Version, platform and where the data lives. */
@@ -296,6 +298,7 @@ export const IPC = {
   signOut: 'mayorly:sign-out',
   deleteAccount: 'mayorly:delete-account',
   signOutEverywhere: 'mayorly:sign-out-everywhere',
+  linkPhone: 'mayorly:link-phone',
   log: 'mayorly:log',
   getInfo: 'mayorly:get-info',
   getBuild: 'mayorly:get-build',

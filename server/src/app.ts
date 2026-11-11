@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomInt } from 'node:crypto'
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { pool } from './db.js'
@@ -73,6 +73,47 @@ app.post('/auth/signout-all', requireAuth, async (c) => {
 app.delete('/account', requireAuth, async (c) => {
   await pool.query('DELETE FROM users WHERE id = $1', [c.get('userId')])
   return c.json({ ok: true })
+})
+
+// Linking a phone. Google refuses sign-in inside an app's web view, and a native Google client
+// would need its own registration, so a phone signs in through a computer that already is: the
+// computer asks for a short code, the phone sends it back, and the phone gets its own session.
+// The code is eight letters from an alphabet without look-alikes (about 40 bits), lives ten
+// minutes, is spent on first use, and only its hash is stored. Claims are rate limited per address.
+
+const LINK_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+const LINK_TTL_MS = 10 * 60_000
+const linkClaims = new Map<string, { n: number; at: number }>()
+const hashCode = (code: string) => createHash('sha256').update(code).digest('hex')
+/** What a person types: case and spaces and dashes do not matter. */
+const normalCode = (raw: string) => raw.toUpperCase().replace(/[^A-Z0-9]/g, '')
+
+app.post('/auth/link', requireAuth, async (c) => {
+  const userId = c.get('userId')
+  const code = Array.from({ length: 8 }, () => LINK_ALPHABET[randomInt(LINK_ALPHABET.length)]).join('')
+  const expiresAt = new Date(Date.now() + LINK_TTL_MS)
+  // One live code per account: asking again replaces the last one.
+  await pool.query('DELETE FROM link_codes WHERE user_id = $1 OR expires_at < now()', [userId])
+  await pool.query('INSERT INTO link_codes (code_hash, user_id, expires_at) VALUES ($1, $2, $3)', [hashCode(code), userId, expiresAt])
+  return c.json({ code, expiresAt: expiresAt.toISOString() })
+})
+
+app.post('/auth/link/claim', bodyLimit({ maxSize: 4 * 1024 }), async (c) => {
+  if (limited(addressOf(c), linkClaims, 20)) return c.json({ error: 'Too many tries. Wait a few minutes.' }, 429)
+  const body = await c.req.json().catch(() => null) as { code?: unknown } | null
+  const code = typeof body?.code === 'string' ? normalCode(body.code) : ''
+  if (code.length !== 8) return c.json({ error: 'That code is eight letters and numbers.' }, 400)
+  const { rows } = await pool.query<{ user_id: string; token_version: number }>(
+    `UPDATE link_codes l SET used_at = now() FROM users u
+     WHERE l.code_hash = $1 AND l.used_at IS NULL AND l.expires_at > now() AND u.id = l.user_id
+     RETURNING l.user_id, u.token_version`,
+    [hashCode(code)],
+  )
+  const row = rows[0]
+  if (!row) return c.json({ error: 'That code is wrong or has run out. Make a new one on your computer.' }, 400)
+  const user = await userById(row.user_id)
+  if (!user) return c.json({ error: 'That account no longer exists.' }, 400)
+  return c.json({ token: await issueToken(row.user_id, row.token_version), user })
 })
 
 interface StateRow { revision: number; state: unknown; updated_at: Date; device: string | null }

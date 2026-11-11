@@ -31,6 +31,7 @@ const bridge: Bridge = {
   signOut: () => ipcRenderer.invoke(IPC.signOut),
   deleteAccount: () => ipcRenderer.invoke(IPC.deleteAccount),
   signOutEverywhere: () => ipcRenderer.invoke(IPC.signOutEverywhere),
+  linkPhone: () => ipcRenderer.invoke(IPC.linkPhone),
   log: (level, message) => ipcRenderer.send(IPC.log, level, message),
   getInfo: () => ipcRenderer.invoke(IPC.getInfo),
   getBuild: () => ipcRenderer.invoke(IPC.getBuild),

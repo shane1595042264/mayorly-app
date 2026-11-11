@@ -172,6 +172,7 @@ export function createWebBridge(): Bridge {
     signOut: async () => {},
     deleteAccount: async () => {},
     signOutEverywhere: async () => {},
+    linkPhone: async () => ({ code: 'K7QX4M2P', expiresAt: new Date(Date.now() + 600_000).toISOString() }),
     log: (level, message) => console[level](message),
     getInfo: async () => ({ version: BUILD.version, platform: 'web', arch: '', dataDir: 'this browser', packaged: false, commit: BUILD.commit, builtAt: BUILD.builtAt, device: 'web' }),
     getBuild: async () => BUILD,

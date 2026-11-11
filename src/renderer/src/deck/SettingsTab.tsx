@@ -151,7 +151,17 @@ function AccountSection() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState(false)
+  const [link, setLink] = useState<{ code: string; expiresAt: string } | null>(null)
   useEffect(() => void bridge.accountsAvailable().then(setAvailable), [])
+  const linkPhone = async () => {
+    setError(null)
+    try {
+      setLink(await bridge.linkPhone())
+    } catch (e) {
+      setError(e instanceof Error ? e.message.replace(/^Error: /, '') : String(e))
+    }
+  }
+  const linkLeft = link ? Math.max(0, Math.ceil((Date.parse(link.expiresAt) - now) / 60_000)) : 0
   const remove = async () => {
     if (!confirm) {
       setConfirm(true)
@@ -206,6 +216,17 @@ function AccountSection() {
             </button>
           </div>
           {error && <span className="field-error">{error}</span>}
+          <div className="link-phone">
+            <button className="btn ghost" onClick={() => void linkPhone()}>{link && linkLeft > 0 ? 'New code' : 'Link a phone'}</button>
+            {link && linkLeft > 0 ? (
+              <span className="link-code-line">
+                <span className="link-code" aria-label={`Code ${link.code.split('').join(' ')}`}>{link.code.slice(0, 4)} {link.code.slice(4)}</span>
+                <span className="field-help">Type it in Mayorly on the phone. Works once, for {linkLeft} more {linkLeft === 1 ? 'minute' : 'minutes'}.</span>
+              </span>
+            ) : (
+              <span className="field-help">Signs Mayorly on your phone in to this account with a one-time code.</span>
+            )}
+          </div>
           <p className="field-help">Deleting removes the account and the synced document from the server. This machine keeps its own copy.</p>
         </div>
       ) : (

@@ -38,6 +38,14 @@ export async function migrate() {
       updated_at timestamptz NOT NULL DEFAULT now()
     );
     ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version integer NOT NULL DEFAULT 0;
+    -- One-time codes that sign a phone in to an account a computer is already signed in to.
+    -- Only a hash of the code is kept; a code lives ten minutes and is spent on first use.
+    CREATE TABLE IF NOT EXISTS link_codes (
+      code_hash text PRIMARY KEY,
+      user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      expires_at timestamptz NOT NULL,
+      used_at timestamptz
+    );
     CREATE TABLE IF NOT EXISTS feed_tokens (
       user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       token text NOT NULL UNIQUE,
