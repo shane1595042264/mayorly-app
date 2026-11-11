@@ -1,0 +1,30 @@
+{
+  "appId": "app.mayorly",
+  "appName": "Mayorly",
+  "webDir": "mobile/www",
+  "backgroundColor": "#0e0d0c",
+  "ios": {
+    "path": "mobile/ios",
+    "contentInset": "never",
+    "backgroundColor": "#0e0d0c",
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    },
+    "LocalNotifications": {
+      "presentationOptions": [
+        "banner",
+        "sound",
+        "list"
+      ]
+    },
+    "Keyboard": {
+      "resizeOnFullScreen": true
+    }
+  },
+  "android": {
+    "path": "mobile/android"
+  }
+}

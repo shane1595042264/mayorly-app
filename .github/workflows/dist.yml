@@ -87,8 +87,42 @@ jobs:
             dist/*.blockmap
             dist/latest*.yml
             dist/mayorly-mac.yml
+  # The phone's web layer, for the iPhone app to take over the air (src/phone/updater.ts): the
+  # built bundle zipped, and a manifest with its commit, the native shell it needs and its sha256.
+  phone:
+    runs-on: ubuntu-latest
+    env:
+      MAIN_VITE_API_URL: ${{ vars.MAIN_VITE_API_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run phone:build
+      - name: Bundle and manifest
+        run: |
+          mkdir -p dist
+          export SHORT=${GITHUB_SHA::7}
+          (cd mobile/www && zip -qr -X "../../dist/mayorly-phone-$SHORT.zip" .)
+          node -e '
+            const fs = require("fs"), crypto = require("crypto")
+            const meta = JSON.parse(fs.readFileSync("mobile/www/phone.json", "utf8"))
+            const file = `mayorly-phone-${process.env.SHORT}.zip`
+            const sha256 = crypto.createHash("sha256").update(fs.readFileSync(`dist/${file}`)).digest("hex")
+            const m = { version: process.env.MAYORLY_VERSION, commit: process.env.SHORT, shell: meta.shell, file, sha256, builtAt: meta.builtAt }
+            fs.writeFileSync("dist/mayorly-phone.json", JSON.stringify(m, null, 2))
+            console.log(m)
+          '
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mayorly-phone
+          path: |
+            dist/mayorly-phone-*.zip
+            dist/mayorly-phone.json
   publish:
-    needs: dist
+    needs: [dist, phone]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

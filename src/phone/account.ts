@@ -1,0 +1,90 @@
+import { useSyncExternalStore } from 'react'
+import type { Account, SyncStatus } from '../shared/bridge'
+import { SyncClient, type SyncMark } from '../shared/sync-client'
+import type { PhoneEngine } from './engine'
+import { API_URL, hash, platformName, readJson, removeFile, writeJson } from './platform'
+
+// The phone's account: a session token from a one-time code made on a computer (Settings,
+// Account, Link a phone), and the same sync loop the desktop runs. The token lives in the app's
+// Library folder, which iOS encrypts while the phone is locked; there is nothing else secret here.
+
+const SESSION = 'session.json'
+const MARK = 'sync.json'
+
+interface Session {
+  token: string
+  user: Account
+}
+
+interface View {
+  account: Account | null
+  sync: SyncStatus
+}
+
+let view: View = { account: null, sync: { phase: 'off', at: null, revision: 0 } }
+const subs = new Set<() => void>()
+const set = (patch: Partial<View>) => {
+  view = { ...view, ...patch }
+  subs.forEach((f) => f())
+}
+
+let client: SyncClient | null = null
+let session: Session | null = null
+
+export const accountsAvailable = !!API_URL
+
+export async function startAccount(engine: PhoneEngine): Promise<void> {
+  if (!accountsAvailable || engine.scratch) return
+  const mark = await readJson<SyncMark>(MARK)
+  session = await readJson<Session>(SESSION)
+  client = new SyncClient(engine, API_URL, {
+    hash,
+    loadMark: () => mark,
+    saveMark: (m) => void writeJson(MARK, m).catch(() => {}),
+    newDevice: () => `${platformName}-${crypto.randomUUID().slice(0, 8)}`,
+  }, (sync) => set({ sync }))
+  client.onExpired = () => void signOut()
+  client.onRefreshed = (token) => {
+    if (!session) return
+    session = { ...session, token }
+    void writeJson(SESSION, session)
+  }
+  engine.onForeground = (front) => {
+    if (front) client?.poke()
+    else void client?.flush()
+  }
+  if (session) {
+    set({ account: session.user })
+    client.setSession(session.token)
+  }
+}
+
+/** The code from the computer, as typed: case, spaces and dashes do not matter. */
+export async function linkWithCode(code: string): Promise<void> {
+  if (!client) throw new Error('This build has no sync server.')
+  const res = await fetch(`${API_URL}/auth/link/claim`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  })
+  const data = (await res.json().catch(() => ({}))) as { token?: string; user?: Account; error?: string }
+  if (!res.ok || !data.token || !data.user) throw new Error(data.error ?? `The server answered ${res.status}`)
+  session = { token: data.token, user: { email: data.user.email, name: data.user.name, avatarUrl: data.user.avatarUrl } }
+  await writeJson(SESSION, session)
+  set({ account: session.user })
+  client.setSession(session.token)
+}
+
+export async function signOut(): Promise<void> {
+  session = null
+  await removeFile(SESSION)
+  client?.setSession(null)
+  set({ account: null })
+}
+
+export function useAccount(): View {
+  return useSyncExternalStore((f) => {
+    subs.add(f)
+    return () => subs.delete(f)
+  }, () => view)
+}

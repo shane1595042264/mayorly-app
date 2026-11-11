@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Mayorly on your iPhone
+
+- Settings, Account has a Link a phone button: it shows a one-time code to type into Mayorly on your phone, which then syncs with this account like another computer.
+- The phone runs the same desk. Whatever you start there runs there, and this computer shows where it is running.
+
 ## The Mac updates itself
 
 - Every push to GitHub now reaches this Mac on its own, as on Windows. Mayorly checks every half hour, downloads the new version quietly, and asks Update now or Later, never during a running focus block.

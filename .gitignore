@@ -6,3 +6,5 @@ dist/
 .env.local
 .env
 .probe/
+# The phone app's built web layer (npm run phone:build)
+mobile/www/

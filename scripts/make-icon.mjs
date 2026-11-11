@@ -249,4 +249,24 @@ writeFileSync('build/icon.icns', encodeIcns([
   { type: 'ic09', png: png(32) },                     // 512
   { type: 'ic10', png: png(64) },                     // 512@2x
 ]))
-console.log('wrote build/icon.png (1024), build/tray.png (32), build/icon.ico, build/icon.icns')
+/**
+ * The phone: iOS wants one opaque 1024 square and rounds its corners itself. The tomato goes on
+ * the app's own ground (#0e0d0c) at 48x, 768 pixels, with 128 clear on every side so the mask
+ * never cuts a pixel. Still a whole multiple; the ground is the only thing added.
+ */
+function onGround(img, size, [r, g, b]) {
+  const rgba = Buffer.alloc(size * size * 4)
+  for (let i = 0; i < size * size; i++) rgba.set([r, g, b, 255], i * 4)
+  const off = (size - img.width) / 2
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      const si = (y * img.width + x) * 4
+      const a = img.rgba[si + 3] / 255
+      const di = ((y + off) * size + x + off) * 4
+      for (let c = 0; c < 3; c++) rgba[di + c] = Math.round(img.rgba[si + c] * a + rgba[di + c] * (1 - a))
+    }
+  }
+  return { width: size, height: size, rgba }
+}
+writeFileSync('mobile/ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png', encodePng(onGround(scale(base, 48), 1024, [0x0e, 0x0d, 0x0c])))
+console.log('wrote build/icon.png (1024), build/tray.png (32), build/icon.ico, build/icon.icns, the iOS app icon')
