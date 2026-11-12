@@ -605,12 +605,14 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 /* ------------------------------------------------------------ the Keymap screen
    After Minecraft's controls: rows of things to do, each with its bevelled keycap. */
 .deck { position: relative; }
-.keymap-wrap { position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; background: rgb(11 13 14 / 0.74); }
+/* On the page, not in the deck (a portal), and sized to the window, so the whole screen always
+   shows however the deck sits. */
+.keymap-wrap { position: fixed; inset: 0; z-index: calc(var(--z-modal) + 5); display: flex; align-items: center; justify-content: center; padding: 16px; background: rgb(11 13 14 / 0.74); }
 .keymap {
   display: flex;
   flex-direction: column;
-  width: min(840px, 94%);
-  height: min(620px, 92%);
+  width: min(840px, 100%);
+  height: min(620px, 100%);
   min-height: 0;
   background: var(--void);
   border: 2px solid #3d4246;
@@ -620,8 +622,8 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 
 /* What changed: the same frame as the Controls screen, sized to a note. */
 .whatsnew {
-  width: min(600px, 92%);
-  max-height: 88%;
+  width: min(600px, 100%);
+  max-height: 100%;
   overflow: auto;
   padding: 22px 28px 20px;
   background: var(--void);
@@ -639,7 +641,8 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .keymap-title { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; text-shadow: 2px 2px 0 rgb(0 0 0 / 0.8); }
 .keymap-search { display: flex; align-items: center; gap: 8px; flex: 1; max-width: 300px; padding: 6px 10px; border: 2px solid #3d4246; background: #000; color: var(--ink-3); box-shadow: inset 2px 2px 0 #15181a; }
 .keymap-search:focus-within { border-color: var(--accent); }
-.keymap-search input { flex: 1; min-width: 0; background: none; border: 0; padding: 0; color: var(--ink); font: inherit; font-size: 14px; outline: none; }
+.keymap-search input { flex: 1; width: 100%; min-width: 0; height: 38px; background: none; border: 0; padding: 0; color: var(--ink); font: inherit; font-size: 14px; outline: none; }
+.keymap-search input::placeholder { color: rgb(237 240 241 / 0.48); }
 .keymap-hint { margin-left: auto; font-family: var(--font-data); font-size: 11px; white-space: pre; }
 .keymap-list { flex: 1; min-height: 0; overflow: auto; padding: 4px 20px 16px; }
 .keymap-list::-webkit-scrollbar { width: 10px; }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ArrowCounterClockwise, Keyboard, MagnifyingGlass } from '@phosphor-icons/react'
 import { DEFAULT_HOTKEYS, type HotkeyAction, type MayorlyState } from '@core/index'
 import { IS_MAC, MODIFIER_KEYS, hotkeyLabel, physicalKey } from '../lib/keys'
@@ -222,7 +223,9 @@ export function Keymap({ s, close }: { s: MayorlyState; close: () => void }) {
 
   const changed = rows.filter((r) => r.changed).length
 
-  return (
+  // On the page, not in the deck: the deck tilts and can sit partly off the window, and this
+  // screen is sized to the window so it always fits whole.
+  return createPortal(
     <div className="keymap-wrap" role="dialog" aria-label="Keymap" onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <div className="keymap">
         <header className="keymap-head">
@@ -257,6 +260,8 @@ export function Keymap({ s, close }: { s: MayorlyState; close: () => void }) {
         </footer>
       </div>
     </div>
+ ,
+    document.body,
   )
 }
 

@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Controls fits the window
+
+- The Controls screen (the keymap) now sizes itself to the window, so its title and search are always in view. On a short screen the list scrolls between them.
+- The deck can no longer get stuck shifted up with its top hidden.
+
 ## Option+Q goes where it shows
 
 - One tap of Option+Q now always goes back to the task you worked on last, the one highlighted when the list opens. It could jump to an older task when the mouse rested over the list, or after you cleared a task.

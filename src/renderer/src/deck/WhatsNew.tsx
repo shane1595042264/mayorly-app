@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Sparkle } from '@phosphor-icons/react'
 import type { BuildInfo } from '../../../shared/bridge'
 import { builtOn } from '../../../shared/build'
@@ -19,7 +20,7 @@ export function WhatsNew({ build, close }: { build: BuildInfo; close: () => void
     return () => window.removeEventListener('keydown', onKey, true)
   }, [close])
 
-  return (
+  return createPortal(
     <div className="keymap-wrap" role="dialog" aria-label="What changed" onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <section className="whatsnew">
         <header className="whatsnew-head">
@@ -44,6 +45,7 @@ export function WhatsNew({ build, close }: { build: BuildInfo; close: () => void
           <button type="button" className="btn primary" onClick={close}>Got it</button>
         </footer>
       </section>
-    </div>
+    </div>,
+    document.body,
   )
 }

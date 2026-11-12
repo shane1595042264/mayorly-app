@@ -513,6 +513,21 @@ export function App() {
     document.documentElement.style.setProperty('--text-pet', String(t?.pet ?? 1))
     document.documentElement.style.setProperty('--text-deck', String(t?.deck ?? 1))
   }, [s?.settings.text])
+  // The page never scrolls. Its roots are overflow hidden, but a focus or scrollIntoView can still
+  // move them (on a Mac, while the window is pet-sized and about to grow), and the deck then sits
+  // partly above the window until a relaunch. Any such scroll is put back at once.
+  useEffect(() => {
+    const onScroll = (e: Event) => {
+      const t = e.target === document ? document.scrollingElement : e.target
+      if (!(t instanceof HTMLElement) || !(t.scrollTop || t.scrollLeft)) return
+      if (t === document.documentElement || t === document.body || t.id === 'root' || t.classList.contains('deck-wrap') || t.querySelector('.deck-wrap')) {
+        t.scrollTop = 0
+        t.scrollLeft = 0
+      }
+    }
+    document.addEventListener('scroll', onScroll, true)
+    return () => document.removeEventListener('scroll', onScroll, true)
+  }, [])
 
   if (!s) return null
   const close = () => setMode('field')
