@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The clerk tries again
+
+- When the AI model is busy, the clerk now tries its next model and your other keys before giving up.
+- A line that still lands in the tray because no model answered gets filed on its own a little later: after 30 seconds, then 2, 10 and 30 minutes.
+
 ## Controls fits the window
 
 - The Controls screen (the keymap) now sizes itself to the window, so its title and search are always in view. On a short screen the list scrolls between them.

@@ -3,7 +3,7 @@ import type { Filing, Ledger } from '@core/index'
 import type { AiKeyPublic, AiKeySync, AiPublic } from '../bridge'
 import { costMicroUsd, rankModels } from './catalog'
 import { AI_PROVIDERS, PROVIDER_LABEL, detectProvider, keyHint, type AiProvider } from './detect'
-import { ProviderError, generate, listModels } from './providers'
+import { ProviderError, generate, listModels, type GenerateResult } from './providers'
 import type { VaultSecret } from './keysync'
 import type { LocalKey, LocalRemoval } from './vault'
 
@@ -44,6 +44,9 @@ const REMOVED_KEEP = 50
 const MAX_PROBES = 4
 const USAGE_KEEP = 500
 const FILE_TIMEOUT_MS = 9_000
+/** How long a capture waits on the clerk across every model and key it tries. */
+const FILE_BUDGET_MS = 15_000
+const MAX_FILE_TRIES = 4
 
 /** Where the clerk's keys and usage live. The text is the clerk's own JSON; the store seals it. */
 export interface ClerkStore {
@@ -226,13 +229,11 @@ export class AiClerk {
   }
 
   /**
-   * Files one captured line. Null when no key works, the model answers nonsense,
-   * or the call takes too long; the caller then files by prefix as before.
+   * Files one captured line. Null when there is no working key or the model answers nonsense;
+   * throws when no model could be reached. The caller then files by prefix as before.
    */
   async fileEntry(text: string, ledgers: Ledger[], rules: string[] = []): Promise<Filing | null> {
-    const k = this.pick()
-    if (!k) return null
-    const model = k.preferredModel ?? k.defaultModel
+    if (!this.pick()) return null
     const system = [
       'You are the clerk of Mayorly, a personal ledger system. The user typed one line into the capture tray.',
       'Decide which ledger it belongs to from the list, by each ledger\'s criterion. Never invent a ledger.',
@@ -245,12 +246,8 @@ export class AiClerk {
       'estimateMin: the minutes if the line states a duration (~20, 20 min, 1h), otherwise null.',
     ].join(' ')
     const prompt = `${ledgerList(ledgers)}${houseRules(rules)}\nLine: ${text}`
-    try {
-      const r = await Promise.race([
-        generate(k.provider, k.key, model, { system, prompt, maxTokens: 160 }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new ProviderError('other', 0, 'The clerk took too long')), FILE_TIMEOUT_MS)),
-      ])
-      this.record({ at: Date.now(), provider: k.provider, model, feature: 'file', inputTokens: r.inputTokens, outputTokens: r.outputTokens, costMicroUsd: costMicroUsd(k.provider, model, r.inputTokens, r.outputTokens) })
+    const { r, model } = await this.ask({ system, prompt, maxTokens: 160 }, FILE_TIMEOUT_MS, FILE_BUDGET_MS)
+    {
       const parsed = parseFiling(r.text)
       if (!parsed) return null
       const title = parsed.title.trim() || text.trim()
@@ -270,13 +267,6 @@ export class AiClerk {
         model,
         confidence,
       }
-    } catch (err) {
-      if (err instanceof ProviderError && (err.kind === 'auth' || err.kind === 'quota')) {
-        Object.assign(k, { status: 'failing', lastError: err.message, lastCheckedAt: Date.now() })
-        this.save()
-      }
-      console.error('[clerk]', err instanceof Error ? err.message : err)
-      return null
     }
   }
 
@@ -287,9 +277,7 @@ export class AiClerk {
    */
   async fileMany(entries: { id: string; title: string }[], ledgers: Ledger[], rules: string[] = []): Promise<Map<string, { ledgerId: string | null; estimateMin: number | null; log: string; model: string; confidence: 'sure' | 'unsure'; leisure?: boolean }>> {
     const out = new Map<string, { ledgerId: string | null; estimateMin: number | null; log: string; model: string; confidence: 'sure' | 'unsure'; leisure?: boolean }>()
-    const k = this.pick()
-    if (!k || entries.length === 0) return out
-    const model = k.preferredModel ?? k.defaultModel
+    if (!this.pick() || entries.length === 0) return out
     const system = [
       'You are the clerk of Mayorly, a personal ledger system. Here are entries waiting in the tray, each with a number.',
       'For each, decide which ledger it belongs to by each ledger\'s criterion. Never invent a ledger.',
@@ -301,12 +289,8 @@ export class AiClerk {
       'estimateMin: the minutes if the entry states a duration, otherwise null.',
     ].join(' ')
     const prompt = `${ledgerList(ledgers)}${houseRules(rules)}\nEntries:\n${entries.map((e, i) => `- ${i + 1}: ${e.title}`).join('\n')}`
-    try {
-      const r = await Promise.race([
-        generate(k.provider, k.key, model, { system, prompt, maxTokens: 200 + 40 * entries.length }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new ProviderError('other', 0, 'The clerk took too long')), FILE_TIMEOUT_MS * 2)),
-      ])
-      this.record({ at: Date.now(), provider: k.provider, model, feature: 'file', inputTokens: r.inputTokens, outputTokens: r.outputTokens, costMicroUsd: costMicroUsd(k.provider, model, r.inputTokens, r.outputTokens) })
+    const { r, model } = await this.ask({ system, prompt, maxTokens: 200 + 40 * entries.length }, FILE_TIMEOUT_MS * 2, FILE_BUDGET_MS * 2)
+    {
       if (process.env.MAYORLY_DEBUG) console.error('[clerk] sweep answer:', r.text.slice(0, 600))
       const rows = parseRows(r.text)
       if (!rows) {
@@ -330,13 +314,6 @@ export class AiClerk {
         const quoted = `'${entry.title.length > 40 ? entry.title.slice(0, 39) + '…' : entry.title}'`
         out.set(entry.id, { ledgerId: ledger.id, estimateMin: est, log: `filed ${quoted} -> ${ledger.code} (clerk, ${model}, from the tray${confidence === 'unsure' ? ', unsure' : ''})${est ? ` est ${est}m` : ''}`, model, confidence })
       }
-      return out
-    } catch (err) {
-      if (err instanceof ProviderError && (err.kind === 'auth' || err.kind === 'quota')) {
-        Object.assign(k, { status: 'failing', lastError: err.message, lastCheckedAt: Date.now() })
-        this.save()
-      }
-      console.error('[clerk]', err instanceof Error ? err.message : err)
       return out
     }
   }
@@ -412,6 +389,52 @@ export class AiClerk {
   }
 
   // ---- internals ----
+
+  /**
+   * One prompt for the filing calls, through every way this machine has of answering it: the
+   * key's own model, then its next cheapest, then each other working key. A model that is busy
+   * or slow (Gemini's "high demand", a 5xx, a rate limit) hands over to the next; a key the
+   * provider refuses is marked failing and skipped. Throws the last error when nothing answered
+   * within the budget, so the caller knows the clerk was unreachable rather than undecided.
+   */
+  private async ask(input: { system: string; prompt: string; maxTokens: number }, timeoutMs: number, budgetMs: number): Promise<{ r: GenerateResult; model: string }> {
+    const ok = this.data.keys.filter((k) => k.status === 'ok')
+    const first = this.pick()
+    const keys = first ? [first, ...ok.filter((k) => k !== first)] : ok
+    const tries: { k: KeyRecord; model: string }[] = []
+    for (const k of keys) {
+      const own = k.preferredModel ?? k.defaultModel
+      tries.push({ k, model: own })
+      if (k === first) {
+        const next = k.models.find((m) => m !== own)
+        if (next) tries.push({ k, model: next })
+      }
+    }
+    const started = Date.now()
+    let last: unknown = new ProviderError('other', 0, 'No working AI key')
+    const refused = new Set<KeyRecord>()
+    for (const { k, model } of tries.slice(0, MAX_FILE_TRIES)) {
+      if (refused.has(k)) continue
+      if (Date.now() - started > budgetMs) break
+      try {
+        const r = await Promise.race([
+          generate(k.provider, k.key, model, input),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new ProviderError('other', 0, 'The clerk took too long')), timeoutMs)),
+        ])
+        this.record({ at: Date.now(), provider: k.provider, model, feature: 'file', inputTokens: r.inputTokens, outputTokens: r.outputTokens, costMicroUsd: costMicroUsd(k.provider, model, r.inputTokens, r.outputTokens) })
+        return { r, model }
+      } catch (err) {
+        last = err
+        console.error('[clerk]', `${k.provider} ${model}:`, err instanceof Error ? err.message : err)
+        if (err instanceof ProviderError && (err.kind === 'auth' || err.kind === 'quota')) {
+          Object.assign(k, { status: 'failing', lastError: err.message, lastCheckedAt: Date.now() })
+          this.save()
+          refused.add(k)
+        }
+      }
+    }
+    throw last
+  }
 
   private pick(): KeyRecord | null {
     // With several keys for one provider, the first that still works; one that fails is marked
