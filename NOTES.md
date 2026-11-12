@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Option+Q goes where it shows
+
+- One tap of Option+Q now always goes back to the task you worked on last, the one highlighted when the list opens. It could jump to an older task when the mouse rested over the list, or after you cleared a task.
+- The mouse only moves the highlight once you actually move it.
+
 ## No passphrase, and a search in Settings
 
 - AI keys now sync with your account on their own. Sign in on a computer or your phone and your keys are there; there is no sync passphrase to choose or type. The sync server holds the key that opens them.

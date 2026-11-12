@@ -45,6 +45,21 @@ export function switchToAction(s: MayorlyState, f: FoundTask): Action | null {
 }
 
 /**
+ * What letting go of the task switcher does: exactly the row it shows, so a tap goes to the task
+ * worked on last, as Alt+Tab goes to the last window. The desk's own swap-back can point
+ * elsewhere (an entry cleared since, whose ledger it falls back to; nothing at all after a parked
+ * session came back), and a tap that followed it took you somewhere the list never showed. The
+ * one place the list cannot show is ledger time with no entry, so when that is where the desk
+ * came from, a tap left on the first row still takes the plain switch.
+ */
+export function switcherAction(s: MayorlyState, rows: FoundTask[], start: number, at: number): Action | null {
+  const p = s.desk.previous
+  if (at === start && p && !p.entryId && !p.leisureId && p.ledgerId && switchBack(s)) return { type: 'desk/switch' }
+  const row = rows[at]
+  return row ? switchToAction(s, row) : null
+}
+
+/**
  * Open tasks for a search, best first: the flow, then the couch list. Every word has to appear in
  * the title or in the name of what the task belongs to, its ledger or the couch. A title that
  * starts with the search comes first, then titles where every word starts a word, then any

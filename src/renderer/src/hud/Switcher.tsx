@@ -10,7 +10,8 @@ interface Props {
   s: MayorlyState
   rows: FoundTask[]
   at: number
-  point: (i: number) => void
+  /** The row under the pointer, with where the pointer is: it only steers once it has moved. */
+  point: (i: number, x: number, y: number) => void
   pick: (i: number) => void
 }
 
@@ -32,7 +33,7 @@ export function Switcher({ s, rows, at, point, pick }: Props) {
           const id = row.kind === 'entry' ? row.entry.id : row.item.id
           const code = row.kind === 'leisure' ? 'COUCH' : (s.ledgers.find((l) => l.id === row.entry.ledgerId)?.code ?? 'TRAY')
           return (
-            <li key={id} role="option" aria-selected={i === at} className={`find-row ${i === at ? 'is-on' : ''}`} onPointerMove={() => point(i)} onClick={() => pick(i)}>
+            <li key={id} role="option" aria-selected={i === at} className={`find-row ${i === at ? 'is-on' : ''}`} onPointerMove={(e) => point(i, e.clientX, e.clientY)} onClick={() => pick(i)}>
               <span className="find-code">{code}</span>
               <span className="find-title">{row.kind === 'entry' ? row.entry.title : row.item.title}</span>
               <span className="find-meta">{id === here ? 'On the desk' : ''}</span>

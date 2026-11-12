@@ -22,11 +22,13 @@ import { setSoundEnabled, sfx } from './lib/sound'
 import { onCalendarAsk } from './lib/calendarAsk'
 import { ARM_OF_ACTION, ARM_OF_COMMAND, isPick, onArm, pointArm, pointPick, takeArmHint, takePickHint } from './plus/arms'
 import { PlusMenu } from './plus/PlusMenu'
-import { balance, onDeskId, recentTasks, switchTarget, switchToAction } from '@core/index'
+import { balance, onDeskId, recentTasks, switcherAction } from '@core/index'
 import { current, dispatch, useHudEvents, useMayorly } from './store'
 
 /** How long the swap hotkey must be held before releasing it closes the menu (hold to peek). */
 const PEEK_MS = 400
+/** How far the pointer has to travel over the task switcher before it moves the highlight. */
+const SWITCHER_STEER_PX = 6
 /** On a Mac the window is the pet. The pet fades out in that small window before the window grows. */
 const PET_FADE_MS = 140
 /** And a panel finishes its exit in the full window before the window shrinks back to the pet. */
@@ -294,9 +296,20 @@ export function App() {
     const v = switcherRef.current
     if (v) setSwitcher({ ...v, at: (v.at + by + v.rows.length) % v.rows.length })
   }
-  const pointSwitcher = (at: number) => {
+  // The list opens in the middle of the screen, often right under a resting pointer, and a twitch
+  // there used to move the highlight to whatever row was under it; letting go then took that row.
+  // The pointer only steers once it has really moved from where it was when the list appeared.
+  const switcherPointer = useRef<{ x: number; y: number } | null>(null)
+  const pointSwitcher = (at: number, x: number, y: number) => {
     const v = switcherRef.current
-    if (v && v.at !== at) setSwitcher({ ...v, at })
+    if (!v) return
+    const from = switcherPointer.current
+    if (!from) {
+      switcherPointer.current = { x, y }
+      return
+    }
+    if (Math.hypot(x - from.x, y - from.y) < SWITCHER_STEER_PX) return
+    if (v.at !== at) setSwitcher({ ...v, at })
   }
   const finishSwitcher = useCallback((go: boolean, at?: number) => {
     const v = switcherRef.current
@@ -305,9 +318,8 @@ export function App() {
     switcherRef.current = null
     setMode('field')
     if (!go || !st) return
-    const to = at ?? v.at
-    // Left where it started: the plain quick switch, which also knows places that are not tasks.
-    const action = to === v.start && switchTarget(st) ? ({ type: 'desk/switch' } as const) : switchToAction(st, v.rows[to])
+    // What is highlighted is what you get (switcherAction).
+    const action = switcherAction(st, v.rows, v.start, at ?? v.at)
     if (action) void dispatch(action)
   }, [setMode])
   useEffect(() => {
@@ -386,6 +398,7 @@ export function App() {
             return
           }
           switcherStep.current = now
+          switcherPointer.current = null
           setSwitcher({ rows, start, at: start })
           setMode('switcher')
           return

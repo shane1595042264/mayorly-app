@@ -6,7 +6,7 @@ import {
   plannedMs,
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
-  findTasks, taskTomatoes, tomatoLabel, onDeskId, recentTasks, switchToAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
+  findTasks, taskTomatoes, tomatoLabel, onDeskId, recentTasks, switchToAction, switcherAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
 } from './index'
 
 const MIN = 60_000
@@ -1698,6 +1698,48 @@ describe('recent tasks', () => {
     const names = (q: string) => findTasks(w.s, q).map((x) => (x.kind === 'entry' ? x.entry.title : x.item.title))
     expect(names('')[0]).toBe('c')
     expect(names('legal')[0]).toBe('c')
+  })
+
+  // Letting go of the switcher: what it highlights is what you get, like Alt+Tab.
+  const tap = (w: ReturnType<typeof world>) => {
+    const rows = recentTasks(w.s, 10)
+    const id = (r: (typeof rows)[number]) => (r.kind === 'entry' ? r.entry.id : r.item.id)
+    const start = rows[0] && id(rows[0]) === onDeskId(w.s) ? 1 : 0
+    return { rows, start, action: switcherAction(w.s, rows, start, start) }
+  }
+  const deskTitle = (w: ReturnType<typeof world>) => w.s.entries.find((e) => e.id === onDeskId(w.s))?.title
+
+  it('a tap goes to the task worked on last, through the quick switch so its clock comes back', () => {
+    const { w, go } = three()
+    go('a'); go('b'); go('c')
+    const { action } = tap(w)
+    expect(action).toEqual({ type: 'desk/switch' })
+    w.do(action!)
+    expect(deskTitle(w)).toBe('b')
+  })
+
+  it('a tap after a clear goes to the task the list shows, not to whatever the cleared one\'s ledger holds', () => {
+    const { w, go } = three()
+    w.do({ type: 'entry/capture', text: 'dance: drills' })
+    go('drills'); go('a')
+    // Clearing a moves the desk on by itself, to the next entry in the ledger; the swap-back then
+    // points at a, gone, and used to fall back to the ledger instead of the drills shown on top.
+    w.do({ type: 'entry/complete', id: w.entry('a').id })
+    w.wait(MIN)
+    const { rows, start, action } = tap(w)
+    const shown = rows[start]
+    expect(shown.kind === 'entry' && shown.entry.title).toBe('drills')
+    w.do(action!)
+    expect(deskTitle(w)).toBe('drills')
+  })
+
+  it('the pointer row is what a release takes, wherever it is in the list', () => {
+    const { w, go } = three()
+    go('a'); go('b'); go('c')
+    const { rows } = tap(w)
+    const a = rows.findIndex((r) => r.kind === 'entry' && r.entry.title === 'a')
+    const action = switcherAction(w.s, rows, 1, a)
+    expect(action).toMatchObject({ type: 'desk/select', entryId: w.entry('a').id })
   })
 
   it('goes back through the quick switch, so the clock returns, and picks anything older', () => {
