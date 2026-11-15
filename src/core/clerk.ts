@@ -16,6 +16,8 @@ export interface Filing {
   confidence?: 'sure' | 'unsure'
   /** The line is entertainment: it goes to the couch list, not a ledger. */
   leisure?: boolean
+  /** No ledger fits, and the clerk proposes one; `ledgerId` is then the closest existing one. Capture decides whether to start it. */
+  newLedger?: { name: string; criterion: string; confidence: number }
 }
 
 export interface Clerk {

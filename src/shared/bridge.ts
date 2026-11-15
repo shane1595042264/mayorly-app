@@ -167,6 +167,10 @@ export interface AiPublic {
   providers: Record<AiProvider, string>
   usage: { days: number; calls: number; costMicroUsd: number }
   sync: AiKeySync
+  /** The level for starting a ledger, found by trial for the model this machine files with; null before it has been tried. */
+  tuning?: { model: string; threshold: number; correct: number; total: number; at: number } | null
+  /** The trial is running. */
+  tuningNow?: boolean
 }
 
 export interface Bridge {
@@ -236,6 +240,8 @@ export interface Bridge {
     syncReset(): Promise<AiPublic>
     /** Send everything in the tray to the clerk now. */
     sweepTray(): Promise<void>
+    /** Run the trial again: the clerk files the test lines and keeps the level that does best. */
+    calibrate(): Promise<AiPublic>
     /** The clerk picks a glyph name for a ledger from the catalogue, skipping names other ledgers wear. Null without a key or an answer. */
     pickGlyph(name: string, criterion: string, options: string[], taken: string[]): Promise<string | null>
     /** A request in words about the calendar. The proposal is held by the shell; null when the clerk could not read it or has no key. */
@@ -318,6 +324,7 @@ export const IPC = {
   aiSyncUnlock: 'mayorly:ai-sync-unlock',
   aiSyncReset: 'mayorly:ai-sync-reset',
   aiSweep: 'mayorly:ai-sweep',
+  aiCalibrate: 'mayorly:ai-calibrate',
   aiPickGlyph: 'mayorly:ai-pick-glyph',
   aiArrange: 'mayorly:ai-arrange',
   calAddSource: 'mayorly:cal-add-source',

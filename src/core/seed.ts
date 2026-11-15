@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hotkeys: DEFAULT_HOTKEYS,
   keymap: {},
   openAtLogin: false,
+  clerk: { createLedgers: true, consolidate: true, minConfidence: null },
 }
 
 export function emptyState(): MayorlyState {
@@ -114,7 +115,7 @@ export function migrate(raw: unknown): MayorlyState | null {
     leisure: (x.leisure ?? []).map((it) => ({ ...it, cues: Array.isArray(it.cues) ? it.cues : [] })),
     entries: (x.entries ?? []).map((e) => ({ ...e, tomatoes: Number.isFinite(e.tomatoes) ? e.tomatoes : 0 })),
     trash: (Array.isArray(x.trash) ? x.trash : []).filter((t) => t && typeof t.id === 'string' && Number.isFinite(t.deletedAt)).map((t) => ({ ...t, tomatoes: Number.isFinite(t.tomatoes) ? t.tomatoes : 0 })),
-    settings: { ...base.settings, ...x.settings, alarms: sanitiseAlarms(x.settings?.alarms), hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys }, calendar: { ...base.settings.calendar, ...x.settings?.calendar } },
+    settings: { ...base.settings, ...x.settings, alarms: sanitiseAlarms(x.settings?.alarms), hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys }, calendar: { ...base.settings.calendar, ...x.settings?.calendar }, clerk: { ...base.settings.clerk, ...x.settings?.clerk } },
     calendar: { ...emptyCalendar(), ...x.calendar },
   } as MayorlyState)))
 }

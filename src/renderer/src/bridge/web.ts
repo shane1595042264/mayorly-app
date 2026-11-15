@@ -201,6 +201,7 @@ export function createWebBridge(): Bridge {
     onSync: () => () => {},
     ai: {
       get: async () => NO_AI,
+      calibrate: async () => NO_AI,
       addKey: async () => { throw new Error('AI keys live in the desktop app') },
       removeKey: async () => NO_AI,
       recheckKey: async () => NO_AI,

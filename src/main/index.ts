@@ -182,7 +182,19 @@ function boot() {
   const keySync = new KeySync(config.apiUrl, clerk)
   const say = (n: ClerkNotice) => send(IPC.clerk, n)
   const short = (t: string) => (t.length > 36 ? `${t.slice(0, 35)}…` : t)
-  const { captureLine, sweepTray } = makeCapture(engine, clerk, say)
+  const { captureLine, sweepTray, consolidate } = makeCapture(engine, clerk, say)
+  // The trial that sets the level for starting a ledger goes to the log, line by line.
+  clerk.onTuned = (lines) => {
+    for (const line of lines) log.info('[clerk]', line)
+  }
+  // Tuned once per model, early, when the clerk is allowed to touch the shelf; and the shelf is
+  // tidied a while after launch and then every few hours.
+  setTimeout(() => {
+    const c = engine.state.settings.clerk
+    if (c.createLedgers || c.consolidate) clerk.ensureTuned()
+  }, 20_000)
+  setTimeout(() => void consolidate(), 2 * 60_000)
+  setInterval(() => void consolidate(), 6 * 3_600_000)
   ipcMain.handle(IPC.getState, () => engine.state)
   // Everything the pages send is something a person did here.
   ipcMain.handle(IPC.dispatch, (_e, action: Action) => {
@@ -203,6 +215,7 @@ function boot() {
     return clerk.public()
   })
   ipcMain.handle(IPC.aiSweep, () => sweepTray())
+  ipcMain.handle(IPC.aiCalibrate, () => aiCall(() => clerk.calibrate()))
   // The clerk arranging the calendar: a request becomes a held proposal, previewed through pure
   // reduce; applying dispatches the real schedule/apply, which checks everything again.
   const proposals = new Map<string, { drafts: Draft[]; log: string; model: string; at: number }>()

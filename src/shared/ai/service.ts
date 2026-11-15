@@ -1,4 +1,5 @@
 import { ARRANGE_SYSTEM } from './arrange'
+import { chooseThreshold, describeTrials, TRIAL_LEDGERS, TRIALS, type Trial } from './tuning'
 import type { Filing, Ledger } from '@core/index'
 import type { AiKeyPublic, AiKeySync, AiPublic } from '../bridge'
 import { costMicroUsd, rankModels } from './catalog'
@@ -37,7 +38,29 @@ interface Saved {
   vault: VaultSecret | null
   /** Keys removed here that the server has not heard about yet. */
   removed: LocalRemoval[]
+  /** The level for starting a ledger, found by trial for each provider and model (tuning.ts). */
+  tuning: Record<string, { model: string; threshold: number; correct: number; total: number; at: number }>
 }
+
+/** A tray entry as the clerk filed it. */
+export interface TrayFiling {
+  ledgerId: string | null
+  estimateMin: number | null
+  log: string
+  model: string
+  confidence: 'sure' | 'unsure'
+  leisure?: boolean
+  newLedger?: { name: string; criterion: string; confidence: number }
+}
+
+/** What the filing calls may do beyond picking a ledger. */
+export interface FileOptions {
+  /** The clerk may propose a ledger when none fits. */
+  newLedgers?: boolean
+}
+
+const NEW_LEDGER_RULE =
+  'Prefer an existing ledger. Only when no ledger fits and the line belongs to a lasting area of the user\'s life that would keep collecting entries (not a one-off that fits loosely somewhere), answer ledgerCode NEW with newLedger: {"name": one or two words, "criterion": one sentence of what belongs in it}, and fallbackCode: the closest existing ledger. For NEW, confidence is how sure you are that a new ledger is right.'
 
 const REMOVED_KEEP = 50
 
@@ -65,7 +88,10 @@ export class KeyCheckError extends Error {
 }
 
 export class AiClerk {
-  private data: Saved = { keys: [], preferredProvider: null, usage: [], vault: null, removed: [] }
+  private data: Saved = { keys: [], preferredProvider: null, usage: [], vault: null, removed: [], tuning: {} }
+  private tuningNow: Promise<void> | null = null
+  /** Set by the shell: the trial run finished; one line for the log, then one per trial. */
+  onTuned: ((lines: string[]) => void) | null = null
   private sync: AiKeySync = { phase: 'off', at: null, message: null }
   /** Set by KeySync: a key was added or removed here. */
   onKeysChanged: (() => void) | null = null
@@ -88,6 +114,8 @@ export class AiClerk {
       preferredProvider: this.data.preferredProvider,
       providers: PROVIDER_LABEL,
       sync: this.sync,
+      tuning: this.tuned(),
+      tuningNow: this.tuningNow !== null,
       usage: {
         days: 30,
         calls: recent.filter((u) => u.feature === 'file').length,
@@ -232,21 +260,24 @@ export class AiClerk {
    * Files one captured line. Null when there is no working key or the model answers nonsense;
    * throws when no model could be reached. The caller then files by prefix as before.
    */
-  async fileEntry(text: string, ledgers: Ledger[], rules: string[] = []): Promise<Filing | null> {
+  async fileEntry(text: string, ledgers: Ledger[], rules: string[] = [], opts: FileOptions = {}): Promise<Filing | null> {
     if (!this.pick()) return null
+    const codes = ledgers.map((l) => l.code).join(', ')
     const system = [
       'You are the clerk of Mayorly, a personal ledger system. The user typed one line into the capture tray.',
-      'Decide which ledger it belongs to from the list, by each ledger\'s criterion. Never invent a ledger.',
+      `Decide which ledger it belongs to from the list, by each ledger\'s criterion. ${opts.newLedgers ? NEW_LEDGER_RULE : 'Never invent a ledger.'}`,
       'Always pick the best-fitting ledger, even when the fit is poor; say how sure you are with the confidence field instead of leaving it out.',
       'Entertainment is not a ledger: games, shows, streams, films, scrolling, anything with no productive value gets ledgerCode LEISURE. Exercise, study and work are not entertainment.',
       'The house rules are the user\'s own corrections and come before the criteria.',
-      `Reply with JSON only, no prose: {"ledgerCode": one of ${ledgers.map((l) => l.code).join(', ')}, LEISURE, "confidence": number from 0 to 1, "title": string, "estimateMin": number or null}. ledgerCode is never null.`,
+      opts.newLedgers
+        ? `Reply with JSON only, no prose: {"ledgerCode": one of ${codes}, LEISURE or NEW, "confidence": number from 0 to 1, "title": string, "estimateMin": number or null, "newLedger": {"name": string, "criterion": string} or null, "fallbackCode": one of ${codes} or null}. ledgerCode is never null.`
+        : `Reply with JSON only, no prose: {"ledgerCode": one of ${codes}, LEISURE, "confidence": number from 0 to 1, "title": string, "estimateMin": number or null}. ledgerCode is never null.`,
       CONFIDENCE_RULE,
       'title: the entry as a short line in the user\'s own words, without the ledger name, tags such as #dance, or the time estimate.',
       'estimateMin: the minutes if the line states a duration (~20, 20 min, 1h), otherwise null.',
     ].join(' ')
     const prompt = `${ledgerList(ledgers)}${houseRules(rules)}\nLine: ${text}`
-    const { r, model } = await this.ask({ system, prompt, maxTokens: 160 }, FILE_TIMEOUT_MS, FILE_BUDGET_MS)
+    const { r, model } = await this.ask({ system, prompt, maxTokens: opts.newLedgers ? 260 : 160 }, FILE_TIMEOUT_MS, FILE_BUDGET_MS)
     {
       const parsed = parseFiling(r.text)
       if (!parsed) return null
@@ -254,6 +285,20 @@ export class AiClerk {
       const quoted = `'${title.length > 40 ? title.slice(0, 39) + '…' : title}'`
       if (parsed.ledgerCode?.toUpperCase() === 'LEISURE') {
         return { title, ledgerId: null, estimateMin: parsed.estimateMin, log: `couch ${quoted}: entertainment (clerk, ${model})`, model, confidence: confidenceOf(parsed.confidence), leisure: true }
+      }
+      const proposal = opts.newLedgers && parsed.ledgerCode?.toUpperCase() === 'NEW' ? proposedLedger(parsed.newLedger, parsed.confidence) : null
+      if (proposal) {
+        const fallback = (parsed.fallbackCode ? ledgers.find((l) => l.code.toLowerCase() === parsed.fallbackCode!.toLowerCase()) : null) ?? bestGuess(text, ledgers)
+        const est = parsed.estimateMin ? ` est ${parsed.estimateMin}m` : ''
+        return {
+          title,
+          ledgerId: fallback?.id ?? null,
+          estimateMin: parsed.estimateMin,
+          log: `${fallback ? `filed ${quoted} -> ${fallback.code}` : `tray ${quoted}`} (clerk, ${model}, unsure; proposes ledger ${proposal.name})${est}`,
+          model,
+          confidence: 'unsure',
+          newLedger: proposal,
+        }
       }
       const named = parsed.ledgerCode ? ledgers.find((l) => l.code.toLowerCase() === parsed.ledgerCode!.toLowerCase()) ?? null : null
       const ledger = named ?? bestGuess(text, ledgers)
@@ -275,21 +320,24 @@ export class AiClerk {
    * only the ledger and a missing estimate come back. Entries the model leaves out
    * or answers nonsense for stay where they are.
    */
-  async fileMany(entries: { id: string; title: string }[], ledgers: Ledger[], rules: string[] = []): Promise<Map<string, { ledgerId: string | null; estimateMin: number | null; log: string; model: string; confidence: 'sure' | 'unsure'; leisure?: boolean }>> {
-    const out = new Map<string, { ledgerId: string | null; estimateMin: number | null; log: string; model: string; confidence: 'sure' | 'unsure'; leisure?: boolean }>()
+  async fileMany(entries: { id: string; title: string }[], ledgers: Ledger[], rules: string[] = [], opts: FileOptions = {}): Promise<Map<string, TrayFiling>> {
+    const out = new Map<string, TrayFiling>()
     if (!this.pick() || entries.length === 0) return out
+    const codes = ledgers.map((l) => l.code).join(', ')
     const system = [
       'You are the clerk of Mayorly, a personal ledger system. Here are entries waiting in the tray, each with a number.',
-      'For each, decide which ledger it belongs to by each ledger\'s criterion. Never invent a ledger.',
+      `For each, decide which ledger it belongs to by each ledger\'s criterion. ${opts.newLedgers ? `${NEW_LEDGER_RULE} Entries that need the same new ledger give it the same name.` : 'Never invent a ledger.'}`,
       'Always pick the best-fitting ledger, even when the fit is poor; say how sure you are with the confidence field instead of leaving it out.',
       'Entertainment is not a ledger: games, shows, streams, films, scrolling, anything with no productive value gets ledgerCode LEISURE. Exercise, study and work are not entertainment.',
       'The house rules are the user\'s own corrections and come before the criteria.',
-      `Reply with JSON only, no prose and no wrapper object: an array of {"n": number, "ledgerCode": one of ${ledgers.map((l) => l.code).join(', ')}, LEISURE, "confidence": number from 0 to 1, "estimateMin": number or null}, one per entry. ledgerCode is never null.`,
+      opts.newLedgers
+        ? `Reply with JSON only, no prose and no wrapper object: an array of {"n": number, "ledgerCode": one of ${codes}, LEISURE or NEW, "confidence": number from 0 to 1, "estimateMin": number or null, "newLedger": {"name": string, "criterion": string} or null, "fallbackCode": one of ${codes} or null}, one per entry. ledgerCode is never null.`
+        : `Reply with JSON only, no prose and no wrapper object: an array of {"n": number, "ledgerCode": one of ${codes}, LEISURE, "confidence": number from 0 to 1, "estimateMin": number or null}, one per entry. ledgerCode is never null.`,
       CONFIDENCE_RULE,
       'estimateMin: the minutes if the entry states a duration, otherwise null.',
     ].join(' ')
     const prompt = `${ledgerList(ledgers)}${houseRules(rules)}\nEntries:\n${entries.map((e, i) => `- ${i + 1}: ${e.title}`).join('\n')}`
-    const { r, model } = await this.ask({ system, prompt, maxTokens: 200 + 40 * entries.length }, FILE_TIMEOUT_MS * 2, FILE_BUDGET_MS * 2)
+    const { r, model } = await this.ask({ system, prompt, maxTokens: 200 + (opts.newLedgers ? 80 : 40) * entries.length }, FILE_TIMEOUT_MS * 2, FILE_BUDGET_MS * 2)
     {
       if (process.env.MAYORLY_DEBUG) console.error('[clerk] sweep answer:', r.text.slice(0, 600))
       const rows = parseRows(r.text)
@@ -304,6 +352,14 @@ export class AiClerk {
         const code = typeof row.ledgerCode === 'string' ? row.ledgerCode : null
         if (code?.toUpperCase() === 'LEISURE') {
           out.set(entry.id, { ledgerId: null, estimateMin: null, log: `couch '${entry.title.length > 40 ? entry.title.slice(0, 39) + '…' : entry.title}': entertainment (clerk, ${model}, from the tray)`, model, confidence: 'sure', leisure: true })
+          continue
+        }
+        const proposal = opts.newLedgers && code?.toUpperCase() === 'NEW' ? proposedLedger(row.newLedger, row.confidence) : null
+        if (proposal) {
+          const fb = typeof row.fallbackCode === 'string' ? row.fallbackCode.toLowerCase() : ''
+          const fallback = ledgers.find((l) => l.code.toLowerCase() === fb) ?? bestGuess(entry.title, ledgers)
+          const quoted = `'${entry.title.length > 40 ? entry.title.slice(0, 39) + '…' : entry.title}'`
+          out.set(entry.id, { ledgerId: fallback?.id ?? null, estimateMin: null, log: `${fallback ? `filed ${quoted} -> ${fallback.code}` : `tray ${quoted}`} (clerk, ${model}, from the tray, unsure; proposes ledger ${proposal.name})`, model, confidence: 'unsure', newLedger: proposal })
           continue
         }
         const named = code ? ledgers.find((l) => l.code.toLowerCase() === code.toLowerCase()) ?? null : null
@@ -368,6 +424,94 @@ export class AiClerk {
    * choose an icon, never drawing one. Names other ledgers wear are off the table. Null when
    * there is no key, the call is slow, or the answer is not in the list.
    */
+  /**
+   * Ledgers the clerk started that cover the same ground as another and would be better folded
+   * into it. Only codes in `movable` may be folded away. Throws when no model could be reached.
+   */
+  async consolidate(ledgers: Ledger[], movable: Set<string>, samples: Map<string, string[]>): Promise<{ from: string; into: string; confidence: number; reason: string }[]> {
+    if (!this.pick() || movable.size === 0 || ledgers.length < 2) return []
+    const system = [
+      'You keep the shelf of Mayorly, a personal ledger system, tidy. Some ledgers were started by the clerk and are marked clerk-made.',
+      'Find clerk-made ledgers that cover the same ground as another ledger, or that belong inside one, so their entries would be better kept there. Ledgers that are only related stay apart.',
+      'Reply with JSON only: an array of {"from": the clerk-made ledger\'s code, "into": the code to fold it into, "confidence": number from 0 to 1, "reason": a few words}. An empty array when nothing should be folded.',
+      'confidence: how sure you are the fold is right. A fold you would argue for is 0.7 or more.',
+    ].join(' ')
+    const lines = ledgers.map((l) => {
+      const seen = (samples.get(l.id) ?? []).slice(0, 5).map((t) => `"${t}"`).join(', ')
+      return `- ${l.code}${movable.has(l.id) ? ' (clerk-made)' : ''}: ${l.name}. ${l.criterion || '(no criterion)'}${seen ? ` Holds: ${seen}.` : ''}`
+    })
+    const { r } = await this.ask({ system, prompt: `Ledgers:\n${lines.join('\n')}`, maxTokens: 300 }, FILE_TIMEOUT_MS * 2, FILE_BUDGET_MS * 2)
+    const rows = parseRows(r.text) as { from?: unknown; into?: unknown; confidence?: unknown; reason?: unknown }[] | null
+    if (!rows) return []
+    const byCode = (c: unknown) => (typeof c === 'string' ? ledgers.find((l) => l.code.toLowerCase() === c.toLowerCase()) : undefined)
+    const out: { from: string; into: string; confidence: number; reason: string }[] = []
+    for (const row of rows) {
+      const from = byCode(row.from)
+      const into = byCode(row.into)
+      const confidence = confidenceValue(row.confidence)
+      if (!from || !into || from.id === into.id || !movable.has(from.id) || confidence === null) continue
+      out.push({ from: from.id, into: into.id, confidence, reason: typeof row.reason === 'string' ? row.reason.slice(0, 80) : '' })
+    }
+    return out
+  }
+
+  /** The level tuned by trial for the model this machine would file with, or null before it has been tried. */
+  tuned(): { model: string; threshold: number; correct: number; total: number; at: number } | null {
+    const k = this.pick()
+    return k ? this.data.tuning[tuneKey(k)] ?? null : null
+  }
+
+  /** Tries the model once, in the background, if it has not been tried. */
+  ensureTuned(): void {
+    if (this.tuningNow || !this.enabled() || this.tuned()) return
+    void this.calibrate().catch((err) => console.warn('[clerk] could not tune:', err instanceof Error ? err.message : String(err)))
+  }
+
+  /**
+   * Trial and error: files the trial lines against the sample ledgers with new ledgers allowed,
+   * then keeps the level that does best (tuning.ts). Four calls at a time; a line nothing answered
+   * for is left out, and too few answers keep whatever level there was.
+   */
+  async calibrate(): Promise<AiPublic> {
+    if (this.tuningNow) {
+      await this.tuningNow
+      return this.public()
+    }
+    const k = this.pick()
+    if (!k) return this.public()
+    const model = k.preferredModel ?? k.defaultModel
+    this.tuningNow = (async () => {
+      this.onChange(this.public())
+      const trials: Trial[] = []
+      for (let i = 0; i < TRIALS.length; i += 4) {
+        const batch = await Promise.all(TRIALS.slice(i, i + 4).map(async (t) => {
+          try {
+            const f = await this.fileEntry(t.line, TRIAL_LEDGERS, [], { newLedgers: true })
+            return f ? { line: t.line, wantsNew: t.wantsNew, proposed: !!f.newLedger, confidence: f.newLedger?.confidence ?? 0 } : null
+          } catch {
+            return null
+          }
+        }))
+        for (const t of batch) if (t) trials.push(t)
+      }
+      if (trials.length < TRIALS.length / 2) {
+        this.onTuned?.([`tuning ${model}: only ${trials.length} of ${TRIALS.length} trial lines answered, level unchanged`])
+        return
+      }
+      const best = chooseThreshold(trials)
+      this.data.tuning = { ...this.data.tuning, [tuneKey(k)]: { model, ...best, at: Date.now() } }
+      this.save()
+      this.onTuned?.([`tuned ${model}: starts a ledger at ${Math.round(best.threshold * 100)}% sure, ${best.correct} of ${best.total} trial lines right`, ...describeTrials(trials, best.threshold)])
+    })()
+    try {
+      await this.tuningNow
+    } finally {
+      this.tuningNow = null
+      this.onChange(this.public())
+    }
+    return this.public()
+  }
+
   async pickGlyph(name: string, criterion: string, options: string[], taken: string[]): Promise<string | null> {
     const k = this.pick()
     if (!k || options.length === 0) return null
@@ -486,6 +630,7 @@ export class AiClerk {
         usage: Array.isArray(d.usage) ? d.usage : [],
         vault: d.vault && typeof d.vault === 'object' ? d.vault : null,
         removed: Array.isArray(d.removed) ? d.removed : [],
+        tuning: d.tuning && typeof d.tuning === 'object' ? d.tuning : {},
       }
       // Sealed by the keychain before: move it to the local seal so it never asks again.
       if (opened.reseal) this.store.save(JSON.stringify(this.data))
@@ -535,7 +680,7 @@ const ledgerList = (ledgers: Ledger[]) => `Ledgers:\n${ledgers.map((l) => `- ${l
 const houseRules = (rules: string[]) => (rules.length ? `\nHouse rules:\n${rules.map((r) => `- ${r}`).join('\n')}\n` : '')
 
 /** The array of rows, whether it came bare, wrapped in an object, or fenced in markdown. */
-function parseRows(text: string): { n?: unknown; ledgerCode?: unknown; estimateMin?: unknown; confidence?: unknown }[] | null {
+function parseRows(text: string): { n?: unknown; ledgerCode?: unknown; estimateMin?: unknown; confidence?: unknown; newLedger?: unknown; fallbackCode?: unknown }[] | null {
   const body = text.replace(/```(?:json)?/gi, '').trim()
   const start = body.search(/[[{]/)
   if (start < 0) return null
@@ -568,14 +713,32 @@ function confidenceOf(v: unknown): 'sure' | 'unsure' {
   return Number.isFinite(n) && n < UNSURE_BELOW ? 'unsure' : 'sure'
 }
 
-function parseFiling(text: string): { ledgerCode: string | null; title: string; estimateMin: number | null; confidence: unknown } | null {
+const tuneKey = (k: { provider: string; preferredModel?: string | null; defaultModel: string }) => `${k.provider}:${k.preferredModel ?? k.defaultModel}`
+
+/** The model's confidence as a number from 0 to 1, or null when it gave none. */
+function confidenceValue(v: unknown): number | null {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN
+  if (!Number.isFinite(n)) return null
+  return Math.min(1, Math.max(0, n > 1 ? n / 100 : n))
+}
+
+/** A ledger the model proposed, tidied: a short name and a criterion, or null when it gave neither. */
+function proposedLedger(raw: unknown, confidence: unknown): { name: string; criterion: string; confidence: number } | null {
+  const j = raw && typeof raw === 'object' ? (raw as { name?: unknown; criterion?: unknown }) : null
+  const name = typeof j?.name === 'string' ? j.name.replace(/["'`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 24) : ''
+  if (!name) return null
+  const criterion = typeof j?.criterion === 'string' ? j.criterion.trim().slice(0, 200) : ''
+  return { name: name.charAt(0).toUpperCase() + name.slice(1), criterion, confidence: confidenceValue(confidence) ?? 0 }
+}
+
+function parseFiling(text: string): { ledgerCode: string | null; title: string; estimateMin: number | null; confidence: unknown; newLedger?: unknown; fallbackCode?: string } | null {
   const m = text.match(/\{[\s\S]*\}/)
   if (!m) return null
   try {
-    const j = JSON.parse(m[0]) as { ledgerCode?: unknown; title?: unknown; estimateMin?: unknown; confidence?: unknown }
+    const j = JSON.parse(m[0]) as { ledgerCode?: unknown; title?: unknown; estimateMin?: unknown; confidence?: unknown; newLedger?: unknown; fallbackCode?: unknown }
     if (typeof j.title !== 'string') return null
     const est = typeof j.estimateMin === 'number' && j.estimateMin > 0 ? Math.round(j.estimateMin) : null
-    return { ledgerCode: typeof j.ledgerCode === 'string' ? j.ledgerCode : null, title: j.title, estimateMin: est, confidence: j.confidence }
+    return { ledgerCode: typeof j.ledgerCode === 'string' ? j.ledgerCode : null, title: j.title, estimateMin: est, confidence: j.confidence, newLedger: j.newLedger, fallbackCode: typeof j.fallbackCode === 'string' ? j.fallbackCode : undefined }
   } catch {
     return null
   }

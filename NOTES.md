@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The clerk can start ledgers, and tidy the ones it started
+
+- When a line you capture fits none of your ledgers, the clerk can start a new ledger for it, with a name, a rule for what goes in it, an icon and its own colour. You can turn this off in Settings, under AI clerk.
+- It only does so when it is sure enough. How sure is found by trial: the clerk files 24 sample lines, half that fit a ledger and half that need a new one, and keeps the level that gets the most right. You can set your own level with the slider, or tune it again.
+- It can also fold a ledger it started into another one that covers the same ground, entries and all, once that ledger is a day old. This is its own switch in Settings.
+- Ledgers you made, or edited, are never renamed, folded or removed by the clerk.
+
 ## The clerk tries again
 
 - When the AI model is busy, the clerk now tries its next model and your other keys before giving up.

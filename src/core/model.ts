@@ -430,6 +430,17 @@ export interface Settings {
   /** In-app keys the user changed, by action id, up to two keys each. Missing ids use the HUD's defaults; syncs with the account. */
   keymap: Record<string, string[]>
   openAtLogin: boolean
+  /** What the AI clerk may do to the shelf on its own. Syncs. */
+  clerk: ClerkSettings
+}
+
+export interface ClerkSettings {
+  /** Start a ledger for a line no ledger fits, when it is sure enough and the shelf has room. */
+  createLedgers: boolean
+  /** Fold a ledger the clerk started into another that covers the same ground. Hand-written ledgers are never touched. */
+  consolidate: boolean
+  /** How sure it must be, 0.5 to 0.99, for either; null takes the level tuned by trial for its model. */
+  minConfidence: number | null
 }
 
 export type AlarmKind = 'work' | 'rest'

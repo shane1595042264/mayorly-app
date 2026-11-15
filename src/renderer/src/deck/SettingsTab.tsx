@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowsClockwise, GoogleLogo, Keyboard, Play, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
-import { ALARM_TONES, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type MayorlyState, type PlanMode, type Settings } from '@core/index'
-import type { AiKeySync, AiProvider, AppInfo } from '../../../shared/bridge'
+import { ALARM_TONES, LEDGER_CAP, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type ClerkSettings, type MayorlyState, type PlanMode, type Settings } from '@core/index'
+import type { AiKeySync, AiProvider, AiPublic, AppInfo } from '../../../shared/bridge'
+import { DEFAULT_THRESHOLD, TRIALS } from '../../../shared/ai/tuning'
 import { builtOn } from '../../../shared/build'
 import { bridge } from '../bridge'
 import { hotkeyLabel, IS_MAC } from '../lib/keys'
@@ -76,7 +77,7 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
       <CalendarSection s={s} />
 
       {kind === 'electron' && <AccountSection />}
-      {kind === 'electron' && <AiSection />}
+      {kind === 'electron' && <AiSection clerk={st.clerk} setClerk={(p) => set({ clerk: { ...st.clerk, ...p } })} />}
       <DataSection kind={kind} openNotes={openNotes} />
       <HouseRulesSection s={s} />
 
@@ -281,7 +282,7 @@ function DataSection({ kind, openNotes }: { kind: 'electron' | 'web'; openNotes:
  * you pick. Keys are sealed on this machine and, with a sync passphrase, shared
  * with the account's other computers, sealed with the passphrase first.
  */
-function AiSection() {
+function AiSection({ clerk, setClerk }: { clerk: ClerkSettings; setClerk: (p: Partial<ClerkSettings>) => void }) {
   const ai = useAi()
   const [key, setKey] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -377,8 +378,72 @@ function AiSection() {
       {ai.usage.calls > 0 && (
         <span className="field-help">Last {ai.usage.days} days: {ai.usage.calls} filed by the clerk, about {dollars(ai.usage.costMicroUsd)}.</span>
       )}
+      <ClerkShelf clerk={clerk} set={setClerk} ai={ai} />
       <KeySyncBlock sync={ai.sync} />
     </section>
+  )
+}
+
+/**
+ * What the clerk may do to the shelf on its own: start a ledger for a line nothing fits, and fold
+ * a ledger it started into one that covers the same ground. How sure it must be is found by trial
+ * for the model this machine files with (shared/ai/tuning.ts); moving the slider sets a level of
+ * your own instead, which syncs.
+ */
+function ClerkShelf({ clerk, set, ai }: { clerk: ClerkSettings; set: (p: Partial<ClerkSettings>) => void; ai: AiPublic }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const tuned = ai.tuning ?? null
+  const level = clerk.minConfidence ?? tuned?.threshold ?? DEFAULT_THRESHOLD
+  const pct = (n: number) => `${Math.round(n * 100)}%`
+  const running = busy || !!ai.tuningNow
+  const working = ai.keys.some((k) => k.status === 'ok')
+  const tune = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await bridge.ai.calibrate()
+    } catch (e) {
+      setError(plainError(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const whose = clerk.minConfidence !== null ? 'your level' : tuned ? 'tuned' : 'until tuned'
+  return (
+    <div className="clerk-shelf" data-setting="new ledger, create ledgers, consolidate, fold, merge ledgers, confidence, threshold, tune">
+      <h4 className="field-label caps" style={{ marginTop: 18 }}>The clerk and your shelf</h4>
+      <Check label="Start a ledger when nothing fits" value={clerk.createLedgers} onChange={(createLedgers) => set({ createLedgers })} />
+      <Check label="Fold its own ledgers into ones that overlap" value={clerk.consolidate} onChange={(consolidate) => set({ consolidate })} />
+      {(clerk.createLedgers || clerk.consolidate) && (
+        <>
+          <label className="field">
+            <span className="field-label caps">How sure</span>
+            <input type="range" min={0.5} max={0.99} step={0.01} value={level} onChange={(e) => set({ minConfidence: Number(e.target.value) })} />
+            <span className="field-help mono num">{pct(level)} {whose}</span>
+          </label>
+          <p className="field-help">
+            {running
+              ? `Tuning: filing ${TRIALS.length} sample lines, half that fit a ledger and half that need a new one.`
+              : tuned
+                ? `Tuned for ${tuned.model} by trial: at ${pct(tuned.threshold)} it got ${tuned.correct} of ${tuned.total} sample lines right.`
+                : working
+                  ? `Not tuned yet. It files ${TRIALS.length} sample lines and keeps the level that gets the most right, a wrong new ledger counting worse than a missed one.`
+                  : 'Needs a working key to tune.'}
+          </p>
+          <div className="form-actions">
+            <button type="button" className="btn ghost" disabled={running || !working} onClick={() => void tune()}>{running ? 'Tuning' : tuned ? 'Tune again' : 'Tune now'}</button>
+            {clerk.minConfidence !== null && (
+              <button type="button" className="btn ghost" onClick={() => set({ minConfidence: null })}>{tuned ? `Use the tuned level, ${pct(tuned.threshold)}` : 'Use the tuned level'}</button>
+            )}
+          </div>
+          {error && <span className="field-error">{error}</span>}
+        </>
+      )}
+      <p className="field-help">
+        It starts a ledger only while the shelf has room for {LEDGER_CAP}, folds a ledger it started only after a day, and never renames, folds or removes one you wrote or edited.
+      </p>
+    </div>
   )
 }
 

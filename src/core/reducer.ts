@@ -1,4 +1,4 @@
-import { LEDGER_THEMES, type CalBlock, type CalendarSettings, type CalEvent, type CalFeed, type ClerkCommand, type Epoch, type ExternalEvent, type HoursWindow, type Interval, type LedgerTheme, type Overflow } from './model'
+import { LEDGER_THEMES, type CalBlock, type CalendarSettings, type ClerkSettings, type CalEvent, type CalFeed, type ClerkCommand, type Epoch, type ExternalEvent, type HoursWindow, type Interval, type LedgerTheme, type Overflow } from './model'
 import { plan, type Placement, type PlanTask } from './schedule'
 import { DEFAULT_SETTINGS } from './seed'
 import { deriveCode, prefixClerk, type Clerk, type Filing } from './clerk'
@@ -70,7 +70,9 @@ export type Action =
   | { type: 'trash/empty' }
   | { type: 'entry/delete'; id: Id }
   | { type: 'entry/move'; id: Id; toIndex: number }
-  | { type: 'ledger/create'; name: string; code?: string; criterion: string; glyph: GlyphName; pays?: boolean; theme?: LedgerTheme }
+  | { type: 'ledger/create'; name: string; code?: string; criterion: string; glyph: GlyphName; pays?: boolean; theme?: LedgerTheme; byClerk?: boolean; log?: string }
+  /** The clerk folds a ledger it started into another; everything on it moves there. */
+  | { type: 'ledger/merge'; from: Id; into: Id; log?: string }
   | { type: 'ledger/update'; id: Id; patch: Partial<Pick<Ledger, 'name' | 'code' | 'criterion' | 'glyph' | 'pays' | 'theme'>> }
   | { type: 'ledger/delete'; id: Id }
   | { type: 'superset/save'; superset: Superset }
@@ -389,11 +391,36 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
         code,
         criterion: action.criterion.trim(),
         glyph: action.glyph,
-        handWritten: true,
+        // A ledger the clerk starts stays the clerk's: it may fold it away later. Yours are locked.
+        handWritten: !action.byClerk,
         pays: action.pays !== false,
         theme: validTheme(action.theme),
         createdAt: now,
       })
+      if (action.byClerk) log(s, now, `new ledger ${name} (${code})${action.log?.trim() ? ` ${action.log.trim()}` : ''}`)
+      break
+    }
+    case 'ledger/merge': {
+      const from = s.ledgers.find((l) => l.id === action.from)
+      const into = s.ledgers.find((l) => l.id === action.into)
+      // The clerk may fold only a ledger it started: a hand-written one is the user's.
+      if (!from || !into || from.id === into.id || from.handWritten) break
+      for (const e of s.entries) {
+        if (e.ledgerId === from.id) e.ledgerId = into.id
+        if (e.clerkFiled?.ledgerId === from.id) e.clerkFiled.ledgerId = into.id
+      }
+      for (const t of s.trash) if (t.ledgerId === from.id) t.ledgerId = into.id
+      for (const ss of s.supersets) for (const sl of ss.slots) if (sl.target.kind === 'ledger' && sl.target.ledgerId === from.id) sl.target.ledgerId = into.id
+      const d = s.desk
+      for (const b of [d.block, d.holster?.block, d.restTask?.block, d.holster?.restTask?.block]) {
+        if (!b || b.ledgerId !== from.id) continue
+        b.ledgerId = into.id
+        if (b.kind === 'focus') b.label = into.name
+      }
+      for (const p of [d.plan, d.holster?.plan, d.restTask?.plan, d.holster?.restTask?.plan]) if (p && p.anchorLedgerId === from.id) p.anchorLedgerId = into.id
+      if (d.previous?.ledgerId === from.id) d.previous.ledgerId = into.id
+      s.ledgers = s.ledgers.filter((l) => l.id !== from.id)
+      log(s, now, action.log?.trim() || `folded ${from.name} into ${into.name}`)
       break
     }
     case 'ledger/update': {
@@ -410,6 +437,8 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
         if (c && !s.ledgers.some((o) => o.id !== l.id && o.code === c)) l.code = c
       }
       if (s.desk.block?.ledgerId === l.id) s.desk.block.label = l.name
+      // Only a person edits a ledger: one the clerk started becomes theirs, and the clerk leaves it be.
+      l.handWritten = true
       break
     }
     case 'ledger/delete': {
@@ -1425,6 +1454,17 @@ export function sanitiseSettings(x: Settings): Settings {
     text: { pet: textSize(x.text?.pet), deck: textSize(x.text?.deck), plus: textSize(x.text?.plus) },
     calendar: sanitiseCalendar(x.calendar),
     alarms: sanitiseAlarms(x.alarms),
+    clerk: sanitiseClerk(x.clerk),
+  }
+}
+
+function sanitiseClerk(c: Partial<ClerkSettings> | undefined): ClerkSettings {
+  const base = DEFAULT_SETTINGS.clerk
+  const n = Number(c?.minConfidence)
+  return {
+    createLedgers: typeof c?.createLedgers === 'boolean' ? c.createLedgers : base.createLedgers,
+    consolidate: typeof c?.consolidate === 'boolean' ? c.consolidate : base.consolidate,
+    minConfidence: c?.minConfidence === null || c?.minConfidence === undefined || !Number.isFinite(n) ? null : Math.min(0.99, Math.max(0.5, Math.round(n * 100) / 100)),
   }
 }
 
