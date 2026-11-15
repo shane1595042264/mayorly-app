@@ -46,12 +46,19 @@ interface Saved {
 const TUNING_VERSION = 2
 
 /**
- * A key a provider turned away for quota or rate. Gemini answers a per-minute limit with "You
- * exceeded your current quota" too, so such a key is checked again on its own (`heal`) instead of
- * staying off until someone presses Check again.
+ * A key a provider turned away rests; it is not dropped. `heal` tries it again on its own when the
+ * rest is over, the way a monitor keeps cycling its inputs, so nobody has to press Check again.
+ * A rate limit rests ten minutes (Gemini answers a per-minute limit with "You exceeded your current
+ * quota" too); anything else, such as no credit, a key switched off or no model answering, rests a day.
  */
-const HEALS = /quota|exceeded|rate.?limit|resource.?exhausted|too many requests|overloaded|high demand/i
-const HEAL_AFTER_MS = 10 * 60_000
+const BRIEF = /quota|exceeded|rate.?limit|resource.?exhausted|too many requests|overloaded|high demand/i
+const BRIEF_REST_MS = 10 * 60_000
+const DAY_REST_MS = 24 * 3_600_000
+
+/** When a failing key is tried again on its own. */
+export function retryAt(k: { lastError: string | null; lastCheckedAt: number }): number {
+  return (k.lastCheckedAt ?? 0) + (BRIEF.test(k.lastError ?? '') ? BRIEF_REST_MS : DAY_REST_MS)
+}
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 /** A tray entry as the clerk filed it. */
@@ -125,7 +132,7 @@ export class AiClerk {
     const since = Date.now() - 30 * 86_400_000
     const recent = this.data.usage.filter((u) => u.at >= since)
     return {
-      keys: this.data.keys.map(({ key: _k, ...pub }) => pub),
+      keys: this.data.keys.map(({ key: _k, ...pub }) => ({ ...pub, retryAt: pub.status === 'failing' ? retryAt(pub) : null })),
       preferredProvider: this.data.preferredProvider,
       providers: PROVIDER_LABEL,
       sync: this.sync,
@@ -479,16 +486,28 @@ export class AiClerk {
   }
 
   /**
-   * Checks again the keys a provider turned away for quota or rate, once they have rested; `now`
-   * skips the rest (a fresh launch, or the trial waiting out a limit). A key still refused stays failing.
+   * Tries again every failing key whose rest is over (`retryAt`). `now` cuts a rate limit's ten
+   * minutes short (a fresh launch, or the trial waiting out a limit), never a day's rest. A key still
+   * refused rests again from now. Resolves to how many keys came back.
    */
-  async heal(now = false): Promise<void> {
-    const due = this.data.keys.filter((k) => k.status === 'failing' && HEALS.test(k.lastError ?? '') && (now || Date.now() - (k.lastCheckedAt ?? 0) >= HEAL_AFTER_MS))
-    if (due.length === 0) return
+  async heal(now = false): Promise<number> {
+    const t = Date.now()
+    const due = this.data.keys.filter((k) => k.status === 'failing' && (t >= retryAt(k) || (now && BRIEF.test(k.lastError ?? ''))))
+    if (due.length === 0) return 0
+    const day = new Set(due.filter((k) => !BRIEF.test(k.lastError ?? '')))
     for (const k of due) await this.recheckKey(k.id)
-    const back = due.filter((k) => k.status === 'ok').length
-    if (back) console.warn(`[clerk] ${back} of ${due.length} rested ${due.length === 1 ? 'key is' : 'keys are'} working again`)
+    let back = 0
+    for (const k of due) {
+      const name = `${PROVIDER_LABEL[k.provider]} key …${k.keyHint}`
+      if (k.status === 'ok') {
+        back++
+        console.warn(`[clerk] ${name} rested and is working again`)
+      } else if (day.has(k)) {
+        console.warn(`[clerk] ${name} rested a day and is still refused, trying again ${new Date(retryAt(k)).toISOString()}: ${k.lastError}`)
+      }
+    }
     this.onChange(this.public())
+    return back
   }
 
   /** Tries the model once, in the background, if it has not been tried. */
@@ -499,7 +518,7 @@ export class AiClerk {
 
   /**
    * Trial and error: files the trial lines against the sample ledgers with new ledgers allowed,
-   * then keeps the level that does best (tuning.ts). Four calls at a time; a line nothing answered
+   * then keeps the level that does best (tuning.ts). One line at a time (`pace`); a line nothing answered
    * for is left out, and too few answers keep whatever level there was.
    */
   async calibrate(): Promise<AiPublic> {

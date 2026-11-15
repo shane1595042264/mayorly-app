@@ -336,6 +336,7 @@ function AiSection({ clerk, setClerk }: { clerk: ClerkSettings; setClerk: (p: Pa
             </span>
           </div>
           {k.status === 'failing' && k.lastError && <span className="field-error">{k.lastError}</span>}
+          {k.status === 'failing' && k.retryAt != null && <span className="field-help">Resting, not removed. The clerk tries it again on its own {restUntil(k.retryAt)}.</span>}
           {k.status === 'checking' && <span className="field-help">From your other computer. Checking it here.</span>}
           {k.models.length > 0 && <label className="field">
             <span className="field-label caps">Model</span>
@@ -448,6 +449,16 @@ function ClerkShelf({ clerk, set, ai }: { clerk: ClerkSettings; set: (p: Partial
 }
 
 /** Electron wraps an error thrown in main: "Error invoking remote method 'x': Error: text". */
+/** When a resting key is tried again, in words. A rest is at most a day, so a time not today is tomorrow. */
+function restUntil(at: number): string {
+  const left = at - Date.now()
+  if (left <= 3 * 60_000) return 'in a few minutes'
+  if (left < 60 * 60_000) return `in ${Math.round(left / 60_000)} minutes`
+  const d = new Date(at)
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  return d.toDateString() === new Date().toDateString() ? `at ${time}` : `tomorrow at ${time}`
+}
+
 function plainError(e: unknown): string {
   return (e instanceof Error ? e.message : String(e)).replace(/^Error invoking remote method '[^']*': /, '').replace(/^Error: /, '')
 }

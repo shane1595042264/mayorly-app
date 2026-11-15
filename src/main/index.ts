@@ -189,13 +189,17 @@ function boot() {
   }
   // Tuned once per model, early, when the clerk is allowed to touch the shelf; and the shelf is
   // tidied a while after launch and then every few hours.
-  setTimeout(async () => {
-    // A key turned away for a rate limit before this launch is likely fine again.
-    await clerk.heal(true)
+  // A key that comes back from its rest may file with another model, so that one is tuned too.
+  const tune = () => {
     const c = engine.state.settings.clerk
     if (c.createLedgers || c.consolidate) clerk.ensureTuned()
+  }
+  setTimeout(async () => {
+    // A key turned away before this launch, for a rate limit or a day ago, is tried again first.
+    await clerk.heal(true)
+    tune()
   }, 20_000)
-  setInterval(() => void clerk.heal(), 2 * 60_000)
+  setInterval(() => void clerk.heal().then((back) => back > 0 && tune()), 2 * 60_000)
   setTimeout(() => void consolidate(), 2 * 60_000)
   setInterval(() => void consolidate(), 6 * 3_600_000)
   ipcMain.handle(IPC.getState, () => engine.state)

@@ -74,6 +74,8 @@ export interface AiKeyPublic {
   status: 'ok' | 'failing' | 'checking'
   lastError: string | null
   lastCheckedAt: number
+  /** A failing key rests, then is tried again on its own at this time: ten minutes after a rate limit, a day after anything else. */
+  retryAt?: number | null
   createdAt: number
 }
 

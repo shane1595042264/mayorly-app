@@ -13,6 +13,7 @@ vi.mock('electron', () => ({ safeStorage: {} }))
 const dirs: string[] = []
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
@@ -103,6 +104,34 @@ describe('a key turned away for a rate limit', () => {
     expect(clerk.public().keys[0].status).toBe('failing')
     await clerk.heal(true)
     expect(clerk.public().keys[0].status).toBe('ok')
+  })
+
+  it('rests a day when refused for anything else, and is then tried again', async () => {
+    let refuse = true
+    const denied = () => Response.json({ error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT' } }, { status: 400 })
+    const { clerk } = await setup(() => (refuse ? denied() : '{"ledgerCode":"CAR","confidence":0.9,"title":"x","estimateMin":null}'))
+    await expect(clerk.fileEntry('apply to Stripe', [{ id: 'l1', code: 'CAR', name: 'Career', criterion: '' }] as never)).rejects.toThrow()
+    const k = clerk.public().keys[0]
+    expect(k.status).toBe('failing')
+    expect(k.retryAt! - k.lastCheckedAt).toBe(24 * 3_600_000)
+    refuse = false
+    // A fresh launch cuts only a rate limit's rest short.
+    expect(await clerk.heal(true)).toBe(0)
+    expect(clerk.public().keys[0].status).toBe('failing')
+    const later = k.retryAt! + 1
+    vi.spyOn(Date, 'now').mockReturnValue(later)
+    expect(await clerk.heal()).toBe(1)
+    expect(clerk.public().keys[0]).toMatchObject({ status: 'ok', retryAt: null })
+  })
+
+  it('rests another day when still refused after its day', async () => {
+    const denied = () => Response.json({ error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT' } }, { status: 400 })
+    const { clerk } = await setup(() => denied())
+    await expect(clerk.fileEntry('apply to Stripe', [{ id: 'l1', code: 'CAR', name: 'Career', criterion: '' }] as never)).rejects.toThrow()
+    const first = clerk.public().keys[0].retryAt!
+    vi.spyOn(Date, 'now').mockReturnValue(first + 1)
+    expect(await clerk.heal()).toBe(0)
+    expect(clerk.public().keys[0]).toMatchObject({ status: 'failing', retryAt: first + 1 + 24 * 3_600_000 })
   })
 
   it('does not cost the trial a line: it waits, heals the key and tries the line again', async () => {
