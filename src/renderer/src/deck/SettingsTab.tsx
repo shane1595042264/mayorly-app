@@ -424,7 +424,7 @@ function ClerkShelf({ clerk, set, ai }: { clerk: ClerkSettings; set: (p: Partial
           </label>
           <p className="field-help">
             {running
-              ? `Tuning: filing ${TRIALS.length} sample lines, half that fit a ledger and half that need a new one.`
+              ? `Tuning: ${ai.tuningDone ?? 0} of ${TRIALS.length} sample lines filed, half that fit a ledger and half that need a new one. One every few seconds, to stay inside the provider's rate limit.`
               : tuned
                 ? `Tuned for ${tuned.model} by trial: at ${pct(tuned.threshold)} it got ${tuned.correct} of ${tuned.total} sample lines right.`
                 : working

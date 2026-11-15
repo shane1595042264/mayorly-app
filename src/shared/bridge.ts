@@ -171,6 +171,8 @@ export interface AiPublic {
   tuning?: { model: string; threshold: number; correct: number; total: number; at: number } | null
   /** The trial is running. */
   tuningNow?: boolean
+  /** How many of the trial lines it has filed so far, while it runs. */
+  tuningDone?: number
 }
 
 export interface Bridge {

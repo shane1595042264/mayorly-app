@@ -18,7 +18,7 @@ afterEach(() => {
 
 const reply = (text: string) => Response.json({ candidates: [{ content: { parts: [{ text }] } }] })
 
-async function setup(answer: (body: string) => string) {
+async function setup(answer: (body: string) => string | Response) {
   const dir = mkdtempSync(join(tmpdir(), 'mayorly-ai-test-'))
   dirs.push(dir)
   const clerk = new AiClerk(sealedClerkStore(dir, new Seal(dir, true)), () => {})
@@ -29,10 +29,12 @@ async function setup(answer: (body: string) => string) {
     if (checking) return reply('ok')
     const body = String(init?.body ?? '')
     bodies.push(body)
-    return reply(answer(body))
+    const r = answer(body)
+    return typeof r === 'string' ? reply(r) : r
   }))
   await clerk.addKey(`AQ.${'dummy_'.repeat(8)}`)
   checking = false
+  clerk.pace = { gapMs: 0, retryMs: 0 }
   return { clerk, bodies }
 }
 
@@ -85,5 +87,37 @@ describe('tuning by trial', () => {
     const pub = await clerk.calibrate()
     expect(pub.tuning).toBeNull()
     expect(lines[0]).toMatch(/level unchanged/)
+  })
+})
+
+describe('a key turned away for a rate limit', () => {
+  const limited = () => Response.json({ error: { code: 429, message: 'You exceeded your current quota, please check your plan and billing details.', status: 'RESOURCE_EXHAUSTED' } }, { status: 429 })
+
+  it('is checked again once it has rested, and works again', async () => {
+    let refuse = true
+    const { clerk } = await setup((body) => (body.includes('Line:') && refuse ? limited() : '{"ledgerCode":"CAR","confidence":0.9,"title":"x","estimateMin":null}'))
+    await expect(clerk.fileEntry('apply to Stripe', [{ id: 'l1', code: 'CAR', name: 'Career', criterion: '' }] as never)).rejects.toThrow()
+    expect(clerk.public().keys[0].status).toBe('failing')
+    refuse = false
+    await clerk.heal()
+    expect(clerk.public().keys[0].status).toBe('failing')
+    await clerk.heal(true)
+    expect(clerk.public().keys[0].status).toBe('ok')
+  })
+
+  it('does not cost the trial a line: it waits, heals the key and tries the line again', async () => {
+    let refused = 0
+    const { clerk } = await setup((body) => {
+      if (!body.includes('Line:')) return 'ok'
+      if (body.includes(`Line: ${TRIALS[3].line}`) && refused++ === 0) return limited()
+      const t = TRIALS.find((x) => body.includes(`Line: ${x.line}`))!
+      return t.wantsNew
+        ? '{"ledgerCode":"NEW","confidence":0.9,"title":"x","estimateMin":null,"newLedger":{"name":"Other","criterion":""},"fallbackCode":"LGL"}'
+        : '{"ledgerCode":"LGL","confidence":0.8,"title":"x","estimateMin":null}'
+    })
+    const pub = await clerk.calibrate()
+    expect(refused).toBe(2)
+    expect(pub.tuning).toMatchObject({ correct: TRIALS.length, total: TRIALS.length })
+    expect(pub.keys[0].status).toBe('ok')
   })
 })

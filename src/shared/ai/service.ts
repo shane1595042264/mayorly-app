@@ -39,8 +39,20 @@ interface Saved {
   /** Keys removed here that the server has not heard about yet. */
   removed: LocalRemoval[]
   /** The level for starting a ledger, found by trial for each provider and model (tuning.ts). */
-  tuning: Record<string, { model: string; threshold: number; correct: number; total: number; at: number }>
+  tuning: Record<string, { model: string; threshold: number; correct: number; total: number; at: number; v?: number }>
 }
+
+/** Bumped when the trial changes enough that an older result should be tried again. 2: paced, one line at a time. */
+const TUNING_VERSION = 2
+
+/**
+ * A key a provider turned away for quota or rate. Gemini answers a per-minute limit with "You
+ * exceeded your current quota" too, so such a key is checked again on its own (`heal`) instead of
+ * staying off until someone presses Check again.
+ */
+const HEALS = /quota|exceeded|rate.?limit|resource.?exhausted|too many requests|overloaded|high demand/i
+const HEAL_AFTER_MS = 10 * 60_000
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 /** A tray entry as the clerk filed it. */
 export interface TrayFiling {
@@ -90,6 +102,9 @@ export class KeyCheckError extends Error {
 export class AiClerk {
   private data: Saved = { keys: [], preferredProvider: null, usage: [], vault: null, removed: [], tuning: {} }
   private tuningNow: Promise<void> | null = null
+  private tuningDone = 0
+  /** The trial's pace: one line at a time, this far apart, so a free tier's per-minute limit is never met; a refused line waits and is tried once more. */
+  pace = { gapMs: 4_500, retryMs: 30_000 }
   /** Set by the shell: the trial run finished; one line for the log, then one per trial. */
   onTuned: ((lines: string[]) => void) | null = null
   private sync: AiKeySync = { phase: 'off', at: null, message: null }
@@ -116,6 +131,7 @@ export class AiClerk {
       sync: this.sync,
       tuning: this.tuned(),
       tuningNow: this.tuningNow !== null,
+      tuningDone: this.tuningNow !== null ? this.tuningDone : undefined,
       usage: {
         days: 30,
         calls: recent.filter((u) => u.feature === 'file').length,
@@ -458,7 +474,21 @@ export class AiClerk {
   /** The level tuned by trial for the model this machine would file with, or null before it has been tried. */
   tuned(): { model: string; threshold: number; correct: number; total: number; at: number } | null {
     const k = this.pick()
-    return k ? this.data.tuning[tuneKey(k)] ?? null : null
+    const t = k ? this.data.tuning[tuneKey(k)] : undefined
+    return t && (t.v ?? 1) >= TUNING_VERSION ? t : null
+  }
+
+  /**
+   * Checks again the keys a provider turned away for quota or rate, once they have rested; `now`
+   * skips the rest (a fresh launch, or the trial waiting out a limit). A key still refused stays failing.
+   */
+  async heal(now = false): Promise<void> {
+    const due = this.data.keys.filter((k) => k.status === 'failing' && HEALS.test(k.lastError ?? '') && (now || Date.now() - (k.lastCheckedAt ?? 0) >= HEAL_AFTER_MS))
+    if (due.length === 0) return
+    for (const k of due) await this.recheckKey(k.id)
+    const back = due.filter((k) => k.status === 'ok').length
+    if (back) console.warn(`[clerk] ${back} of ${due.length} rested ${due.length === 1 ? 'key is' : 'keys are'} working again`)
+    this.onChange(this.public())
   }
 
   /** Tries the model once, in the background, if it has not been tried. */
@@ -480,26 +510,39 @@ export class AiClerk {
     const k = this.pick()
     if (!k) return this.public()
     const model = k.preferredModel ?? k.defaultModel
+    this.tuningDone = 0
     this.tuningNow = (async () => {
       this.onChange(this.public())
       const trials: Trial[] = []
-      for (let i = 0; i < TRIALS.length; i += 4) {
-        const batch = await Promise.all(TRIALS.slice(i, i + 4).map(async (t) => {
-          try {
-            const f = await this.fileEntry(t.line, TRIAL_LEDGERS, [], { newLedgers: true })
-            return f ? { line: t.line, wantsNew: t.wantsNew, proposed: !!f.newLedger, confidence: f.newLedger?.confidence ?? 0 } : null
-          } catch {
-            return null
-          }
-        }))
-        for (const t of batch) if (t) trials.push(t)
+      // Undefined: the call was refused (busy, rate, quota); null: the model answered nonsense.
+      const once = async (t: (typeof TRIALS)[number]): Promise<Trial | null | undefined> => {
+        try {
+          const f = await this.fileEntry(t.line, TRIAL_LEDGERS, [], { newLedgers: true })
+          return f ? { line: t.line, wantsNew: t.wantsNew, proposed: !!f.newLedger, confidence: f.newLedger?.confidence ?? 0 } : null
+        } catch {
+          return undefined
+        }
+      }
+      for (const t of TRIALS) {
+        const started = Date.now()
+        let r = this.pick() ? await once(t) : undefined
+        if (r === undefined) {
+          await sleep(this.pace.retryMs)
+          await this.heal(true)
+          if (this.pick()) r = await once(t)
+        }
+        if (r) trials.push(r)
+        this.tuningDone++
+        this.onChange(this.public())
+        if (!this.pick()) break
+        await sleep(Math.max(0, this.pace.gapMs - (Date.now() - started)))
       }
       if (trials.length < TRIALS.length / 2) {
         this.onTuned?.([`tuning ${model}: only ${trials.length} of ${TRIALS.length} trial lines answered, level unchanged`])
         return
       }
       const best = chooseThreshold(trials)
-      this.data.tuning = { ...this.data.tuning, [tuneKey(k)]: { model, ...best, at: Date.now() } }
+      this.data.tuning = { ...this.data.tuning, [tuneKey(k)]: { model, ...best, at: Date.now(), v: TUNING_VERSION } }
       this.save()
       this.onTuned?.([`tuned ${model}: starts a ledger at ${Math.round(best.threshold * 100)}% sure, ${best.correct} of ${best.total} trial lines right`, ...describeTrials(trials, best.threshold)])
     })()

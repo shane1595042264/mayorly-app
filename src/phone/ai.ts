@@ -44,6 +44,9 @@ export async function startClerk(engine: PhoneEngine): Promise<void> {
   keySync = new KeySync(API_URL, clerk)
   capture = makeCapture(engine, clerk, (notice) => set({ notice }))
   set({ ai: clerk.public() })
+  // A key a provider turned away for a rate limit comes back on its own.
+  setTimeout(() => void clerk?.heal(true), 20_000)
+  setInterval(() => void clerk?.heal(), 2 * 60_000)
   onSessionToken((token, renewed) => (renewed ? keySync?.setToken(token!) : keySync?.setSession(token)))
 }
 

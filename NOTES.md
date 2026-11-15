@@ -8,6 +8,7 @@ The top section is what the app shows once per build, the first time that build 
 - It only does so when it is sure enough. How sure is found by trial: the clerk files 24 sample lines, half that fit a ledger and half that need a new one, and keeps the level that gets the most right. You can set your own level with the slider, or tune it again.
 - It can also fold a ledger it started into another one that covers the same ground, entries and all, once that ledger is a day old. This is its own switch in Settings.
 - Ledgers you made, or edited, are never renamed, folded or removed by the clerk.
+- A key that Gemini turned away for asking too often no longer stays off: the clerk checks it again on its own a few minutes later.
 
 ## The clerk tries again
 
