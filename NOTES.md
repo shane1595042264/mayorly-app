@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## This card shows once, and Got it works
+
+- This card now shows once per version. It counts as seen as soon as it appears, so closing it any way at all keeps it away until the next update.
+- Got it closes the card and leaves the deck open. Before, any click on the card closed the whole deck, so the card was never marked seen and came back every time. The Controls screen had the same trouble and is fixed too.
+
 ## The clerk can start ledgers, and tidy the ones it started
 
 - When a line you capture fits none of your ledgers, the clerk can start a new ledger for it, with a name, a rule for what goes in it, an icon and its own colour. You can turn this off in Settings, under AI clerk.

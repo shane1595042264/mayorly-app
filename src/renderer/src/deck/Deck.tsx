@@ -29,21 +29,21 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
   const [tab, setTabState] = useState<Tab>(() => (hasCalendarAsk() ? 'Calendar' : s.ledgers.length === 0 && remembered === 'Flow' ? 'Shelf' : remembered))
   const [keymap, setKeymap] = useState(false)
   // What changed: the first time a build launches on this machine the deck opens on the card.
+  // Seen once it is shown, however it is closed, so it never comes back on its own for this build.
   const [news, setNews] = useState<BuildInfo | null>(null)
   useEffect(() => {
     let on = true
     void bridge.whatsNew().then(async (fresh) => {
-      if (fresh && on) setNews(await bridge.getBuild())
+      if (!fresh || !on) return
+      bridge.seenBuild()
+      setNews(await bridge.getBuild())
     })
     return () => void (on = false)
   }, [])
   const openNotes = () => void bridge.getBuild().then(setNews)
   // A request for the clerk about the calendar arrives: that tab, now.
   useEffect(() => onCalendarAsk(() => setTab('Calendar')), [])
-  const closeNotes = () => {
-    bridge.seenBuild()
-    setNews(null)
-  }
+  const closeNotes = () => setNews(null)
   const panel = useRef<HTMLElement>(null)
   useEffect(() => panel.current?.focus(), [])
   const reduce = useReducedMotion()

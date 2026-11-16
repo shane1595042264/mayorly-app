@@ -538,7 +538,9 @@ export function App() {
   // A click outside the open interface closes it, like clicking away from a menu.
   const onStageDown = (e: React.PointerEvent) => {
     if (modeRef.current === 'field') return
-    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .capture, .switcher, .clerk-ask, .drawer, .pet, .pet-caption-box')
+    // .keymap-wrap: the Keymap and the What changed card are portalled to the body, outside the
+    // deck in the page, while React still bubbles their presses through here.
+    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .keymap-wrap, .capture, .switcher, .clerk-ask, .drawer, .pet, .pet-caption-box')
     if (!inside) close()
   }
 
