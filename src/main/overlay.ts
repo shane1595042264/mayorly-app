@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BrowserWindow, screen, type Display, type Rectangle } from 'electron'
-import { IPC, type Effect, type Layout, type UiMode } from '../shared/bridge'
+import { IPC, type CaptionStyle, type Effect, type Layout, type UiMode } from '../shared/bridge'
 import { CAPTION, DRAWER, TASKBAR, TOMATO, anchorInBox, captionBox, clampAnchor, cornerAnchor, drawerBox, homeAnchor, petBox, sideOf, type Side } from '../shared/pet'
 
 // One transparent, always-on-top, frameless window.
@@ -54,6 +54,7 @@ export class Overlay {
   private dragging = false
   private caption: BrowserWindow | null = null
   private captionText: string | null = null
+  private captionStyle: CaptionStyle | undefined
   private effects: BrowserWindow | null = null
   private effectsReady = false
   private effectQueue: Effect[] = []
@@ -144,9 +145,10 @@ export class Overlay {
    * click-through, so the pet window can be exactly the pet. It shows the same
    * renderer in caption mode and gets its text over IPC.
    */
-  setCaption(text: string | null) {
+  setCaption(text: string | null, style?: CaptionStyle) {
     if (!mac || this.win.isDestroyed()) return
     this.captionText = text
+    this.captionStyle = style
     if (!text) {
       this.caption?.hide()
       return
@@ -279,7 +281,7 @@ export class Overlay {
 
   private pushCaption() {
     if (!this.caption || this.caption.isDestroyed()) return
-    this.caption.webContents.send(IPC.caption, { text: this.captionText ?? '', side: this.layout().side })
+    this.caption.webContents.send(IPC.caption, { text: this.captionText ?? '', side: this.layout().side, style: this.captionStyle })
   }
 
   /** Just above the tomato, starting at its outer edge and running over the sign's column; below it when the screen's top is in the way. */
@@ -287,7 +289,7 @@ export class Overlay {
     if (!this.caption) return
     const wa = this.display().workArea
     const a = this.anchor ?? this.defaultAnchor(wa)
-    const { below, ...box } = captionBox(a, wa, this.layout().side, this.scale)
+    const { below, ...box } = captionBox(a, wa, this.layout().side, this.scale, this.captionStyle === 'scheduled' ? 'below' : 'above', this.text)
     debug('caption', { ...box, below, anchor: a })
     this.caption.setBounds(box)
   }

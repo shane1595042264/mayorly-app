@@ -2,8 +2,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type MessageBoxOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
-import { isDeviceOnly, migrate, type Action, type ClerkCommand, type HudEvent, type Settings } from '@core/index'
-import { IPC, type AiProvider, type Arrangement, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
+import { isDeviceOnly, migrate, nextBlock, onDeskId, scheduledNow, switchToAction, type Action, type ClerkCommand, type HudEvent, type Settings } from '@core/index'
+import { IPC, type AiProvider, type Arrangement, type CaptionStyle, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from '../shared/ai/service'
 import { makeCapture } from '../shared/capture'
@@ -328,7 +328,7 @@ function boot() {
     send(IPC.sync, sync.current())
   })
   ipcMain.handle(IPC.getLayout, () => overlay.layout())
-  ipcMain.on(IPC.setCaption, (_e, text: string | null) => overlay.setCaption(text))
+  ipcMain.on(IPC.setCaption, (_e, text: string | null, style?: CaptionStyle) => overlay.setCaption(text, style === 'scheduled' ? style : undefined))
   ipcMain.handle(IPC.accountsAvailable, () => accountsConfigured())
   ipcMain.handle(IPC.getAccount, () => session?.user ?? null)
   ipcMain.handle(IPC.signIn, async () => {
@@ -473,6 +473,27 @@ function boot() {
     if (id) engine.act({ type: 'entry/complete', id })
     else say({ phase: 'done', text: 'Nothing on the desk to clear' })
   }
+  /** Alt+I: onto what the calendar says now, the way the switcher would go there, so a parked or swapped-back session keeps its clock. */
+  const goScheduled = () => {
+    const st = engine.state
+    const now = Date.now()
+    const at = scheduledNow(st, now)
+    const time = (t: number) => new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: st.settings.calendar.tz || undefined }).format(t)
+    if (!at) {
+      const next = nextBlock(st, now)
+      const e = next ? st.entries.find((x) => x.id === next.entryId) : null
+      say({ phase: 'done', text: e && next ? `Nothing scheduled now. Next: ${short(e.title)}, ${time(next.start)}` : 'Nothing scheduled now' })
+      return
+    }
+    const entry = st.entries.find((x) => x.id === at.entryId)
+    if (!entry) return
+    if (onDeskId(st) === entry.id && st.desk.status !== 'idle') {
+      say({ phase: 'done', text: `On schedule: ${short(entry.title)}` })
+      return
+    }
+    const act = switchToAction(st, { kind: 'entry', entry }) ?? { type: 'desk/select' as const, entryId: entry.id, ledgerId: entry.ledgerId }
+    engine.act(act)
+  }
   const notify = (ev: HudEvent) => {
     if (!Notification.isSupported()) return
     const hk = engine.state.settings.hotkeys
@@ -507,6 +528,8 @@ function boot() {
         // macOS: the drawer is the shell's own window beside the pet. Elsewhere the overlay draws it.
         drawer: () => (process.platform === 'darwin' ? overlay.toggleDrawer() : command('drawer')),
         clear: clearDesk,
+        schedule: () => command('schedule'),
+        scheduled: goScheduled,
       })
       if (failed.length) {
         const failures = { keys: failed, reason: refusedAsOptionOnly(failed) ? ('option-only' as const) : undefined }

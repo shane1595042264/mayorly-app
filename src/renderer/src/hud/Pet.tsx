@@ -44,6 +44,8 @@ interface Props {
   onScale: (scale: number) => void
   /** Something the shell needs to say (a hotkey that failed); shown in place of the caption. */
   notice: string | null
+  /** The schedule's quiet line after a switch off it: under the tomato when there is room, breathing. */
+  nudge: string | null
   /** This computer's id, null until the shell says; the desk may be running on another one. */
   here: string | null
 }
@@ -52,7 +54,7 @@ const MOVE_HINT = 'Arrows move, + and - resize, 1 to 4 corners, Enter when done'
 /** A press that moves less than this is not a drag. */
 const DRAG_PX = 4
 
-export function Pet({ s, away, moving, open, side, dragging, compact, notice, here, anchor, area, onDrag, onPlace, onGrab, onScale }: Props) {
+export function Pet({ s, away, moving, open, side, dragging, compact, notice, nudge, here, anchor, area, onDrag, onPlace, onGrab, onScale }: Props) {
   // Idle, the pet only counts today's tomatoes; a clock is what needs the quarter second.
   const now = useNow(s.desk.status === 'idle' ? 10_000 : 250)
   const reduce = useReducedMotion()
@@ -92,20 +94,21 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, he
     ? nextEntry ? `Next: ${nextEntry.title}, ${nextAt}. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.` : `Desk idle. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.`
     : s.desk.heldAt !== null && s.desk.device && s.desk.device.id !== here ? `Running on ${s.desk.device.name}. Anything you do here takes it over.`
     : back ? `${hotkeyLabel(s.settings.hotkeys.switch)}: back to ${back}` : ''
-  const text = moving ? MOVE_HINT : (notice ?? hint)
-  const showCaption = moving || !!notice || (hover && !dragging && hint !== '')
+  const quiet = !moving && !notice && !!nudge && !(hover && !dragging)
+  const text = moving ? MOVE_HINT : (notice ?? (quiet ? nudge! : hint))
+  const showCaption = moving || !!notice || quiet || (hover && !dragging && hint !== '')
 
   // macOS: the caption is the shell's window. Elsewhere it is drawn in the same box, in this window.
   useEffect(() => {
-    if (compact) bridge.setCaption(showCaption ? text : null)
-  }, [compact, showCaption, text])
+    if (compact) bridge.setCaption(showCaption ? text : null, quiet ? 'scheduled' : undefined)
+  }, [compact, showCaption, text, quiet])
 
   // Windows: the pet's box and the caption's, from where the tomato is, as the Mac would hang its windows.
   const scale = s.settings.hudScale
   const whole = { x: 0, y: 0, ...area }
   const box = !compact && anchor ? petBox(anchor, whole, scale, s.settings.text.pet) : null
   const tomatoAt = box ? anchorInBox(box, side, scale) : null
-  const cap = tomatoAt ? captionBox(tomatoAt, whole, side, scale) : null
+  const cap = tomatoAt ? captionBox(tomatoAt, whole, side, scale, quiet ? 'below' : 'above', s.settings.text.pet) : null
   const placed = box
     ? right
       ? { right: area.width - (box.x + box.width - INSET.x), bottom: area.height - (box.y + box.height - INSET.y) }
@@ -221,7 +224,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, he
             exit={{ opacity: 0, y: cap.below ? -4 : 4, transition: { duration: 0.12 } }}
             transition={{ type: 'spring', stiffness: 260, damping: 26 }}
           >
-            <p className={`pet-sign is-caption ${notice ? 'is-notice' : ''}`} role="status">
+            <p className={`pet-sign is-caption ${notice ? 'is-notice' : ''} ${quiet ? 'is-scheduled' : ''}`} role="status">
               {text}
             </p>
           </motion.div>

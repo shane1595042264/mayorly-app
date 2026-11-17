@@ -5,6 +5,7 @@ import { balance, type MayorlyState } from '@core/index'
 import type { BuildInfo } from '../../../shared/bridge'
 import { bridge } from '../bridge'
 import { hasCalendarAsk, onCalendarAsk } from '../lib/calendarAsk'
+import { onDeckTab, takeDeckTab } from '../lib/deckTab'
 import { useLean } from '../lib/parallax'
 import { sfx } from '../lib/sound'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
@@ -26,7 +27,11 @@ let remembered: Tab = 'Flow'
 
 export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; kind: 'electron' | 'web' }) {
   // A shelf with no ledgers is where a new install starts.
-  const [tab, setTabState] = useState<Tab>(() => (hasCalendarAsk() ? 'Calendar' : s.ledgers.length === 0 && remembered === 'Flow' ? 'Shelf' : remembered))
+  const [tab, setTabState] = useState<Tab>(() => {
+    const asked = takeDeckTab()
+    if (asked && (TABS as readonly string[]).includes(asked)) return (remembered = asked as Tab)
+    return hasCalendarAsk() ? 'Calendar' : s.ledgers.length === 0 && remembered === 'Flow' ? 'Shelf' : remembered
+  })
   const [keymap, setKeymap] = useState(false)
   // What changed: the first time a build launches on this machine the deck opens on the card.
   // Seen once it is shown, however it is closed, so it never comes back on its own for this build.
@@ -43,6 +48,11 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
   const openNotes = () => void bridge.getBuild().then(setNews)
   // A request for the clerk about the calendar arrives: that tab, now.
   useEffect(() => onCalendarAsk(() => setTab('Calendar')), [])
+  // The schedule hotkey with the deck already open: that tab, now.
+  useEffect(() => onDeckTab((t) => {
+    takeDeckTab()
+    if ((TABS as readonly string[]).includes(t)) setTab(t as Tab)
+  }), [])
   const closeNotes = () => setNews(null)
   const panel = useRef<HTMLElement>(null)
   useEffect(() => panel.current?.focus(), [])

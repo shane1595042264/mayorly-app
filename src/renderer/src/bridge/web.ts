@@ -1,5 +1,5 @@
 import {
-  firstRunState, migrate, reduce, SLEEP_GAP_MS,
+  firstRunState, migrate, reduce, scheduledNow, SLEEP_GAP_MS, switchToAction,
   type Action, type HudEvent, type MayorlyState,
 } from '@core/index'
 import type { Bridge, Command, Layout, UiMode } from '../../../shared/bridge'
@@ -103,9 +103,9 @@ export function createWebBridge(): Bridge {
     // By key position: with Option held, macOS reports the composed character, not the letter.
     const k = physicalKey(e)
     const combo = `Alt+${e.shiftKey ? 'Shift+' : ''}${k.length === 1 ? k.toUpperCase() : k}`
-    const map: Record<string, Command | 'pause' | 'skipRest' | 'clear' | 'hide'> = {
+    const map: Record<string, Command | 'pause' | 'skipRest' | 'clear' | 'hide' | 'scheduled'> = {
       [hk.plus]: 'plus', [hk.capture]: 'capture', [hk.find]: 'find', [hk.deck]: 'deck', [hk.drawer]: 'drawer', [hk.pause]: 'pause', [hk.move]: 'move', [hk.switch]: 'switcher', [hk.clear]: 'clear', [hk.hide]: 'hide',
-      [hk.skipRest]: 'skipRest',
+      [hk.skipRest]: 'skipRest', [hk.schedule]: 'schedule', [hk.scheduled]: 'scheduled',
     }
     const cmd = map[combo]
     if (!cmd) return
@@ -119,6 +119,11 @@ export function createWebBridge(): Bridge {
       if (id) dispatch({ type: 'entry/complete', id })
     } else if (cmd === 'hide') {
       // A browser tab has nothing to hide behind.
+    } else if (cmd === 'scheduled') {
+      const at = scheduledNow(state, Date.now())
+      const entry = at ? state.entries.find((x) => x.id === at.entryId) : null
+      const act = entry ? switchToAction(state, { kind: 'entry', entry }) : null
+      if (act) dispatch(act)
     } else cmdSubs.forEach((f) => f(cmd))
   })
 

@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The schedule follows you
+
+- Alt+I (Option+I on a Mac) switches you to what the calendar says you should be doing now. If nothing is scheduled, the tomato says what is next.
+- Alt+S (Option+S) opens the calendar. Press it again to close it.
+- Switch to anything other than what is scheduled and a quiet line breathes by the tomato for a few seconds: Scheduled, and the task. It shows once per switch.
+- Both keys can be changed in Settings, under Hotkeys.
+
 ## Work hours, and sessions instead of pomodoros
 
 - Set your job's hours and which ledgers are work: the gear on the Calendar tab, or Settings, Calendar. The clerk plans only work entries inside work hours and everything else outside them. You can still work on anything, any time.

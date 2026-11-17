@@ -12,7 +12,10 @@ export type UiMode = 'field' | 'plus' | 'deck' | 'capture' | 'find' | 'switcher'
 /** Option+digit while the Plus menu is open: pick that number in the arm you are on; 0 is the couch. */
 export type PickCommand = `pick-${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
 /** arm-* and pick-*: Option+arrow or digit while the Plus menu is open, taken by the shell so they land even before the window has the keyboard. */
-export type Command = 'plus' | 'capture' | 'find' | 'switcher' | 'deck' | 'drawer' | 'close' | 'move' | 'arm-up' | 'arm-down' | 'arm-left' | 'arm-right' | PickCommand
+export type Command = 'plus' | 'capture' | 'find' | 'switcher' | 'deck' | 'schedule' | 'drawer' | 'close' | 'move' | 'arm-up' | 'arm-down' | 'arm-left' | 'arm-right' | PickCommand
+
+/** How the pet's caption reads: plain, or the schedule's quiet breathing line. */
+export type CaptionStyle = 'scheduled'
 
 /** How the shell lays the HUD out. Compact: the window is only the pet and what it unfolds (macOS). */
 export interface Layout {
@@ -194,10 +197,10 @@ export interface Bridge {
   setMode(mode: UiMode): void
   /** Field mode only: the pointer is over an interactive HUD element. */
   setHit(hit: boolean): void
-  /** macOS: the hover caption is its own click-through window beside the pet; null hides it. */
-  setCaption(text: string | null): void
-  /** The caption window's own page: the text to show and which side of the pet it sits on. */
-  onCaption(fn: (caption: { text: string; side: 'left' | 'right' }) => void): () => void
+  /** macOS: the hover caption is its own click-through window beside the pet; null hides it. `scheduled`: the schedule's quiet line, under the tomato when there is room. */
+  setCaption(text: string | null, style?: CaptionStyle): void
+  /** The caption window's own page: the text to show, which side of the pet it sits on, and how. */
+  onCaption(fn: (caption: { text: string; side: 'left' | 'right'; style?: CaptionStyle }) => void): () => void
   /** The shell's layout: asked for on mount, and pushed whenever the pet changes side or is dragged. */
   getLayout(): Promise<Layout>
   onLayout(fn: (layout: Layout) => void): () => void

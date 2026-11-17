@@ -15,6 +15,8 @@ export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   clear: 'Alt+C',
   move: 'Alt+G',
   drawer: 'Alt+Shift+R',
+  schedule: 'Alt+S',
+  scheduled: 'Alt+I',
 }
 
 /** Nine to five, minutes from midnight. */

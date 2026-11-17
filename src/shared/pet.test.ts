@@ -127,4 +127,14 @@ describe('pet geometry matches the Mac pet window', () => {
     expect(captionBox({ x: 1800, y: 1000 }, wa, 'right', 1).below).toBe(false)
     expect(captionBox({ x: 1800, y: 60 }, wa, 'right', 1).below).toBe(true)
   })
+
+  it('puts the schedule line under the tomato when the bottom of the area allows, over it otherwise', () => {
+    const wa = { x: 0, y: 0, width: 1920, height: 1040 }
+    expect(captionBox({ x: 1800, y: 500 }, wa, 'right', 1, 'below').below).toBe(true)
+    const over = captionBox({ x: 1800, y: 1030 }, wa, 'right', 1, 'below')
+    expect(over.below).toBe(false)
+    // Over the whole pet, task lines and all: its visible box ends above the pet's top.
+    const pet = petBox({ x: 1800, y: 1030 }, wa, 1, 1)
+    expect(over.y + (over.height + 30) / 2).toBeLessThanOrEqual(pet.y)
+  })
 })

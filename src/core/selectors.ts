@@ -134,6 +134,19 @@ export function plannedMs(s: MayorlyState, from: number, to: number): Ms {
 }
 
 /** The next planned block that has not ended, or null. */
+/**
+ * What the calendar has you on at `now`: a pin of yours covering it, else the plan's block. A
+ * fresh plan starts on the next five minutes, so a block that starts that soon counts as now.
+ * Null between blocks and outside your hours.
+ */
+export function scheduledNow(s: MayorlyState, now: number): { entryId: Id; start: number; end: number } | null {
+  const open = new Set(openFlow(s).map((e) => e.id))
+  const pin = s.calendar.events.find((e) => e.entryId !== null && open.has(e.entryId) && e.start <= now && now < e.end)
+  if (pin) return { entryId: pin.entryId!, start: pin.start, end: pin.end }
+  const b = s.calendar.blocks.find((x) => open.has(x.entryId) && x.start <= now && now < x.end) ?? s.calendar.blocks.find((x) => open.has(x.entryId) && x.start > now && x.start <= now + 5 * 60_000)
+  return b ? { entryId: b.entryId, start: b.start, end: b.end } : null
+}
+
 export function nextBlock(s: MayorlyState, now: number) {
   let best: MayorlyState['calendar']['blocks'][number] | null = null
   for (const b of s.calendar.blocks) if (b.end > now && (!best || b.start < best.start)) best = b

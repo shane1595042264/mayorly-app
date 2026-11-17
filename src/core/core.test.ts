@@ -7,6 +7,7 @@ import {
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
   findTasks, taskTomatoes, tomatoLabel, onDeskId, recentTasks, switchToAction, switcherAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
+  scheduledNow,
 } from './index'
 
 const MIN = 60_000
@@ -380,6 +381,20 @@ describe('the calendar', () => {
       { op: 'place', entryId: w.entry('job').id, start: w.now + 90 * MIN, minutes: 30 },
     ] })
     expect(w.s.calendar.events.map((e) => [e.title, (e.start - w.now) / MIN])).toEqual([['job', 90]])
+  })
+
+  it('what is scheduled now is a pin of yours over the plan, and nothing between blocks', () => {
+    const w = calWorld()
+    w.do({ type: 'entry/capture', text: 'legal: a ~60' })
+    w.do({ type: 'entry/capture', text: 'dance: b ~60' })
+    replan(w)
+    expect(scheduledNow(w.s, w.now + 10 * MIN)?.entryId).toBe(w.entry('a').id)
+    expect(scheduledNow(w.s, w.now + 70 * MIN)?.entryId).toBe(w.entry('b').id)
+    expect(scheduledNow(w.s, w.now + 9 * 60 * MIN)).toBeNull()
+    w.do({ type: 'calendar/event-add', title: '', start: w.now + 5 * MIN, end: w.now + 20 * MIN, entryId: w.entry('b').id })
+    expect(scheduledNow(w.s, w.now + 10 * MIN)?.entryId).toBe(w.entry('b').id)
+    w.do({ type: 'entry/complete', id: w.entry('b').id })
+    expect(scheduledNow(w.s, w.now + 10 * MIN)?.entryId).toBe(w.entry('a').id)
   })
 
   it('a day off work is a mark; the later mark for a day wins in a merge', () => {

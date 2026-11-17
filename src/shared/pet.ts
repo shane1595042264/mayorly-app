@@ -110,14 +110,19 @@ export function anchorInBox(box: Rect, side: Side, scale: number): Point {
 }
 
 /** The caption: just above the tomato, from its outer edge over the sign's column; below it when the top is in the way. */
-export function captionBox(a: Point, area: Rect, side: Side, scale: number): Rect & { below: boolean } {
+export function captionBox(a: Point, area: Rect, side: Side, scale: number, prefer: 'above' | 'below' = 'above', text = 1): Rect & { below: boolean } {
   const box = 30
   const gap = 10
   const top = a.y - TOMATO * scale
   const x = side === 'left' ? a.x - half(scale) - 4 : a.x + half(scale) + 4 - CAPTION.width
-  let y = top - gap - box - (CAPTION.height - box) / 2
-  const below = y < area.y
-  if (below) y = a.y + gap - (CAPTION.height - box) / 2
+  const belowY = a.y + gap - (CAPTION.height - box) / 2
+  // A line that waits under the tomato and finds no room there goes over the whole pet, task lines
+  // included, rather than over the tomato where those lines are; a hover caption hugs the tomato.
+  const aboveY = prefer === 'below'
+    ? a.y - petHeight(text) * scale - INSET.y - 2 - (CAPTION.height + box) / 2
+    : top - gap - box - (CAPTION.height - box) / 2
+  const below = prefer === 'below' ? belowY + CAPTION.height <= area.y + area.height || aboveY < area.y : aboveY < area.y
+  const y = below ? belowY : aboveY
   return {
     x: Math.round(Math.min(Math.max(x, area.x), area.x + area.width - CAPTION.width)),
     y: Math.round(Math.min(Math.max(y, area.y), area.y + area.height - CAPTION.height)),

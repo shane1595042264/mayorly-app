@@ -20,9 +20,10 @@ import { Pet } from './hud/Pet'
 import { MODIFIER_KEYS, hotkeyLabel, matchesAcceleratorKey, physicalKey } from './lib/keys'
 import { setSoundEnabled, sfx } from './lib/sound'
 import { onCalendarAsk } from './lib/calendarAsk'
+import { requestDeckTab } from './lib/deckTab'
 import { ARM_OF_ACTION, ARM_OF_COMMAND, isPick, onArm, pointArm, pointPick, takeArmHint, takePickHint } from './plus/arms'
 import { PlusMenu } from './plus/PlusMenu'
-import { balance, onDeskId, recentTasks, switcherAction } from '@core/index'
+import { balance, onDeskId, recentTasks, scheduledNow, switcherAction } from '@core/index'
 import { current, dispatch, useHudEvents, useMayorly } from './store'
 
 /** How long the swap hotkey must be held before releasing it closes the menu (hold to peek). */
@@ -35,6 +36,8 @@ const PET_FADE_MS = 140
 const PANEL_EXIT_MS = 200
 /** A tomato ripened: the entry's count stays above the pet this long. */
 const POP_MS = 3000
+/** How long the schedule's line stays under the tomato after a switch off the schedule. */
+const NUDGE_MS = 9000
 
 export function App() {
   const s = useMayorly()
@@ -144,6 +147,29 @@ export function App() {
       }
     }, []),
   )
+
+  // The schedule, quietly: a switch to anything but what the calendar has now says so once,
+  // under the tomato, breathing, then goes. A rest is not a switch; the launch is not either.
+  const [nudge, setNudge] = useState<string | null>(null)
+  const lastTask = useRef<string | null | undefined>(undefined)
+  const block = s?.desk.block ?? null
+  const deskTask = !s ? undefined : !block ? null : block.kind === 'rest' ? undefined : (block.entryId ?? block.leisureId ?? null)
+  useEffect(() => {
+    if (deskTask === undefined) return
+    const was = lastTask.current
+    lastTask.current = deskTask
+    if (was === undefined || was === deskTask || deskTask === null) return
+    const st = current()
+    const at = st ? scheduledNow(st, Date.now()) : null
+    const e = at && at.entryId !== deskTask ? st!.entries.find((x) => x.id === at.entryId) : null
+    if (!e) {
+      setNudge(null)
+      return
+    }
+    setNudge(`Scheduled: ${e.title}`)
+    const t = setTimeout(() => setNudge(null), NUDGE_MS)
+    return () => clearTimeout(t)
+  }, [deskTask])
 
   // The clerk narrates on the pet: a working line stays until the result, a result stays a few seconds.
   useEffect(() => {
@@ -404,6 +430,15 @@ export function App() {
           return
         }
         recordUse(`global.${cmd}`)
+        // The schedule: the deck on the Calendar tab; again from there closes it.
+        if (cmd === 'schedule') {
+          if (cur === 'deck' && document.querySelector('.cal')) setMode('field')
+          else {
+            requestDeckTab('Calendar')
+            if (cur !== 'deck') setMode('deck')
+          }
+          return
+        }
         if (cmd === 'move') {
           if (cur !== 'field') setMode('field')
           setMoving((m) => !m)
@@ -571,6 +606,7 @@ export function App() {
         dragging={layout.dragging || dragAnchor !== null}
         compact={layout.compact}
         notice={clerk ?? pop ?? warning}
+        nudge={nudge}
         anchor={anchor}
         area={area}
         onDrag={onDrag}

@@ -150,6 +150,10 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
   border-color: var(--line-2);
 }
 .pet-sign.is-notice { color: var(--ink); border-color: var(--accent-2); }
+/* The schedule after a switch off it: no frame, a soft breath, gone after a few seconds. */
+.pet-sign.is-scheduled { color: var(--ink-2); border-color: transparent; background: rgb(14 16 18 / 0.55); animation: schedule-breathe 3.2s ease-in-out infinite; }
+@keyframes schedule-breathe { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pet-sign.is-scheduled { animation: none; opacity: 0.85; } }
 
 /* ------------------------------------------------------------ the quick drawer
    Under the pet (or above it, when the pet sits low): what is on the desk, with room to write.
