@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'motion/react'
-import { CaretRight } from '@phosphor-icons/react'
+import { CaretRight, Check, Prohibit, Question, Sparkle } from '@phosphor-icons/react'
 import { matchLedger, parseSuperset, prefixClerk, type Action, type MayorlyState } from '@core/index'
+import { looksLikeInstruction, stripInstruction, type InstructionPlan } from '../../../shared/instruct'
+import { bridge } from '../bridge'
 import { askCalendar } from '../lib/calendarAsk'
 import { actionFor, keyLabel, keysFor, recordUse } from '../lib/keymap'
 import { aiOn, dispatch } from '../store'
@@ -15,6 +17,8 @@ interface Plan {
   run?: () => void
   /** File the line and put it on the desk now, the clock where it is. */
   start?: () => void
+  /** The line is an instruction for the clerk: the box stays open for its answer. */
+  instruct?: string
 }
 
 export function plan(raw: string, s: MayorlyState): Plan {
@@ -71,6 +75,11 @@ export function plan(raw: string, s: MayorlyState): Plan {
     }
   }
 
+  // An instruction about how Mayorly works: the clerk reads it and does it, or asks first.
+  if (aiOn() && looksLikeInstruction(text)) {
+    return { tone: 'order', text: `Clerk: ${stripInstruction(text)}`, instruct: text }
+  }
+
   const f = prefixClerk.file(text, s.ledgers)
   if (f.leisure) {
     return {
@@ -96,8 +105,27 @@ export function Capture({ s, close }: { s: MayorlyState; close: () => void }) {
   const [text, setText] = useState('')
   const p = useMemo(() => plan(text, s), [text, s])
   const [flash, setFlash] = useState(0)
+  const [order, setOrder] = useState<{ line: string; plan: InstructionPlan | null } | null>(null)
+
+  const instruct = async (line: string, startNow: boolean) => {
+    setOrder({ line, plan: null })
+    const r = await bridge.ai.instruct(line)
+    // Read as a task after all: filed as one, as the line would have been.
+    if (r.kind === 'task') {
+      void dispatch({ type: 'entry/capture', text: stripInstruction(line), start: startNow })
+      close()
+      return
+    }
+    if (r.calendarAsk) askCalendar(r.calendarAsk)
+    setOrder({ line, plan: r })
+  }
 
   const submit = (keepOpen: boolean, startNow = false) => {
+    if (p.instruct) {
+      void instruct(p.instruct, startNow)
+      setText('')
+      return
+    }
     const go = startNow && p.start ? p.start : p.run
     if (!go) return
     go()
@@ -105,6 +133,8 @@ export function Capture({ s, close }: { s: MayorlyState; close: () => void }) {
     setFlash((n) => n + 1)
     if (!keepOpen) close()
   }
+
+  if (order) return <OrderCard order={order} close={close} again={() => setOrder(null)} />
 
   return (
     <motion.div
@@ -147,6 +177,93 @@ export function Capture({ s, close }: { s: MayorlyState; close: () => void }) {
           <span><i className="key">Esc</i> Close</span>
         </footer>
       </div>
+    </motion.div>
+  )
+}
+
+/** How long a card with nothing left to ask stays before it closes on its own; Undo works until then. */
+const ORDER_LINGER_MS = 8000
+
+/**
+ * The clerk's answer to an instruction, in the capture box: each step done (with Undo), waiting
+ * for Apply, or not allowed. Enter applies what waits, or closes; Esc closes.
+ */
+function OrderCard({ order, close, again }: { order: { line: string; plan: InstructionPlan | null }; close: () => void; again: () => void }) {
+  const [steps, setSteps] = useState(order.plan?.steps ?? [])
+  const [undone, setUndone] = useState(false)
+  useEffect(() => setSteps(order.plan?.steps ?? []), [order.plan])
+  const plan = order.plan
+  const waiting = steps.some((x) => x.status === 'ask')
+  const done = steps.some((x) => x.status === 'done')
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Nothing to decide: the card goes by itself, as a capture would.
+  useEffect(() => {
+    if (!plan || waiting || undone) return
+    timer.current = setTimeout(close, plan.kind === 'none' ? ORDER_LINGER_MS / 2 : ORDER_LINGER_MS)
+    return () => {
+      if (timer.current) clearTimeout(timer.current)
+    }
+  }, [plan, waiting, undone, close])
+  const apply = () => {
+    for (const st of steps) if (st.status === 'ask') for (const a of st.actions) void dispatch(a)
+    setSteps((xs) => xs.map((x) => (x.status === 'ask' ? { ...x, status: 'done' } : x)))
+  }
+  const skip = () => setSteps((xs) => xs.filter((x) => x.status !== 'ask'))
+  const undo = () => {
+    for (const st of [...steps].reverse()) if (st.status === 'done') for (const a of st.undo) void dispatch(a)
+    setUndone(true)
+    setTimeout(close, 900)
+  }
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') close()
+    else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (waiting) apply()
+      else close()
+    }
+  }
+  return (
+    <motion.div
+      className="capture"
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 16, transition: { duration: 0.15 } }}
+      transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+    >
+      <span className="capture-label caps">Clerk</span>
+      <div className="order-card" role="dialog" aria-label="The clerk's answer" tabIndex={-1} onKeyDown={onKey} ref={(el) => el?.focus()}>
+        <p className="order-line"><Sparkle size={14} weight="fill" /> {stripInstruction(order.line)}</p>
+        {!plan ? (
+          <p className="order-say dim">Reading it…</p>
+        ) : (
+          <>
+            {steps.length > 0 && (
+              <ul className="order-steps">
+                {steps.map((st, i) => (
+                  <li key={i} className={`order-step is-${undone && st.status === 'done' ? 'undone' : st.status}`}>
+                    {st.status === 'done' ? <Check size={14} weight="bold" /> : st.status === 'never' ? <Prohibit size={14} /> : <Question size={14} />}
+                    <span>{st.says}{st.status === 'never' ? '. Not allowed: Settings, AI clerk, What the clerk may do.' : ''}{undone && st.status === 'done' ? '. Undone.' : ''}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {plan.calendarAsk && <p className="order-say">The calendar opens with the clerk's plan for: {plan.calendarAsk}</p>}
+            {plan.refused.length > 0 && <p className="order-say dim">Could not do: {plan.refused.join(', ')}.</p>}
+            {(plan.say || plan.kind === 'none') && <p className="order-say dim">{plan.say || 'Nothing to do.'}</p>}
+            <div className="form-actions">
+              {waiting && <button type="button" className="btn primary" onClick={apply}>Apply</button>}
+              {waiting && <button type="button" className="btn ghost" onClick={skip}>Skip</button>}
+              {done && !undone && <button type="button" className="btn ghost" onClick={undo}>Undo</button>}
+              {plan.kind === 'none' && <button type="button" className="btn ghost" onClick={again}>Say it again</button>}
+              <button type="button" className="btn ghost" onClick={close}>Close</button>
+            </div>
+          </>
+        )}
+      </div>
+      <footer className="hint-row">
+        <span><i className="key">Enter</i> {waiting ? 'Apply' : 'Close'}</span>
+        <span><i className="key">Esc</i> Close</span>
+      </footer>
     </motion.div>
   )
 }

@@ -485,3 +485,17 @@ body.effects { background: transparent; }
 .hud-error-title { margin: 0; font-size: 15px; }
 .hud-error-text { margin: 0; font-size: 11px; color: var(--ink-3); overflow-wrap: anywhere; }
 .hud-error .btn { justify-self: start; }
+
+/* ------------------------------------------------------------ the clerk's answer in the capture box */
+
+.order-card { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--accent-2); background: var(--glass); outline: none; }
+.order-line { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 16px; color: var(--ink); }
+.order-line svg { color: var(--accent); flex: none; }
+.order-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.order-step { display: flex; gap: 8px; align-items: flex-start; color: var(--ink); }
+.order-step svg { flex: none; margin-top: 3px; }
+.order-step.is-done svg { color: var(--accent); }
+.order-step.is-ask svg { color: var(--ink-2); }
+.order-step.is-never, .order-step.is-undone { color: var(--ink-3); }
+.order-say { margin: 0; font-size: 13px; color: var(--ink-2); }
+.order-card .form-actions { display: flex; gap: 8px; flex-wrap: wrap; }

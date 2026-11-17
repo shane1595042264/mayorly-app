@@ -53,6 +53,7 @@ const bridge: Bridge = {
     syncReset: () => ipcRenderer.invoke(IPC.aiSyncReset),
     sweepTray: () => ipcRenderer.invoke(IPC.aiSweep),
     calibrate: () => ipcRenderer.invoke(IPC.aiCalibrate),
+    instruct: (text) => ipcRenderer.invoke(IPC.instruct, text),
     pickGlyph: (name, criterion, options, taken) => ipcRenderer.invoke(IPC.aiPickGlyph, name, criterion, options, taken),
     arrange: (request) => ipcRenderer.invoke(IPC.aiArrange, request),
     applyArrangement: (id, picks) => ipcRenderer.invoke(IPC.aiApplyArrangement, id, picks),

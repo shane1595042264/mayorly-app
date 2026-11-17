@@ -465,7 +465,12 @@ export interface Settings {
   clerk: ClerkSettings
 }
 
+/** What the clerk does with an instruction of that kind: do it (with Undo), ask first, or never. */
+export type ClerkAllow = 'auto' | 'ask' | 'never'
+
 export interface ClerkSettings {
+  /** Per kind of instruction typed into Alt+N: settings (work hours, days off, sessions) and recipes (daily entries, shortcuts). */
+  allow: { settings: ClerkAllow; recipes: ClerkAllow }
   /** Start a ledger for a line no ledger fits, when it is sure enough and the shelf has room. */
   createLedgers: boolean
   /** Fold a ledger the clerk started into another that covers the same ground. Hand-written ledgers are never touched. */
@@ -498,7 +503,33 @@ export interface MayorlyState {
   desk: Desk
   settings: Settings
   calendar: Calendar
+  /** Things the clerk does on its own, set up by asking it in plain words. Syncs. */
+  recipes: Recipe[]
 }
+
+/**
+ * A standing order: when it fires, the line is captured as if typed into Alt+N, `{date}` in
+ * it becoming the day's month and day (the year too when that title is already taken). Each
+ * day's run makes the entry `recipe:<id>:<day>`, so two computers running it make one entry.
+ */
+export interface Recipe {
+  id: Id
+  /** What it does, in plain words. */
+  name: string
+  when: RecipeWhen
+  /** The line, with an optional ledger prefix: "PRO: CWILL {date}". */
+  line: string
+  estimateMin: number | null
+  /** On a key: put the entry on the desk too. */
+  start: boolean
+  enabled: boolean
+  createdAt: Epoch
+}
+
+/** daily: at a time of day; `workdays` follows the work schedule, or Monday to Friday without one. key: a global hotkey, on demand. */
+export type RecipeWhen =
+  | { kind: 'daily'; days: 'workdays' | 'weekdays' | 'everyday'; at: number; holidays: boolean }
+  | { kind: 'key'; key: string }
 
 export type HudEvent =
   /** A tomato ripened. On an entry it is banked there (coins 0) until the entry is cleared; ledger time pays as it goes. */

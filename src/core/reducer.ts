@@ -1,4 +1,4 @@
-import { LEDGER_THEMES, type CalBlock, type CalendarSettings, type ClerkSettings, type CalEvent, type CalFeed, type ClerkCommand, type Epoch, type ExternalEvent, type HoursWindow, type Interval, type LedgerTheme, type Overflow } from './model'
+import { LEDGER_THEMES, type CalBlock, type CalendarSettings, type ClerkSettings, type CalEvent, type CalFeed, type ClerkCommand, type Epoch, type ExternalEvent, type HoursWindow, type Interval, type LedgerTheme, type Overflow, type ClerkAllow, type Recipe, type RecipeWhen } from './model'
 import { normalize, plan, subtract, type Placement, type PlanResult, type PlanTask } from './schedule'
 import { DEFAULT_SETTINGS } from './seed'
 import { deriveCode, prefixClerk, type Clerk, type Filing } from './clerk'
@@ -42,6 +42,11 @@ export type Action =
   | { type: 'rule/add'; text: string }
   | { type: 'rule/update'; id: Id; text: string }
   | { type: 'rule/delete'; id: Id }
+  | { type: 'recipe/add'; recipe: Recipe }
+  | { type: 'recipe/update'; id: Id; patch: Partial<Pick<Recipe, 'enabled' | 'name' | 'line' | 'estimateMin' | 'start'>> }
+  | { type: 'recipe/remove'; id: Id }
+  /** One day's run (YYYY-MM-DD in the calendar's zone): the entry is made once, here or on any computer; `start` puts it on the desk. */
+  | { type: 'recipe/run'; id: Id; day: string; start?: boolean }
   /** Your answer to the clerk's question: appended to the rule it learned, or a new rule when it only confirmed. */
   | { type: 'rule/explain'; entryId: Id; ruleId: Id | null; text: string }
   | { type: 'entry/update'; id: Id; patch: Partial<Pick<Entry, 'title' | 'ledgerId' | 'estimateMin' | 'due' | 'notBefore' | 'rush' | 'splittable' | 'minChunkMin' | 'maxChunkMin' | 'offCalendar'>> }
@@ -300,6 +305,44 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     case 'rule/delete':
       s.houseRules = s.houseRules.filter((x) => x.id !== action.id)
       break
+    case 'recipe/add': {
+      const r = cleanRecipe(action.recipe, now)
+      if (!r || s.recipes.length >= RECIPE_CAP) break
+      s.recipes = [...s.recipes.filter((x) => x.id !== r.id), r]
+      log(s, now, `recipe added: ${r.name}`)
+      break
+    }
+    case 'recipe/update': {
+      const r = s.recipes.find((x) => x.id === action.id)
+      if (!r) break
+      const next = cleanRecipe({ ...r, ...action.patch }, r.createdAt)
+      if (next) Object.assign(r, next)
+      break
+    }
+    case 'recipe/remove':
+      s.recipes = s.recipes.filter((x) => x.id !== action.id)
+      break
+    case 'recipe/run': {
+      const r = s.recipes.find((x) => x.id === action.id)
+      if (!r || !/^\d{4}-\d{2}-\d{2}$/.test(action.day)) break
+      const id = `recipe:${r.id}:${action.day}`
+      let e = s.entries.find((x) => x.id === id)
+      // Deleted that day: it stays deleted. Already made: a key run puts it on the desk.
+      if (!e && s.trash.some((x) => x.id === id)) break
+      if (!e) {
+        const f = clerk.file(recipeLine(s, r.line, action.day), s.ledgers)
+        if (!f.title || f.leisure) break
+        e = addEntry(s, ctx, f.title, f.ledgerId, clampEstimate(r.estimateMin ?? f.estimateMin))
+        e.id = id
+        log(s, now, `recipe ${r.name}: ${f.title}`)
+      }
+      if (action.start && e.doneAt === null && s.desk.block?.entryId !== e.id) {
+        const d = s.desk
+        if (d.block && d.block.kind === 'focus' && d.status !== 'idle') swapTo(s, ctx, ev, e.id, e.ledgerId, true)
+        else deploy(s, ctx, ev, { mode: 'pomodoro', supersetId: null, entryId: e.id, ledgerId: e.ledgerId, leisureId: null })
+      }
+      break
+    }
     case 'entry/update': {
       const e = s.entries.find((x) => x.id === action.id)
       if (!e) break
@@ -1474,7 +1517,9 @@ export function sanitiseSettings(x: Settings): Settings {
 function sanitiseClerk(c: Partial<ClerkSettings> | undefined): ClerkSettings {
   const base = DEFAULT_SETTINGS.clerk
   const n = Number(c?.minConfidence)
+  const level = (v: unknown, dflt: ClerkAllow): ClerkAllow => (v === 'auto' || v === 'ask' || v === 'never' ? v : dflt)
   return {
+    allow: { settings: level(c?.allow?.settings, base.allow.settings), recipes: level(c?.allow?.recipes, base.allow.recipes) },
     createLedgers: typeof c?.createLedgers === 'boolean' ? c.createLedgers : base.createLedgers,
     consolidate: typeof c?.consolidate === 'boolean' ? c.consolidate : base.consolidate,
     minConfidence: c?.minConfidence === null || c?.minConfidence === undefined || !Number.isFinite(n) ? null : Math.min(0.99, Math.max(0.5, Math.round(n * 100) / 100)),
@@ -1528,6 +1573,44 @@ function cleanHours(days: HoursWindow[][]): HoursWindow[][] {
     hours.push(merged)
   }
   return hours
+}
+
+const RECIPE_CAP = 40
+
+/** A recipe as the reducer keeps it, every field checked; null when it cannot run. */
+function cleanRecipe(r: Partial<Recipe> | undefined, now: Epoch): Recipe | null {
+  if (!r || typeof r.id !== 'string' || !r.id) return null
+  const line = String(r.line ?? '').trim().slice(0, 160)
+  const w = r.when
+  let when: RecipeWhen | null = null
+  if (w?.kind === 'daily') {
+    const at = Math.round(Number(w.at))
+    if (Number.isFinite(at) && at >= 0 && at < 1440) when = { kind: 'daily', days: w.days === 'weekdays' || w.days === 'everyday' ? w.days : 'workdays', at, holidays: !!w.holidays }
+  } else if (w?.kind === 'key' && typeof w.key === 'string' && /^((Ctrl|Alt|Shift|Super|Meta|CmdOrCtrl)\+)+[A-Z0-9]$/i.test(w.key.trim())) {
+    when = { kind: 'key', key: w.key.trim() }
+  }
+  if (!line || !when) return null
+  const est = Number(r.estimateMin)
+  return {
+    id: r.id,
+    name: String(r.name ?? '').trim().slice(0, 120) || line,
+    when,
+    line,
+    estimateMin: Number.isFinite(est) && est > 0 ? Math.min(1440, Math.round(est)) : null,
+    start: !!r.start,
+    enabled: r.enabled !== false,
+    createdAt: Number.isFinite(r.createdAt) ? r.createdAt! : now,
+  }
+}
+
+/** A recipe's line for a day: {date} is the month and day, with the year only when that title is already taken by another entry. */
+export function recipeLine(s: MayorlyState, line: string, day: string): string {
+  const [y, m, d] = day.split('-').map(Number)
+  const short = line.replace(/\{date\}/gi, `${m}/${d}`)
+  if (short === line) return line
+  const title = prefixClerk.file(short, s.ledgers).title.toLowerCase()
+  const taken = [...s.entries, ...s.trash].some((e) => e.title.toLowerCase() === title && !e.id.endsWith(`:${day}`))
+  return taken ? line.replace(/\{date\}/gi, `${m}/${d}/${y}`) : short
 }
 
 /** The clerk's session length, only where nobody set one: a length you chose stays yours. */

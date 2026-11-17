@@ -105,6 +105,7 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
   const ledgers = mergeDeletable(local.ledgers, incoming.ledgers, since, (l) => l.createdAt, theirs)
   const leisure = mergeDeletable(local.leisure, incoming.leisure, since, (l) => l.createdAt, theirs)
   const houseRules = mergeDeletable(local.houseRules, incoming.houseRules, since, (r) => r.createdAt, theirs)
+  const recipes = mergeDeletable(local.recipes ?? [], incoming.recipes ?? [], since, (r) => r.createdAt, theirs)
   // Supersets carry no date: one only this machine has is kept.
   const supersets = mergeDeletable(local.supersets, incoming.supersets, since, () => Infinity, theirs)
   // The calendar: events and feeds like entries; outside events per feed, the fresher fetch wins;
@@ -135,5 +136,5 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
     })
     .sort((a, b) => a.at - b.at)
     .slice(-CLERK_LOG_CAP)
-  return focusFromLog(reconcileTomatoes({ ...incoming, ledgers, entries, trash, supersets, leisure, houseRules, sittings, segments, tokens, clerkLog, desk: kept.desk, calendar }))
+  return focusFromLog(reconcileTomatoes({ ...incoming, ledgers, entries, trash, supersets, leisure, houseRules, recipes, sittings, segments, tokens, clerkLog, desk: kept.desk, calendar }))
 }

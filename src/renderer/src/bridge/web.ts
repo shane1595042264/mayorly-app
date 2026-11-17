@@ -6,6 +6,7 @@ import type { Bridge, Command, Layout, UiMode } from '../../../shared/bridge'
 import { clampAnchor, cornerAnchor, homeAnchor, sideOf, type Point } from '../../../shared/pet'
 import { BUILD } from '../../../shared/build'
 import { machineZone, replanAction } from '../../../shared/windows'
+import { permit, resolveInstruction, type InstructionPlan } from '../../../shared/instruct'
 import { physicalKey } from '../lib/keys'
 import { demoState } from './demo'
 
@@ -23,12 +24,16 @@ function readSeen(): string | null {
 }
 const NO_AI = { keys: [], preferredProvider: null, providers: { gemini: 'Google Gemini', openai: 'OpenAI', anthropic: 'Anthropic Claude', xai: 'xAI Grok' }, usage: { days: 30, calls: 0, costMicroUsd: 0 }, sync: { phase: 'off' as const, at: null, message: null } }
 
+/** ?demo&clerk: a stand-in key, so the capture box sends instructions to the clerk's demo reading. */
+const DEMO_KEY = { id: 'demo', provider: 'gemini' as const, keyHint: 'demo', models: ['demo'], defaultModel: 'demo', preferredModel: null, status: 'ok' as const, lastError: null, lastCheckedAt: 0, createdAt: 0 }
+
 export function createWebBridge(): Bridge {
   const newId = () => crypto.randomUUID()
   // ?demo seeds sample data, ?fresh starts from first run. Neither touches storage.
   const params = new URLSearchParams(location.search)
   const demo = params.has('demo')
   const scratch = demo || params.has('fresh')
+  const demoClerk = scratch && params.has('clerk')
   let state: MayorlyState = demo
     ? demoState(Date.now(), newId)
     : (!scratch && load()) || firstRunState(Date.now(), newId)
@@ -205,8 +210,19 @@ export function createWebBridge(): Bridge {
     onAccount: () => () => {},
     onSync: () => () => {},
     ai: {
-      get: async () => NO_AI,
+      get: async () => (demoClerk ? { ...NO_AI, keys: [DEMO_KEY] } : NO_AI),
       calibrate: async () => NO_AI,
+      instruct: async (text: string): Promise<InstructionPlan> => {
+        if (!demoClerk) return { kind: 'none', say: 'Instructions need the desktop app and an AI key.', steps: [], calendarAsk: null, refused: [] }
+        // ?demo&clerk: two instructions read the way the clerk would, so the box can be seen at work.
+        const code = state.ledgers[0]?.code
+        const raw = /work/i.test(text)
+          ? { kind: 'ops', say: 'work hours set', ops: [{ op: 'work', days: [1, 2, 3, 4, 5], start: '07:00', end: '16:00', ledgers: code ? [code] : null }] }
+          : { kind: 'ops', say: 'recipe made', ops: [{ op: 'recipe', name: 'CWILL every workday', when: { kind: 'daily', days: 'workdays', at: '06:00', holidays: false }, line: `${code ?? 'PRO'}: CWILL {date}`, estimateMin: null }] }
+        const plan = permit(resolveInstruction(raw, state, Date.now(), newId), state.settings.clerk.allow)
+        for (const st of plan.steps) if (st.status === 'done') for (const a of st.actions) dispatch(a)
+        return plan
+      },
       addKey: async () => { throw new Error('AI keys live in the desktop app') },
       removeKey: async () => NO_AI,
       recheckKey: async () => NO_AI,

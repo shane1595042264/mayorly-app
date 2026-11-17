@@ -9,12 +9,24 @@ import type { HotkeyAction } from '@core/index'
 export function registerHotkeys(
   keys: Record<HotkeyAction, string>,
   handlers: Record<HotkeyAction, () => void>,
+  /** Recipes on a key. A recipe's key wins over a built-in one with the same key on this computer. */
+  extra: { key: string; run: () => void }[] = [],
 ): string[] {
   globalShortcut.unregisterAll()
   const failed: string[] = []
+  const taken = new Set(extra.map((x) => x.key.toLowerCase()))
+  for (const x of extra) {
+    let ok = false
+    try {
+      ok = globalShortcut.register(x.key, x.run)
+    } catch {
+      ok = false
+    }
+    if (!ok) failed.push(x.key)
+  }
   for (const action of Object.keys(handlers) as HotkeyAction[]) {
     const accel = keys[action]
-    if (!accel) continue
+    if (!accel || taken.has(accel.toLowerCase())) continue
     let ok = false
     try {
       ok = globalShortcut.register(accel, handlers[action])

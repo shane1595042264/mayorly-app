@@ -2,11 +2,13 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type MessageBoxOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
-import { isDeviceOnly, migrate, nextBlock, onDeskId, scheduledNow, switchToAction, type Action, type ClerkCommand, type HudEvent, type Settings } from '@core/index'
+import { isDeviceOnly, migrate, nextBlock, onDeskId, scheduledNow, switchToAction, type Action, type ClerkCommand, type HudEvent, type MayorlyState, type Settings } from '@core/index'
 import { IPC, type AiProvider, type Arrangement, type CaptionStyle, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from '../shared/ai/service'
 import { makeCapture } from '../shared/capture'
+import { INSTRUCT_SYSTEM, instructContext, parseInstruction, permit, resolveInstruction, stripInstruction, type InstructionPlan } from '../shared/instruct'
+import { dayKey, recipeRunsOn, wallClock } from '../shared/windows'
 import { sealedClerkStore } from './ai/store'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
@@ -506,12 +508,29 @@ function boot() {
     new Notification({ title: 'Mayorly', body, silent: true }).show()
   }
 
+  // A recipe on a key: today's entry, made once, and onto the desk when the recipe says so.
+  const recipeKeys = (st: MayorlyState) => st.recipes.flatMap((r) => (r.enabled && r.when.kind === 'key' ? [{ id: r.id, key: r.when.key }] : []))
+  const runKeyRecipe = (id: string) => {
+    const st = engine.state
+    const r = st.recipes.find((x) => x.id === id)
+    if (!r) return
+    const day = dayKey(Date.now(), st.settings.calendar.tz)
+    const made = st.entries.find((e) => e.id === `recipe:${r.id}:${day}`)
+    if (made?.doneAt) {
+      say({ phase: 'done', text: `${short(made.title)} is cleared today` })
+      return
+    }
+    engine.act({ type: 'recipe/run', id: r.id, day, start: r.start })
+  }
   let applied: Settings | null = null
+  let appliedRecipes = ''
   const applySettings = (s: Settings) => {
     overlay.setScale(s.hudScale)
     overlay.setTextSize(s.text.pet)
-    if (applied && JSON.stringify(applied.hotkeys) === JSON.stringify(s.hotkeys) && applied.openAtLogin === s.openAtLogin) return
-    if (!applied || JSON.stringify(applied.hotkeys) !== JSON.stringify(s.hotkeys)) {
+    const recipes = JSON.stringify(recipeKeys(engine.state))
+    if (applied && JSON.stringify(applied.hotkeys) === JSON.stringify(s.hotkeys) && applied.openAtLogin === s.openAtLogin && recipes === appliedRecipes) return
+    if (!applied || JSON.stringify(applied.hotkeys) !== JSON.stringify(s.hotkeys) || recipes !== appliedRecipes) {
+      appliedRecipes = recipes
       const failed = registerHotkeys(s.hotkeys, {
         plus: () => {
           command('plus')
@@ -530,7 +549,7 @@ function boot() {
         clear: clearDesk,
         schedule: () => command('schedule'),
         scheduled: goScheduled,
-      })
+      }, recipeKeys(engine.state).map((r) => ({ key: r.key, run: () => runKeyRecipe(r.id) })))
       if (failed.length) {
         const failures = { keys: failed, reason: refusedAsOptionOnly(failed) ? ('option-only' as const) : undefined }
         overlay.win.webContents.once('did-finish-load', () => send(IPC.hotkeyFailures, failures))
@@ -548,6 +567,50 @@ function boot() {
   }
   applySettings(engine.state.settings)
   engine.on((state) => applySettings(state.settings))
+
+  // Daily recipes: each enabled one makes its entry once a day, from its time on, on the days
+  // it names. Any computer may; the entry's id is the recipe and the day, so a merge keeps one.
+  const runRecipes = () => {
+    const st = engine.state
+    const cal = st.settings.calendar
+    if (!cal.tz) return
+    const now = Date.now()
+    const day = dayKey(now, cal.tz)
+    const minutes = wallClock(now, cal.tz).minutes
+    for (const r of st.recipes) {
+      if (!r.enabled || r.when.kind !== 'daily' || minutes < r.when.at) continue
+      const id = `recipe:${r.id}:${day}`
+      if (st.entries.some((e) => e.id === id) || st.trash.some((e) => e.id === id)) continue
+      if (!recipeRunsOn(cal, st.calendar.workMarks, r.when, now)) continue
+      engine.dispatch({ type: 'recipe/run', id: r.id, day })
+    }
+  }
+  setTimeout(runRecipes, 15_000)
+  setInterval(runRecipes, 60_000)
+
+  // An instruction from Alt+N: the clerk reads it into steps; what the permissions allow is done
+  // now (the box offers Undo), the rest waits for Apply in the box.
+  ipcMain.handle(IPC.instruct, async (_e, text: string): Promise<InstructionPlan> => {
+    const none = (say: string): InstructionPlan => ({ kind: 'none', say, steps: [], calendarAsk: null, refused: [] })
+    const st = engine.state
+    const now = Date.now()
+    const line = stripInstruction(String(text ?? '')).slice(0, 500)
+    if (!line) return none('Nothing to do')
+    let answer: { text: string; model: string } | null
+    try {
+      answer = await clerk.instruct(INSTRUCT_SYSTEM, `${instructContext(st, now)}\n\nInstruction: ${line}`)
+    } catch (err) {
+      log.warn('[clerk] instruction:', err instanceof Error ? err.message : String(err))
+      return none('The clerk could not be reached. Try again in a moment.')
+    }
+    if (!answer) return none('The clerk needs an AI key for instructions. Add one in Settings, AI clerk.')
+    const raw = parseInstruction(answer.text)
+    if (!raw) return none('The clerk could not read that. Say it another way?')
+    const plan = permit(resolveInstruction(raw, engine.state, now, () => randomUUID()), engine.state.settings.clerk.allow)
+    for (const step of plan.steps) if (step.status === 'done') for (const a of step.actions) engine.act(a)
+    log.info('[clerk]', `instruction (${answer.model}): ${plan.kind}, ${plan.steps.map((x) => `${x.status} ${x.says}`).join('; ') || 'no steps'}${plan.calendarAsk ? `; calendar: ${plan.calendarAsk}` : ''}`)
+    return { ...plan, model: answer.model }
+  })
 
   // Set once the last push is done, so the quit that follows does not wait for it again.
   let flushed = false

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowsClockwise, GoogleLogo, Keyboard, Play, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
-import { ALARM_TONES, LEDGER_CAP, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type ClerkSettings, type MayorlyState, type Settings } from '@core/index'
+import { ALARM_TONES, LEDGER_CAP, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type ClerkSettings, type MayorlyState, type Recipe, type Settings, type ClerkAllow } from '@core/index'
 import type { AiKeySync, AiProvider, AiPublic, AppInfo } from '../../../shared/bridge'
 import { DEFAULT_THRESHOLD, TRIALS } from '../../../shared/ai/tuning'
 import { builtOn } from '../../../shared/build'
@@ -11,6 +11,7 @@ import { dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
 import { decodeAlarm, playAlarm } from '../lib/sound'
 import { SoundSearch } from './SoundSearch'
 import { PlanSettings } from './PlanSettings'
+import { dayKey } from '../../../shared/windows'
 import { SettingsSearch } from '../lib/settingsSearch'
 
 const EXAMPLE = IS_MAC ? 'Option+T' : 'Alt+T'
@@ -81,6 +82,7 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
       {kind === 'electron' && <AiSection clerk={st.clerk} setClerk={(p) => set({ clerk: { ...st.clerk, ...p } })} />}
       <DataSection kind={kind} openNotes={openNotes} />
       <HouseRulesSection s={s} />
+      <RecipesSection s={s} />
 
       <section>
         <div className="section-head">
@@ -381,6 +383,7 @@ function AiSection({ clerk, setClerk }: { clerk: ClerkSettings; setClerk: (p: Pa
         <span className="field-help">Last {ai.usage.days} days: {ai.usage.calls} filed by the clerk, about {dollars(ai.usage.costMicroUsd)}.</span>
       )}
       <ClerkShelf clerk={clerk} set={setClerk} ai={ai} />
+      <ClerkAllowance clerk={clerk} set={setClerk} />
       <KeySyncBlock sync={ai.sync} />
     </section>
   )
@@ -450,6 +453,68 @@ function ClerkShelf({ clerk, set, ai }: { clerk: ClerkSettings; set: (p: Partial
 }
 
 /** Electron wraps an error thrown in main: "Error invoking remote method 'x': Error: text". */
+const ALLOW: [ClerkAllow, string][] = [['auto', 'Do it'], ['ask', 'Ask first'], ['never', 'Never']]
+
+/** What the clerk may do with an instruction typed into Alt+N, by kind. Done is always undoable from the box. */
+function ClerkAllowance({ clerk, set }: { clerk: ClerkSettings; set: (p: Partial<ClerkSettings>) => void }) {
+  const row = (scope: 'settings' | 'recipes', label: string, help: string) => (
+    <div className="field" key={scope}>
+      <span className="field-label caps">{label}</span>
+      <div className="seg" role="radiogroup" aria-label={label}>
+        {ALLOW.map(([v, l]) => (
+          <button key={v} role="radio" aria-checked={clerk.allow[scope] === v} className={clerk.allow[scope] === v ? 'on' : ''} onClick={() => set({ allow: { ...clerk.allow, [scope]: v } })}>{l}</button>
+        ))}
+      </div>
+      <span className="field-help">{help}</span>
+    </div>
+  )
+  return (
+    <div className="clerk-shelf" data-setting="permissions, instructions, auto approve, ask first, what the clerk may do">
+      <h4 className="field-label caps">What the clerk may do</h4>
+      <p className="field-help">Type an instruction into Capture, like "set work to weekdays 7am to 4pm" or "every workday add PRO: CWILL {'{date}'}". Start a line with ! to make sure it is read as one. Do it: done at once, with Undo in the box. Ask first: the box shows Apply.</p>
+      <div className="form-row">
+        {row('settings', 'Settings', 'Work hours, days off, session lengths.')}
+        {row('recipes', 'Recipes and shortcuts', 'Entries it adds every day, or on a key.')}
+      </div>
+    </div>
+  )
+}
+
+const recipeWhen = (r: Recipe) => {
+  if (r.when.kind === 'key') return hotkeyLabel(r.when.key)
+  const at = `${String(Math.floor(r.when.at / 60)).padStart(2, '0')}:${String(r.when.at % 60).padStart(2, '0')}`
+  const days = r.when.days === 'workdays' ? 'Workdays' : r.when.days === 'weekdays' ? 'Weekdays' : 'Every day'
+  return `${days}${r.when.days !== 'everyday' && !r.when.holidays ? ', not holidays' : ''}, ${at}`
+}
+
+/** Standing orders the clerk set up: when each runs, what it adds; pause, run now, remove. */
+function RecipesSection({ s }: { s: MayorlyState }) {
+  return (
+    <section data-setting="recipes, shortcuts, recurring, daily, every day, automation">
+      <h3 className="side-title caps">Recipes</h3>
+      <p className="field-help">Entries the clerk adds on its own, every day or on a key. Ask for one in Capture: "every workday, not on holidays, add PRO: CWILL {'{date}'}", or "Alt+H makes PRO: CWILL {'{date}'}, 16 tomatoes". {'{date}'} is the month and day.</p>
+      {s.recipes.length === 0 ? (
+        <p className="dim">None yet.</p>
+      ) : (
+        <div className="sources">
+          {s.recipes.map((r) => (
+            <div key={r.id} className={`source-row ${r.enabled ? '' : 'dim'}`}>
+              <label className="check" title={r.enabled ? 'On' : 'Paused'}>
+                <input type="checkbox" checked={r.enabled} onChange={(e) => dispatch({ type: 'recipe/update', id: r.id, patch: { enabled: e.target.checked } })} aria-label={`${r.name} on`} />
+                <span className="check-box" aria-hidden />
+              </label>
+              <span className="source-label">{r.name}</span>
+              <span className="field-help"><span className="mono">{recipeWhen(r)}</span>: {r.line}{r.estimateMin ? `, ${r.estimateMin} min` : ''}{r.when.kind === 'key' && r.start ? ', started' : ''}</span>
+              <button type="button" className="btn ghost small" title="Make today's entry now" onClick={() => dispatch({ type: 'recipe/run', id: r.id, day: dayKey(Date.now(), s.settings.calendar.tz) })}><Play size={12} /> Today</button>
+              <button type="button" className="icon-btn" aria-label={`Remove ${r.name}`} title="Remove" onClick={() => dispatch({ type: 'recipe/remove', id: r.id })}><Trash size={14} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 /** When a resting key is tried again, in words. A rest is at most a day, so a time not today is tomorrow. */
 function restUntil(at: number): string {
   const left = at - Date.now()

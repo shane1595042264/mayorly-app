@@ -81,12 +81,12 @@ describe('folding a ledger into another', () => {
 describe('the clerk settings', () => {
   it('start on, at the tuned level, and are clamped', () => {
     const w = world()
-    expect(w.s.settings.clerk).toEqual({ createLedgers: true, consolidate: true, minConfidence: null })
-    w.do({ type: 'settings/update', patch: { clerk: { createLedgers: false, consolidate: true, minConfidence: 1.4 } } })
-    expect(w.s.settings.clerk).toEqual({ createLedgers: false, consolidate: true, minConfidence: 0.99 })
-    w.do({ type: 'settings/update', patch: { clerk: { createLedgers: true, consolidate: false, minConfidence: 0.1 } } })
+    expect(w.s.settings.clerk).toEqual({ allow: { settings: 'ask', recipes: 'ask' }, createLedgers: true, consolidate: true, minConfidence: null })
+    w.do({ type: 'settings/update', patch: { clerk: { allow: { settings: 'ask', recipes: 'ask' }, createLedgers: false, consolidate: true, minConfidence: 1.4 } } })
+    expect(w.s.settings.clerk).toEqual({ allow: { settings: 'ask', recipes: 'ask' }, createLedgers: false, consolidate: true, minConfidence: 0.99 })
+    w.do({ type: 'settings/update', patch: { clerk: { allow: { settings: 'ask', recipes: 'ask' }, createLedgers: true, consolidate: false, minConfidence: 0.1 } } })
     expect(w.s.settings.clerk.minConfidence).toBe(0.5)
-    w.do({ type: 'settings/update', patch: { clerk: { createLedgers: true, consolidate: false, minConfidence: null } } })
+    w.do({ type: 'settings/update', patch: { clerk: { allow: { settings: 'ask', recipes: 'ask' }, createLedgers: true, consolidate: false, minConfidence: null } } })
     expect(w.s.settings.clerk.minConfidence).toBeNull()
   })
 
@@ -94,8 +94,8 @@ describe('the clerk settings', () => {
     const w = world()
     const old = JSON.parse(JSON.stringify(w.s)) as { settings: { clerk?: unknown } }
     delete old.settings.clerk
-    expect(migrate(old)?.settings.clerk).toEqual({ createLedgers: true, consolidate: true, minConfidence: null })
+    expect(migrate(old)?.settings.clerk).toEqual({ allow: { settings: 'ask', recipes: 'ask' }, createLedgers: true, consolidate: true, minConfidence: null })
     const set = { ...old, settings: { ...old.settings, clerk: { createLedgers: false, consolidate: false, minConfidence: 0.8 } } }
-    expect(migrate(set)?.settings.clerk).toEqual({ createLedgers: false, consolidate: false, minConfidence: 0.8 })
+    expect(migrate(set)?.settings.clerk).toEqual({ allow: { settings: 'ask', recipes: 'ask' }, createLedgers: false, consolidate: false, minConfidence: 0.8 })
   })
 })

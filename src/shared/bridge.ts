@@ -1,4 +1,5 @@
 import type { Action, AlarmKind, HudEvent, MayorlyState } from '../core/index'
+import type { InstructionPlan } from './instruct'
 
 // The contract between a Mayorly client (the HUD) and whatever owns the state.
 // In Electron that is the main process over IPC; in a plain browser it is an
@@ -249,6 +250,8 @@ export interface Bridge {
     sweepTray(): Promise<void>
     /** Run the trial again: the clerk files the test lines and keeps the level that does best. */
     calibrate(): Promise<AiPublic>
+    /** An instruction from Alt+N, read into steps; the ones allowed are already done. */
+    instruct(text: string): Promise<InstructionPlan>
     /** The clerk picks a glyph name for a ledger from the catalogue, skipping names other ledgers wear. Null without a key or an answer. */
     pickGlyph(name: string, criterion: string, options: string[], taken: string[]): Promise<string | null>
     /** A request in words about the calendar. The proposal is held by the shell; null when the clerk could not read it or has no key. */
@@ -332,6 +335,7 @@ export const IPC = {
   aiSyncReset: 'mayorly:ai-sync-reset',
   aiSweep: 'mayorly:ai-sweep',
   aiCalibrate: 'mayorly:ai-calibrate',
+  instruct: 'mayorly:instruct',
   aiPickGlyph: 'mayorly:ai-pick-glyph',
   aiArrange: 'mayorly:ai-arrange',
   calAddSource: 'mayorly:cal-add-source',

@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Tell the clerk what to do
+
+- Type an instruction into Capture (Alt+N) and the clerk does it: "set work schedule to workdays 7am to 4pm", "no work this Friday", "sessions 45 minutes to 90". Start a line with ! to make sure it is read as an instruction; a line that turns out to be a task is filed as one.
+- Recipes: "every workday, not on holidays, add PRO: CWILL {date}" makes that entry each workday morning, and "Alt+H makes PRO: CWILL {date} with 16 tomatoes and starts it" makes a shortcut. {date} becomes the month and day, like 11/17. Your recipes are in Settings, under Recipes, where you can pause, run or remove them.
+- Settings, AI clerk, What the clerk may do: for settings and for recipes, choose Do it (done at once, with Undo), Ask first (the box shows Apply) or Never. Both start at Ask first.
+- A shortcut a recipe takes wins over the same key used for something else on that computer. Give the other action a new key in Settings.
+
 ## The schedule follows you
 
 - Alt+I (Option+I on a Mac) switches you to what the calendar says you should be doing now. If nothing is scheduled, the tomato says what is next.

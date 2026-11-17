@@ -442,6 +442,13 @@ export class AiClerk {
   }
 
   /** A calendar request in words: the raw answer and the model that gave it. Null without a key, on a slow call, or when the model said nothing. */
+  /** An instruction typed into Alt+N, read into the clerk's own JSON (`shared/instruct.ts`), through every working key. Null without one. */
+  async instruct(system: string, prompt: string): Promise<{ text: string; model: string } | null> {
+    if (!this.pick()) return null
+    const { r, model } = await this.ask({ system, prompt, maxTokens: 700 }, FILE_TIMEOUT_MS * 2, FILE_BUDGET_MS * 2)
+    return { text: r.text, model }
+  }
+
   async arrange(request: string, context: string, rules: string[]): Promise<{ text: string; model: string } | null> {
     const k = this.pick()
     if (!k) return null

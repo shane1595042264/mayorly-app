@@ -113,6 +113,20 @@ export function workWindowsFor(cal: CalendarSettings, marks: WorkMark[] | undefi
   return out.sort((a, b) => a.start - b.start)
 }
 
+/**
+ * Whether a daily recipe runs on the day `t` falls in. workdays: the work schedule's days with
+ * work (holidays and days off already out), or Monday to Friday without a schedule; weekdays:
+ * Monday to Friday. Either skips US federal holidays unless the recipe keeps them.
+ */
+export function recipeRunsOn(cal: CalendarSettings, marks: WorkMark[] | undefined, when: { days: 'workdays' | 'weekdays' | 'everyday'; holidays: boolean }, t: number): boolean {
+  if (when.days === 'everyday') return true
+  const w = wallClock(t, cal.tz)
+  const holiday = usHolidayOn(`${w.y}-${pad2(w.m)}-${pad2(w.d)}`) !== null
+  if (holiday && !when.holidays) return false
+  if (when.days === 'workdays' && cal.work?.hours.some((d) => d.length > 0)) return workOn(cal, marks, t).hours.length > 0 || (holiday && when.holidays && (cal.work.hours[w.weekday] ?? []).length > 0)
+  return w.weekday >= 1 && w.weekday <= 5
+}
+
 /** The replan every platform asks for: your hours, work time and where the plan ends, expanded in the calendar's zone. */
 export function replanAction(s: { settings: { calendar: CalendarSettings }; calendar: { workMarks?: WorkMark[] } }, now: number): { type: 'schedule/replan'; windows: Interval[]; work: Interval[]; horizonEnd: number } {
   const cal = s.settings.calendar

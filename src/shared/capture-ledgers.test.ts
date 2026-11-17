@@ -68,14 +68,14 @@ describe('the clerk starting a ledger', () => {
     const { captureLine } = makeCapture(w.engine, fakeClerk({ fileEntry: proposing(0.9, null), tuned: () => ({ threshold: 0.95 }) }), () => {})
     await captureLine('repot the monstera')
     expect(w.s.ledgers.some((l) => l.name === 'Plants')).toBe(false)
-    w.engine.act({ type: 'settings/update', patch: { clerk: { createLedgers: true, consolidate: true, minConfidence: 0.6 } } })
+    w.engine.act({ type: 'settings/update', patch: { clerk: { allow: { settings: 'ask', recipes: 'ask' }, createLedgers: true, consolidate: true, minConfidence: 0.6 } } })
     await captureLine('water the ferns')
     expect(w.s.ledgers.some((l) => l.name === 'Plants')).toBe(true)
   })
 
   it('does not ask for new ledgers when the setting is off', async () => {
     const w = world()
-    w.engine.act({ type: 'settings/update', patch: { clerk: { createLedgers: false, consolidate: true, minConfidence: null } } })
+    w.engine.act({ type: 'settings/update', patch: { clerk: { allow: { settings: 'ask', recipes: 'ask' }, createLedgers: false, consolidate: true, minConfidence: null } } })
     const fileEntry = vi.fn(proposing(0.99, null))
     const { captureLine } = makeCapture(w.engine, fakeClerk({ fileEntry }), () => {})
     await captureLine('repot the monstera')
@@ -125,7 +125,7 @@ describe('the clerk folding its own ledgers', () => {
     expect(asked).not.toHaveBeenCalled()
 
     const off = setup(FOLD_AFTER_MS + DAY)
-    off.w.engine.act({ type: 'settings/update', patch: { clerk: { createLedgers: true, consolidate: false, minConfidence: null } } })
+    off.w.engine.act({ type: 'settings/update', patch: { clerk: { allow: { settings: 'ask', recipes: 'ask' }, createLedgers: true, consolidate: false, minConfidence: null } } })
     const never = vi.fn(async () => [])
     await makeCapture(off.w.engine, fakeClerk({ consolidate: never }), () => {}).consolidate()
     expect(never).not.toHaveBeenCalled()
