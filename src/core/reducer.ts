@@ -1,5 +1,5 @@
 import { LEDGER_THEMES, type CalBlock, type CalendarSettings, type ClerkSettings, type CalEvent, type CalFeed, type ClerkCommand, type Epoch, type ExternalEvent, type HoursWindow, type Interval, type LedgerTheme, type Overflow } from './model'
-import { plan, type Placement, type PlanTask } from './schedule'
+import { normalize, plan, subtract, type Placement, type PlanResult, type PlanTask } from './schedule'
 import { DEFAULT_SETTINGS } from './seed'
 import { deriveCode, prefixClerk, type Clerk, type Filing } from './clerk'
 import type {
@@ -36,7 +36,7 @@ export type Action =
   | { type: 'entry/subtask-delete'; id: Id; subId: Id }
   | { type: 'leisure/cue-edit'; id: Id; index: number; text: string }
   /** The clerk filed an existing entry (a tray sweep): ledger, an estimate if it had none, and its log line. */
-  | { type: 'entry/file'; id: Id; ledgerId: Id | null; estimateMin: number | null; log: string; model?: string; confidence?: 'sure' | 'unsure' }
+  | { type: 'entry/file'; id: Id; ledgerId: Id | null; estimateMin: number | null; log: string; model?: string; confidence?: 'sure' | 'unsure'; sessionMin?: number | null }
   /** You looked at an unsure filing and left it: the question mark goes, no rule is learned. */
   | { type: 'entry/confirm'; id: Id }
   | { type: 'rule/add'; text: string }
@@ -58,7 +58,10 @@ export type Action =
   | { type: 'calendar/feed-remove'; id: Id }
   | { type: 'calendar/external'; feedId: Id; events: ExternalEvent[]; fetchedAt: Epoch; error: string | null }
   /** The planner runs: work hours as absolute windows (expanded outside core, in the calendar's zone) and where to stop. */
-  | { type: 'schedule/replan'; windows: Interval[]; horizonEnd: Epoch }
+  /** `work`: your job's hours inside the range, absolute; only work-ledger entries are planned there, and nothing else. */
+  | { type: 'schedule/replan'; windows: Interval[]; horizonEnd: Epoch; work?: Interval[] }
+  /** No work on this day (YYYY-MM-DD in the calendar's zone), or work back on. */
+  | { type: 'calendar/work-day'; day: string; off: boolean }
   /** The clerk's proposal, resolved to ids by main. Each command is checked and applied on its own; a bad one is skipped and counted. */
   | { type: 'schedule/apply'; commands: ClerkCommand[]; log: string; model?: string }
   | { type: 'entry/complete'; id: Id }
@@ -157,7 +160,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
 
   // The planner runs often and usually changes nothing: compute first, copy only when it did.
   if (action.type === 'schedule/replan') {
-    const next = replanned(state, action.windows, action.horizonEnd, ctx.now)
+    const next = replanned(state, action.windows, action.horizonEnd, ctx.now, action.work ?? [])
     return { state: next ?? state, events: [] }
   }
 
@@ -183,7 +186,10 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
         break
       }
       const e = addEntry(s, ctx, filing.title, filing.ledgerId, filing.estimateMin)
-      if (byClerk) e.clerkFiled = { ledgerId: filing.ledgerId, model: filing.model ?? 'clerk', confidence: filing.confidence ?? 'sure' }
+      if (byClerk) {
+        e.clerkFiled = { ledgerId: filing.ledgerId, model: filing.model ?? 'clerk', confidence: filing.confidence ?? 'sure' }
+        clerkSession(e, filing.sessionMin)
+      }
       log(s, now, filing.log)
       if (action.start) {
         const d = s.desk
@@ -243,6 +249,7 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const e = s.entries.find((x) => x.id === action.id)
       if (!e || e.doneAt !== null) break
       if (action.ledgerId !== null && !s.ledgers.some((l) => l.id === action.ledgerId)) break
+      clerkSession(e, action.sessionMin)
       if (action.ledgerId === e.ledgerId) break
       e.ledgerId = action.ledgerId
       e.clerkFiled = { ledgerId: action.ledgerId, model: action.model ?? 'clerk', confidence: action.confidence ?? 'sure' }
@@ -697,6 +704,12 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     case 'calendar/event-delete':
       s.calendar.events = s.calendar.events.filter((x) => x.id !== action.id)
       break
+    case 'calendar/work-day': {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(action.day)) break
+      const marks = (s.calendar.workMarks ?? []).filter((m) => m.day !== action.day)
+      s.calendar.workMarks = [...marks, { day: action.day, off: !!action.off, at: now }].sort((a, b) => (a.day < b.day ? -1 : 1)).slice(-WORK_MARKS_KEEP)
+      break
+    }
     case 'calendar/pin': {
       const b = s.calendar.blocks.find((x) => x.id === action.blockId)
       if (!b || b.end <= now) break
@@ -1470,7 +1483,35 @@ function sanitiseClerk(c: Partial<ClerkSettings> | undefined): ClerkSettings {
 
 function sanitiseCalendar(c: Partial<CalendarSettings> | undefined): CalendarSettings {
   const base = DEFAULT_SETTINGS.calendar
-  const days = Array.isArray(c?.hours) ? c!.hours : base.hours
+  const step5 = (v: unknown, lo: number, hi: number, dflt: number) => {
+    const n = Number(v)
+    return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n / 5) * 5)) : dflt
+  }
+  const sessionMin = step5(c?.sessionMin, 5, 480, base.sessionMin)
+  const w = c?.work
+  return {
+    tz: typeof c?.tz === 'string' ? c.tz.slice(0, 64) : base.tz,
+    hours: cleanHours(Array.isArray(c?.hours) ? c!.hours : base.hours),
+    breakMin: step5(c?.breakMin, 0, 60, base.breakMin),
+    minChunkMin: step5(c?.minChunkMin, 5, 240, base.minChunkMin),
+    horizonDays: Math.min(28, Math.max(1, Math.round(Number(c?.horizonDays)) || base.horizonDays)),
+    spill: c?.spill === undefined ? base.spill : !!c.spill,
+    defaultMin: step5(c?.defaultMin, 5, 240, base.defaultMin),
+    mode: c?.mode === 'rotate' || c?.mode === 'done' ? c.mode : base.mode,
+    work: {
+      hours: cleanHours(Array.isArray(w?.hours) ? w!.hours : base.work.hours),
+      ledgerIds: Array.isArray(w?.ledgerIds) ? [...new Set(w!.ledgerIds.filter((x) => typeof x === 'string'))].slice(0, 20) : [],
+      usHolidays: w?.usHolidays === undefined ? base.work.usHolidays : !!w.usHolidays,
+    },
+    sessionMin,
+    sessionMax: Math.max(sessionMin, step5(c?.sessionMax, 5, 480, base.sessionMax)),
+  }
+}
+
+const WORK_MARKS_KEEP = 200
+
+/** Seven days of windows, Sunday first: each clamped to the day, sorted, overlaps merged. */
+function cleanHours(days: HoursWindow[][]): HoursWindow[][] {
   const hours: HoursWindow[][] = []
   for (let d = 0; d < 7; d++) {
     const list = Array.isArray(days[d]) ? days[d] : []
@@ -1486,20 +1527,13 @@ function sanitiseCalendar(c: Partial<CalendarSettings> | undefined): CalendarSet
     }
     hours.push(merged)
   }
-  const step5 = (v: unknown, lo: number, hi: number, dflt: number) => {
-    const n = Number(v)
-    return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n / 5) * 5)) : dflt
-  }
-  return {
-    tz: typeof c?.tz === 'string' ? c.tz.slice(0, 64) : base.tz,
-    hours,
-    breakMin: step5(c?.breakMin, 0, 60, base.breakMin),
-    minChunkMin: step5(c?.minChunkMin, 5, 240, base.minChunkMin),
-    horizonDays: Math.min(28, Math.max(1, Math.round(Number(c?.horizonDays)) || base.horizonDays)),
-    spill: c?.spill === undefined ? base.spill : !!c.spill,
-    defaultMin: step5(c?.defaultMin, 5, 240, base.defaultMin),
-    mode: c?.mode === 'rotate' || c?.mode === 'done' ? c.mode : base.mode,
-  }
+  return hours
+}
+
+/** The clerk's session length, only where nobody set one: a length you chose stays yours. */
+function clerkSession(e: Entry, n: unknown) {
+  if (e.maxChunkMin !== undefined || typeof n !== 'number' || !Number.isFinite(n) || n < 5) return
+  e.maxChunkMin = Math.min(480, Math.round(n / 5) * 5)
 }
 
 /** The calendar knobs on an entry, each checked; a bad value is left as it was. */
@@ -1540,7 +1574,7 @@ function applyClerkCommand(s: MayorlyState, ctx: Ctx, c: ClerkCommand): boolean 
     const len = minutes(c.minutes)
     if (!title || start === null || len === null) return false
     const end = start + len * 60_000
-    if (overlapsFixed(s, start, end)) return false
+    if (overlapsFixed(s, start, end) || overlapsWork(s, start, end)) return false
     s.calendar.events.push({ id: ctx.newId(), title, origin: 'clerk', entryId: null, start, end, createdAt: now, seq: 0 })
     return true
   }
@@ -1605,6 +1639,8 @@ function applyClerkCommand(s: MayorlyState, ctx: Ctx, c: ClerkCommand): boolean 
       if (start === null || len === null) return false
       const end = start + len * 60_000
       if (overlapsFixed(s, start, end)) return false
+      // Work time holds work: anything else the clerk places there is refused.
+      if (!isWorkEntry(s, e) && overlapsWork(s, start, end)) return false
       s.calendar.events = s.calendar.events.filter((x) => !(x.entryId === e.id && x.origin === 'clerk'))
       s.calendar.events.push({ id: ctx.newId(), title: e.title, origin: 'clerk', entryId: e.id, start, end, createdAt: now, seq: 0 })
       return true
@@ -1624,6 +1660,13 @@ function overlapsFixed(s: MayorlyState, start: number, end: number): boolean {
   return false
 }
 
+/** True when [start, end) crosses work time in the last plan's range. */
+function overlapsWork(s: MayorlyState, start: number, end: number): boolean {
+  return (s.calendar.workTime ?? []).some((w) => w.start < end && w.end > start)
+}
+
+const isWorkEntry = (s: MayorlyState, e: Entry) => e.ledgerId !== null && s.settings.calendar.work.ledgerIds.includes(e.ledgerId)
+
 function validSpan(start: unknown, end: unknown): boolean {
   return typeof start === 'number' && typeof end === 'number' && Number.isFinite(start) && Number.isFinite(end) && end > start && end - start <= 86_400_000
 }
@@ -1637,9 +1680,12 @@ function tidyCalendar(s: MayorlyState, entryId: Id) {
   for (const e of cal.events) if (e.entryId === entryId) e.entryId = null
 }
 
+/** Bumped when the planner's unit changes, so the next plan starts afresh. 2: sessions instead of pomodoros, no gaps. */
+const PLAN_VERSION = 2
+
 /** The planner, against the state as it is: the new state when the plan changed, null when it is the same. */
-function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: number, now: number): MayorlyState | null {
-  if (!Array.isArray(windowsIn) || windowsIn.length > 400 || !Number.isFinite(horizonEndIn)) return null
+function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: number, now: number, workIn: Interval[]): MayorlyState | null {
+  if (!Array.isArray(windowsIn) || windowsIn.length > 400 || !Array.isArray(workIn) || workIn.length > 400 || !Number.isFinite(horizonEndIn)) return null
   const horizonEnd = Math.min(horizonEndIn, now + 60 * 86_400_000)
   if (horizonEnd <= now) return null
   const cal = state.calendar
@@ -1650,14 +1696,16 @@ function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: num
   ]
   const tasks: PlanTask[] = []
   const assumedIds = new Set<Id>()
-  // The unit of planned time is the pomodoro: every block is one focus block as long as the
-  // desk's, with the short rest after it, and a task's time rounds up to whole ones. On the
-  // five-minute grid, so a block always lands on it.
-  const pomo = Math.max(5, Math.round(state.settings.focusMin / 5) * 5)
+  // The unit of planned time is a session, not a pomodoro: as long as the entry wants between
+  // the calendar's shortest and longest (the clerk picks it when it files the entry), back to
+  // back with no gap, on the five-minute grid.
+  const sMin = settings.sessionMin
+  const sMax = settings.sessionMax
+  const session = (n: number | undefined, dflt: number) => Math.min(sMax, Math.max(sMin, n ?? dflt))
   for (const e of openFlow(state)) {
     if (e.offCalendar) continue
-    // No estimate: one pomodoro, so the plan never waits for a number.
-    const estimate = e.estimateMin || pomo
+    // No estimate: one shortest session, so the plan never waits for a number.
+    const estimate = e.estimateMin || sMin
     if (!e.estimateMin) assumedIds.add(e.id)
     const spent = Math.floor(entrySpentMs(state, e.id, now) / 60_000)
     let pinned = 0
@@ -1669,7 +1717,8 @@ function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: num
     // entry without a number stays on the plan until it is cleared.
     const raw = e.estimateMin ? estimate - spent - pinned : estimate - pinned
     if (raw <= 0) continue
-    const needMin = Math.ceil(raw / pomo) * pomo
+    const needMin = Math.ceil(raw / 5) * 5
+    const minChunk = session(e.minChunkMin, sMin)
     tasks.push({
       id: e.id,
       needMin,
@@ -1678,19 +1727,37 @@ function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: num
       rush: !!e.rush,
       order: e.order,
       splittable: e.splittable !== false,
-      // One pomodoro a block; an entry that may not be split gets its pomodoros back to back.
-      minChunkMin: pomo,
-      maxChunkMin: e.splittable === false ? null : pomo,
+      minChunkMin: minChunk,
+      maxChunkMin: e.splittable === false ? null : Math.max(minChunk, session(e.maxChunkMin, sMax)),
       group: e.ledgerId,
     })
   }
-  // A mode change releases future placements, but keeps the current block and the old
-  // blocks below so moved feed items retain their ids and increment their sequences.
-  const modeChanged = (cal.plannedMode ?? 'done') !== settings.mode
+  // A change in how the plan is made (the mode, the session lengths, the work schedule)
+  // releases future placements, but keeps the current block and the old blocks below so
+  // moved feed items retain their ids and increment their sequences.
+  const plannedWith = JSON.stringify([PLAN_VERSION, settings.mode, sMin, sMax, settings.work])
+  const changed = (cal.plannedMode ?? 'done') !== settings.mode || cal.plannedWith !== plannedWith
   const previous: Placement[] = cal.blocks
-    .filter((b) => !modeChanged || (b.start < now && now < b.end))
+    .filter((b) => !changed || (b.start < now && now < b.end))
     .map((b) => ({ taskId: b.entryId, start: b.start, end: b.end, late: b.late }))
-  const r = plan({ now, horizonEnd, windows: windowsIn, busy, tasks, previous, minChunkMin: pomo, gridMin: 5, breakMin: Math.max(0, state.settings.shortRestMin), spill: settings.spill, mode: settings.mode })
+  // Work time holds the work ledgers' entries and nothing else; everything else goes in your
+  // own hours outside it. Without a work schedule there is one plan, as before.
+  const work = normalize(workIn).filter((w) => w.end > now - 86_400_000 && w.start < horizonEnd)
+  const hasWork = settings.work.hours.some((d) => d.length > 0)
+  const workLedgers = new Set(settings.work.ledgerIds)
+  const isWork = (t: PlanTask) => hasWork && t.group !== null && workLedgers.has(t.group)
+  const base = { now, horizonEnd, busy, minChunkMin: sMin, gridMin: 5, breakMin: 0, spill: settings.spill, mode: settings.mode }
+  const part = (ts: PlanTask[], windows: Interval[]): PlanResult => {
+    const ids = new Set(ts.map((t) => t.id))
+    return plan({ ...base, windows, tasks: ts, previous: previous.filter((p) => ids.has(p.taskId)) })
+  }
+  const runs = hasWork
+    ? [part(tasks.filter(isWork), work), part(tasks.filter((t) => !isWork(t)), subtract(normalize(windowsIn), work))]
+    : [part(tasks, windowsIn)]
+  const r: PlanResult = {
+    placements: runs.flatMap((x) => x.placements).sort((a, b) => a.start - b.start || (a.taskId < b.taskId ? -1 : a.taskId > b.taskId ? 1 : 0)),
+    overflow: runs.flatMap((x) => x.overflow),
+  }
   // Chunks numbered per entry by start; ids stable per chunk number so a moved chunk keeps its feed UID.
   const byTask = new Map<Id, Placement[]>()
   for (const p of r.placements) byTask.set(p.taskId, [...(byTask.get(p.taskId) ?? []), p])
@@ -1707,8 +1774,8 @@ function replanned(state: MayorlyState, windowsIn: Interval[], horizonEndIn: num
   blocks.sort((a, b) => a.start - b.start || (a.id < b.id ? -1 : 1))
   const overflow: Overflow[] = r.overflow.map((o) => ({ entryId: o.taskId, kind: o.kind, minutes: o.minutes }))
   const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
-  if (same(blocks, cal.blocks) && same(overflow, cal.overflow) && cal.horizonEnd === horizonEnd && cal.plannedAt !== null && cal.plannedMode === settings.mode) return null
-  return { ...state, calendar: { ...cal, blocks, overflow, plannedAt: now, horizonEnd, plannedMode: settings.mode } }
+  if (same(blocks, cal.blocks) && same(overflow, cal.overflow) && same(work, cal.workTime ?? []) && cal.horizonEnd === horizonEnd && cal.plannedAt !== null && cal.plannedMode === settings.mode && cal.plannedWith === plannedWith) return null
+  return { ...state, calendar: { ...cal, blocks, overflow, plannedAt: now, horizonEnd, plannedMode: settings.mode, plannedWith, workTime: work } }
 }
 
 export const TEXT_MIN = 0.8

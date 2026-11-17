@@ -8,11 +8,12 @@ describe('the plan described to the clerk', () => {
     let n = 0
     const ctx = { now, newId: () => `id${++n}`, random: () => 0.5, device: 'here' }
     let s = sampleState(now, ctx.newId)
-    s = reduce(s, { type: 'settings/update', patch: { calendar: { ...s.settings.calendar, tz: 'UTC', horizonDays: 14, mode: 'rotate', defaultMin: 45 } } }, ctx).state
+    s = reduce(s, { type: 'settings/update', patch: { calendar: { ...s.settings.calendar, tz: 'UTC', horizonDays: 14, mode: 'rotate', sessionMin: 45 } } }, ctx).state
     s = reduce(s, { type: 'entry/capture', text: 'legal: Read the lease' }, ctx).state
     s = reduce(s, { type: 'calendar/event-add', title: 'Second week appointment', start: now + 10 * 86_400_000, end: now + 10 * 86_400_000 + 3_600_000 }, ctx).state
     const text = describeForClerk(s, now)
     expect(text).toContain('Plan: Rotate, 14 days including today, until 2026-11-13 00:00 (exclusive)')
+    expect(text).toContain('sessions 45-120m back to back')
     expect(text).toContain('no estimate (default 45m)')
     expect(text).toContain('Second week appointment')
     expect(text).toContain('Fixed events in the planning range (cannot be moved)')

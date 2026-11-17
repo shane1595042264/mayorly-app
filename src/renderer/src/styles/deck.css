@@ -749,3 +749,36 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
   .setting-flash::after { animation: setting-flash-still 1.9s linear forwards; }
   @keyframes setting-flash-still { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 }
+
+/* ------------------------------------------------------------ plan settings and work time */
+
+.plan-settings { display: grid; gap: 22px; }
+.plan-settings h4 { margin: 0 0 4px; }
+.plan-settings .form-row { flex-wrap: wrap; }
+.work-ledgers { display: grid; gap: 6px; margin: 12px 0 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { height: 28px; padding: 0 10px; border: 1px solid var(--line-2); font-size: 12px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 6px; }
+.chip b { font-size: 10px; }
+.chip.on { border-color: var(--accent); color: var(--ink); background: rgb(240 174 60 / 0.1); }
+.chip:not(.on):hover { color: var(--ink); }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cal-side .plan-settings .hours-row .check { width: 64px; }
+.cal-side .plan-settings .hours-row input[type='time'] { width: 92px; }
+.cal-settings-head { display: flex; align-items: center; justify-content: space-between; }
+.cal-work {
+  position: absolute; left: 0; right: 0; z-index: 1;
+  background: repeating-linear-gradient(135deg, rgb(99 160 255 / 0.07) 0 6px, transparent 6px 12px);
+  border-top: 1px solid rgb(99 160 255 / 0.35); border-bottom: 1px solid rgb(99 160 255 / 0.2);
+}
+.cal-work-tag { position: absolute; top: 2px; left: 4px; display: inline-flex; align-items: center; gap: 4px; padding: 0 2px; font-size: 9px; letter-spacing: 0.08em; color: rgb(140 186 255 / 0.85); background: none; border: 0; cursor: pointer; }
+.cal-work-tag svg { opacity: 0; transition: opacity 120ms; }
+.cal-work-tag:hover, .cal-work-tag:focus-visible { color: var(--ink); }
+.cal-work-tag:hover svg, .cal-work-tag:focus-visible svg { opacity: 1; }
+.cal-work-tag:focus-visible { outline: 1px solid var(--accent); }
+.cal-workoff { margin-top: 2px; display: inline-flex; align-items: center; gap: 4px; padding: 1px 5px; border: 1px dashed rgb(99 160 255 / 0.4); font-size: 10px; color: var(--ink-3); background: none; cursor: pointer; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-workoff:hover, .cal-workoff:focus-visible { color: var(--ink); border-color: rgb(99 160 255 / 0.8); }
+.cal.wide-side { grid-template-columns: minmax(0, 1fr) 360px; }
+.cal-side .plan-settings .hours-row { gap: 6px; }
+.cal-side .plan-settings .hours-row .check { width: 58px; }
+.cal-side .plan-settings .hours-row input[type='time'] { width: 118px; }
+.icon-btn.on { color: var(--accent); }

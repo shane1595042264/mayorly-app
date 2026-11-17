@@ -49,6 +49,15 @@ describe('a proposed ledger', () => {
     expect(bodies[0]).toContain('LEISURE or NEW')
   })
 
+  it('comes with a session length inside the calendar range, when asked for one', async () => {
+    const { clerk, bodies } = await setup(() => '{"ledgerCode":"CAR","confidence":0.9,"title":"prep the onsite","estimateMin":240,"sessionMin":300}')
+    const f = await clerk.fileEntry('prep the onsite ~4h', ledgers, [], { sessions: { min: 30, max: 120 } })
+    expect(f).toMatchObject({ ledgerId: 'l1', estimateMin: 240, sessionMin: 120 })
+    expect(bodies[0]).toContain('sessionMin\\": number from 30 to 120')
+    const plain = await clerk.fileEntry('prep the onsite ~4h', ledgers)
+    expect(plain?.sessionMin).toBeNull()
+  })
+
   it('is not asked for, nor taken, when new ledgers are off', async () => {
     const { clerk, bodies } = await setup(() => '{"ledgerCode":"NEW","confidence":0.91,"title":"repot the monstera","estimateMin":null,"newLedger":{"name":"Plants","criterion":""}}')
     const f = await clerk.fileEntry('repot the monstera', ledgers)

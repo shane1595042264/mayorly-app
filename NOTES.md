@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Work hours, and sessions instead of pomodoros
+
+- Set your job's hours and which ledgers are work: the gear on the Calendar tab, or Settings, Calendar. The clerk plans only work entries inside work hours and everything else outside them. You can still work on anything, any time.
+- No work on US federal holidays. To take any other day off, click Work on that day in the calendar; the day header puts it back.
+- The calendar plans sessions, not pomodoros, back to back with no gaps between them. Each session is 30 minutes to 2 hours (change both in the same panel), and the clerk picks the length for each new entry when it files it. You can set one yourself when you select a block.
+- What you move or edit on the calendar stays where you put it.
+
 ## This card shows once, and Got it works
 
 - This card now shows once per version. It counts as seen as soon as it appears, so closing it any way at all keeps it away until the next update.

@@ -36,7 +36,10 @@ export function makeCapture(engine: CaptureEngine, clerk: AiClerk, say: (n: Cler
   const own = () => engine.state.settings?.clerk ?? { createLedgers: false, consolidate: false, minConfidence: null }
   /** How sure the clerk must be to start or fold a ledger. */
   const bar = () => own().minConfidence ?? clerk.tuned()?.threshold ?? DEFAULT_THRESHOLD
-  const opts = () => ({ newLedgers: own().createLedgers && engine.state.ledgers.length < LEDGER_CAP })
+  const opts = () => {
+    const cal = engine.state.settings?.calendar
+    return { newLedgers: own().createLedgers && engine.state.ledgers.length < LEDGER_CAP, sessions: cal ? { min: cal.sessionMin, max: cal.sessionMax } : undefined }
+  }
   const pct = (n: number) => `${Math.round(n * 100)}%`
 
   /**
@@ -112,7 +115,7 @@ export function makeCapture(engine: CaptureEngine, clerk: AiClerk, say: (n: Cler
       const now = engine.state.entries.find((e) => e.id === id)
       if (!now || now.ledgerId !== null || now.doneAt !== null) continue
       if (f.leisure) engine.dispatch({ type: 'entry/toLeisure', id, log: f.log })
-      else engine.dispatch({ type: 'entry/file', id, ledgerId: f.ledgerId, estimateMin: f.estimateMin, log: f.log, model: f.model, confidence: f.confidence })
+      else engine.dispatch({ type: 'entry/file', id, ledgerId: f.ledgerId, estimateMin: f.estimateMin, log: f.log, model: f.model, confidence: f.confidence, sessionMin: f.sessionMin })
     }
   }
 
@@ -179,7 +182,7 @@ export function makeCapture(engine: CaptureEngine, clerk: AiClerk, say: (n: Cler
       return
     }
     if (filing && filing.ledgerId && filing.ledgerId !== e.ledgerId) {
-      engine.dispatch({ type: 'entry/file', id: e.id, ledgerId: filing.ledgerId, estimateMin: filing.estimateMin, log: filing.log, model: filing.model, confidence: filing.confidence })
+      engine.dispatch({ type: 'entry/file', id: e.id, ledgerId: filing.ledgerId, estimateMin: filing.estimateMin, log: filing.log, model: filing.model, confidence: filing.confidence, sessionMin: filing.sessionMin })
     }
     const now = engine.state.entries.find((x) => x.id === e.id)
     const ledger = engine.state.ledgers.find((l) => l.id === now?.ledgerId)

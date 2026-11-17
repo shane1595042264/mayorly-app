@@ -165,6 +165,32 @@ export interface Calendar {
   plannedMode?: PlanMode
   /** Where the last plan stopped looking, so the grid knows where the plan ends. */
   horizonEnd: Epoch | null
+  /** What the last plan was made with (mode, session lengths, work schedule); a change starts the future afresh. */
+  plannedWith?: string
+  /** Work time inside the last plan's range, absolute: derived like the blocks, so the reducer can keep the clerk out of it. */
+  workTime?: Interval[]
+  /** Days you changed by hand: no work on a workday, or work back on. The latest mark for a day wins, here and in a merge. */
+  workMarks?: WorkMark[]
+}
+
+/** One day's work, changed by hand. `day` is YYYY-MM-DD in the calendar's zone. */
+export interface WorkMark {
+  day: string
+  off: boolean
+  at: Epoch
+}
+
+/**
+ * Your job's hours. The planner puts entries from the work ledgers only inside them, and
+ * nothing else; you can still work on anything at any time. Every list empty: no schedule.
+ */
+export interface WorkSchedule {
+  /** Seven lists of windows, Sunday first. */
+  hours: HoursWindow[][]
+  /** The ledgers that are work. */
+  ledgerIds: Id[]
+  /** No work on US federal holidays (the observed day). */
+  usHolidays: boolean
 }
 
 /**
@@ -210,6 +236,11 @@ export interface CalendarSettings {
   defaultMin: number
   /** done: earliest due first, the flow's order after. rotate: one entry from each ledger in turn. */
   mode: PlanMode
+  /** Your job's hours; the clerk plans only work there. */
+  work: WorkSchedule
+  /** A planned session's shortest and longest length, minutes. The clerk picks each entry's length between them. */
+  sessionMin: number
+  sessionMax: number
 }
 
 export type PlanMode = 'done' | 'rotate'

@@ -1,4 +1,4 @@
-import type { Id, MayorlyState, Segment } from './model'
+import type { Id, MayorlyState, Segment, WorkMark } from './model'
 import { CLERK_LOG_CAP } from './rules'
 import { focusFromLog, reconcileTomatoes } from './accounting'
 
@@ -117,7 +117,14 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
   const fresherHere = new Set(feeds.filter((f) => lc.feeds.some((x) => x.id === f.id && (x.lastFetchedAt ?? 0) >= (ic.feeds.find((y) => y.id === f.id)?.lastFetchedAt ?? 0))).map((f) => f.id))
   const external = [...lc.external.filter((x) => feedIds.has(x.feedId) && fresherHere.has(x.feedId)), ...ic.external.filter((x) => feedIds.has(x.feedId) && !fresherHere.has(x.feedId))]
   const newerPlan = (lc.plannedAt ?? 0) >= (ic.plannedAt ?? 0) ? lc : ic
-  const calendar = { events, feeds, external, blocks: newerPlan.blocks, overflow: newerPlan.overflow, plannedAt: newerPlan.plannedAt, horizonEnd: newerPlan.horizonEnd, plannedMode: newerPlan.plannedMode }
+  // A day's work mark: the later one wins.
+  const marks = new Map<string, WorkMark>()
+  for (const m of [...(lc.workMarks ?? []), ...(ic.workMarks ?? [])]) {
+    const had = marks.get(m.day)
+    if (!had || m.at > had.at) marks.set(m.day, m)
+  }
+  const workMarks = [...marks.values()].sort((a, b) => (a.day < b.day ? -1 : 1))
+  const calendar = { events, feeds, external, blocks: newerPlan.blocks, overflow: newerPlan.overflow, plannedAt: newerPlan.plannedAt, horizonEnd: newerPlan.horizonEnd, plannedMode: newerPlan.plannedMode, plannedWith: newerPlan.plannedWith, workTime: newerPlan.workTime, workMarks }
   const seen = new Set<string>()
   const clerkLog = [...incoming.clerkLog, ...local.clerkLog]
     .filter((x) => {

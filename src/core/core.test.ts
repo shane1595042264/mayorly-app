@@ -307,22 +307,92 @@ describe('capture and start', () => {
 
 describe('the calendar', () => {
   const windows = (w: typeof world extends (...a: never[]) => infer R ? R : never) => [{ start: w.now, end: w.now + 8 * 60 * MIN }, { start: w.now + 24 * 60 * MIN, end: w.now + 32 * 60 * MIN }]
-  // The calendar plans in pomodoros; these tests use a 30 minute one, the founder's.
-  const calWorld = () => world((s) => { s.settings.focusMin = 30 })
-  const replan = (w: ReturnType<typeof world>) => w.do({ type: 'schedule/replan', windows: windows(w), horizonEnd: w.now + 14 * 24 * 60 * MIN })
+  // The calendar plans in sessions, 30 minutes to two hours by default, back to back.
+  const calWorld = () => world()
+  const replan = (w: ReturnType<typeof world>, work: { start: number; end: number }[] = []) => w.do({ type: 'schedule/replan', windows: windows(w), horizonEnd: w.now + 14 * 24 * 60 * MIN, work })
 
-  it('plans entries in whole pomodoros with a rest between, and a quiet replan returns the same state', () => {
+  it('plans entries in sessions with no gap between, and a quiet replan returns the same state', () => {
     const w = calWorld()
     w.do({ type: 'entry/capture', text: 'legal: a ~90' })
     w.do({ type: 'entry/capture', text: 'dance: b ~30' })
+    w.do({ type: 'entry/capture', text: 'dance: c ~300' })
     replan(w)
     const blocks = w.s.calendar.blocks
-    expect(blocks.map((b) => [b.entryId === w.entry('a').id ? 'a' : 'b', (b.end - b.start) / MIN])).toEqual([['a', 30], ['a', 30], ['a', 30], ['b', 30]])
+    const name = (id: string) => ['a', 'b', 'c'].find((t) => w.entry(t).id === id)
+    expect(blocks.map((b) => [name(b.entryId), (b.end - b.start) / MIN])).toEqual([['a', 90], ['b', 30], ['c', 120], ['c', 120], ['c', 60]])
     expect(blocks[0].id).toBe(`${w.entry('a').id}#1`)
-    expect(blocks[1].start).toBe(blocks[0].end + 5 * MIN)
+    for (let i = 1; i < 4; i++) expect(blocks[i].start).toBe(blocks[i - 1].end)
     const before = w.s
     replan(w)
     expect(w.s).toBe(before)
+  })
+
+  it('an entry keeps its own session length, between the shortest and the longest', () => {
+    const w = calWorld()
+    w.do({ type: 'entry/capture', text: 'legal: study ~180' })
+    w.do({ type: 'entry/update', id: w.entry('study').id, patch: { maxChunkMin: 45 } })
+    w.do({ type: 'entry/capture', text: 'legal: deep ~180' })
+    w.do({ type: 'entry/update', id: w.entry('deep').id, patch: { maxChunkMin: 600 } })
+    replan(w)
+    const lengths = (t: string) => w.s.calendar.blocks.filter((b) => b.entryId === w.entry(t).id).map((b) => (b.end - b.start) / MIN)
+    expect(lengths('study')).toEqual([45, 45, 45, 45])
+    expect(lengths('deep')).toEqual([120, 60])
+  })
+
+  it('the clerk sets a session length only where nobody did', () => {
+    const w = calWorld()
+    w.do({ type: 'entry/capture', text: 'study for the exam', filing: { title: 'study for the exam', ledgerId: w.ledger('LGL').id, estimateMin: 240, log: 'filed', model: 'm', confidence: 'sure', sessionMin: 92 } })
+    expect(w.entry('study for the exam').maxChunkMin).toBe(90)
+    w.do({ type: 'entry/capture', text: 'dance: drills' })
+    const drills = w.entry('drills')
+    w.do({ type: 'entry/update', id: drills.id, patch: { maxChunkMin: 40 } })
+    w.do({ type: 'entry/file', id: drills.id, ledgerId: drills.ledgerId, estimateMin: null, log: 'filed', sessionMin: 120 })
+    expect(w.entry('drills').maxChunkMin).toBe(40)
+  })
+
+  it('work time holds only the work ledgers, and the rest goes around it', () => {
+    const w = calWorld()
+    w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, work: { hours: [[], [{ start: 420, end: 960 }], [], [], [], [], []], ledgerIds: [w.ledger('LGL').id], usHolidays: true } } } })
+    w.do({ type: 'entry/capture', text: 'legal: job ~60' })
+    w.do({ type: 'entry/capture', text: 'dance: fun ~120' })
+    const work = [{ start: w.now + 60 * MIN, end: w.now + 180 * MIN }]
+    replan(w, work)
+    const of = (t: string) => w.s.calendar.blocks.filter((b) => b.entryId === w.entry(t).id).map((b) => [(b.start - w.now) / MIN, (b.end - w.now) / MIN])
+    expect(of('job')).toEqual([[60, 120]])
+    expect(of('fun')).toEqual([[0, 60], [180, 240]])
+    expect(w.s.calendar.workTime).toEqual(work)
+    // A day with no work: the job waits; the rest stays where it was.
+    replan(w, [])
+    expect(of('job')).toEqual([])
+    expect(w.s.calendar.overflow).toEqual([{ entryId: w.entry('job').id, kind: 'no-room', minutes: 60 }])
+    expect(of('fun')).toEqual([[0, 60], [180, 240]])
+  })
+
+  it('the clerk cannot place anything but work in work time', () => {
+    const w = calWorld()
+    w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, work: { hours: [[], [{ start: 420, end: 960 }], [], [], [], [], []], ledgerIds: [w.ledger('LGL').id], usHolidays: true } } } })
+    w.do({ type: 'entry/capture', text: 'legal: job ~60' })
+    w.do({ type: 'entry/capture', text: 'dance: fun ~60' })
+    replan(w, [{ start: w.now + 60 * MIN, end: w.now + 180 * MIN }])
+    w.do({ type: 'schedule/apply', log: 'x', commands: [
+      { op: 'place', entryId: w.entry('fun').id, start: w.now + 90 * MIN, minutes: 30 },
+      { op: 'block', title: 'Gym', start: w.now + 150 * MIN, minutes: 60 },
+      { op: 'place', entryId: w.entry('job').id, start: w.now + 90 * MIN, minutes: 30 },
+    ] })
+    expect(w.s.calendar.events.map((e) => [e.title, (e.start - w.now) / MIN])).toEqual([['job', 90]])
+  })
+
+  it('a day off work is a mark; the later mark for a day wins in a merge', () => {
+    const w = calWorld()
+    w.do({ type: 'calendar/work-day', day: '2026-11-18', off: true })
+    w.do({ type: 'calendar/work-day', day: 'not a day', off: true })
+    expect(w.s.calendar.workMarks).toEqual([{ day: '2026-11-18', off: true, at: w.now }])
+    const other = structuredClone(w.s)
+    other.calendar.workMarks = [{ day: '2026-11-18', off: false, at: w.now + MIN }, { day: '2026-11-19', off: true, at: w.now }]
+    w.wait(2 * MIN)
+    w.do({ type: 'calendar/work-day', day: '2026-11-19', off: false })
+    w.do({ type: 'sync/merge', state: other, syncedAt: null })
+    expect(w.s.calendar.workMarks).toEqual([{ day: '2026-11-18', off: false, at: w.now - MIN }, { day: '2026-11-19', off: false, at: w.now }])
   })
 
   it('a pin is busy to the planner and credit to its entry; a cleared entry leaves the calendar', () => {
@@ -371,7 +441,7 @@ describe('the calendar', () => {
     expect(w.s.calendar.blocks).toEqual([])
   })
 
-  it('an entry without an estimate gets one pomodoro and is marked assumed; an estimate rounds up to whole ones; the range may be one day', () => {
+  it('an entry without an estimate gets one shortest session and is marked assumed; an estimate is kept to five minutes; the range may be one day', () => {
     const w = calWorld()
     w.do({ type: 'entry/capture', text: 'legal: no number' })
     w.do({ type: 'entry/capture', text: 'legal: with ~50' })
@@ -379,9 +449,9 @@ describe('the calendar', () => {
     const a = w.s.calendar.blocks.find((b) => b.entryId === w.entry('no number').id)!
     const b = w.s.calendar.blocks.find((b) => b.entryId === w.entry('with').id)!
     expect(a.assumed).toBe(true)
-    expect(a.end - a.start).toBe(w.s.settings.focusMin * MIN)
+    expect(a.end - a.start).toBe(w.s.settings.calendar.sessionMin * MIN)
     expect(b.assumed).toBe(false)
-    expect(w.s.calendar.blocks.filter((x) => x.entryId === w.entry('with').id).map((x) => (x.end - x.start) / MIN)).toEqual([30, 30])
+    expect(w.s.calendar.blocks.filter((x) => x.entryId === w.entry('with').id).map((x) => (x.end - x.start) / MIN)).toEqual([50])
     w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, horizonDays: 1, defaultMin: 45, mode: 'rotate' } } })
     expect(w.s.settings.calendar).toMatchObject({ horizonDays: 1, defaultMin: 45, mode: 'rotate' })
     w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, mode: 'sideways' as never, horizonDays: -3 } } })
@@ -390,7 +460,7 @@ describe('the calendar', () => {
 
   it('an assumed length remains on the plan after more than that much desk time', () => {
     const w = calWorld()
-    w.do({ type: 'settings/update', patch: { focusMin: 60 } })
+    w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, sessionMin: 60 } } })
     w.do({ type: 'entry/capture', text: 'legal: ongoing', start: true })
     const id = w.entry('ongoing').id
     replan(w)
@@ -449,7 +519,7 @@ describe('the calendar', () => {
     expect(w.s.settings.calendar).toMatchObject({ mode: 'done', defaultMin: 60, horizonDays: 2 })
   })
 
-  it('a mode change keeps the task in progress at the front, in whole pomodoros, never a scrap', () => {
+  it('a mode change keeps the task in progress at the front, whole, never a scrap', () => {
     const w = calWorld()
     for (const text of ['legal: a ~60', 'legal: b ~30', 'dance: c ~30']) w.do({ type: 'entry/capture', text })
     replan(w)
@@ -457,9 +527,8 @@ describe('the calendar', () => {
     w.wait(10 * MIN)
     w.do({ type: 'settings/update', patch: { calendar: { ...w.s.settings.calendar, mode: 'rotate' } } })
     replan(w)
-    expect(w.s.calendar.blocks[0]).toMatchObject({ entryId: current.entryId, start: w.now, end: w.now + 30 * MIN })
-    expect(w.s.calendar.blocks.filter((b) => b.entryId === current.entryId).map((b) => (b.end - b.start) / MIN)).toEqual([30, 30])
-    expect(w.s.calendar.blocks.every((b) => b.end - b.start === 30 * MIN)).toBe(true)
+    expect(w.s.calendar.blocks[0]).toMatchObject({ entryId: current.entryId, start: w.now, end: w.now + 60 * MIN })
+    expect(w.s.calendar.blocks.map((b) => [b.entryId, (b.end - b.start) / MIN])).toEqual([[current.entryId, 60], [w.entry('c').id, 30], [w.entry('b').id, 30]])
   })
 
   it('a block dragged to another time pins there, never before now, and planned time is summed', () => {
@@ -493,15 +562,15 @@ describe('the calendar', () => {
 
   it('calendar settings are sanitised and an old save loads with defaults', () => {
     const w = world()
-    w.do({ type: 'settings/update', patch: { calendar: { tz: 'America/Chicago', hours: [[], [{ start: 600, end: 540 }, { start: 480, end: 720 }, { start: 700, end: 900 }], [], [], [], [], []], breakMin: 7, minChunkMin: 2, horizonDays: 99, spill: false, defaultMin: 1000, mode: 'rotate' } } })
-    expect(w.s.settings.calendar).toEqual({ tz: 'America/Chicago', hours: [[], [{ start: 480, end: 900 }], [], [], [], [], []], breakMin: 5, minChunkMin: 5, horizonDays: 28, spill: false, defaultMin: 240, mode: 'rotate' })
+    w.do({ type: 'settings/update', patch: { calendar: { tz: 'America/Chicago', hours: [[], [{ start: 600, end: 540 }, { start: 480, end: 720 }, { start: 700, end: 900 }], [], [], [], [], []], breakMin: 7, minChunkMin: 2, horizonDays: 99, spill: false, defaultMin: 1000, mode: 'rotate', work: { hours: [[], [{ start: 420, end: 960 }, { start: 900, end: 1000 }], [], [], [], [], []], ledgerIds: ['a', 'a', 3 as never], usHolidays: false }, sessionMin: 47, sessionMax: 20 } } })
+    expect(w.s.settings.calendar).toEqual({ tz: 'America/Chicago', hours: [[], [{ start: 480, end: 900 }], [], [], [], [], []], breakMin: 5, minChunkMin: 5, horizonDays: 28, spill: false, defaultMin: 240, mode: 'rotate', work: { hours: [[], [{ start: 420, end: 1000 }], [], [], [], [], []], ledgerIds: ['a'], usHolidays: false }, sessionMin: 45, sessionMax: 45 })
     const old = JSON.parse(JSON.stringify(w.s)) as Record<string, unknown>
     delete old.calendar
     delete (old.settings as Record<string, unknown>).calendar
     const back = migrate(old)!
     expect(back.calendar.blocks).toEqual([])
     expect(back.settings.calendar.minChunkMin).toBe(25)
-    expect(back.settings.calendar).toMatchObject({ defaultMin: 30, mode: 'done' })
+    expect(back.settings.calendar).toMatchObject({ defaultMin: 30, mode: 'done', sessionMin: 30, sessionMax: 120, work: { hours: [[], [], [], [], [], [], []], ledgerIds: [], usHolidays: true } })
   })
 })
 

@@ -1,6 +1,6 @@
 import { entrySpentMs, openFlow, reduce, type ClerkCommand, type Ctx, type Id, type MayorlyState } from '@core/index'
 import type { Arrangement, ArrangementLine } from '../bridge'
-import { horizonEndFor, wallClock, windowsFor, zonedEpoch } from '../windows'
+import { horizonEndFor, replanAction, wallClock, zonedEpoch } from '../windows'
 
 // The clerk listening: a request in words becomes typed commands the reducer checks. The
 // model sees the plan in plain lines and answers JSON naming entries by title; this file
@@ -50,16 +50,23 @@ export function describeForClerk(s: MayorlyState, now: number): string {
     return `${w.y}-${String(w.m).padStart(2, '0')}-${String(w.d).padStart(2, '0')} ${String(Math.floor(w.minutes / 60)).padStart(2, '0')}:${String(w.minutes % 60).padStart(2, '0')}`
   }
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const hours = cal.hours.map((d, i) => (d.length ? `${dayNames[i]} ${d.map((h) => `${hhmm(h.start)}-${hhmm(h.end)}`).join(',')}` : null)).filter(Boolean).join('; ')
-  const lines: string[] = [`Now: ${dayNames[wallClock(now, tz).weekday]} ${stamp(now)}`, `Work hours: ${hours || 'none set'}`]
-  lines.push(`Plan: ${cal.mode === 'rotate' ? 'Rotate' : 'Get it done'}, ${cal.horizonDays} days including today, until ${stamp(horizonEnd)} (exclusive); default length ${cal.defaultMin}m; ${cal.spill ? 'late work stays on the plan' : 'no work after its due'}`)
+  const week = (days: { start: number; end: number }[][]) => days.map((d, i) => (d.length ? `${dayNames[i]} ${d.map((h) => `${hhmm(h.start)}-${hhmm(h.end)}`).join(',')}` : null)).filter(Boolean).join('; ')
+  const hours = week(cal.hours)
+  const lines: string[] = [`Now: ${dayNames[wallClock(now, tz).weekday]} ${stamp(now)}`, `The user's hours (entries are planned here): ${hours || 'none set'}`]
+  const job = week(cal.work.hours)
+  if (job) {
+    const codes = cal.work.ledgerIds.map((id) => s.ledgers.find((l) => l.id === id)?.code).filter(Boolean).join(', ')
+    const work = (s.calendar.workTime ?? []).filter((w) => w.end > now && w.start < horizonEnd).map((w) => `${stamp(w.start)}-${hhmm(wallClock(w.end, tz).minutes)}`)
+    lines.push(`Job work hours: ${job}${cal.work.usHolidays ? ', not on US federal holidays' : ''}. Only entries from the work ledgers (${codes || 'none chosen'}) go in work time; never place or block anything else there. Work time in range: ${work.join(' ') || 'none'}`)
+  }
+  lines.push(`Plan: ${cal.mode === 'rotate' ? 'Rotate' : 'Get it done'}, ${cal.horizonDays} days including today, until ${stamp(horizonEnd)} (exclusive); sessions ${cal.sessionMin}-${cal.sessionMax}m back to back; ${cal.spill ? 'late work stays on the plan' : 'no work after its due'}`)
   const flow = openFlow(s)
   lines.push(`Entries (${flow.length}), in flow order:`)
   for (const e of flow.slice(0, 40)) {
     const l = s.ledgers.find((x) => x.id === e.ledgerId)
     const spent = Math.floor(entrySpentMs(s, e.id, now) / MIN)
     const blocks = s.calendar.blocks.filter((b) => b.entryId === e.id && b.end > now && b.start < horizonEnd).map((b) => `${stamp(b.start)}-${hhmm(wallClock(b.end, tz).minutes)}`)
-    const bits = [l ? l.code : 'TRAY', e.estimateMin ? `est ${e.estimateMin}m` : `no estimate (default ${cal.defaultMin}m)`, spent ? `spent ${spent}m` : null, e.due ? `due ${stamp(e.due)}` : null, e.notBefore ? `not before ${stamp(e.notBefore)}` : null, e.rush ? 'up next' : null, e.offCalendar ? 'off calendar' : null, e.splittable === false ? 'one piece' : null, blocks.length ? `blocks ${blocks.join(' ')}` : null].filter(Boolean)
+    const bits = [l ? l.code : 'TRAY', e.estimateMin ? `est ${e.estimateMin}m` : `no estimate (default ${cal.sessionMin}m)`, e.maxChunkMin ? `sessions of ${e.maxChunkMin}m` : null, spent ? `spent ${spent}m` : null, e.due ? `due ${stamp(e.due)}` : null, e.notBefore ? `not before ${stamp(e.notBefore)}` : null, e.rush ? 'up next' : null, e.offCalendar ? 'off calendar' : null, e.splittable === false ? 'one piece' : null, blocks.length ? `blocks ${blocks.join(' ')}` : null].filter(Boolean)
     lines.push(`- "${e.title}" ${bits.join(', ')}`)
   }
   if (flow.length > 40) lines.push(`- and ${flow.length - 40} more`)
@@ -224,11 +231,8 @@ export function fillDraft(d: Draft, picks: Record<string, Id>, s: MayorlyState, 
 
 /** The outcome of applying the commands, without committing: how many blocks move and how many turn late. */
 export function previewApply(s: MayorlyState, commands: ClerkCommand[], log: string, ctx: Ctx): { moved: number; newLate: number } {
-  const cal = s.settings.calendar
-  const windows = windowsFor(cal, ctx.now, cal.horizonDays + 1)
-  const horizonEnd = horizonEndFor(cal, ctx.now)
   const applied = reduce(s, { type: 'schedule/apply', commands, log }, ctx).state
-  const after = reduce(applied, { type: 'schedule/replan', windows, horizonEnd }, ctx).state
+  const after = reduce(applied, replanAction(applied, ctx.now), ctx).state
   const before = new Map(s.calendar.blocks.map((b) => [b.id, b]))
   let moved = 0
   for (const b of after.calendar.blocks) {

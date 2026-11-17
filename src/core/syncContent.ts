@@ -29,7 +29,7 @@ export function syncContent(s: MayorlyState, self: string): string {
     canonical({
       ...s,
       desk: mine ? s.desk : null,
-      calendar: { ...s.calendar, blocks: null, overflow: null, plannedAt: null, horizonEnd: null, plannedMode: null },
+      calendar: { ...s.calendar, blocks: null, overflow: null, plannedAt: null, horizonEnd: null, plannedMode: null, plannedWith: null, workTime: null },
       settings: Object.fromEntries(Object.entries(s.settings).filter(([k]) => !device.includes(k))),
       sittings: s.sittings.map((x) => ({ ...x, focusMs: 0 })),
       segments: run ? s.segments.map((x) => (x.id === run ? { ...x, end: null } : x)) : s.segments,

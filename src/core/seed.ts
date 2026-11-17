@@ -32,7 +32,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hudSide: 'right',
   hudScale: 1,
   text: { pet: 1, deck: 1, plus: 1 },
-  calendar: { tz: '', hours: [[], WORKDAY, WORKDAY, WORKDAY, WORKDAY, WORKDAY, []], breakMin: 5, minChunkMin: 25, horizonDays: 7, spill: true, defaultMin: 30, mode: 'done' },
+  calendar: { tz: '', hours: [[], WORKDAY, WORKDAY, WORKDAY, WORKDAY, WORKDAY, []], breakMin: 0, minChunkMin: 25, horizonDays: 7, spill: true, defaultMin: 30, mode: 'done', work: { hours: [[], [], [], [], [], [], []], ledgerIds: [], usHolidays: true }, sessionMin: 30, sessionMax: 120 },
   trayTimer: false,
   hotkeys: DEFAULT_HOTKEYS,
   keymap: {},
@@ -54,7 +54,7 @@ export function emptyState(): MayorlyState {
     leisure: [],
     trash: [],
     desk: { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null, device: null, heldAt: null },
-    settings: { ...DEFAULT_SETTINGS, hotkeys: { ...DEFAULT_HOTKEYS }, calendar: { ...DEFAULT_SETTINGS.calendar, hours: DEFAULT_SETTINGS.calendar.hours.map((d) => d.map((w) => ({ ...w }))) } },
+    settings: { ...DEFAULT_SETTINGS, hotkeys: { ...DEFAULT_HOTKEYS }, calendar: { ...DEFAULT_SETTINGS.calendar, hours: DEFAULT_SETTINGS.calendar.hours.map((d) => d.map((w) => ({ ...w }))), work: { hours: [[], [], [], [], [], [], []], ledgerIds: [], usHolidays: true } } },
     calendar: emptyCalendar(),
   }
 }

@@ -1,6 +1,6 @@
 import { powerMonitor } from 'electron'
 import type { Action } from '@core/index'
-import { horizonEndFor, machineZone, windowsFor } from '../../shared/windows'
+import { machineZone, replanAction } from '../../shared/windows'
 import type { Engine } from '../engine'
 
 // The planner's trigger, in one place. After anything that can change the plan (entries,
@@ -24,7 +24,7 @@ export function installReplanner(engine: Engine) {
       return
     }
     const now = Date.now()
-    engine.dispatch({ type: 'schedule/replan', windows: windowsFor(cal, now, cal.horizonDays + 1), horizonEnd: horizonEndFor(cal, now) })
+    engine.dispatch(replanAction(engine.state, now))
   }
   const soon = () => {
     if (timer) clearTimeout(timer)

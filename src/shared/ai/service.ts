@@ -70,12 +70,24 @@ export interface TrayFiling {
   confidence: 'sure' | 'unsure'
   leisure?: boolean
   newLedger?: { name: string; criterion: string; confidence: number }
+  sessionMin?: number | null
 }
 
 /** What the filing calls may do beyond picking a ledger. */
 export interface FileOptions {
   /** The clerk may propose a ledger when none fits. */
   newLedgers?: boolean
+  /** The calendar's shortest and longest session: the clerk picks one sitting's length between them. */
+  sessions?: { min: number; max: number }
+}
+
+const sessionField = (o: FileOptions) => (o.sessions ? `, "sessionMin": number from ${o.sessions.min} to ${o.sessions.max}` : '')
+const SESSION_RULE = 'sessionMin: how long one sitting on it should last in minutes, within the range: short for errands and admin, longer for deep work such as study, writing or building.'
+/** The model's session length kept inside the calendar's range, on the five-minute grid; null when it gave none. */
+const sessionOf = (v: unknown, o: FileOptions): number | null => {
+  const n = Number(v)
+  if (!o.sessions || v === null || v === undefined || !Number.isFinite(n) || n <= 0) return null
+  return Math.min(o.sessions.max, Math.max(o.sessions.min, Math.round(n / 5) * 5))
 }
 
 const NEW_LEDGER_RULE =
@@ -286,6 +298,7 @@ export class AiClerk {
   async fileEntry(text: string, ledgers: Ledger[], rules: string[] = [], opts: FileOptions = {}): Promise<Filing | null> {
     if (!this.pick()) return null
     const codes = ledgers.map((l) => l.code).join(', ')
+    const sess = sessionField(opts)
     const system = [
       'You are the clerk of Mayorly, a personal ledger system. The user typed one line into the capture tray.',
       `Decide which ledger it belongs to from the list, by each ledger\'s criterion. ${opts.newLedgers ? NEW_LEDGER_RULE : 'Never invent a ledger.'}`,
@@ -293,17 +306,19 @@ export class AiClerk {
       'Entertainment is not a ledger: games, shows, streams, films, scrolling, anything with no productive value gets ledgerCode LEISURE. Exercise, study and work are not entertainment.',
       'The house rules are the user\'s own corrections and come before the criteria.',
       opts.newLedgers
-        ? `Reply with JSON only, no prose: {"ledgerCode": one of ${codes}, LEISURE or NEW, "confidence": number from 0 to 1, "title": string, "estimateMin": number or null, "newLedger": {"name": string, "criterion": string} or null, "fallbackCode": one of ${codes} or null}. ledgerCode is never null.`
-        : `Reply with JSON only, no prose: {"ledgerCode": one of ${codes}, LEISURE, "confidence": number from 0 to 1, "title": string, "estimateMin": number or null}. ledgerCode is never null.`,
+        ? `Reply with JSON only, no prose: {"ledgerCode": one of ${codes}, LEISURE or NEW, "confidence": number from 0 to 1, "title": string, "estimateMin": number or null${sess}, "newLedger": {"name": string, "criterion": string} or null, "fallbackCode": one of ${codes} or null}. ledgerCode is never null.`
+        : `Reply with JSON only, no prose: {"ledgerCode": one of ${codes}, LEISURE, "confidence": number from 0 to 1, "title": string, "estimateMin": number or null${sess}}. ledgerCode is never null.`,
       CONFIDENCE_RULE,
       'title: the entry as a short line in the user\'s own words, without the ledger name, tags such as #dance, or the time estimate.',
       'estimateMin: the minutes if the line states a duration (~20, 20 min, 1h), otherwise null.',
+      opts.sessions ? SESSION_RULE : '',
     ].join(' ')
     const prompt = `${ledgerList(ledgers)}${houseRules(rules)}\nLine: ${text}`
-    const { r, model } = await this.ask({ system, prompt, maxTokens: opts.newLedgers ? 260 : 160 }, FILE_TIMEOUT_MS, FILE_BUDGET_MS)
+    const { r, model } = await this.ask({ system, prompt, maxTokens: (opts.newLedgers ? 260 : 160) + (opts.sessions ? 20 : 0) }, FILE_TIMEOUT_MS, FILE_BUDGET_MS)
     {
       const parsed = parseFiling(r.text)
       if (!parsed) return null
+      const sessionMin = sessionOf(parsed.sessionMin, opts)
       const title = parsed.title.trim() || text.trim()
       const quoted = `'${title.length > 40 ? title.slice(0, 39) + '…' : title}'`
       if (parsed.ledgerCode?.toUpperCase() === 'LEISURE') {
@@ -321,6 +336,7 @@ export class AiClerk {
           model,
           confidence: 'unsure',
           newLedger: proposal,
+          sessionMin,
         }
       }
       const named = parsed.ledgerCode ? ledgers.find((l) => l.code.toLowerCase() === parsed.ledgerCode!.toLowerCase()) ?? null : null
@@ -331,9 +347,10 @@ export class AiClerk {
         title,
         ledgerId: ledger?.id ?? null,
         estimateMin: parsed.estimateMin,
-        log: ledger ? `filed ${quoted} -> ${ledger.code} (clerk, ${model}${confidence === 'unsure' ? ', unsure' : ''})${est}` : `tray ${quoted}: clerk found no ledger (${model})${est}`,
+        log: ledger ? `filed ${quoted} -> ${ledger.code} (clerk, ${model}${confidence === 'unsure' ? ', unsure' : ''})${est}${sessionMin ? ` sessions ${sessionMin}m` : ''}` : `tray ${quoted}: clerk found no ledger (${model})${est}`,
         model,
         confidence,
+        sessionMin,
       }
     }
   }
@@ -347,6 +364,7 @@ export class AiClerk {
     const out = new Map<string, TrayFiling>()
     if (!this.pick() || entries.length === 0) return out
     const codes = ledgers.map((l) => l.code).join(', ')
+    const sess = sessionField(opts)
     const system = [
       'You are the clerk of Mayorly, a personal ledger system. Here are entries waiting in the tray, each with a number.',
       `For each, decide which ledger it belongs to by each ledger\'s criterion. ${opts.newLedgers ? `${NEW_LEDGER_RULE} Entries that need the same new ledger give it the same name.` : 'Never invent a ledger.'}`,
@@ -354,13 +372,14 @@ export class AiClerk {
       'Entertainment is not a ledger: games, shows, streams, films, scrolling, anything with no productive value gets ledgerCode LEISURE. Exercise, study and work are not entertainment.',
       'The house rules are the user\'s own corrections and come before the criteria.',
       opts.newLedgers
-        ? `Reply with JSON only, no prose and no wrapper object: an array of {"n": number, "ledgerCode": one of ${codes}, LEISURE or NEW, "confidence": number from 0 to 1, "estimateMin": number or null, "newLedger": {"name": string, "criterion": string} or null, "fallbackCode": one of ${codes} or null}, one per entry. ledgerCode is never null.`
-        : `Reply with JSON only, no prose and no wrapper object: an array of {"n": number, "ledgerCode": one of ${codes}, LEISURE, "confidence": number from 0 to 1, "estimateMin": number or null}, one per entry. ledgerCode is never null.`,
+        ? `Reply with JSON only, no prose and no wrapper object: an array of {"n": number, "ledgerCode": one of ${codes}, LEISURE or NEW, "confidence": number from 0 to 1, "estimateMin": number or null${sess}, "newLedger": {"name": string, "criterion": string} or null, "fallbackCode": one of ${codes} or null}, one per entry. ledgerCode is never null.`
+        : `Reply with JSON only, no prose and no wrapper object: an array of {"n": number, "ledgerCode": one of ${codes}, LEISURE, "confidence": number from 0 to 1, "estimateMin": number or null${sess}}, one per entry. ledgerCode is never null.`,
       CONFIDENCE_RULE,
       'estimateMin: the minutes if the entry states a duration, otherwise null.',
+      opts.sessions ? SESSION_RULE : '',
     ].join(' ')
     const prompt = `${ledgerList(ledgers)}${houseRules(rules)}\nEntries:\n${entries.map((e, i) => `- ${i + 1}: ${e.title}`).join('\n')}`
-    const { r, model } = await this.ask({ system, prompt, maxTokens: 200 + (opts.newLedgers ? 80 : 40) * entries.length }, FILE_TIMEOUT_MS * 2, FILE_BUDGET_MS * 2)
+    const { r, model } = await this.ask({ system, prompt, maxTokens: 200 + ((opts.newLedgers ? 80 : 40) + (opts.sessions ? 12 : 0)) * entries.length }, FILE_TIMEOUT_MS * 2, FILE_BUDGET_MS * 2)
     {
       if (process.env.MAYORLY_DEBUG) console.error('[clerk] sweep answer:', r.text.slice(0, 600))
       const rows = parseRows(r.text)
@@ -382,7 +401,7 @@ export class AiClerk {
           const fb = typeof row.fallbackCode === 'string' ? row.fallbackCode.toLowerCase() : ''
           const fallback = ledgers.find((l) => l.code.toLowerCase() === fb) ?? bestGuess(entry.title, ledgers)
           const quoted = `'${entry.title.length > 40 ? entry.title.slice(0, 39) + '…' : entry.title}'`
-          out.set(entry.id, { ledgerId: fallback?.id ?? null, estimateMin: null, log: `${fallback ? `filed ${quoted} -> ${fallback.code}` : `tray ${quoted}`} (clerk, ${model}, from the tray, unsure; proposes ledger ${proposal.name})`, model, confidence: 'unsure', newLedger: proposal })
+          out.set(entry.id, { ledgerId: fallback?.id ?? null, estimateMin: null, log: `${fallback ? `filed ${quoted} -> ${fallback.code}` : `tray ${quoted}`} (clerk, ${model}, from the tray, unsure; proposes ledger ${proposal.name})`, model, confidence: 'unsure', newLedger: proposal, sessionMin: sessionOf(row.sessionMin, opts) })
           continue
         }
         const named = code ? ledgers.find((l) => l.code.toLowerCase() === code.toLowerCase()) ?? null : null
@@ -391,7 +410,7 @@ export class AiClerk {
         const est = typeof row.estimateMin === 'number' && row.estimateMin > 0 ? Math.round(row.estimateMin) : null
         const confidence = named ? confidenceOf(row.confidence) : 'unsure'
         const quoted = `'${entry.title.length > 40 ? entry.title.slice(0, 39) + '…' : entry.title}'`
-        out.set(entry.id, { ledgerId: ledger.id, estimateMin: est, log: `filed ${quoted} -> ${ledger.code} (clerk, ${model}, from the tray${confidence === 'unsure' ? ', unsure' : ''})${est ? ` est ${est}m` : ''}`, model, confidence })
+        out.set(entry.id, { ledgerId: ledger.id, estimateMin: est, log: `filed ${quoted} -> ${ledger.code} (clerk, ${model}, from the tray${confidence === 'unsure' ? ', unsure' : ''})${est ? ` est ${est}m` : ''}`, model, confidence, sessionMin: sessionOf(row.sessionMin, opts) })
       }
       return out
     }
@@ -742,7 +761,7 @@ const ledgerList = (ledgers: Ledger[]) => `Ledgers:\n${ledgers.map((l) => `- ${l
 const houseRules = (rules: string[]) => (rules.length ? `\nHouse rules:\n${rules.map((r) => `- ${r}`).join('\n')}\n` : '')
 
 /** The array of rows, whether it came bare, wrapped in an object, or fenced in markdown. */
-function parseRows(text: string): { n?: unknown; ledgerCode?: unknown; estimateMin?: unknown; confidence?: unknown; newLedger?: unknown; fallbackCode?: unknown }[] | null {
+function parseRows(text: string): { n?: unknown; ledgerCode?: unknown; estimateMin?: unknown; confidence?: unknown; newLedger?: unknown; fallbackCode?: unknown; sessionMin?: unknown }[] | null {
   const body = text.replace(/```(?:json)?/gi, '').trim()
   const start = body.search(/[[{]/)
   if (start < 0) return null
@@ -793,14 +812,14 @@ function proposedLedger(raw: unknown, confidence: unknown): { name: string; crit
   return { name: name.charAt(0).toUpperCase() + name.slice(1), criterion, confidence: confidenceValue(confidence) ?? 0 }
 }
 
-function parseFiling(text: string): { ledgerCode: string | null; title: string; estimateMin: number | null; confidence: unknown; newLedger?: unknown; fallbackCode?: string } | null {
+function parseFiling(text: string): { ledgerCode: string | null; title: string; estimateMin: number | null; confidence: unknown; newLedger?: unknown; fallbackCode?: string; sessionMin?: unknown } | null {
   const m = text.match(/\{[\s\S]*\}/)
   if (!m) return null
   try {
-    const j = JSON.parse(m[0]) as { ledgerCode?: unknown; title?: unknown; estimateMin?: unknown; confidence?: unknown; newLedger?: unknown; fallbackCode?: unknown }
+    const j = JSON.parse(m[0]) as { ledgerCode?: unknown; title?: unknown; estimateMin?: unknown; confidence?: unknown; newLedger?: unknown; fallbackCode?: unknown; sessionMin?: unknown }
     if (typeof j.title !== 'string') return null
     const est = typeof j.estimateMin === 'number' && j.estimateMin > 0 ? Math.round(j.estimateMin) : null
-    return { ledgerCode: typeof j.ledgerCode === 'string' ? j.ledgerCode : null, title: j.title, estimateMin: est, confidence: j.confidence, newLedger: j.newLedger, fallbackCode: typeof j.fallbackCode === 'string' ? j.fallbackCode : undefined }
+    return { ledgerCode: typeof j.ledgerCode === 'string' ? j.ledgerCode : null, title: j.title, estimateMin: est, confidence: j.confidence, newLedger: j.newLedger, fallbackCode: typeof j.fallbackCode === 'string' ? j.fallbackCode : undefined, sessionMin: j.sessionMin }
   } catch {
     return null
   }

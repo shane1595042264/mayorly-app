@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarBlank, CaretLeft, CaretRight, Lock, Play, PushPin, Sparkle, Warning } from '@phosphor-icons/react'
+import { ArrowCounterClockwise, CalendarBlank, CaretLeft, CaretRight, GearSix, Lock, Play, PushPin, Sparkle, Warning, X } from '@phosphor-icons/react'
 import { openFlow, span, type Action, type CalBlock, type CalEvent, type ExternalEvent, type MayorlyState } from '@core/index'
-import { startOfDayIn, wallClock, zonedEpoch } from '../../../shared/windows'
+import { dayKey, startOfDayIn, wallClock, workOn, zonedEpoch } from '../../../shared/windows'
 import { askCalendar } from '../lib/calendarAsk'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { useListKeys } from '../lib/listkeys'
 import { ledgerVars } from '../lib/themes'
 import { current, dispatch, useNow } from '../store'
 import { AskClerk } from './AskClerk'
+import { PlanSettings } from './PlanSettings'
 
 // The calendar: a week of the plan. Blocks are what the planner placed (derived, redrawn on
 // every replan), events are yours and never move, outside events are busy time from Google.
@@ -57,8 +58,8 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
   }, [weekStart, tz])
   const weekEnd = startOfDayIn(days[6] + DAY + DAY / 2, tz)
 
-  // Hour rows from an hour before the earliest window to an hour after the latest; eight to six at least.
-  const hours = s.settings.calendar.hours.flat()
+  // Hour rows from an hour before the earliest window (yours or work) to an hour after the latest; eight to six at least.
+  const hours = [...s.settings.calendar.hours.flat(), ...s.settings.calendar.work.hours.flat()]
   const firstHour = Math.max(0, Math.min(8, ...hours.map((h) => Math.floor(h.start / 60) - 1)))
   const lastHour = Math.min(24, Math.max(18, ...hours.map((h) => Math.ceil(h.end / 60) + 1)))
   const rows = lastHour - firstHour
@@ -77,6 +78,7 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
   const ledgerOf = (id: string | null) => (id ? s.ledgers.find((l) => l.id === id) ?? null : null)
 
   const [adding, setAdding] = useState(false)
+  const [panel, setPanel] = useState(false)
   const { sel, setSel } = useListKeys(items.map((i) => i.id), ({ action, id }) => {
     const it = items.find((i) => i.id === id)
     if (action === 'list.go') {
@@ -193,7 +195,7 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
   const selected = items.find((i) => i.id === sel) ?? null
 
   return (
-    <div className="cal">
+    <div className={`cal ${panel ? 'wide-side' : ''}`}>
       <div className="cal-main">
         <header className="cal-head">
           <button type="button" className="icon-btn" aria-label="Previous week" onClick={() => setWeekOffset((w) => w - 1)}><CaretLeft size={16} /></button>
@@ -201,6 +203,7 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
           <button type="button" className="icon-btn" aria-label="Next week" onClick={() => setWeekOffset((w) => w + 1)}><CaretRight size={16} /></button>
           {weekOffset !== 0 && <button type="button" className="btn ghost" onClick={() => setWeekOffset(0)}>Today</button>}
           <button type="button" className="btn ghost" onClick={() => setAdding(true)}>New event</button>
+          <button type="button" className={`icon-btn ${panel ? 'on' : ''}`} aria-label="Plan settings" aria-pressed={panel} title="Plan settings: work, your hours, sessions" onClick={() => setPanel((p) => !p)}><GearSix size={16} /></button>
           <span className="cal-planned dim">
             {lastDay ? `Planned to ${lastDay}` : 'Not planned yet'}
             {!tz && '  (no zone yet; it is set on the first launch)'}
@@ -230,6 +233,15 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
               {ribbon.filter((x) => x.end > d && x.start < d + DAY).map((x) => (
                 <span key={x.id} className="cal-allday" title={x.title}>{x.title}</span>
               ))}
+              {(() => {
+                const wk = workOn(s.settings.calendar, cal.workMarks, d + DAY / 2)
+                if (!wk.scheduled || !wk.off) return null
+                return (
+                  <button type="button" className="cal-workoff" title="Put work back on this day" onClick={() => dispatch({ type: 'calendar/work-day', day: dayKey(d + DAY / 2, tz), off: false })}>
+                    <ArrowCounterClockwise size={10} /> {wk.holiday ?? 'No work'}
+                  </button>
+                )
+              })()}
             </div>
           ))}
           <div className="cal-hours">
@@ -248,6 +260,15 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
               <div key={d} className={`cal-day ${d === todayStart ? 'today' : ''} ${d < todayStart ? 'past' : ''}`}>
                 {windows.map((h, i) => (
                   <div key={i} className="cal-window" style={{ top: (h.start / 60 - firstHour) * HOUR_PX, height: ((h.end - h.start) / 60) * HOUR_PX }} />
+                ))}
+                {workOn(s.settings.calendar, cal.workMarks, d + DAY / 2).hours.map((h, i) => (
+                  <div key={`w${i}`} className="cal-work" style={{ top: (h.start / 60 - firstHour) * HOUR_PX, height: ((h.end - h.start) / 60) * HOUR_PX }}>
+                    {i === 0 && (
+                      <button type="button" className="cal-work-tag caps" title="Work. Click for no work this day; only work entries are planned here." onClick={() => dispatch({ type: 'calendar/work-day', day: dayKey(d + DAY / 2, tz), off: true })}>
+                        Work <X size={9} />
+                      </button>
+                    )}
+                  </div>
                 ))}
                 {drag && drag.end > d && drag.start < dayEnd && (
                   <div className={`cal-item cal-ghost ${drag.kind === 'block' ? 'cal-block' : 'cal-event'}`} style={{ top: top(drag.start), height: height(drag.start, drag.end) }}>
@@ -296,14 +317,22 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
         </div>
       </div>
       <aside className="cal-side">
-        {adding ? (
+        {panel ? (
+          <section className="cal-sel">
+            <div className="cal-settings-head">
+              <h3 className="side-title caps">Plan settings</h3>
+              <button type="button" className="icon-btn" aria-label="Close plan settings" onClick={() => setPanel(false)}><X size={14} /></button>
+            </div>
+            <PlanSettings s={s} />
+          </section>
+        ) : adding ? (
           <EventForm tz={tz} now={now} done={() => setAdding(false)} />
         ) : selected ? (
           <Selected s={s} item={selected} fmt={fmt} fmtDay={fmtDay} tz={tz} />
         ) : (
           <>
             <h3 className="side-title caps">The plan</h3>
-            <p className="field-help">The clerk keeps {rangeLabel} filled with every open entry, {s.settings.calendar.mode === 'rotate' ? 'one ledger after another' : 'earliest due first'}, from now. Your own events are never moved. Select a block with j and k; Enter starts it, p pins it where it is. Drag a block to pin it elsewhere; drag an event to move it, its bottom edge to resize it. Change the range and the mode in Settings.</p>
+            <p className="field-help">The clerk keeps {rangeLabel} filled with every open entry, {s.settings.calendar.mode === 'rotate' ? 'one ledger after another' : 'earliest due first'}, from now. Your own events are never moved. Select a block with j and k; Enter starts it, p pins it where it is. Drag a block to pin it elsewhere; drag an event to move it, its bottom edge to resize it. What you move or edit stays put. The gear above sets work, your hours and session lengths.</p>
           </>
         )}
         {unestimated.length > 0 && (
@@ -361,7 +390,12 @@ function Knobs({ s, entryId, tz }: { s: MayorlyState; entryId: string; tz: strin
         <input type="datetime-local" value={e.notBefore ? toLocal(e.notBefore, tz) : ''} onChange={(ev) => up({ notBefore: ev.target.value ? fromLocal(ev.target.value, tz) : null })} />
       </label>
       <label className="check"><input type="checkbox" checked={!!e.rush} onChange={(ev) => up({ rush: ev.target.checked })} /><span className="check-box" aria-hidden /><span>Up next, ahead of every due</span></label>
-      <label className="check"><input type="checkbox" checked={e.splittable !== false} onChange={(ev) => up({ splittable: ev.target.checked })} /><span className="check-box" aria-hidden /><span>May be split into separate pomodoros</span></label>
+      <label className="field">
+        <span className="field-label caps">Session</span>
+        <input type="number" min={5} max={480} step={5} value={e.maxChunkMin ?? ''} placeholder={`${s.settings.calendar.sessionMax} min`} onChange={(ev) => up({ maxChunkMin: ev.target.value === '' ? 0 : Number(ev.target.value) })} />
+        <span className="field-help">Longest sitting, between {s.settings.calendar.sessionMin} and {s.settings.calendar.sessionMax} minutes. The clerk picks it when it files the entry.</span>
+      </label>
+      <label className="check"><input type="checkbox" checked={e.splittable !== false} onChange={(ev) => up({ splittable: ev.target.checked })} /><span className="check-box" aria-hidden /><span>May be split into separate sessions</span></label>
       <label className="check"><input type="checkbox" checked={!!e.offCalendar} onChange={(ev) => up({ offCalendar: ev.target.checked })} /><span className="check-box" aria-hidden /><span>Keep off the calendar</span></label>
     </div>
   )

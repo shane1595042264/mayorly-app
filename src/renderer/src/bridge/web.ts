@@ -5,7 +5,7 @@ import {
 import type { Bridge, Command, Layout, UiMode } from '../../../shared/bridge'
 import { clampAnchor, cornerAnchor, homeAnchor, sideOf, type Point } from '../../../shared/pet'
 import { BUILD } from '../../../shared/build'
-import { horizonEndFor, machineZone, windowsFor } from '../../../shared/windows'
+import { machineZone, replanAction } from '../../../shared/windows'
 import { physicalKey } from '../lib/keys'
 import { demoState } from './demo'
 
@@ -76,7 +76,7 @@ export function createWebBridge(): Bridge {
       return
     }
     const now = Date.now()
-    dispatch({ type: 'schedule/replan', windows: windowsFor(cal, now, cal.horizonDays + 1), horizonEnd: horizonEndFor(cal, now) })
+    dispatch(replanAction(state, now))
   }
   function replanSoon() {
     if (replanTimer) clearTimeout(replanTimer)

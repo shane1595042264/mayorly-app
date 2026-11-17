@@ -18,6 +18,8 @@ export interface Filing {
   leisure?: boolean
   /** No ledger fits, and the clerk proposes one; `ledgerId` is then the closest existing one. Capture decides whether to start it. */
   newLedger?: { name: string; criterion: string; confidence: number }
+  /** The AI clerk's pick for one sitting on it, minutes: the entry's longest session on the calendar. */
+  sessionMin?: number | null
 }
 
 export interface Clerk {

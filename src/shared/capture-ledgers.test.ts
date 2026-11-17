@@ -47,7 +47,7 @@ describe('the clerk starting a ledger', () => {
     const said: string[] = []
     const { captureLine } = makeCapture(w.engine, fakeClerk({ fileEntry }), (m) => said.push(m.text))
     await captureLine('repot the monstera')
-    expect(fileEntry.mock.calls[0][3]).toEqual({ newLedgers: true })
+    expect(fileEntry.mock.calls[0][3]).toMatchObject({ newLedgers: true })
     const plants = w.s.ledgers.find((l) => l.name === 'Plants')
     expect(plants).toMatchObject({ handWritten: false, glyph: 'plant' })
     expect(w.s.entries.find((e) => e.title === 'repot the monstera')?.ledgerId).toBe(plants!.id)
@@ -79,7 +79,7 @@ describe('the clerk starting a ledger', () => {
     const fileEntry = vi.fn(proposing(0.99, null))
     const { captureLine } = makeCapture(w.engine, fakeClerk({ fileEntry }), () => {})
     await captureLine('repot the monstera')
-    expect(fileEntry.mock.calls[0][3]).toEqual({ newLedgers: false })
+    expect(fileEntry.mock.calls[0][3]).toMatchObject({ newLedgers: false })
     expect(w.s.ledgers.some((l) => l.name === 'Plants')).toBe(false)
   })
 

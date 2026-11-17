@@ -1,6 +1,6 @@
 import { App as CapApp } from '@capacitor/app'
 import { firstRunState, migrate, reduce, type Action, type HudEvent, type MayorlyState } from '@core/index'
-import { horizonEndFor, machineZone, windowsFor } from '../shared/windows'
+import { machineZone, replanAction } from '../shared/windows'
 import type { SyncEngine } from '../shared/sync-client'
 import { demoState } from '../renderer/src/bridge/demo'
 import { deviceName, readJson, writeJson } from './platform'
@@ -140,6 +140,6 @@ export class PhoneEngine implements SyncEngine {
       return
     }
     const now = Date.now()
-    this.dispatch({ type: 'schedule/replan', windows: windowsFor(cal, now, cal.horizonDays + 1), horizonEnd: horizonEndFor(cal, now) })
+    this.dispatch(replanAction(this.state, now))
   }
 }

@@ -1,4 +1,5 @@
-import type { CalendarSettings, Interval } from '../core/model'
+import type { CalendarSettings, HoursWindow, Interval, WorkMark } from '../core/model'
+import { usHolidayOn } from './holidays'
 
 // Work hours as absolute intervals, expanded in the calendar's own zone with Intl, so two
 // machines in different places agree on the same windows. Outside core on purpose: core
@@ -70,4 +71,55 @@ export function horizonEndFor(cal: CalendarSettings, now: number): number {
 
 export function machineZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+/** YYYY-MM-DD of the day `t` falls in, in the zone. */
+export function dayKey(t: number, tz: string): string {
+  const w = wallClock(t, tz)
+  return `${w.y}-${pad2(w.m)}-${pad2(w.d)}`
+}
+
+/**
+ * Your job on one day: the work schedule's hours for its weekday, none on a US federal
+ * holiday (when that is on) or a day you marked off; a day you put back on works again,
+ * holiday or not. `day` is any instant inside it.
+ */
+export function workOn(cal: CalendarSettings, marks: WorkMark[] | undefined, day: number): { hours: HoursWindow[]; scheduled: boolean; holiday: string | null; off: boolean } {
+  const w = wallClock(day, cal.tz)
+  const scheduled = (cal.work?.hours[w.weekday] ?? []).length > 0
+  const key = `${w.y}-${pad2(w.m)}-${pad2(w.d)}`
+  const holiday = scheduled && cal.work?.usHolidays ? usHolidayOn(key) : null
+  const mark = marks?.find((m) => m.day === key)
+  const off = mark ? mark.off : holiday !== null
+  return { hours: scheduled && !off ? cal.work.hours[w.weekday] : [], scheduled, holiday, off }
+}
+
+/** Work time from the day of `from` through `days` days, absolute, sorted. */
+export function workWindowsFor(cal: CalendarSettings, marks: WorkMark[] | undefined, from: number, days: number): Interval[] {
+  const out: Interval[] = []
+  if (!cal.work?.hours.some((d) => d.length > 0)) return out
+  let day = startOfDayIn(from, cal.tz)
+  for (let i = 0; i < days + 1; i++) {
+    const w = wallClock(day + DAY / 2, cal.tz)
+    for (const h of workOn(cal, marks, day + DAY / 2).hours) {
+      const start = zonedEpoch(cal.tz, w.y, w.m, w.d, h.start)
+      const end = zonedEpoch(cal.tz, w.y, w.m, w.d, h.end)
+      if (end > start) out.push({ start, end })
+    }
+    day = startOfDayIn(day + DAY + DAY / 2, cal.tz)
+  }
+  return out.sort((a, b) => a.start - b.start)
+}
+
+/** The replan every platform asks for: your hours, work time and where the plan ends, expanded in the calendar's zone. */
+export function replanAction(s: { settings: { calendar: CalendarSettings }; calendar: { workMarks?: WorkMark[] } }, now: number): { type: 'schedule/replan'; windows: Interval[]; work: Interval[]; horizonEnd: number } {
+  const cal = s.settings.calendar
+  return {
+    type: 'schedule/replan',
+    windows: windowsFor(cal, now, cal.horizonDays + 1),
+    work: workWindowsFor(cal, s.calendar.workMarks, now, cal.horizonDays + 1),
+    horizonEnd: horizonEndFor(cal, now),
+  }
 }
