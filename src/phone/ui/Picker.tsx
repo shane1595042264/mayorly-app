@@ -6,7 +6,7 @@ import {
 } from '@core/index'
 import { Glyph } from '../../renderer/src/lib/glyphs'
 import { act, useMayorly, useNow } from '../store'
-import { captureLine } from '../ai'
+import { captureLine, useClerk } from '../ai'
 import { LedgerDot, Sheet } from './parts'
 
 // Picking what the desk is on: every ledger's open entries, the tray, the couch, the saved
@@ -31,6 +31,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const [ssLine, setSsLine] = useState('')
   const [ssError, setSsError] = useState<string | null>(null)
   const onDesk = onDeskId(s)
+  const keys = (useClerk().ai?.keys.filter((k) => k.status === 'ok').length ?? 0) > 0
   const flow = openFlow(s)
 
   // The mode goes with the pick only when it is a change, so a swap keeps the block's clock.
@@ -92,7 +93,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
 
       {found ? (
         <>
-          <h3 className="section-title">Matches</h3>
+          <h3 className="section-title">{found.length ? 'Matches' : 'Nothing matches'}</h3>
           <div className="list">
             {found.map((f) => (f.kind === 'entry' ? entryRow(f.entry) : (
               <button type="button" key={f.item.id} className="row" onClick={() => pickLeisure(f.item.id)}>
@@ -102,7 +103,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
             )))}
             <button type="button" className="row add" onClick={add}>
               <span className="glyph"><Plus size={18} /></span>
-              <span className="row-main"><span className="row-title">Add and start “{q.trim()}”</span><span className="row-sub">Filed by its first word if that names a ledger</span></span>
+              <span className="row-main"><span className="row-title">Add and start “{q.trim()}”</span><span className="row-sub">{keys ? 'The clerk files it' : 'legal: or #legal files it, else the tray'}</span></span>
             </button>
           </div>
         </>

@@ -33,20 +33,36 @@ export function App() {
     setCapturing(false)
     setTab('desk')
   }), [])
+  // Which way a tab change slides: toward the tab's place in the bar.
+  const [dir, setDir] = useState(1)
+  const order = TABS.map((t) => t.id as Tab)
   const go = (t: Tab) => {
-    if (t !== tab) tap()
+    if (t === tab) return
+    tap()
+    setDir(order.indexOf(t) > order.indexOf(tab) ? 1 : -1)
     setTab(t)
   }
+  useEffect(() => onFeel((f) => {
+    if (f === 'start') setDir(-1)
+  }), [])
   return (
     <div className="app">
-      <AnimatePresence mode="wait" initial={false}>
+      <div className="stage">
+      <AnimatePresence initial={false} custom={dir}>
         <motion.main
           className="screen"
           key={tab}
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+          custom={dir}
+          variants={{
+            // The new screen slides across on its own ground, over the old one, which slips back
+            // and dims: an iOS push, so the two never mix into one picture.
+            enter: (d: number) => ({ x: `${d * 100}%`, zIndex: 2 }),
+            center: { x: '0%', zIndex: 2, transition: { type: 'spring', stiffness: 360, damping: 38 } },
+            leave: (d: number) => ({ x: `${d * -28}%`, opacity: 0.4, zIndex: 1, transition: { type: 'spring', stiffness: 360, damping: 38 } }),
+          }}
+          initial="enter"
+          animate="center"
+          exit="leave"
         >
           {tab === 'desk' && <Timer openPicker={() => setPicking(true)} openSync={() => setTab('settings')} />}
           {tab === 'ledgers' && <Ledgers />}
@@ -54,6 +70,7 @@ export function App() {
           {tab === 'settings' && <Settings />}
         </motion.main>
       </AnimatePresence>
+      </div>
       <nav className="tabbar" aria-label="Places">
         {TABS.map((t, i) => (
           <span key={t.id} style={{ display: 'contents' }}>

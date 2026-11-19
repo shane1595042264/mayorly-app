@@ -21,9 +21,9 @@ export function RollingText({ text, className }: { text: string; className?: str
             <motion.span
               key={ch}
               className="rolling-char"
-              initial={{ y: '-60%', opacity: 0 }}
+              initial={{ y: '-100%', opacity: 0 }}
               animate={{ y: '0%', opacity: 1 }}
-              exit={{ y: '60%', opacity: 0 }}
+              exit={{ y: '100%', opacity: 0 }}
               transition={{ type: 'spring', stiffness: 600, damping: 38 }}
             >
               {ch}
@@ -57,7 +57,7 @@ export function rowIn(i: number): HTMLMotionProps<'button'> {
     layout: 'position',
     initial: { opacity: 0, y: 10 },
     animate: { opacity: 1, y: 0, transition: { ...soft, delay: Math.min(i, 14) * 0.028 } },
-    exit: { opacity: 0, x: 60, transition: { duration: 0.18 } },
+    exit: { opacity: 0, height: 0, transition: { duration: 0.16 } },
     whileTap: { scale: 0.98 },
   }
 }

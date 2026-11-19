@@ -26,7 +26,7 @@ export function Settings() {
       <Account />
       <Clerk />
       <section>
-      <h2 className="section-title" data-setting="Timer, focus, rest, pomodoro, cadence, auto start">Timer</h2>
+      <h2 className="section-title" data-setting="Timer, focus, rest, pomodoro, cadence, auto start, sound, mute">Timer</h2>
       <div className="list">
         <SettingRow title="Focus"><Stepper label="focus minutes" value={s.settings.focusMin} min={5} max={120} step={5} unit="min" onChange={(n) => set({ focusMin: n })} /></SettingRow>
         <SettingRow title="Short rest"><Stepper label="short rest minutes" value={s.settings.shortRestMin} min={1} max={30} unit="min" onChange={(n) => set({ shortRestMin: n })} /></SettingRow>
@@ -34,6 +34,7 @@ export function Settings() {
         <SettingRow title="Long rest every"><Stepper label="focus blocks between long rests" value={s.settings.longRestEvery} min={2} max={8} unit="blocks" onChange={(n) => set({ longRestEvery: n })} /></SettingRow>
         <SettingRow title="Start focus on its own" sub="After a rest ends"><Toggle label="Start focus on its own" on={s.settings.autoStartFocus} onChange={(on) => set({ autoStartFocus: on })} /></SettingRow>
         <SettingRow title="Start rests on its own" sub="After a focus block ends"><Toggle label="Start rests on its own" on={s.settings.autoStartRest} onChange={(on) => set({ autoStartRest: on })} /></SettingRow>
+        <SettingRow title="Sound cues" sub="Start, pause, clear and ripe tomatoes, on this phone"><Toggle label="Sound cues" on={s.settings.sound} onChange={(on) => set({ sound: on })} /></SettingRow>
       </div>
       <p className="help">These are the same settings as on your computers. The phone rings at the end of each block, also when locked.</p>
       </section>

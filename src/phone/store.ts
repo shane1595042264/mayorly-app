@@ -22,7 +22,7 @@ export function act(action: Action) {
   const before = engine.state
   beginAct()
   engine.act(action)
-  afterAct(before, engine.state)
+  afterAct(before, engine.state, action.type)
 }
 
 export function current(): MayorlyState {

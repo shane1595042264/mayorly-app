@@ -32,10 +32,12 @@ export const useClerk = () => useSyncExternalStore((f) => {
 }, () => view)
 
 let clerk: AiClerk | null = null
+let engineRef: PhoneEngine | null = null
 let keySync: KeySync | null = null
 let capture: ReturnType<typeof makeCapture> | null = null
 
 export async function startClerk(engine: PhoneEngine): Promise<void> {
+  engineRef = engine
   const saved = engine.scratch ? null : await readJson<{ text: string }>(FILE)
   clerk = new AiClerk({
     load: () => (saved?.text ? { text: saved.text } : null),
@@ -53,10 +55,10 @@ export async function startClerk(engine: PhoneEngine): Promise<void> {
       const before = engine.state
       beginAct()
       engine.act(a)
-      afterAct(before, engine.state)
+      afterAct(before, engine.state, a.type)
     },
     dispatch: (a) => engine.dispatch(a),
-  }, clerk, (notice) => set({ notice }))
+  }, clerk, (notice) => set({ notice: { ...notice, at: Date.now() } }))
   set({ ai: clerk.public() })
   // A key a provider turned away for a rate limit comes back on its own.
   setTimeout(() => void clerk?.heal(true), 20_000)
@@ -66,8 +68,20 @@ export async function startClerk(engine: PhoneEngine): Promise<void> {
 
 /** A line typed or said into the inbox. With start, it goes on the desk at once. */
 export async function captureLine(text: string, start = false): Promise<void> {
-  if (!capture || !text.trim()) return
+  if (!capture || !text.trim() || !engineRef) return
+  const before = new Set([...engineRef.state.entries.map((e) => e.id), ...engineRef.state.leisure.map((x) => x.id)])
   await capture.captureLine(text.trim(), start)
+  // Say where it went, always: the clerk's own line when it filed it, otherwise the plain place.
+  const s = engineRef.state
+  const entry = s.entries.find((e) => !before.has(e.id))
+  const couch = s.leisure.find((x) => !before.has(x.id))
+  const short = (t: string) => (t.length > 34 ? `${t.slice(0, 33)}…` : t)
+  if (view.notice?.phase === 'done' && view.notice.at && Date.now() - view.notice.at < 3000) return
+  if (couch) set({ notice: { phase: 'done', text: `'${short(couch.title)}' is on the couch list`, at: Date.now() } })
+  else if (entry) {
+    const ledger = s.ledgers.find((l) => l.id === entry.ledgerId)
+    set({ notice: { phase: 'done', text: ledger ? `'${short(entry.title)}' went to ${ledger.name}` : `'${short(entry.title)}' is in the tray`, at: Date.now() } })
+  }
 }
 
 export const sweepTray = () => capture?.sweepTray()

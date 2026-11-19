@@ -25,7 +25,7 @@ function phaseOf(s: MayorlyState): string {
   else if (b.kind === 'leisure') kind = 'Couch'
   else if (d.plan?.mode === 'blitz') kind = 'Blitz'
   else if (obj) kind = `${obj.name || 'Superset'}, round ${obj.round}${obj.rounds ? ` of ${obj.rounds}` : ''}`
-  else kind = `Focus, round ${b.round + 1}`
+  else kind = `Focus, round ${Math.max(1, b.round)}`
   if (d.status === 'paused') return `${kind}, paused`
   if (d.status === 'ready') return `${kind}, waiting to start`
   return kind
@@ -81,7 +81,10 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
   const launch = useFeelKey(['start', 'resume'])
   const hop = useFeelKey(['tomato', 'harvest'])
   const cleared = useFeelKey(['clear', 'harvest'])
-  const taskKey = leisure?.id ?? entry?.id ?? (idle ? 'idle' : `ledger-${v?.block.ledgerId ?? ''}`)
+  const resting = !idle && v?.block.kind === 'rest'
+  // During a rest the card says what comes back after it, not the rest itself.
+  const after = resting ? (entry ?? s.leisure.find((x) => x.id === deskId) ?? null) : null
+  const taskKey = resting ? `rest-${deskId ?? ''}` : leisure?.id ?? entry?.id ?? (idle ? 'idle' : `ledger-${v?.block.ledgerId ?? ''}`)
 
   let syncLine = ''
   if (account && sync.phase === 'error') syncLine = 'Sync failed'
@@ -120,8 +123,15 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
       </section>
 
       <motion.button type="button" className="task" onClick={openPicker} aria-label="Pick a task" whileTap={{ scale: 0.98 }} transition={spring}>
-        <AnimatePresence mode="popLayout" initial={false}>
-        <motion.span key={taskKey} className="task-body" initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -28 }} transition={spring}>
+        <AnimatePresence mode="wait" initial={false}>
+        <motion.span key={taskKey} className="task-body" initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0, transition: { type: 'spring', stiffness: 520, damping: 36 } }} exit={{ opacity: 0, x: -24, transition: { duration: 0.09 } }}>
+        {resting ? (
+          <>
+            <span className="ledger-line"><i className="dot rest-dot" aria-hidden />Rest, then</span>
+            <span className={`task-title ${after ? '' : 'placeholder'}`}>{after ? after.title : 'Back to the desk'}</span>
+            <span className="crop num" aria-hidden><span className="crop-room" /></span>
+          </>
+        ) : (<>
         <span className="ledger-line">
           {leisure ? <><i className="dot" aria-hidden />Couch</> : ledger ? <><LedgerDot ledger={ledger} /><span className="code">{ledger.code}</span>{ledger.name}</> : entry ? <><i className="dot" aria-hidden />Tray</> : idle ? 'Nothing on the desk' : <><i className="dot" aria-hidden />Ledger time</>}
           {idle && nextUp && <span>, next up</span>}
@@ -129,7 +139,7 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
         <span className={`task-title ${!entry && !leisure ? 'placeholder' : ''}`}>
           {leisure ? leisure.title : entry ? entry.title : idle ? 'Pick a task' : v?.block.label ?? 'Ledger time'}
         </span>
-        {crop !== null && (
+        {crop === null ? <span className="crop num" aria-hidden><span className="crop-room" /></span> : (
           <span className="crop num">
             <motion.span key={hop} style={{ display: 'inline-flex' }} initial={hop ? { y: 0, rotate: 0 } : false} animate={hop ? { y: [0, -14, 0, -5, 0], rotate: [0, -12, 8, 0, 0] } : {}} transition={{ duration: 0.7, ease: 'easeOut' }}>
               <Tomato />
@@ -138,6 +148,7 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
             {leisure ? 'blocks on this' : 'on this task'}
           </span>
         )}
+        </>)}
         </motion.span>
         </AnimatePresence>
         <CaretRight className="caret" size={18} weight="bold" aria-hidden />
@@ -145,8 +156,8 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
 
       <div className="controls">
         <motion.button type="button" className="primary" onClick={primary} whileTap={{ scale: 0.95 }} transition={spring}>
-          <AnimatePresence mode="popLayout" initial={false}>
-            <motion.span key={primaryLabel} className="primary-face" initial={{ opacity: 0, scale: 0.6, rotate: -40 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} exit={{ opacity: 0, scale: 0.6, rotate: 40 }} transition={spring}>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span key={primaryLabel} className="primary-face" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0, transition: { type: 'spring', stiffness: 700, damping: 38 } }} exit={{ opacity: 0, y: -14, transition: { duration: 0.08 } }}>
               <PrimaryIcon size={20} weight="fill" aria-hidden />
               {primaryLabel}
             </motion.span>
@@ -179,7 +190,7 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
         <>
           <h2 className="section-title">Up next</h2>
           <div className="list">
-            <AnimatePresence initial={false} mode="popLayout">
+            <AnimatePresence initial={false}>
               {upNext.map((e, i) => {
                 const l = s.ledgers.find((x) => x.id === e.ledgerId)
                 return (

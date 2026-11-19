@@ -142,7 +142,7 @@ h1, h2, h3, p { margin: 0; }
 .ledger-line { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); min-width: 0; }
 .ledger-line .code { font-weight: 600; color: var(--text); letter-spacing: 0.02em; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--meta); }
-.task-title { font-size: 21px; line-height: 1.25; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.task-title { min-height: 52px; font-size: 21px; line-height: 1.25; font-weight: 600; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .task-title.placeholder { color: var(--muted); font-weight: 500; }
 .crop { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--meta); padding-top: 2px; }
 .crop b { color: var(--accent); font-family: var(--display); font-weight: 600; font-size: 20px; font-variant-numeric: tabular-nums; }
@@ -187,7 +187,9 @@ h1, h2, h3, p { margin: 0; }
   font-size: 15px;
   color: var(--muted);
 }
-.switch b { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.switch b { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.switch { white-space: nowrap; overflow: hidden; }
+.switch svg { flex: none; }
 .switch:active { background: var(--raised); }
 
 /* ------------------------------------------------------------------ lists */
@@ -304,7 +306,7 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 16px; resize: non
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; border-radius: var(--r-row); overflow: hidden; }
 .stat { background: var(--surface); padding: 14px 16px; display: grid; gap: 2px; }
 .stat b { font-family: var(--display); font-weight: 600; font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.stat span { font-size: 13px; color: var(--meta); }
+.stat > span { font-size: 13px; color: var(--meta); }
 .stat.lead b { color: var(--accent); }
 
 @media (prefers-reduced-motion: reduce) {
@@ -376,3 +378,15 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 16px; resize: non
 .glyphs button { transition: transform 140ms, background 140ms; }
 .glyphs button:active { transform: scale(0.88); }
 .seg button { transition: background 180ms, color 180ms, transform 120ms; }
+
+/* Round 1 fixes */
+.crop-room { display: block; height: 25px; }
+.rest-dot { background: var(--muted); }
+.stage { position: relative; overflow: hidden; }
+.stage > .screen { position: absolute; inset: 0; background: var(--ground); }
+.primary { overflow: hidden; }
+/* The search band is opaque, edge to edge, so nothing scrolls visibly under it. */
+.settings-search { box-shadow: 0 -18px 0 6px var(--ground), 0 0 0 10px var(--ground); }
+/* On the phone amber is for data only: the search's match and ring are white. */
+.settings-search-label b { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+.setting-flash::after { border-color: var(--text); background: rgb(255 255 255 / 0.06); }

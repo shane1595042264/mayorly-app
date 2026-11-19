@@ -31,8 +31,14 @@ export function beginAct() {
 }
 
 /** After something the person did here: what changed on the desk, felt and heard. */
-export function afterAct(before: MayorlyState, after: MayorlyState) {
+export function afterAct(before: MayorlyState, after: MayorlyState, kind?: string) {
   setSoundEnabled(after.settings.sound)
+  if (kind === 'desk/skip' || kind === 'desk/skipRest') {
+    sfx.swap()
+    impact(ImpactStyle.Light)
+    tell('skip')
+    return
+  }
   const b = before.desk
   const a = after.desk
   const wasRunning = b.status === 'running'

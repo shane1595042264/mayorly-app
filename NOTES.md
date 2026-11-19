@@ -51,6 +51,12 @@ The top section is what the app shows once per build, the first time that build 
 - One tap of Option+Q now always goes back to the task you worked on last, the one highlighted when the list opens. It could jump to an older task when the mouse rested over the list, or after you cleared a task.
 - The mouse only moves the highlight once you actually move it.
 
+## The phone answers when you touch it
+
+- Start a task from anywhere, the picker, a ledger, the couch or Add and start, and the phone takes you straight to the timer, which lands with a pop so you see it running.
+- Start, pause, clear, a ripe tomato and the end of a block each have a sound and a tap you feel. Sound follows the Sound cues setting.
+- Tabs slide, sheets rise and swipe down to close, the clock's digits roll, rows slide in, and the microphone pulses while it listens.
+
 ## No passphrase, and a search in Settings
 
 - AI keys now sync with your account on their own. Sign in on a computer or your phone and your keys are there; there is no sync passphrase to choose or type. The sync server holds the key that opens them.

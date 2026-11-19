@@ -105,7 +105,7 @@ export function Capture({ onClose }: { onClose: () => void }) {
       {error && <p className="error">{error}</p>}
       <AnimatePresence mode="wait" initial={false}>
         <motion.p key={notice?.text ?? 'hint'} className={`help capture-note ${notice ? 'said' : ''}`} aria-live="polite" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2 }}>
-          {notice ? notice.text : keys > 0 ? 'The clerk files it into a ledger, or onto the couch.' : 'Without an AI key, a first word that names a ledger files it; the rest waits in the tray. Add a key in Settings.'}
+          {notice ? notice.text : keys > 0 ? 'The clerk files it into a ledger, or onto the couch.' : 'Without an AI key, start with a ledger and a colon, like legal: call the notary, or tag it #legal; the rest waits in the tray.'}
         </motion.p>
       </AnimatePresence>
       {keys > 0 && tray > 0 && (

@@ -155,6 +155,8 @@ export interface BuildInfo {
 export interface ClerkNotice {
   phase: 'working' | 'done'
   text: string
+  /** When it was said, where a screen needs to know whether it is fresh. */
+  at?: number
 }
 
 /**

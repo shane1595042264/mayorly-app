@@ -13,6 +13,10 @@ export function demoState(now: number, newId: () => string): MayorlyState {
 
   // A week of history so the record has something to show.
   const [lgl, dnc, car] = s.ledgers
+  // Each sample ledger wears its own colour, as a person's would.
+  run({ type: 'ledger/update', id: lgl.id, patch: { theme: 'blue' } })
+  run({ type: 'ledger/update', id: dnc.id, patch: { theme: 'rose' } })
+  run({ type: 'ledger/update', id: car.id, patch: { theme: 'teal' } })
   run({ type: 'settings/update', patch: { shortRestMin: 0, longRestMin: 0 } })
   const mins = [[50, 25, 75], [25, 50, 50], [0, 75, 25], [75, 25, 100], [50, 50, 25], [25, 0, 50]]
   for (let d = 0; d < mins.length; d++) {
