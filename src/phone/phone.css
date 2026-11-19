@@ -483,3 +483,13 @@ body:has(.toast) .screen { padding-bottom: 96px; }
 .track.rest > i { background: rgb(255 255 255 / 0.6); }
 /* The toast opens out from its middle, solid from its first frame, so nothing shows through it. */
 .toast { will-change: clip-path; }
+
+/* Round 10 fixes */
+/* A ring of the ground colour around the toast, so nothing under it peeks out at its edges. */
+.toast { box-shadow: 0 0 0 10px var(--ground), 0 10px 30px rgb(0 0 0 / 0.5); }
+/* The card is as tall for a one-line title as for two, so the controls under it never move. */
+.task-body { min-height: 112px; }
+/* Capture's note keeps one height whether it holds the hint or what was just filed. */
+.capture-note { min-height: 4.8em; }
+/* A tomato count in a list carries the tomato, as on the desk. */
+.row-crop { display: inline-flex; align-items: center; gap: 6px; }

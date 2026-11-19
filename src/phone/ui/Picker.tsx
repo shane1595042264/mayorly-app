@@ -7,7 +7,7 @@ import {
 import { Glyph } from '../../renderer/src/lib/glyphs'
 import { act, useMayorly, useNow } from '../store'
 import { captureLine, useClerk } from '../ai'
-import { LedgerDot, Sheet } from './parts'
+import { LedgerDot, Sheet, Tomato } from './parts'
 import { AnimatePresence, motion } from 'motion/react'
 import { captured, tap } from '../feel'
 
@@ -77,7 +77,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
           <span className="row-title">{e.title}</span>
           {e.estimateMin ? <span className="row-sub">{e.estimateMin} min</span> : null}
         </span>
-        {crop >= 0.1 && <span className="row-end num"><b>{tomatoLabel(crop)}</b></span>}
+        {crop >= 0.1 && <span className="row-end num row-crop"><Tomato /><b>{tomatoLabel(crop)}</b></span>}
       </button>
     )
   }

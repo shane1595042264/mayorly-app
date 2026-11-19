@@ -11,7 +11,7 @@ import { distinctTheme, THEME_COLORS } from '../../renderer/src/lib/themes'
 import { act, useMayorly, useNow } from '../store'
 import { dismissToast, showToast } from '../toast'
 import { captured, tap } from '../feel'
-import { LedgerDot, Sheet, Toggle } from './parts'
+import { LedgerDot, Sheet, Toggle, Tomato } from './parts'
 
 // The shelf: every ledger with what is open in it and today's time, the tray of unfiled
 // entries, and inside a ledger its entries in the flow's order. A tap on an entry offers what
@@ -109,7 +109,7 @@ function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () =>
   const cleared = s.entries.filter((e) => e.ledgerId === id && e.doneAt !== null && e.doneAt >= day).sort((a, b) => b.doneAt! - a.doneAt!)
   const add = () => {
     if (!title.trim()) return
-    // "~40m" or "40 min" at the end is the estimate, as in Capture.
+    // "~40m" at the end is the estimate, as in Capture.
     const { rest, minutes } = parseEstimate(title)
     act({ type: 'entry/add', title: rest.replace(/\s+/g, ' ').trim() || title, ledgerId: id, estimateMin: minutes })
     captured()
@@ -126,7 +126,7 @@ function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () =>
         {ledger ? <><LedgerDot ledger={ledger} />{ledger.name}</> : 'Tray'}
       </h1>
       {ledger?.criterion && <p className="help" style={{ marginTop: -8, marginBottom: 12 }}>{ledger.criterion}</p>}
-      <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder={ledger ? `Add to ${ledger.name}` : 'Add to the tray'} aria-label="New entry" enterKeyHint="done" />
+      <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder={ledger ? `Add to ${ledger.name}; ~30m sets an estimate` : 'Add to the tray; ~30m sets an estimate'} aria-label="New entry" enterKeyHint="done" />
       <div className="list" style={{ marginTop: 10 }}>
         <AnimatePresence initial={false} mode="popLayout">
           {entries.map((e, i) => {
@@ -137,7 +137,7 @@ function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () =>
                   <span className="row-title">{e.title}</span>
                   {e.estimateMin ? <span className="row-sub">{e.estimateMin} min</span> : null}
                 </span>
-                {crop >= 0.1 && <span className="row-end num"><b>{tomatoLabel(crop)}</b></span>}
+                {crop >= 0.1 && <span className="row-end num row-crop"><Tomato /><b>{tomatoLabel(crop)}</b></span>}
               </motion.button>
             )
           })}

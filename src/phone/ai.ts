@@ -70,6 +70,7 @@ export async function startClerk(engine: PhoneEngine): Promise<void> {
 export async function captureLine(text: string, start = false): Promise<void> {
   if (!capture || !text.trim() || !engineRef) return
   const before = new Set([...engineRef.state.entries.map((e) => e.id), ...engineRef.state.leisure.map((x) => x.id)])
+  const asked = Date.now()
   await capture.captureLine(text.trim(), start)
   // Say where it went, always: the clerk's own line when it filed it, otherwise the plain place.
   const s = engineRef.state
@@ -81,7 +82,8 @@ export async function captureLine(text: string, start = false): Promise<void> {
     const cut = t.slice(0, 34)
     return `${cut.slice(0, cut.lastIndexOf(' ') > 16 ? cut.lastIndexOf(' ') : 33).trimEnd()}…`
   }
-  if (view.notice?.phase === 'done' && view.notice.at && Date.now() - view.notice.at < 3000) return
+  // The clerk's own word wins, but only one it gave for this line, not the last line's.
+  if (view.notice?.phase === 'done' && view.notice.at && view.notice.at >= asked) return
   if (couch) set({ notice: { phase: 'done', text: `“${short(couch.title)}” is on the couch list`, at: Date.now() } })
   else if (entry) {
     const ledger = s.ledgers.find((l) => l.id === entry.ledgerId)
