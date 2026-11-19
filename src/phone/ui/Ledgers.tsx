@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { AnimatePresence, motion, type Variants } from 'motion/react'
 import { rowIn } from './motion'
 import { ArrowCounterClockwise, ArrowDown, ArrowLeft, ArrowUp, CaretRight, Check, PencilSimple, Play, Plus, Trash, Tray } from '@phosphor-icons/react'
 import {
-  dayStats, deriveCode, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, onDeskId, openFlow, span, startOfDay, tomatoLabel,
+  dayStats, deriveCode, parseEstimate, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, onDeskId, openFlow, span, startOfDay, tomatoLabel,
   type Entry, type Ledger, type LedgerTheme,
 } from '@core/index'
 import { Glyph, GLYPH_NAMES, glyphKey, localGlyph } from '../../renderer/src/lib/glyphs'
@@ -90,12 +90,12 @@ export function Ledgers({ home = 0 }: { home?: number }) {
   )
 }
 
-const pushSpring = { type: 'spring', stiffness: 360, damping: 38 } as const
-const PUSH = {
+const pushSpring = { type: 'spring', stiffness: 420, damping: 42 } as const
+const PUSH: Variants = {
   // The ledger page is always above the shelf (a static z-index on each), whichever way it moves.
   enter: (d: number) => (d > 0 ? { x: '100%', opacity: 1 } : { x: '-28%', opacity: 0.4 }),
   center: { x: 0, opacity: 1, transition: pushSpring },
-  leave: (d: number) => (d > 0 ? { x: '-28%', opacity: 0.4, transition: pushSpring } : { x: '100%', opacity: 1, transition: pushSpring }),
+  leave: (d: number) => (d > 0 ? { x: '-28%', opacity: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } } : { x: '100%', opacity: 1, transition: pushSpring }),
 }
 
 function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () => void; edit: () => void }) {
@@ -109,7 +109,9 @@ function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () =>
   const cleared = s.entries.filter((e) => e.ledgerId === id && e.doneAt !== null && e.doneAt >= day).sort((a, b) => b.doneAt! - a.doneAt!)
   const add = () => {
     if (!title.trim()) return
-    act({ type: 'entry/add', title, ledgerId: id, estimateMin: null })
+    // "~40m" or "40 min" at the end is the estimate, as in Capture.
+    const { rest, minutes } = parseEstimate(title)
+    act({ type: 'entry/add', title: rest.replace(/\s+/g, ' ').trim() || title, ledgerId: id, estimateMin: minutes })
     captured()
     setTitle('')
   }

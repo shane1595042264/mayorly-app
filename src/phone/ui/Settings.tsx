@@ -21,7 +21,7 @@ export function Settings() {
   const page = useRef<HTMLDivElement>(null)
   return (
     <div ref={page}>
-      <h1 className="title">Settings</h1>
+      <header className="top"><h1 className="title" style={{ flex: 1, padding: 0 }}>Settings</h1></header>
       <SettingsSearch root={page} />
       <Account />
       <Clerk />
@@ -150,7 +150,7 @@ function Clerk() {
   return (
     <section>
       <h2 className="section-title" data-setting="AI clerk, API key, keys, passphrase, Gemini, OpenAI, Anthropic, Claude, xAI">AI clerk</h2>
-      {!account && <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Sign in above and the AI keys from your computers come here on their own, or paste one here.</p>}
+      {!account && <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>{googleAvailable() ? 'Sign in above' : 'Link this phone above'} and the AI keys from your computers come here on their own, or paste one here.</p>}
       {account && phase === 'on' && <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Keys sync with your computers through your account.</p>}
       {account && (phase === 'checking' || phase === 'none') && <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Checking for your keys</p>}
       {account && phase === 'locked' && (

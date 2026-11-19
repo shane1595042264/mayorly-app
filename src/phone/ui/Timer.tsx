@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useAccount } from '../account'
 import { Pop, RollingText, rowIn, spring, useFeelKey } from './motion'
 import { upcoming } from '../next'
-import { act, deviceId, useMayorly, useNow } from '../store'
+import { act, current, deviceId, useMayorly, useNow } from '../store'
 import { onFeel } from '../feel'
 import { showToast } from '../toast'
 import { Coin, LedgerDot, Tomato } from './parts'
@@ -219,7 +219,12 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
             {cleared > 0 && <motion.i key={cleared} className="burst" initial={{ scale: 0.4, opacity: 0.9 }} animate={{ scale: 2.4, opacity: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.55, ease: 'easeOut' }} />}
           </AnimatePresence>
         </motion.button>
-        <motion.button type="button" className="round" aria-label="Stand down" disabled={idle || !!elsewhere} onClick={() => act({ type: 'desk/standDown' })} whileTap={{ scale: 0.88 }} transition={spring}>
+        <motion.button type="button" className="round" aria-label="Stand down" disabled={idle || !!elsewhere} onClick={() => {
+          const was = entry?.title ?? leisure?.title ?? null
+          act({ type: 'desk/standDown' })
+          // Said in words like a clear; the time stays counted, so there is nothing to undo.
+          if (was && current().desk.status === 'idle') showToast(`Stood down from ${was}. Its time is kept.`)
+        }} whileTap={{ scale: 0.88 }} transition={spring}>
           <Stop size={22} />
         </motion.button>
       </div>

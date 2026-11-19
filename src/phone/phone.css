@@ -474,3 +474,12 @@ body:has(.toast) .screen { padding-bottom: 96px; }
 .toggle-knob { box-shadow: 0 0 0 1px rgb(0 0 0 / 0.3), 0 1px 3px rgb(0 0 0 / 0.45); transition: background 180ms; }
 /* Rows fade out under the sheet's head instead of being cut by it. */
 .sheet-body { -webkit-mask-image: linear-gradient(transparent 0, #000 14px); mask-image: linear-gradient(transparent 0, #000 14px); }
+
+/* Round 9 fixes */
+/* Off the desk, the Desk tab carries the block's clock: amber while it runs, grey when it waits. */
+.tab-live { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tab-live.paused, .tab-live.rest { color: var(--muted); }
+/* A rest's track reads at a glance: a light neutral fill, not grey on grey. */
+.track.rest > i { background: rgb(255 255 255 / 0.6); }
+/* The toast opens out from its middle, solid from its first frame, so nothing shows through it. */
+.toast { will-change: clip-path; }
