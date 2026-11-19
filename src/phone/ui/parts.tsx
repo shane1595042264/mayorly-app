@@ -22,7 +22,7 @@ export function LedgerDot({ ledger }: { ledger: Ledger | null | undefined }) {
 }
 
 /** A panel from the bottom: the picker, a form, a menu. Done closes it. */
-export function Sheet({ title, onClose, short, action, children }: { title: string; onClose: () => void; short?: boolean; action?: ReactNode; children: ReactNode }) {
+export function Sheet({ title, onClose, short, action, className, children }: { title: string; onClose: () => void; short?: boolean; action?: ReactNode; className?: string; children: ReactNode }) {
   // A sheet opening sends any toast away, so nothing ever sits over a sheet's buttons.
   useEffect(() => dismissToast(), [])
   useEffect(() => {
@@ -64,7 +64,7 @@ export function Sheet({ title, onClose, short, action, children }: { title: stri
     <>
       <motion.div className="sheet-back" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} />
       <motion.div
-        className={`sheet ${short ? 'short' : ''}`}
+        className={`sheet ${short ? 'short' : ''} ${className ?? ''}`}
         role="dialog"
         aria-label={title}
         initial={{ y: '100%' }}

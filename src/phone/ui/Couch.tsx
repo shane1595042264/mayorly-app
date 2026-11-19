@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { rowIn } from './motion'
-import { Play, Trash } from '@phosphor-icons/react'
+import { MagnifyingGlass, Play, Trash } from '@phosphor-icons/react'
 import { balance, onDeskId, leisureList, leisureSpentMs, leisureTokensSpent, span, type LeisureItem } from '@core/index'
 import { act, useMayorly, useNow } from '../store'
 import { captured } from '../feel'
@@ -10,7 +10,7 @@ import { Coin, Sheet } from './parts'
 // The couch: what you would like to spend a coin on. A finished couch block costs one coin,
 // leaving early is free, nothing is earned here. The balance is what the desk has paid.
 
-export function Couch() {
+export function Couch({ onSearch }: { onSearch?: () => void }) {
   const s = useMayorly()
   const now = useNow(30_000)
   const [title, setTitle] = useState('')
@@ -30,6 +30,7 @@ export function Couch() {
     <>
       <header className="top">
         <h1 className="title" style={{ flex: 1, padding: 0 }}>Couch</h1>
+        {onSearch && <motion.button type="button" className="btn icon-btn" aria-label="Find a task and start it" onClick={onSearch} whileTap={{ scale: 0.9 }}><MagnifyingGlass size={18} /></motion.button>}
         <span className="coins num" aria-label={`${coins} coins`}><Coin scale={1} />{coins}</span>
       </header>
       <p className="help" style={{ padding: '2px 4px 14px' }}>{coins > 0 ? `A finished block here costs one coin of the ${coins} the desk has paid. Leaving early is free.` : 'A finished block here costs one coin, and the desk pays one for every tomato. Leaving early is free.'}</p>

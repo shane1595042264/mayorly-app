@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, type Variants } from 'motion/react'
 import { rowIn } from './motion'
-import { ArrowCounterClockwise, ArrowDown, ArrowLeft, ArrowUp, CaretRight, Check, PencilSimple, Play, Plus, Trash, Tray } from '@phosphor-icons/react'
+import { MagnifyingGlass, ArrowCounterClockwise, ArrowDown, ArrowLeft, ArrowUp, CaretRight, Check, PencilSimple, Play, Plus, Trash, Tray } from '@phosphor-icons/react'
 import {
   dayStats, deriveCode, parseEstimate, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, onDeskId, openFlow, span, startOfDay, tomatoLabel,
   type Entry, type Ledger, type LedgerTheme,
@@ -20,7 +20,7 @@ import { LedgerDot, Sheet, Toggle, Tomato } from './parts'
 type Open = { kind: 'ledger'; id: string | null } | null
 let lastOpen: Open = null
 
-export function Ledgers({ home = 0 }: { home?: number }) {
+export function Ledgers({ home = 0, onSearch }: { home?: number; onSearch?: () => void }) {
   const s = useMayorly()
   const now = useNow(30_000)
   // The open ledger is remembered while the app runs, so leaving the tab and coming back keeps it;
@@ -56,6 +56,7 @@ export function Ledgers({ home = 0 }: { home?: number }) {
     <motion.div key="shelf" className="push-page" style={{ zIndex: 0 }} custom={dir} variants={PUSH} initial="enter" animate="center" exit="leave">
       <header className="top">
         <h1 className="title" style={{ flex: 1, padding: 0 }}>Ledgers</h1>
+        {onSearch && <motion.button type="button" className="btn icon-btn" aria-label="Find a task and start it" onClick={onSearch} whileTap={{ scale: 0.9 }}><MagnifyingGlass size={18} /></motion.button>}
         <button type="button" className="btn" onClick={() => setEditing('new')} disabled={s.ledgers.length >= LEDGER_CAP}><Plus size={16} />New</button>
       </header>
       <div className="list" style={{ marginTop: 8 }}>

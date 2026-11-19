@@ -79,7 +79,7 @@ export function Capture({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Sheet title="Capture" short onClose={onClose}>
+    <Sheet title="Capture" short className="capture-sheet" onClose={onClose}>
       <textarea
         ref={field}
         className="field capture-field"

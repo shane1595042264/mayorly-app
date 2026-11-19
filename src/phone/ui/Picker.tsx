@@ -10,7 +10,6 @@ import { captureLine, useClerk } from '../ai'
 import { LedgerDot, Sheet, Tomato } from './parts'
 import { AnimatePresence, motion } from 'motion/react'
 import { captured, tap } from '../feel'
-import { rowIn } from './motion'
 
 // Picking what the desk is on: every ledger's open entries, the tray, the couch, the saved
 // supersets, and a search that adds what it cannot find. A pick sends one desk/select: from an
@@ -57,7 +56,10 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const [short] = useState(() => s.ledgers.length === 0 && flow.length === 0)
 
   // The mode goes with the pick only when it is a change, so a swap keeps the block's clock.
-  const withMode = () => (!running || mode !== currentMode ? { mode } : {})
+  // A task picked with Superset chosen and none running has no superset to go into: it starts a
+  // pomodoro, as the list under the search says.
+  const taskMode: Mode = mode === 'superset' && !inSuperset ? 'pomodoro' : mode
+  const withMode = () => (!running || taskMode !== currentMode ? { mode: taskMode } : {})
   const pickEntry = (e: Entry) => {
     if (e.id === onDesk) tap()
     freeze()
@@ -123,9 +125,12 @@ export function Picker({ onClose }: { onClose: () => void }) {
     const ledger = s.ledgers.find((l) => l.id === f.ledgerId)
     const named = !!ledger || !!f.leisure
     const where = f.leisure ? 'Couch, one coin a block' : ledger ? ledger.name : keys ? 'The clerk files it' : 'Tray'
-    const hint = !named && !keys && s.ledgers[0] ? `; ${s.ledgers[0].code.toLowerCase()}: files it in ${s.ledgers[0].name}` : ''
+    // How to file by ledger is said once, on the only row, when nothing else matches.
+    const hint = !named && !keys && s.ledgers[0] && (hits.length === 0) ? `; ${s.ledgers[0].code.toLowerCase()}: files it in ${s.ledgers[0].name}` : ''
     return { title: f.title, sub: `${where}${f.estimateMin ? `, ${f.estimateMin} min` : ''}${hint}` }
   })()
+  // A line that is exactly a task you have (open or cleared) is not offered as a new one.
+  const exact = [...hits.map((f) => (f.kind === 'entry' ? f.entry.title : f.item.title)), ...cleared.map((e) => e.title)].some((t) => foldSearch(t) === foldSearch(preview.title))
   const recent = !searching ? recentTasks(s, 6).filter((f) => idOf(f) !== onDesk).slice(0, 3) : []
   const supersets = (
         <>
@@ -165,11 +170,12 @@ export function Picker({ onClose }: { onClose: () => void }) {
     add()
   }
   const resultRow = (key: string, i: number, icon: ReactNode, title: string, sub: string, onClick: () => void, opts: { on?: boolean; end?: ReactNode; add?: boolean } = {}) => (
-    <motion.button type="button" key={key} className={`row search-row ${opts.on ? 'on' : ''} ${opts.add ? 'add' : ''}`} onClick={onClick} {...rowIn(i)} layout="position" exit={{ opacity: 0, transition: { duration: 0.08 } }} transition={{ layout: { type: 'spring', stiffness: 520, damping: 42 } }}>
+    <motion.button type="button" key={key} className={`row search-row ${opts.on ? 'on' : ''} ${opts.add ? 'add' : ''}`} onClick={onClick} initial={{ opacity: 0.3, y: 6 }} animate={{ opacity: 1, y: 0, transition: { duration: 0.18, delay: Math.min(i, 8) * 0.02, ease: [0.22, 1, 0.36, 1] } }} whileTap={{ scale: 0.98 }}>
       <span className="glyph">{icon}</span>
       <span className="row-main">
         <span className="row-title">{opts.add ? title : marked(title, words)}</span>
-        <span className="row-sub">{sub}</span>
+        {/* The subtitle is marked only for a word the title does not show (a ledger name, "tray"). */}
+        <span className="row-sub">{opts.add ? sub : marked(sub, words.filter((w) => w.length >= 2 && !foldSearch(title).includes(w)))}</span>
       </span>
       {opts.end}
     </motion.button>
@@ -219,7 +225,8 @@ export function Picker({ onClose }: { onClose: () => void }) {
         <>
           <h3 className="section-title">{found.length || cleared.length || sets.length ? 'Matches' : 'Nothing matches'}</h3>
           <div className="list">
-            <AnimatePresence initial={false} mode="popLayout">
+            {/* Rows come in with a short rise; a row that no longer matches is gone at once, so no
+                two rows are ever drawn over each other while you type. */}
               {found.map((f, i) => {
                 if (f.kind === 'leisure') return resultRow(f.item.id, i, <Couch size={18} />, f.item.title, f.item.id === onDesk ? 'On the desk now' : 'Couch, one coin a block', () => pick(f), { on: f.item.id === onDesk, end: top === f || (target === 'desk' && i === 0) ? returnMark : null })
                 const e = f.entry
@@ -229,10 +236,9 @@ export function Picker({ onClose }: { onClose: () => void }) {
                 const end = top === f || (target === 'desk' && i === 0) ? returnMark : crop >= 0.1 ? <span className="row-end num row-crop"><Tomato /><b>{tomatoLabel(crop)}</b></span> : null
                 return resultRow(e.id, i, l ? <span className="glyph-dot" style={{ color: 'var(--muted)' }}><Glyph name={l.glyph} size={18} /><LedgerDot ledger={l} /></span> : <Tray size={18} />, e.title, sub, () => pick(f), { on: e.id === onDesk, end })
               })}
-              {sets.map((x, i) => resultRow(`set-${x.id}`, found.length + i, <Repeat size={18} />, x.name || 'Superset', 'Superset, starts it from its first slot', () => deploySet(x.id), { end: target === 'set' && i === 0 ? returnMark : null }))}
-              {cleared.map((e, i) => resultRow(`done-${e.id}`, found.length + sets.length + i, <ArrowCounterClockwise size={18} />, e.title, `Cleared ${new Date(e.doneAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}; opens it again and starts it`, () => reopen(e), { end: target === 'cleared' && i === 0 ? returnMark : null }))}
-              {preview.title && resultRow('add', found.length + sets.length + cleared.length, <Plus size={18} />, `Add and start “${preview.title}”`, preview.sub, add, { add: true, end: target === 'add' ? returnMark : null })}
-            </AnimatePresence>
+              {sets.map((x, i) => resultRow(`set-${x.id}`, found.length + i, <Repeat size={18} />, x.name || 'Superset', x.id === runningSet?.id ? 'Superset, running now' : 'Superset, starts at its first slot', () => (x.id === runningSet?.id ? (tap(), onClose()) : deploySet(x.id)), { end: target === 'set' && i === 0 ? returnMark : null }))}
+              {cleared.map((e, i) => resultRow(`done-${e.id}`, found.length + sets.length + i, <ArrowCounterClockwise size={18} />, e.title, `Cleared ${new Date(e.doneAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, reopens it`, () => reopen(e), { end: target === 'cleared' && i === 0 ? returnMark : null }))}
+              {preview.title && !exact && resultRow('add', found.length + sets.length + cleared.length, <Plus size={18} />, `Add and start “${preview.title}”`, preview.sub, add, { add: true, end: target === 'add' ? returnMark : null })}
           </div>
           {more > 0 && <p className="help" style={{ padding: '10px 4px 0' }}>{found.length} of {ordered.length} shown. Keep typing to narrow it.</p>}
         </>
@@ -241,6 +247,11 @@ export function Picker({ onClose }: { onClose: () => void }) {
       ) : (
         <>
           <AnimatePresence initial={false}>
+            {resting && (
+              <motion.p key="rest-hint" className="help" style={{ padding: '14px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
+                A pick ends the rest and starts a pomodoro.
+              </motion.p>
+            )}
             {inSuperset && mode === 'superset' && (
               <motion.p key="slot-hint" className="help" style={{ padding: '14px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
                 A pick goes into the slot of {runningSet?.name || 'the superset'} that is running.

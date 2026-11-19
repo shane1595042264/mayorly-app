@@ -101,8 +101,8 @@ export function App() {
           exit="leave"
         >
           {tab === 'desk' && <Timer openPicker={openPicker} openSync={() => setTab('settings')} />}
-          {tab === 'ledgers' && <Ledgers home={home} />}
-          {tab === 'couch' && <Couch />}
+          {tab === 'ledgers' && <Ledgers home={home} onSearch={openPicker} />}
+          {tab === 'couch' && <Couch onSearch={openPicker} />}
           {tab === 'settings' && <Settings />}
         </motion.main>
       </AnimatePresence>

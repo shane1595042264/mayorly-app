@@ -70,6 +70,9 @@ export const prefixClerk: Clerk = {
     if (prefix && isCouch(prefix[1], ledgers)) {
       leisure = true
       title = title.slice(prefix[0].length)
+    } else if (prefix && prefix[1].toLowerCase() === 'tray' && !matchLedger('tray', ledgers)) {
+      // "tray:" says where it goes, the tray, and is not part of the title.
+      title = title.slice(prefix[0].length)
     } else if (prefix) {
       const hit = matchLedger(prefix[1], ledgers)
       if (hit) {
@@ -80,7 +83,9 @@ export const prefixClerk: Clerk = {
     }
     if (!ledger && !leisure) {
       const tag = title.match(TAG)
-      if (tag && isCouch(tag[1], ledgers)) {
+      if (tag && tag[1].toLowerCase() === 'tray' && !matchLedger('tray', ledgers)) {
+        title = title.replace(tag[0], ' ')
+      } else if (tag && isCouch(tag[1], ledgers)) {
         leisure = true
         title = title.replace(tag[0], ' ')
       } else if (tag) {
@@ -94,6 +99,8 @@ export const prefixClerk: Clerk = {
     }
 
     title = tidy(title)
+    // A line of nothing but marks ("#", "--") is not a task.
+    if (!/[\p{L}\p{N}]/u.test(title)) title = ''
     const quoted = `'${title.length > 40 ? title.slice(0, 39) + '…' : title}'`
     const est = minutes ? ` est ${minutes}m` : ''
     if (leisure) return { title, ledgerId: null, estimateMin: minutes, log: `couch ${quoted}: named`, leisure: true }

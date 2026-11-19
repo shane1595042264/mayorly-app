@@ -1737,6 +1737,9 @@ describe('the couch works like the flow', () => {
     expect(names('legal: footwork')).toEqual([])
     expect(names('tray')).toContain('buy a lamp')
     expect(names('fotwork')).toEqual(['footwork drills'])
+    expect(prefixClerk.file('tray: buy stamps', w.s.ledgers)).toMatchObject({ title: 'buy stamps', ledgerId: null })
+    expect(prefixClerk.file('buy stamps #tray', w.s.ledgers)).toMatchObject({ title: 'buy stamps', ledgerId: null })
+    expect(prefixClerk.file('#', w.s.ledgers).title).toBe('')
     expect(names('foot')[0]).toBe('footwork drills')
   })
 
