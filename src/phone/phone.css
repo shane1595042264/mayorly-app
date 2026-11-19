@@ -493,3 +493,22 @@ body:has(.toast) .screen { padding-bottom: 96px; }
 .capture-note { min-height: 4.8em; }
 /* A tomato count in a list carries the tomato, as on the desk. */
 .row-crop { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Search */
+.picker-head { position: sticky; top: -4px; z-index: 3; background: var(--ground); padding: 4px 0 6px; margin-top: -4px; }
+.search-field { display: flex; align-items: center; gap: 10px; height: 50px; padding: 0 12px 0 14px; border-radius: var(--r-row); background: var(--surface); }
+.search-field:focus-within { background: var(--raised); }
+.search-field .search-icon { color: var(--meta); flex: none; }
+.search-field input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: none; color: var(--text); font: 17px var(--ui); -webkit-appearance: none; }
+.search-field input::placeholder { color: var(--meta); }
+.search-clear { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--press); color: var(--text); flex: none; }
+.row-title .hit { color: var(--text); font-weight: 700; }
+.search-row .row-title { color: var(--muted); }
+.search-row.add .row-title { color: var(--text); }
+.search-row .glyph { color: var(--muted); }
+.glyph-dot { position: relative; display: grid; place-items: center; }
+.glyph-dot .dot, .glyph-dot > i { position: absolute; right: -3px; bottom: -2px; width: 7px; height: 7px; }
+.return-mark { display: grid; place-items: center; width: 30px; height: 26px; border-radius: 8px; background: var(--press); color: var(--muted); flex: none; }
+.kb-proxy { position: fixed; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; font-size: 16px; pointer-events: none; border: 0; padding: 0; }
+.capture-existing { overflow: hidden; }
+.sheet-body:has(.picker-head) { -webkit-mask-image: none; mask-image: none; }

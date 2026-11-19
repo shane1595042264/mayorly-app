@@ -2,6 +2,7 @@ import type { Block, Entry, Id, Ledger, LeisureItem, MayorlyState, Ms, TokenTx }
 import { entryTomatoes } from './accounting'
 import { openFlow, supersetOf } from './planner'
 import { restSession, switchBack, switchSession, type Action } from './reducer'
+import { matchLedger } from './clerk'
 
 
 export type FoundTask = { kind: 'entry'; entry: Entry } | { kind: 'leisure'; item: LeisureItem }
@@ -59,29 +60,67 @@ export function switcherAction(s: MayorlyState, rows: FoundTask[], start: number
   return row ? switchToAction(s, row) : null
 }
 
+/** Lower case, with punctuation folded away, so "follow-up" is found by "followup" and "follow up". */
+export function foldSearch(text: string): string {
+  return text.toLowerCase().replace(/[\u2018\u2019'\-]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+}
+
+/** One letter wrong, missing, extra or two swapped: "fotwork" is near "footwork". */
+function oneEdit(a: string, b: string): boolean {
+  if (a === b) return true
+  if (Math.abs(a.length - b.length) > 1) return false
+  let i = 0
+  while (i < a.length && i < b.length && a[i] === b[i]) i++
+  if (a.length === b.length) {
+    if (a.slice(i + 1) === b.slice(i + 1)) return true
+    return a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2)
+  }
+  return a.length > b.length ? a.slice(i + 1) === b.slice(i) : a.slice(i) === b.slice(i + 1)
+}
+
+/** A search word of four letters or more that is one edit from a word in the text, or from its start. */
+function nearWord(text: string, w: string): boolean {
+  if (w.length < 4) return false
+  return text.split(' ').some((t) => oneEdit(w, t) || (t.length > w.length && oneEdit(w, t.slice(0, w.length))))
+}
+
 /**
  * Open tasks for a search, best first: the flow, then the couch list. Every word has to appear in
- * the title or in the name of what the task belongs to, its ledger or the couch. A title that
- * starts with the search comes first, then titles where every word starts a word, then any
- * title holding them, then matches on the group alone; most recently used first within each.
+ * the title or in the name of what the task belongs to, its ledger, the tray or the couch.
+ * Punctuation does not count. A first word written as a filing (`legal:` or `#legal`) keeps the
+ * search to that ledger, so the line that would add a task also finds it. A title that starts with
+ * the search comes first, then titles where every word starts a word, then any title holding them,
+ * then matches on the group alone, then titles one typo away; most recently used first within each.
  * No search: what was used last, then the top of the list.
  */
 export function findTasks(s: MayorlyState, query: string, limit = 8): FoundTask[] {
-  const q = query.trim().toLowerCase()
   const recent = new Map(recentTasks(s).map((f, i) => [idOf(f), i]))
   const soonest = (f: FoundTask) => recent.get(idOf(f)) ?? recent.size
-  const ledgers = new Map(s.ledgers.map((l) => [l.id, `${l.name} ${l.code}`.toLowerCase()]))
+  const ledgers = new Map(s.ledgers.map((l) => [l.id, foldSearch(`${l.name} ${l.code}`)]))
+  let raw = query.trim()
+  let only: Id | null | undefined
+  const filing = raw.match(/^#(\S+)\s*(.*)$/) ?? raw.match(/^([^\s:]+):\s*(.*)$/)
+  if (filing) {
+    const word = filing[1].toLowerCase()
+    const ledger = matchLedger(word, s.ledgers)
+    if (ledger) { only = ledger.id; raw = filing[2] }
+    else if (word === 'tray') { only = null; raw = filing[2] }
+  }
   const all = [
-    ...openFlow(s).map((entry) => ({ found: { kind: 'entry', entry } as FoundTask, title: entry.title.toLowerCase(), group: entry.ledgerId ? (ledgers.get(entry.ledgerId) ?? '') : '' })),
-    ...leisureList(s).map((item) => ({ found: { kind: 'leisure', item } as FoundTask, title: item.title.toLowerCase(), group: 'couch leisure' })),
-  ].sort((a, b) => soonest(a.found) - soonest(b.found))
+    ...openFlow(s).map((entry) => ({ found: { kind: 'entry', entry } as FoundTask, ledgerId: entry.ledgerId as Id | null | undefined, title: foldSearch(entry.title), group: entry.ledgerId ? (ledgers.get(entry.ledgerId) ?? '') : 'tray' })),
+    ...leisureList(s).map((item) => ({ found: { kind: 'leisure', item } as FoundTask, ledgerId: undefined as Id | null | undefined, title: foldSearch(item.title), group: 'couch leisure' })),
+  ]
+    .filter((x) => only === undefined || (x.found.kind === 'entry' && x.ledgerId === only))
+    .sort((a, b) => soonest(a.found) - soonest(b.found))
+  const q = foldSearch(raw)
   if (!q) return all.slice(0, limit).map((x) => x.found)
-  const words = q.split(/\s+/)
+  const words = q.split(' ')
   const startsWord = (text: string, w: string) => text.startsWith(w) || text.includes(` ${w}`)
   return all
     .flatMap((x) => {
-      if (!words.every((w) => x.title.includes(w) || x.group.includes(w))) return []
-      const rank = x.title.startsWith(q) ? 0 : words.every((w) => startsWord(x.title, w)) ? 1 : words.every((w) => x.title.includes(w)) ? 2 : 3
+      const exact = words.every((w) => x.title.includes(w) || x.group.includes(w))
+      if (!exact && !words.every((w) => x.title.includes(w) || x.group.includes(w) || nearWord(x.title, w))) return []
+      const rank = !exact ? 4 : x.title.startsWith(q) ? 0 : words.every((w) => startsWord(x.title, w)) ? 1 : words.every((w) => x.title.includes(w)) ? 2 : 3
       return [{ found: x.found, rank }]
     })
     .sort((a, b) => a.rank - b.rank)

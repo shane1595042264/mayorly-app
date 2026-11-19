@@ -4,7 +4,8 @@ import { captured } from '../feel'
 import { Broom, Microphone, Play, Stop } from '@phosphor-icons/react'
 import { captureLine, clearNotice, sweepTray, useClerk } from '../ai'
 import { dictationAvailable, listen } from '../dictation'
-import { useMayorly } from '../store'
+import { act, useMayorly } from '../store'
+import { findTasks, onDeskId } from '@core/index'
 import { Sheet } from './parts'
 
 // The inbox, one tap from anywhere: type a line or say it, and the clerk files it into a ledger
@@ -24,6 +25,7 @@ export function Capture({ onClose }: { onClose: () => void }) {
   const keys = ai?.keys.filter((k) => k.status === 'ok').length ?? 0
   const tray = s.entries.filter((e) => e.ledgerId === null && e.doneAt === null).length
   const canTalk = dictationAvailable()
+  const existing = text.trim().length >= 3 ? findTasks(s, text, 3) : []
 
   useEffect(() => {
     clearNotice()
@@ -86,6 +88,27 @@ export function Capture({ onClose }: { onClose: () => void }) {
         enterKeyHint="done"
         rows={3}
       />
+      {/* A line that is already a task offers that task, so Capture never makes a second copy. */}
+      <AnimatePresence initial={false}>
+        {existing.length > 0 && !listening && (
+          <motion.div key="existing" className="capture-existing" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
+            <h3 className="section-title">Already on your list</h3>
+            <div className="list">
+              {existing.map((f) => {
+                const id = f.kind === 'entry' ? f.entry.id : f.item.id
+                const title = f.kind === 'entry' ? f.entry.title : f.item.title
+                const where = f.kind === 'entry' ? s.ledgers.find((l) => l.id === f.entry.ledgerId)?.name ?? 'Tray' : 'Couch'
+                return (
+                  <motion.button type="button" key={id} className="row" whileTap={{ scale: 0.98 }} onClick={() => { act(f.kind === 'entry' ? { type: 'desk/select', entryId: id, ledgerId: f.entry.ledgerId } : { type: 'desk/select', leisureId: id }); onClose() }}>
+                    <span className="glyph"><Play size={16} weight="fill" /></span>
+                    <span className="row-main"><span className="row-title">{title}</span><span className="row-sub">{id === onDeskId(s) ? 'On the desk now' : `${where}; start it`}</span></span>
+                  </motion.button>
+                )
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="capture-actions">
         {canTalk && (
           <motion.button type="button" className={`mic ${listening ? 'on' : ''}`} onClick={() => void toggleMic()} aria-label={listening ? 'Stop listening' : 'Say a task'} aria-pressed={listening} whileTap={{ scale: 0.88 }}>

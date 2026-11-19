@@ -27,6 +27,15 @@ export function App() {
   const toast = useToast()
   const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(location.search).get('tab') as Tab) || 'desk')
   const [picking, setPicking] = useState(() => new URLSearchParams(location.search).has('pick'))
+  // Each opening is a new picker, so a quick reopen never brings back the last search.
+  const [opens, setOpens] = useState(0)
+  const kbProxy = useRef<HTMLInputElement>(null)
+  const openPicker = () => {
+    tap()
+    kbProxy.current?.focus({ preventScroll: true })
+    setOpens((n) => n + 1)
+    setPicking(true)
+  }
   const closePicker = useCallback(() => setPicking(false), [])
   const [capturing, setCapturing] = useState(() => new URLSearchParams(location.search).has('capture'))
   const closeCapture = useCallback(() => setCapturing(false), [])
@@ -91,7 +100,7 @@ export function App() {
           animate="center"
           exit="leave"
         >
-          {tab === 'desk' && <Timer openPicker={() => { tap(); setPicking(true) }} openSync={() => setTab('settings')} />}
+          {tab === 'desk' && <Timer openPicker={openPicker} openSync={() => setTab('settings')} />}
           {tab === 'ledgers' && <Ledgers home={home} />}
           {tab === 'couch' && <Couch />}
           {tab === 'settings' && <Settings />}
@@ -123,7 +132,10 @@ export function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      <AnimatePresence>{picking && <Picker key="picker" onClose={closePicker} />}</AnimatePresence>
+      {/* A stand-in field focused inside the tap that opens the picker: iOS raises the keyboard only
+          for a focus a touch made, and keeps it up as focus moves on to the picker's search. */}
+      <input ref={kbProxy} className="kb-proxy" aria-hidden tabIndex={-1} />
+      <AnimatePresence>{picking && <Picker key={`picker-${opens}`} onClose={closePicker} />}</AnimatePresence>
       <AnimatePresence>{capturing && <Capture key="capture" onClose={closeCapture} />}</AnimatePresence>
     </div>
   )

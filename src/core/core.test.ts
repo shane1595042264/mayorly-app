@@ -1714,6 +1714,21 @@ describe('the couch works like the flow', () => {
     expect(w.s.leisure.find((x) => x.id === id)).toMatchObject({ notes: 'one game', subtasks: [{ text: 'win', done: true }] })
   })
 
+  it('is found through punctuation, a filing prefix, the tray and one typo', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: send the follow-up letter' })
+    w.do({ type: 'entry/capture', text: 'dance: footwork drills' })
+    w.do({ type: 'entry/capture', text: 'buy a lamp' })
+    const names = (q: string) => findTasks(w.s, q).map((x) => (x.kind === 'entry' ? x.entry.title : x.item.title))
+    expect(names('followup')).toEqual(['send the follow-up letter'])
+    expect(names('legal: letter')).toEqual(['send the follow-up letter'])
+    expect(names('#legal')).toEqual(['send the follow-up letter'])
+    expect(names('legal: footwork')).toEqual([])
+    expect(names('tray')).toContain('buy a lamp')
+    expect(names('fotwork')).toEqual(['footwork drills'])
+    expect(names('foot')[0]).toBe('footwork drills')
+  })
+
   it('is found by search, by title or by the word couch', () => {
     const w = world()
     w.do({ type: 'leisure/add', title: 'civilization 6' })
