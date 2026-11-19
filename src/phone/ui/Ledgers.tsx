@@ -49,7 +49,7 @@ export function Ledgers({ home = 0, onSearch }: { home?: number; onSearch?: () =
       <AnimatePresence initial={false} custom={dir} mode="popLayout">
         {open ? (
           <motion.div key={`ledger-${open.id ?? 'tray'}`} className="push-page" style={{ zIndex: 2 }} custom={dir} variants={PUSH} initial="enter" animate="center" exit="leave">
-            <LedgerView ledger={openLedger} back={() => setOpen(null)} edit={() => openLedger && setEditing(openLedger)} />
+            <LedgerView ledger={openLedger} back={() => setOpen(null)} edit={() => openLedger && setEditing(openLedger)} onSearch={onSearch} />
             {form}
           </motion.div>
         ) : (
@@ -99,7 +99,7 @@ const PUSH: Variants = {
   leave: (d: number) => (d > 0 ? { x: '-28%', opacity: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } } : { x: '100%', opacity: 1, transition: pushSpring }),
 }
 
-function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () => void; edit: () => void }) {
+function LedgerView({ ledger, back, edit, onSearch }: { ledger: Ledger | null; back: () => void; edit: () => void; onSearch?: () => void }) {
   const s = useMayorly()
   const now = useNow(10_000)
   const [title, setTitle] = useState('')
@@ -121,6 +121,7 @@ function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () =>
       <header className="top">
         <button type="button" className="btn" onClick={back} style={{ paddingLeft: 12 }}><ArrowLeft size={18} />Ledgers</button>
         <span className="spacer" />
+        {onSearch && <motion.button type="button" className="btn icon-btn" aria-label="Find a task and start it" onClick={onSearch} whileTap={{ scale: 0.9 }}><MagnifyingGlass size={18} /></motion.button>}
         {ledger && <button type="button" className="btn" onClick={edit}><PencilSimple size={16} />Edit</button>}
       </header>
       <h1 className="title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

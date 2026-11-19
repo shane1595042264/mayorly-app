@@ -62,7 +62,10 @@ export function switcherAction(s: MayorlyState, rows: FoundTask[], start: number
 
 /** Lower case, with punctuation folded away, so "follow-up" is found by "followup" and "follow up". */
 export function foldSearch(text: string): string {
-  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\u2018\u2019'\-]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    // Letters with dots between them are one word: "n.d.a." is "nda".
+    .replace(/(?<![\p{L}\p{N}])((?:\p{L}\.){2,}\p{L}?)/gu, (m) => m.replace(/\./g, ''))
+    .toLowerCase().replace(/[\u2018\u2019'\-]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
 }
 
 /** One letter wrong, missing, extra or two swapped: "fotwork" is near "footwork". */
@@ -127,11 +130,14 @@ export function findTasks(s: MayorlyState, query: string, limit = 8): FoundTask[
   const startsWord = (text: string, w: string) => text.startsWith(w) || text.includes(` ${w}`)
   return all
     .flatMap((x) => {
-      const exact = words.every((w) => x.title.includes(w) || x.group.includes(w))
-      const near = exact || words.every((w) => x.title.includes(w) || x.group.includes(w) || nearWord(x.title, w))
+      // A single letter counts only where a word starts, so "e" does not match every title.
+      const has = (text: string, w: string) => (w.length === 1 ? startsWord(text, w) : text.includes(w))
+      const exact = words.every((w) => has(x.title, w) || has(x.group, w))
+      const near = exact || words.every((w) => has(x.title, w) || has(x.group, w) || nearWord(x.title, w))
       // Said the way you would say it, one word more than the title holds ("book haircut
       // tomorrow"): of three words or more, all but one is enough, ranked last.
-      const loose = !near && words.length >= 3 && words.filter((w) => x.title.includes(w) || nearWord(x.title, w)).length >= words.length - 1
+      const matched = words.filter((w) => has(x.title, w) || nearWord(x.title, w))
+      const loose = !near && words.length >= 3 && matched.length >= words.length - 1
       if (!near && !loose) return []
       const rank = loose ? 5 : !exact ? 4 : x.title.startsWith(q) ? 0 : words.every((w) => startsWord(x.title, w)) ? 1 : words.every((w) => x.title.includes(w)) ? 2 : 3
       return [{ found: x.found, rank }]

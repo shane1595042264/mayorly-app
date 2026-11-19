@@ -15,7 +15,7 @@ import { announce, captured, tap } from '../feel'
 // supersets, and a search that adds what it cannot find. A pick sends one desk/select: from an
 // idle desk it starts, on a running block it swaps what the block is on and keeps its clock,
 // in another mode it starts that mode. Typing a line nothing matches files it by its prefix
-// (`legal draft the letter`) and starts it.
+// (`legal: draft the letter`) and starts it.
 
 const MODES: { id: Mode; label: string }[] = [
   { id: 'pomodoro', label: 'Pomodoro' },
@@ -113,7 +113,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
 
   // The search: open tasks and the couch (the one on the desk last), then cleared tasks from the
   // last month and saved supersets by name. Twelve open matches show; more are counted.
-  const words = foldSearch(parseEstimate(q).rest.replace(/^#?\S+:\s*/, (m) => (matchLedger(m.replace(/[#:\s]/g, ''), s.ledgers) ? '' : m))).split(' ').filter(Boolean)
+  const words = foldSearch(parseEstimate(q).rest.replace(/^#?\S+:\s*/, (m) => (matchLedger(m.replace(/[#:\s]/g, ''), s.ledgers) || /^#?tray:?\s*$/i.test(m) ? '' : m))).split(' ').filter(Boolean)
   const searching = !!q.trim()
   const hits = searching ? findTasks(s, q, 60) : []
   const ordered = [...hits.filter((f) => idOf(f) !== onDesk), ...hits.filter((f) => idOf(f) === onDesk)]
@@ -133,12 +133,8 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const nothing = hits.length === 0 && cleared.length === 0 && sets.length === 0
   const couchWord = ['couch', 'leisure'].includes(foldSearch(q))
   const canAdd = (foldSearch(q).length >= 4 || (nothing && foldSearch(q).length >= 3)) && !namedLedger && !couchWord
-  // The Add row is for a line that is plainly new: nothing matched, or several words of which no
-  // task holds them all. One word that found something is a search, not a new task.
-  const content = words.filter((w) => !['the', 'a', 'an', 'to', 'for', 'of', 'and', 'my', 'on', 'in', 'at', 'with'].includes(w))
-  const holdsAll = (t: string) => content.length > 0 && content.every((w) => foldSearch(t).includes(w))
-  const strong = hits.some((f) => holdsAll(f.kind === 'entry' ? f.entry.title : f.item.title)) || cleared.some((e) => holdsAll(e.title))
-  const showAdd = canAdd && (nothing || (content.length >= 2 && !strong))
+  // Any row that matches is what you meant; a new line is offered only when nothing does.
+  const showAdd = canAdd && nothing
   const target = top ? 'task' : sets[0] ? 'set' : cleared[0] ? 'cleared' : found?.[0] ? 'desk' : namedLedger ? 'ledger' : showAdd ? 'add' : 'none'
   // How a new line would be filed: its ledger by prefix, its estimate, else the clerk or the tray.
   // The preview asks the same rules the reducer files by, so it says exactly where the line goes.
@@ -148,7 +144,10 @@ export function Picker({ onClose }: { onClose: () => void }) {
     const named = !!ledger || !!f.leisure
     const where = f.leisure ? 'Goes to the couch, one coin a block' : ledger ? `Goes to ${ledger.name}` : keys ? 'The clerk files it' : 'Goes to the tray'
     // How to file by ledger is a line of its own under the list, shown when nothing matched.
-    const hint = !named && !keys && s.ledgers[0] ? `Start with ${s.ledgers[0].code.toLowerCase()}: to file it in ${s.ledgers[0].name}.` : ''
+    // A first word that names a ledger, typed without its colon, gets the hint for that ledger.
+    const first = matchLedger(q.trim().split(/\s+/)[0] ?? '', s.ledgers)
+    const shown = first ?? s.ledgers[0]
+    const hint = !named && !keys && shown ? `Start with ${(first ? q.trim().split(/\s+/)[0] : shown.code).toLowerCase()}: to file it in ${shown.name}.` : ''
     return { title: f.title, sub: `${where}${f.estimateMin && !f.leisure ? `, ${f.estimateMin} min` : ''}`, hint }
   })()
   // A line that is exactly a task you have (open or cleared) is not offered as a new one.
@@ -209,7 +208,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
       : ['add', add]
     if (frozen.current || flash) return
     setFlash(go[0])
-    setTimeout(go[1], 110)
+    setTimeout(go[1], 60)
   }
   const resultRow = (key: string, i: number, icon: ReactNode, title: string, sub: string, onClick: () => void, opts: { on?: boolean; end?: ReactNode; add?: boolean } = {}) => (
     <motion.button type="button" key={key} className={`row search-row ${opts.on ? 'on' : ''} ${opts.add ? 'add' : ''} ${flash === key ? 'pressing' : ''}`} onClick={onClick} initial={{ opacity: 0.3, y: 6 }} animate={{ opacity: 1, y: 0, transition: { duration: 0.18, delay: Math.min(i, 8) * 0.02, ease: [0.22, 1, 0.36, 1] } }} whileTap={{ scale: 0.98 }}>
@@ -263,17 +262,30 @@ export function Picker({ onClose }: { onClose: () => void }) {
       </div>
       </div>
 
+      {/* What a pick will do here, said above the list whether you are searching or not, so the
+          first letter typed never shifts the rows. */}
+      <AnimatePresence initial={false}>
+        {resting && (
+          <motion.p key="rest-hint" className="help" style={{ padding: '14px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
+            A pick ends the rest and starts a pomodoro.
+          </motion.p>
+        )}
+        {inSuperset && mode === 'superset' && (
+          <motion.p key="slot-hint" className="help" style={{ padding: '14px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
+            A pick goes into the slot of {runningSet?.name || 'the superset'} that is running.
+          </motion.p>
+        )}
+        {searching && mode === 'superset' && !inSuperset && (
+          <motion.p key="no-set" className="help" style={{ padding: '12px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
+            No superset is running, so a task picked here starts a pomodoro.
+          </motion.p>
+        )}
+      </AnimatePresence>
+
       {found ? (
         <>
-          <AnimatePresence initial={false}>
-            {mode === 'superset' && !inSuperset && (
-              <motion.p key="no-set" className="help" style={{ padding: '12px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
-                No superset is running, so a task picked here starts a pomodoro.
-              </motion.p>
-            )}
-          </AnimatePresence>
-          {couchWord && !hits.length && <p className="empty">The couch list is empty. Add to it with couch: and what you would enjoy, like couch: watch an episode.</p>}
           <h3 className="section-title">{found.length || cleared.length || sets.length ? 'Matches' : 'Nothing matches'}</h3>
+          {couchWord && !hits.length && <p className="empty">The couch list is empty. Add to it with couch: and what you would enjoy, like couch: watch an episode.</p>}
           {!preview.title && !found.length && <p className="empty">Type what the task is, then the estimate: call the notary ~30m.</p>}
           <div className="list">
             {/* Rows come in with a short rise; a row that no longer matches is gone at once, so no
@@ -301,18 +313,6 @@ export function Picker({ onClose }: { onClose: () => void }) {
         supersets
       ) : (
         <>
-          <AnimatePresence initial={false}>
-            {resting && (
-              <motion.p key="rest-hint" className="help" style={{ padding: '14px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
-                A pick ends the rest and starts a pomodoro.
-              </motion.p>
-            )}
-            {inSuperset && mode === 'superset' && (
-              <motion.p key="slot-hint" className="help" style={{ padding: '14px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
-                A pick goes into the slot of {runningSet?.name || 'the superset'} that is running.
-              </motion.p>
-            )}
-          </AnimatePresence>
           {recent.length > 0 && (
             <section>
               <h3 className="section-title">Recent</h3>
@@ -391,6 +391,8 @@ export function marked(title: string, words: string[]): ReactNode {
     // Every place the word appears, not only the first.
     let found = false
     for (let f = folded.indexOf(w); f >= 0; f = folded.indexOf(w, f + w.length)) {
+      // A word of one or two letters lights only where a word starts, never mid-word.
+      if (w.length <= 2 && f > 0 && folded[f - 1] !== ' ') continue
       marks.push([at[f], at[f + w.length - 1] + 1])
       found = true
     }

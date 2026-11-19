@@ -527,3 +527,5 @@ body:has(.toast) .screen { padding-bottom: 96px; }
 .search-row.add .row-title { color: var(--text); }
 .row-title .hit, .row-sub .hit { color: var(--text); font-weight: inherit; background: none; padding: 0; }
 .search-row.pressing { background: var(--raised); transform: scale(0.985); }
+/* The pinned search head fades into the rows that scroll under it, so none is cut hard. */
+.picker-head::after { content: ''; position: absolute; left: 0; right: 0; bottom: -14px; height: 14px; background: linear-gradient(var(--ground), transparent); pointer-events: none; }
