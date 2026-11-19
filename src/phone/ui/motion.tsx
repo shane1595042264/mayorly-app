@@ -52,7 +52,7 @@ export function Pop({ value, children, className }: { value: string | number; ch
 /** A row that arrives in a short stagger and leaves by sliding off. */
 export function rowIn(i: number): HTMLMotionProps<'button'> {
   return {
-    initial: { opacity: 0, y: 10 },
+    initial: { opacity: 0.3, y: 8 },
     animate: { opacity: 1, y: 0, transition: { ...soft, delay: Math.min(i, 14) * 0.028 } },
     // A row that goes fades as it folds shut, and the rows under it rise with it: none is ever
     // drawn over another.

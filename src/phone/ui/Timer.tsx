@@ -52,6 +52,8 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
   const remaining = dur === null ? null : Math.max(0, dur - elapsed)
   const progress = dur ? Math.min(1, elapsed / dur) : 0
   const idle = !v || d.status === 'idle'
+  // A new block draws a new bar, which starts at its own width: never the last block's, draining.
+  const blockKey = v ? `${v.block.kind}-${v.block.round}-${v.block.slotIndex}-${v.block.entryId}-${v.block.leisureId}-${v.block.durationMs}` : 'idle'
   // A new block starts its bar empty at once, rather than draining the old width over a second.
   const lastProgress = useRef(0)
   const drop = progress < lastProgress.current - 0.02
@@ -116,6 +118,8 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
     setSaid('Back to your parked session, paused')
     setTimeout(() => setSaid(null), 2600)
   }), [])
+  // The word lasts only while the desk is still the paused session that came back.
+  const shownPhase = said && d.status === 'paused' ? said : phaseOf(s)
   // Clear acts on what the card shows. Until the card shows the next task, a second tap does nothing.
   const clearedAt = useRef(0)
   const clear = () => {
@@ -149,8 +153,8 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
 
       <section className="dial" aria-live="off">
         {/* The phase line changes in place: the new words drop in, never a blank line. */}
-        <motion.p key={said ?? phaseOf(s)} className="phase" initial={{ opacity: 0.2, y: -5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
-          {said ?? phaseOf(s)}
+        <motion.p key={shownPhase} className="phase" initial={{ opacity: 0.2, y: -5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+          {shownPhase}
         </motion.p>
         <motion.h1
           key={launch}
@@ -163,14 +167,14 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
           <RollingText text={shown} />
         </motion.h1>
         <div className={`track ${v?.block.kind === 'rest' ? 'rest' : ''} ${!running ? 'still' : ''}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
-          <motion.i key={launch} initial={launch ? { scaleX: 0 } : false} animate={{ scaleX: 1 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }} style={{ width: `${idle ? 0 : progress * 100}%`, transformOrigin: 'left', transition: drop ? 'none' : undefined }} />
+          <motion.i key={`${launch}-${blockKey}`} initial={launch ? { scaleX: 0 } : false} animate={{ scaleX: 1 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }} style={{ width: `${idle ? 0 : progress * 100}%`, transformOrigin: 'left', transition: drop ? 'none' : undefined }} />
         </div>
         <p className="sub num">{sub}</p>
       </section>
 
       <motion.button type="button" className="task" onClick={openPicker} aria-label="Pick a task" whileTap={{ scale: 0.98 }} transition={spring}>
         {/* The new task replaces the old at once and slides in from a little way off: never empty, never two at once. */}
-        <motion.span key={taskKey} className={`task-body ${idle && !nextUp ? 'empty' : ''}`} initial={{ opacity: 0.3, x: 18 }} animate={{ opacity: 1, x: 0 }} transition={{ type: 'spring', stiffness: 520, damping: 36 }}>
+        <motion.span key={taskKey} className={`task-body ${idle && !nextUp ? 'blank' : ''}`} initial={{ opacity: 0.3, x: 18 }} animate={{ opacity: 1, x: 0 }} transition={{ type: 'spring', stiffness: 520, damping: 36 }}>
         {resting ? (
           <>
             <span className="ledger-line"><i className="dot rest-dot" aria-hidden />Rest, then</span>

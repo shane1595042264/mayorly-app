@@ -10,7 +10,7 @@ let timer: ReturnType<typeof setTimeout> | null = null
 const subs = new Set<() => void>()
 const emit = () => subs.forEach((f) => f())
 
-export function showToast(text: string, undo?: () => void, ms = 4500) {
+export function showToast(text: string, undo?: () => void, ms = 4000) {
   current = { id: (current?.id ?? 0) + 1, text, undo }
   if (timer) clearTimeout(timer)
   timer = setTimeout(dismissToast, ms)

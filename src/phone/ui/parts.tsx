@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, useDragControls, type PanInfo } from 'motion/react'
 import { Minus, Plus } from '@phosphor-icons/react'
@@ -32,6 +32,24 @@ export function Sheet({ title, onClose, short, action, children }: { title: stri
   }, [onClose])
   // Pulled down by its head far enough, or flicked, it goes; otherwise it springs back.
   const drag = useDragControls()
+  // The body drags the sheet too when it has nothing to scroll, as an iOS sheet does; a body that
+  // scrolls keeps its scrolling, and on the phone pulling it past its top (the rubber band) closes it.
+  const body = useRef<HTMLDivElement>(null)
+  const [fits, setFits] = useState(true)
+  useEffect(() => {
+    const el = body.current
+    if (!el) return
+    const check = () => setFits(el.scrollHeight <= el.clientHeight + 1)
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    for (const c of Array.from(el.children)) ro.observe(c)
+    return () => ro.disconnect()
+  }, [])
+  const fromBody = (e: React.PointerEvent) => {
+    if (!fits || (e.target as HTMLElement).closest('input, textarea, select')) return
+    drag.start(e)
+  }
   const release = (_: unknown, info: PanInfo) => {
     if (info.offset.y > 110 || info.velocity.y > 650) onClose()
   }
@@ -61,7 +79,15 @@ export function Sheet({ title, onClose, short, action, children }: { title: stri
           {action}
           <motion.button type="button" className="btn" onClick={onClose} whileTap={{ scale: 0.92 }}>Done</motion.button>
         </div>
-        <div className="sheet-body">{children}</div>
+        <div
+          ref={body}
+          className="sheet-body"
+          onPointerDown={fromBody}
+          onScroll={(e) => { if (e.currentTarget.scrollTop < -80) onClose() }}
+          style={{ touchAction: fits ? 'none' : undefined }}
+        >
+          {children}
+        </div>
       </motion.div>
     </>,
     document.body,
@@ -80,7 +106,7 @@ export function Stepper({ value, min, max, step = 1, unit, onChange, label }: { 
   return (
     <span className="stepper" role="group" aria-label={label}>
       <motion.button type="button" aria-label={`Less ${label}`} disabled={value <= min} whileTap={{ scale: 0.82 }} onClick={() => { tap(); onChange(Math.max(min, value - step)) }}><Minus size={16} /></motion.button>
-      <span><motion.span key={value} style={{ display: 'inline-block' }} initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>{value}</motion.span>{unit ? ` ${unit}` : ''}</span>
+      <span><motion.span key={value} style={{ display: 'inline-block' }} initial={{ y: -6, opacity: 0.35 }} animate={{ y: 0, opacity: 1 }}>{value}</motion.span>{unit ? ` ${unit}` : ''}</span>
       <motion.button type="button" aria-label={`More ${label}`} disabled={value >= max} whileTap={{ scale: 0.82 }} onClick={() => { tap(); onChange(Math.min(max, value + step)) }}><Plus size={16} /></motion.button>
     </span>
   )

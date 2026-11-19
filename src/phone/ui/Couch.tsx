@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { rowIn } from './motion'
 import { Play, Trash } from '@phosphor-icons/react'
-import { balance, leisureList, leisureSpentMs, leisureTokensSpent, span, type LeisureItem } from '@core/index'
+import { balance, onDeskId, leisureList, leisureSpentMs, leisureTokensSpent, span, type LeisureItem } from '@core/index'
 import { act, useMayorly, useNow } from '../store'
 import { captured } from '../feel'
 import { Coin, Sheet } from './parts'
@@ -17,6 +17,7 @@ export function Couch() {
   const [menu, setMenu] = useState<LeisureItem | null>(null)
   // Removing asks for a second tap, as deleting an entry does.
   const [removing, setRemoving] = useState(false)
+  const sitting = !!menu && s.desk.status !== 'idle' && onDeskId(s) === menu.id
   const items = leisureList(s)
   const coins = balance(s)
   const add = () => {
@@ -48,13 +49,14 @@ export function Couch() {
           )
         })}
         </AnimatePresence>
-        {items.length === 0 && <p className="empty">Nothing on the couch list yet.</p>}
+        {items.length === 0 && title.length === 0 && <p className="empty">Nothing on the couch list yet.</p>}
       </div>
       <AnimatePresence>{menu && (
         <Sheet key="couch-menu" title={menu.title} short onClose={() => setMenu(null)}>
           <div className="menu">
-            <button type="button" onClick={() => { act({ type: 'desk/select', leisureId: menu.id }); setMenu(null) }}><Play size={20} />Sit down now</button>
-            <button type="button" className="danger" onClick={() => (removing ? (act({ type: 'leisure/delete', id: menu.id }), setMenu(null), setRemoving(false)) : setRemoving(true))}><Trash size={20} />{removing ? 'Tap again to remove it' : 'Remove from the list'}</button>
+            {sitting ? <button type="button" disabled><Play size={20} />On the desk now</button> : <button type="button" onClick={() => { act({ type: 'desk/select', leisureId: menu.id }); setMenu(null) }}><Play size={20} />Sit down now</button>}
+            {/* What is on the desk is not taken off the list under it; stand down first. */}
+            <button type="button" className="danger" disabled={sitting} onClick={() => (removing ? (act({ type: 'leisure/delete', id: menu.id }), setMenu(null), setRemoving(false)) : setRemoving(true))}><Trash size={20} />{sitting ? 'Stand down to remove it' : removing ? 'Tap again to remove it' : 'Remove from the list'}</button>
           </div>
           {menu.cues.length > 0 && (
             <>

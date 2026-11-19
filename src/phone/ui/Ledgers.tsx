@@ -9,8 +9,8 @@ import {
 import { Glyph, GLYPH_NAMES, glyphKey, localGlyph } from '../../renderer/src/lib/glyphs'
 import { distinctTheme, THEME_COLORS } from '../../renderer/src/lib/themes'
 import { act, useMayorly, useNow } from '../store'
-import { showToast } from '../toast'
-import { captured } from '../feel'
+import { dismissToast, showToast } from '../toast'
+import { captured, tap } from '../feel'
 import { LedgerDot, Sheet, Toggle } from './parts'
 
 // The shelf: every ledger with what is open in it and today's time, the tray of unfiled
@@ -18,12 +18,17 @@ import { LedgerDot, Sheet, Toggle } from './parts'
 // can be done with it; adding is the line at the top.
 
 type Open = { kind: 'ledger'; id: string | null } | null
+let lastOpen: Open = null
 
 export function Ledgers({ home = 0 }: { home?: number }) {
   const s = useMayorly()
   const now = useNow(30_000)
-  const [open, setOpen] = useState<Open>(null)
-  useEffect(() => setOpen(null), [home])
+  // The open ledger is remembered while the app runs, so leaving the tab and coming back keeps it;
+  // tapping the Ledgers tab while on it goes back to the shelf.
+  const [open, setOpenState] = useState<Open>(() => lastOpen)
+  const setOpen = (o: Open) => { lastOpen = o; setOpenState(o) }
+  const firstHome = useRef(home)
+  useEffect(() => { if (home !== firstHome.current) setOpen(null) }, [home]) // eslint-disable-line react-hooks/exhaustive-deps
   const [editing, setEditing] = useState<Ledger | 'new' | null>(null)
   const flow = openFlow(s)
   const today = dayStats(s, startOfDay(now), now)
@@ -144,7 +149,7 @@ function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () =>
             {cleared.map((e) => (
               <div key={e.id} className="row">
                 <span className="row-main"><span className="row-title" style={{ color: 'var(--muted)' }}>{e.title}</span></span>
-                <button type="button" className="btn" style={{ height: 36 }} onClick={() => act({ type: 'entry/reopen', id: e.id })}><ArrowCounterClockwise size={16} />Reopen</button>
+                <button type="button" className="btn" style={{ height: 36 }} onClick={() => { tap(); dismissToast(); act({ type: 'entry/reopen', id: e.id }) }}><ArrowCounterClockwise size={16} />Reopen</button>
               </div>
             ))}
           </div>
@@ -200,7 +205,7 @@ function EntryMenu({ entry, onClose }: { entry: Entry; onClose: () => void }) {
         <button type="button" onClick={done(() => { const place = openFlow(s).findIndex((x) => x.id === entry.id); act({ type: 'entry/complete', id: entry.id }); showToast(`Cleared ${entry.title}`, () => { act({ type: 'entry/reopen', id: entry.id }); act({ type: 'entry/move', id: entry.id, toIndex: place }) }) })}><Check size={20} />Clear</button>
         {index > 0 && <button type="button" onClick={() => act({ type: 'entry/move', id: entry.id, toIndex: index - 1 })}><ArrowUp size={20} />Earlier in the flow</button>}
         {index >= 0 && index < flow.length - 1 && <button type="button" onClick={() => act({ type: 'entry/move', id: entry.id, toIndex: index + 1 })}><ArrowDown size={20} />Later in the flow</button>}
-        <button type="button" className="danger" onClick={() => (confirm ? done(() => { act({ type: 'entry/delete', id: entry.id }); showToast(`Deleted ${entry.title}`, () => act({ type: 'entry/restore', id: entry.id })) })() : setConfirm(true))}>
+        <button type="button" className="danger" onClick={() => (confirm ? done(() => { const place = openFlow(s).findIndex((x) => x.id === entry.id); act({ type: 'entry/delete', id: entry.id }); showToast(`Deleted ${entry.title}`, () => { act({ type: 'entry/restore', id: entry.id }); act({ type: 'entry/move', id: entry.id, toIndex: place }) }) })() : setConfirm(true))}>
           <Trash size={20} />{confirm ? (crop >= 0.1 ? 'Delete: its tomatoes go too' : 'Tap again to delete') : 'Delete'}
         </button>
       </div>

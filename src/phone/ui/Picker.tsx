@@ -92,14 +92,14 @@ export function Picker({ onClose }: { onClose: () => void }) {
                 <span className="glyph"><Repeat size={18} /></span>
                 <span className="row-main">
                   <span className="row-title">{ss.name || 'Superset'}{ss.id === runningSet?.id ? ', running' : ''}</span>
-                  <span className="row-sub">{formatSuperset(ss, s.ledgers, s.entries)}</span>
+                  <span className="row-sub">{formatSuperset(ss, s.ledgers, s.entries).replace(/ rest (\d+)/, ', rest $1').replace(/ rr (\d+)/, ', long rest $1')}</span>
                 </span>
               </button>
             ))}
             {s.supersets.length === 0 && <p className="empty">No supersets yet. Write one below.</p>}
           </div>
           <label className="label" htmlFor="ss">New superset</label>
-          <input id="ss" className="field" value={ssLine} onChange={(e) => setSsLine(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveSuperset()} placeholder="legal 25, dance 20 x3" enterKeyHint="done" autoCapitalize="none" />
+          <input id="ss" className="field" value={ssLine} onChange={(e) => { setSsLine(e.target.value); setSsError(null) }} onKeyDown={(e) => e.key === 'Enter' && saveSuperset()} placeholder="legal 25, dance 20 x3" enterKeyHint="done" autoCapitalize="none" />
           {ssError ? <p className="error">{ssError}</p> : <p className="help">Ledger codes or names with minutes, then the rounds.</p>}
         </>
   )

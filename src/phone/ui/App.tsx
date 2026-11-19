@@ -98,7 +98,8 @@ export function App() {
           </span>
         ))}
       </nav>
-      <AnimatePresence>
+      {/* One toast at a time: the last leaves before the next comes, never text over text. */}
+      <AnimatePresence mode="wait">
         {toast && (
           <motion.div key={toast.id} className="toast" role="status" initial={{ opacity: 0, y: 24, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 520, damping: 34, delay: 0.22 } }} exit={{ opacity: 0, y: 12, transition: { duration: 0.14 } }} transition={{ type: 'spring', stiffness: 520, damping: 34 }}>
             <span>{toast.text}</span>
