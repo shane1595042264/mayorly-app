@@ -48,7 +48,7 @@ const HOOKS = `(() => {
       Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, text)
       el.dispatchEvent(new Event('input', { bubbles: true }))
     },
-    key(sel, key, i = 0) { at(sel, i).dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true })) },
+    key(sel, key, i = 0) { at(sel, i).dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })) },
     text(sel, i = 0) { const el = document.querySelectorAll(sel)[i]; return el ? el.textContent.trim() : null },
     count(sel) { return document.querySelectorAll(sel).length },
   }

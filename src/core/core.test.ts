@@ -1689,6 +1689,17 @@ describe('the couch works like the flow', () => {
     expect(w.s.desk).toMatchObject({ status: 'running', block: { kind: 'leisure', label: 'play civ' } })
   })
 
+  it('starts a new task on the couch block where it stands, keeping its clock', () => {
+    const w = rich()
+    w.do({ type: 'leisure/add', title: 'civ' })
+    const civ = w.s.leisure.find((x) => x.title === 'civ')!
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: civ.id })
+    w.wait(3 * MIN)
+    w.do({ type: 'entry/capture', text: 'legal: file the form', start: true })
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', entryId: w.entry('file the form').id })
+    expect(blockView(w.s, w.now)?.elapsedMs).toBe(3 * MIN)
+  })
+
   it('moves a task just started to the couch on the same clock, and Alt+Q still goes back to the real task', () => {
     const w = rich()
     w.do({ type: 'entry/capture', text: 'legal: real work' })

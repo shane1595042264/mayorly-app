@@ -26,7 +26,12 @@ export function Sheet({ title, onClose, short, action, children }: { title: stri
   // A sheet opening sends any toast away, so nothing ever sits over a sheet's buttons.
   useEffect(() => dismissToast(), [])
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    // A search field with something in it takes the first Escape to empty itself.
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLInputElement | null
+      if (e.key !== 'Escape' || e.defaultPrevented || (t?.dataset?.escClears !== undefined && t.value)) return
+      onClose()
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])

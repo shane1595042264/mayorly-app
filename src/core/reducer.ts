@@ -199,6 +199,8 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       if (action.start) {
         const d = s.desk
         if (d.block && d.block.kind === 'focus' && d.status !== 'idle') swapTo(s, ctx, ev, e.id, e.ledgerId, true)
+        // On the couch, a new task takes the block where it stands, as a picked one does.
+        else if (d.block?.kind === 'leisure' && sharesClock(s)) swapAcross(s, ctx, ev, { entryId: e.id, ledgerId: e.ledgerId, leisureId: null })
         else deploy(s, ctx, ev, { mode: 'pomodoro', supersetId: null, entryId: e.id, ledgerId: e.ledgerId, leisureId: null })
       }
       break

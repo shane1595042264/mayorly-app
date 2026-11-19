@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { captured } from '../feel'
+import { captured, tap } from '../feel'
 import { Broom, Microphone, Play, Stop } from '@phosphor-icons/react'
 import { captureLine, clearNotice, sweepTray, useClerk } from '../ai'
 import { dictationAvailable, listen } from '../dictation'
 import { act, useMayorly } from '../store'
-import { findTasks, onDeskId } from '@core/index'
+import { findTasks, foldSearch, onDeskId, prefixClerk } from '@core/index'
 import { Sheet } from './parts'
 
 // The inbox, one tap from anywhere: type a line or say it, and the clerk files it into a ledger
@@ -26,6 +26,13 @@ export function Capture({ onClose }: { onClose: () => void }) {
   const tray = s.entries.filter((e) => e.ledgerId === null && e.doneAt === null).length
   const canTalk = dictationAvailable()
   const existing = text.trim().length >= 3 ? findTasks(s, text, 3) : []
+  // The line is exactly a task you already have: Add and Return start that task, never a copy.
+  const same = existing.find((f) => foldSearch(f.kind === 'entry' ? f.entry.title : f.item.title) === foldSearch(prefixClerk.file(text.trim(), s.ledgers).title || text))
+  const startExisting = (f: NonNullable<typeof same>) => {
+    tap()
+    act(f.kind === 'entry' ? { type: 'desk/select', entryId: f.entry.id, ledgerId: f.entry.ledgerId } : { type: 'desk/select', leisureId: f.item.id })
+    onClose()
+  }
 
   useEffect(() => {
     clearNotice()
@@ -58,6 +65,7 @@ export function Capture({ onClose }: { onClose: () => void }) {
   const add = async (start: boolean) => {
     const line = text.trim()
     if (!line || busy) return
+    if (same) return startExisting(same)
     if (listening) await stopRef.current?.()
     setBusy(true)
     setText('')
@@ -122,8 +130,8 @@ export function Capture({ onClose }: { onClose: () => void }) {
             </AnimatePresence>
           </motion.button>
         )}
-        <motion.button type="button" className="btn white" disabled={!text.trim() || busy} onClick={() => void add(false)} whileTap={{ scale: 0.94 }}>Add</motion.button>
-        <motion.button type="button" className="btn" disabled={!text.trim() || busy} onClick={() => void add(true)} whileTap={{ scale: 0.94 }}><Play size={16} weight="fill" />Add and start</motion.button>
+        <motion.button type="button" className="btn white" disabled={!text.trim() || busy} onClick={() => void add(false)} whileTap={{ scale: 0.94 }}>{same ? 'Start it' : 'Add'}</motion.button>
+{!same && <motion.button type="button" className="btn" disabled={!text.trim() || busy} onClick={() => void add(true)} whileTap={{ scale: 0.94 }}><Play size={16} weight="fill" />Add and start</motion.button>}
       </div>
       {error && <p className="error">{error}</p>}
       <AnimatePresence mode="wait" initial={false}>

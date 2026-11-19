@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowCounterClockwise, Couch, KeyReturn, MagnifyingGlass, Plus, Repeat, Tray, X } from '@phosphor-icons/react'
 import {
-  findTasks, foldSearch, formatSuperset, leisureList, matchLedger, onDeskId, openFlow, parseEstimate, parseSuperset, recentTasks, tomatoLabel, entryTomatoes,
+  findTasks, foldSearch, formatSuperset, leisureList, matchLedger, onDeskId, openFlow, parseSuperset, prefixClerk, recentTasks, tomatoLabel, entryTomatoes,
   type Entry, type FoundTask, type Mode,
 } from '@core/index'
 import { Glyph } from '../../renderer/src/lib/glyphs'
@@ -25,7 +25,12 @@ const MODES: { id: Mode; label: string }[] = [
 ]
 
 export function Picker({ onClose }: { onClose: () => void }) {
-  const s = useMayorly()
+  const live = useMayorly()
+  // Once a pick is made the sheet keeps showing what it showed as it slides away: no row flips,
+  // moves or appears under the finger.
+  const frozen = useRef<typeof live | null>(null)
+  const s = frozen.current ?? live
+  const freeze = () => { frozen.current = live }
   const now = useNow(5000)
   const running = s.desk.status !== 'idle' && !!s.desk.block
   // A pick during a rest starts a pomodoro (the reducer's rule), so the picker says Pomodoro then.
@@ -41,6 +46,8 @@ export function Picker({ onClose }: { onClose: () => void }) {
   // iOS keeps the keyboard up as focus moves here).
   const field = useRef<HTMLInputElement>(null)
   useEffect(() => { field.current?.focus({ preventScroll: true }) }, [])
+  // A new search starts at the top, so what Return starts is always in sight.
+  useEffect(() => { field.current?.closest('.sheet-body')?.scrollTo({ top: 0 }) }, [q])
   const [ssLine, setSsLine] = useState('')
   const [ssError, setSsError] = useState<string | null>(null)
   const onDesk = onDeskId(s)
@@ -53,16 +60,19 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const withMode = () => (!running || mode !== currentMode ? { mode } : {})
   const pickEntry = (e: Entry) => {
     if (e.id === onDesk) tap()
+    freeze()
     act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId, ...withMode() })
     onClose()
   }
   const pickLeisure = (id: string) => {
+    freeze()
     act({ type: 'desk/select', leisureId: id })
     onClose()
   }
   const add = () => {
     const text = q.trim()
-    if (!text) return
+    if (!text || !preview.title) return tap()
+    freeze()
     void captureLine(text, true)
     onClose()
   }
@@ -102,15 +112,19 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const holds = (title: string) => words.length > 0 && words.every((w) => foldSearch(title).includes(w))
   const cleared = searching ? s.entries.filter((e) => e.doneAt !== null && e.doneAt >= monthAgo && holds(e.title)).sort((a, b) => b.doneAt! - a.doneAt!).slice(0, 3) : []
   const sets = searching ? s.supersets.filter((x) => holds(x.name)) : []
+  // What Return starts: the first open task, else a superset or a cleared task by that name, else
+  // the task already on the desk, and only when nothing at all matches, a new line.
   const top: FoundTask | null = found?.[0] && idOf(found[0]) !== onDesk ? found[0] : null
+  const target = top ? 'task' : sets[0] ? 'set' : cleared[0] ? 'cleared' : found?.[0] ? 'desk' : 'add'
   // How a new line would be filed: its ledger by prefix, its estimate, else the clerk or the tray.
+  // The preview asks the same rules the reducer files by, so it says exactly where the line goes.
   const preview = (() => {
-    const m = q.trim().match(/^#(\S+)\s*(.*)$/) ?? q.trim().match(/^([^\s:]+):\s*(.*)$/)
-    const ledger = m ? matchLedger(m[1], s.ledgers) : null
-    const { rest, minutes } = parseEstimate(ledger && m ? m[2] : q.trim())
-    const title = rest.replace(/\s+/g, ' ').trim() || q.trim()
-    const where = ledger ? ledger.name : keys ? 'The clerk files it' : 'The tray (legal: or #legal files it)'
-    return { title, sub: `${where}${minutes ? `, ${minutes} min` : ''}` }
+    const f = prefixClerk.file(q.trim(), s.ledgers)
+    const ledger = s.ledgers.find((l) => l.id === f.ledgerId)
+    const named = !!ledger || !!f.leisure
+    const where = f.leisure ? 'Couch, one coin a block' : ledger ? ledger.name : keys ? 'The clerk files it' : 'Tray'
+    const hint = !named && !keys && s.ledgers[0] ? `; ${s.ledgers[0].code.toLowerCase()}: files it in ${s.ledgers[0].name}` : ''
+    return { title: f.title, sub: `${where}${f.estimateMin ? `, ${f.estimateMin} min` : ''}${hint}` }
   })()
   const recent = !searching ? recentTasks(s, 6).filter((f) => idOf(f) !== onDesk).slice(0, 3) : []
   const supersets = (
@@ -136,18 +150,22 @@ export function Picker({ onClose }: { onClose: () => void }) {
 
   const pick = (f: FoundTask) => (f.kind === 'entry' ? pickEntry(f.entry) : pickLeisure(f.item.id))
   const reopen = (e: Entry) => {
+    freeze()
     act({ type: 'entry/reopen', id: e.id })
     act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId, ...withMode() })
     onClose()
   }
+  const deploySet = (id: string) => { freeze(); act({ type: 'desk/deploy', mode: 'superset', supersetId: id }); onClose() }
   const enter = () => {
     if (!searching) return tap()
-    if (top) return pick(top)
-    if (found?.[0]) return pick(found[0])
+    if (target === 'task' && top) return pick(top)
+    if (target === 'set') return deploySet(sets[0].id)
+    if (target === 'cleared') return reopen(cleared[0])
+    if (target === 'desk' && found?.[0]) return pick(found[0])
     add()
   }
   const resultRow = (key: string, i: number, icon: ReactNode, title: string, sub: string, onClick: () => void, opts: { on?: boolean; end?: ReactNode; add?: boolean } = {}) => (
-    <motion.button type="button" key={key} className={`row search-row ${opts.on ? 'on' : ''} ${opts.add ? 'add' : ''}`} onClick={onClick} {...rowIn(i)}>
+    <motion.button type="button" key={key} className={`row search-row ${opts.on ? 'on' : ''} ${opts.add ? 'add' : ''}`} onClick={onClick} {...rowIn(i)} layout="position" exit={{ opacity: 0, transition: { duration: 0.08 } }} transition={{ layout: { type: 'spring', stiffness: 520, damping: 42 } }}>
       <span className="glyph">{icon}</span>
       <span className="row-main">
         <span className="row-title">{opts.add ? title : marked(title, words)}</span>
@@ -165,9 +183,14 @@ export function Picker({ onClose }: { onClose: () => void }) {
         <MagnifyingGlass size={18} className="search-icon" aria-hidden />
         <input
           ref={field}
+          data-esc-clears=""
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && enter()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') enter()
+            // Escape empties the search first; a second Escape closes the sheet.
+            if (e.key === 'Escape' && q) { e.preventDefault(); setQ('') }
+          }}
           placeholder="Find or add a task"
           aria-label="Find or add a task"
           enterKeyHint="go"
@@ -196,19 +219,19 @@ export function Picker({ onClose }: { onClose: () => void }) {
         <>
           <h3 className="section-title">{found.length || cleared.length || sets.length ? 'Matches' : 'Nothing matches'}</h3>
           <div className="list">
-            <AnimatePresence initial={false}>
+            <AnimatePresence initial={false} mode="popLayout">
               {found.map((f, i) => {
-                if (f.kind === 'leisure') return resultRow(f.item.id, i, <Couch size={18} />, f.item.title, f.item.id === onDesk ? 'On the desk now' : 'Couch, one coin a block', () => pick(f), { on: f.item.id === onDesk, end: top === f ? returnMark : null })
+                if (f.kind === 'leisure') return resultRow(f.item.id, i, <Couch size={18} />, f.item.title, f.item.id === onDesk ? 'On the desk now' : 'Couch, one coin a block', () => pick(f), { on: f.item.id === onDesk, end: top === f || (target === 'desk' && i === 0) ? returnMark : null })
                 const e = f.entry
                 const l = s.ledgers.find((x) => x.id === e.ledgerId)
                 const crop = entryTomatoes(s, e.id, now)
                 const sub = e.id === onDesk ? 'On the desk now' : `${l?.name ?? 'Tray'}${e.estimateMin ? `, ${e.estimateMin} min` : ''}`
-                const end = top === f ? returnMark : crop >= 0.1 ? <span className="row-end num row-crop"><Tomato /><b>{tomatoLabel(crop)}</b></span> : null
+                const end = top === f || (target === 'desk' && i === 0) ? returnMark : crop >= 0.1 ? <span className="row-end num row-crop"><Tomato /><b>{tomatoLabel(crop)}</b></span> : null
                 return resultRow(e.id, i, l ? <span className="glyph-dot" style={{ color: 'var(--muted)' }}><Glyph name={l.glyph} size={18} /><LedgerDot ledger={l} /></span> : <Tray size={18} />, e.title, sub, () => pick(f), { on: e.id === onDesk, end })
               })}
-              {sets.map((x, i) => resultRow(`set-${x.id}`, found.length + i, <Repeat size={18} />, x.name || 'Superset', 'Superset, starts it from its first slot', () => { act({ type: 'desk/deploy', mode: 'superset', supersetId: x.id }); onClose() }))}
-              {cleared.map((e, i) => resultRow(`done-${e.id}`, found.length + sets.length + i, <ArrowCounterClockwise size={18} />, e.title, `Cleared ${new Date(e.doneAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}; opens it again and starts it`, () => reopen(e)))}
-              {resultRow('add', found.length + sets.length + cleared.length, <Plus size={18} />, `Add and start “${preview.title}”`, preview.sub, add, { add: true, end: !top && found.length === 0 ? returnMark : null })}
+              {sets.map((x, i) => resultRow(`set-${x.id}`, found.length + i, <Repeat size={18} />, x.name || 'Superset', 'Superset, starts it from its first slot', () => deploySet(x.id), { end: target === 'set' && i === 0 ? returnMark : null }))}
+              {cleared.map((e, i) => resultRow(`done-${e.id}`, found.length + sets.length + i, <ArrowCounterClockwise size={18} />, e.title, `Cleared ${new Date(e.doneAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}; opens it again and starts it`, () => reopen(e), { end: target === 'cleared' && i === 0 ? returnMark : null }))}
+              {preview.title && resultRow('add', found.length + sets.length + cleared.length, <Plus size={18} />, `Add and start “${preview.title}”`, preview.sub, add, { add: true, end: target === 'add' ? returnMark : null })}
             </AnimatePresence>
           </div>
           {more > 0 && <p className="help" style={{ padding: '10px 4px 0' }}>{found.length} of {ordered.length} shown. Keep typing to narrow it.</p>}
@@ -282,14 +305,25 @@ export function Picker({ onClose }: { onClose: () => void }) {
 
 const idOf = (f: FoundTask) => (f.kind === 'entry' ? f.entry.id : f.item.id)
 
-/** A title with the searched words drawn bright and bold, the rest as it is. */
+/**
+ * A title with the searched words drawn bright and bold. The words are matched against the title
+ * folded the way search folds it (no punctuation), and mapped back, so "followup" lights up
+ * "follow-up".
+ */
 function marked(title: string, words: string[]): ReactNode {
   if (!words.length) return title
-  const lower = title.toLowerCase()
+  let folded = ''
+  const at: number[] = []
+  for (let i = 0; i < title.length; i++) {
+    const c = title[i]
+    if (/['\u2018\u2019-]/.test(c)) continue
+    if (/[\p{L}\p{N}]/u.test(c)) { folded += c.toLowerCase(); at.push(i) }
+    else if (!folded.endsWith(' ')) { folded += ' '; at.push(i) }
+  }
   const marks: [number, number][] = []
   for (const w of words) {
-    const at = lower.indexOf(w)
-    if (at >= 0) marks.push([at, at + w.length])
+    const f = folded.indexOf(w)
+    if (f >= 0) marks.push([at[f], at[f + w.length - 1] + 1])
   }
   if (!marks.length) return title
   marks.sort((a, b) => a[0] - b[0])
