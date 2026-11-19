@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowCounterClockwise, Couch, KeyReturn, MagnifyingGlass, Plus, Repeat, Tray, X } from '@phosphor-icons/react'
 import {
-  findTasks, foldSearch, formatSuperset, oneEdit, leisureList, matchLedger, onDeskId, openFlow, parseSuperset, prefixClerk, recentTasks, tomatoLabel, entryTomatoes,
+  findTasks, foldSearch, formatSuperset, oneEdit, parseEstimate, startOfDay, leisureList, matchLedger, onDeskId, openFlow, parseSuperset, prefixClerk, recentTasks, tomatoLabel, entryTomatoes,
   type Entry, type FoundTask, type Mode,
 } from '@core/index'
 import { Glyph } from '../../renderer/src/lib/glyphs'
@@ -113,7 +113,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
 
   // The search: open tasks and the couch (the one on the desk last), then cleared tasks from the
   // last month and saved supersets by name. Twelve open matches show; more are counted.
-  const words = foldSearch(q.replace(/^#?\S+:\s*/, (m) => (matchLedger(m.replace(/[#:\s]/g, ''), s.ledgers) ? '' : m))).split(' ').filter(Boolean)
+  const words = foldSearch(parseEstimate(q).rest.replace(/^#?\S+:\s*/, (m) => (matchLedger(m.replace(/[#:\s]/g, ''), s.ledgers) ? '' : m))).split(' ').filter(Boolean)
   const searching = !!q.trim()
   const hits = searching ? findTasks(s, q, 60) : []
   const ordered = [...hits.filter((f) => idOf(f) !== onDesk), ...hits.filter((f) => idOf(f) === onDesk)]
@@ -130,8 +130,16 @@ export function Picker({ onClose }: { onClose: () => void }) {
   // the task already on the desk, and only when nothing at all matches, a new line.
   const top: FoundTask | null = found?.[0] && idOf(found[0]) !== onDesk ? found[0] : null
   // A new line is offered only when it reads as a task: four letters or more, not a ledger's name.
-  const canAdd = foldSearch(q).length >= 4 && !namedLedger
-  const target = top ? 'task' : sets[0] ? 'set' : cleared[0] ? 'cleared' : found?.[0] ? 'desk' : namedLedger ? 'ledger' : canAdd ? 'add' : 'none'
+  const nothing = hits.length === 0 && cleared.length === 0 && sets.length === 0
+  const couchWord = ['couch', 'leisure'].includes(foldSearch(q))
+  const canAdd = (foldSearch(q).length >= 4 || (nothing && foldSearch(q).length >= 3)) && !namedLedger && !couchWord
+  // The Add row is for a line that is plainly new: nothing matched, or several words of which no
+  // task holds them all. One word that found something is a search, not a new task.
+  const content = words.filter((w) => !['the', 'a', 'an', 'to', 'for', 'of', 'and', 'my', 'on', 'in', 'at', 'with'].includes(w))
+  const holdsAll = (t: string) => content.length > 0 && content.every((w) => foldSearch(t).includes(w))
+  const strong = hits.some((f) => holdsAll(f.kind === 'entry' ? f.entry.title : f.item.title)) || cleared.some((e) => holdsAll(e.title))
+  const showAdd = canAdd && (nothing || (content.length >= 2 && !strong))
+  const target = top ? 'task' : sets[0] ? 'set' : cleared[0] ? 'cleared' : found?.[0] ? 'desk' : namedLedger ? 'ledger' : showAdd ? 'add' : 'none'
   // How a new line would be filed: its ledger by prefix, its estimate, else the clerk or the tray.
   // The preview asks the same rules the reducer files by, so it says exactly where the line goes.
   const preview = (() => {
@@ -176,6 +184,13 @@ export function Picker({ onClose }: { onClose: () => void }) {
     onClose()
   }
   const deploySet = (id: string) => { if (!freeze()) return; act({ type: 'desk/deploy', mode: 'superset', supersetId: id }); onClose() }
+  // The superset already running is where you are: Return or a tap only takes you to the timer.
+  const toTimer = () => {
+    if (!freeze()) return
+    tap()
+    announce('start')
+    onClose()
+  }
   const pickLedger = (id: string) => {
     if (!freeze()) return
     act({ type: 'desk/select', ledgerId: id, ...withMode() })
@@ -187,7 +202,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
     if (!searching || target === 'none') return tap()
     const go: [string, () => void] =
       target === 'task' && top ? [idOf(top), () => pick(top)]
-      : target === 'set' ? [`set-${sets[0].id}`, () => deploySet(sets[0].id)]
+      : target === 'set' ? [`set-${sets[0].id}`, () => (sets[0].id === runningSet?.id ? toTimer() : deploySet(sets[0].id))]
       : target === 'cleared' ? [`done-${cleared[0].id}`, () => reopen(cleared[0])]
       : target === 'desk' && found?.[0] ? [idOf(found[0]), () => pick(found[0])]
       : target === 'ledger' && namedLedger ? ['lt', () => pickLedger(namedLedger.id)]
@@ -250,7 +265,14 @@ export function Picker({ onClose }: { onClose: () => void }) {
 
       {found ? (
         <>
-          {mode === 'superset' && !inSuperset && <p className="help" style={{ padding: '12px 4px 0' }}>No superset is running, so a task picked here starts a pomodoro.</p>}
+          <AnimatePresence initial={false}>
+            {mode === 'superset' && !inSuperset && (
+              <motion.p key="no-set" className="help" style={{ padding: '12px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
+                No superset is running, so a task picked here starts a pomodoro.
+              </motion.p>
+            )}
+          </AnimatePresence>
+          {couchWord && !hits.length && <p className="empty">The couch list is empty. Add to it with couch: and what you would enjoy, like couch: watch an episode.</p>}
           <h3 className="section-title">{found.length || cleared.length || sets.length ? 'Matches' : 'Nothing matches'}</h3>
           {!preview.title && !found.length && <p className="empty">Type what the task is, then the estimate: call the notary ~30m.</p>}
           <div className="list">
@@ -267,10 +289,10 @@ export function Picker({ onClose }: { onClose: () => void }) {
                 const end = top === f || (target === 'desk' && i === 0) ? returnMark : crop >= 0.1 ? <span className="row-end num row-crop"><Tomato /><b>{tomatoLabel(crop)}</b></span> : null
                 return resultRow(e.id, i, l ? <span className="glyph-dot" style={{ color: 'var(--muted)' }}><Glyph name={l.glyph} size={18} /><LedgerDot ledger={l} /></span> : <Tray size={18} />, e.title, sub, () => pick(f), { on: e.id === onDesk, end })
               })}
-              {sets.map((x, i) => resultRow(`set-${x.id}`, found.length + i, <Repeat size={18} />, x.name || 'Superset', x.id === runningSet?.id ? 'Superset, running now' : 'Superset, starts at its first slot', () => (x.id === runningSet?.id ? (tap(), onClose()) : deploySet(x.id)), { end: target === 'set' && i === 0 ? returnMark : null }))}
-              {cleared.map((e, i) => resultRow(`done-${e.id}`, found.length + sets.length + i, <ArrowCounterClockwise size={18} />, e.title, `Cleared ${new Date(e.doneAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, reopens it`, () => reopen(e), { end: target === 'cleared' && i === 0 ? returnMark : null }))}
-              {namedLedger && resultRow('lt', found.length + sets.length + cleared.length, <Glyph name={namedLedger.glyph} size={18} />, 'Ledger time', `${namedLedger.name}, the time counts to the ledger itself`, () => pickLedger(namedLedger.id), { end: target === 'ledger' ? returnMark : null })}
-              {preview.title && canAdd && !exact && !(found[0] && foldSearch(q).length < 3) && !(found[0] && foldSearch(found[0].kind === 'entry' ? found[0].entry.title : found[0].item.title).startsWith(foldSearch(preview.title))) && resultRow('add', found.length + sets.length + cleared.length, <Plus size={18} />, `Add and start “${preview.title}”`, preview.sub, add, { add: true, end: target === 'add' ? returnMark : null })}
+              {sets.map((x, i) => resultRow(`set-${x.id}`, found.length + i, <Repeat size={18} />, x.name || 'Superset', x.id === runningSet?.id ? 'Superset, running now' : 'Superset, starts at its first slot', () => (x.id === runningSet?.id ? toTimer() : deploySet(x.id)), { end: target === 'set' && i === 0 ? returnMark : null }))}
+              {cleared.map((e, i) => resultRow(`done-${e.id}`, found.length + sets.length + i, <ArrowCounterClockwise size={18} />, e.title, `Cleared ${e.doneAt! >= startOfDay(now) ? 'today' : new Date(e.doneAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, reopens it`, () => reopen(e), { end: target === 'cleared' && i === 0 ? returnMark : null }))}
+              {namedLedger && resultRow('lt', found.length + sets.length + cleared.length, <span className="glyph-dot" style={{ color: 'var(--muted)' }}><Glyph name={namedLedger.glyph} size={18} /><LedgerDot ledger={namedLedger} /></span>, 'Ledger time', `${namedLedger.name}, the time counts to the ledger itself`, () => pickLedger(namedLedger.id), { end: target === 'ledger' ? returnMark : null })}
+              {preview.title && showAdd && !exact && resultRow('add', found.length + sets.length + cleared.length, <Plus size={18} />, `Add and start “${preview.title}”`, preview.sub, add, { add: true, end: target === 'add' ? returnMark : null })}
           </div>
           {!found.length && !cleared.length && !sets.length && !namedLedger && preview.hint && canAdd && <p className="help" style={{ padding: '10px 4px 0' }}>{preview.hint}</p>}
           {more > 0 && <p className="help" style={{ padding: '10px 4px 0' }}>{found.length} of {ordered.length} shown. Keep typing to narrow it.</p>}
@@ -354,7 +376,7 @@ const idOf = (f: FoundTask) => (f.kind === 'entry' ? f.entry.id : f.item.id)
  * folded the way search folds it (no punctuation), and mapped back, so "followup" lights up
  * "follow-up".
  */
-function marked(title: string, words: string[]): ReactNode {
+export function marked(title: string, words: string[]): ReactNode {
   if (!words.length) return title
   let folded = ''
   const at: number[] = []

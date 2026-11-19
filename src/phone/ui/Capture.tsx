@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { announce, captured, tap } from '../feel'
-import { Broom, Microphone, Play, Stop } from '@phosphor-icons/react'
+import { Broom, Couch, Microphone, Play, Stop, Tray } from '@phosphor-icons/react'
 import { captureLine, clearNotice, sweepTray, useClerk } from '../ai'
 import { dictationAvailable, listen } from '../dictation'
 import { act, useMayorly } from '../store'
 import { findTasks, foldSearch, onDeskId, prefixClerk } from '@core/index'
-import { Sheet } from './parts'
+import { LedgerDot, Sheet } from './parts'
+import { marked } from './Picker'
+import { Glyph } from '../../renderer/src/lib/glyphs'
 
 // The inbox, one tap from anywhere: type a line or say it, and the clerk files it into a ledger
 // (or onto the couch). Add keeps the sheet open for the next line; Add and start puts it on the
@@ -29,6 +31,7 @@ export function Capture({ onClose }: { onClose: () => void }) {
   // Under the buttons, so they never move as you type; held as they were once one is tapped.
   const [leaving, setLeaving] = useState<typeof existing | null>(null)
   const shown = leaving ?? existing
+  const deskAtLeave = useRef<string | null>(null)
   // The line is exactly a task you already have: Add and Return start that task, never a copy.
   const same = existing.find((f) => foldSearch(f.kind === 'entry' ? f.entry.title : f.item.title) === foldSearch(prefixClerk.file(text.trim(), s.ledgers).title || text))
   const acting = useRef(false)
@@ -74,7 +77,7 @@ export function Capture({ onClose }: { onClose: () => void }) {
     const line = text.trim()
     // One press is one line: a second Return before the first is filed adds nothing.
     if (!line || busy || acting.current) return
-    if (same) return startExisting(same)
+    if (same) { setLeaving(existing); deskAtLeave.current = onDeskId(s); return startExisting(same) }
     if (listening) await stopRef.current?.()
     setBusy(true)
     acting.current = true
@@ -134,11 +137,15 @@ export function Capture({ onClose }: { onClose: () => void }) {
               {shown.map((f) => {
                 const id = f.kind === 'entry' ? f.entry.id : f.item.id
                 const title = f.kind === 'entry' ? f.entry.title : f.item.title
-                const where = f.kind === 'entry' ? s.ledgers.find((l) => l.id === f.entry.ledgerId)?.name ?? 'Tray' : 'Couch'
+                const l = f.kind === 'entry' ? s.ledgers.find((x) => x.id === f.entry.ledgerId) : undefined
+                const where = f.kind === 'entry' ? l?.name ?? 'Tray' : 'Couch'
+                // Drawn as the picker draws a match: the ledger's icon and dot, the typed words lit.
+                const icon = f.kind === 'leisure' ? <Couch size={18} /> : l ? <span className="glyph-dot" style={{ color: 'var(--muted)' }}><Glyph name={l.glyph} size={18} /><LedgerDot ledger={l} /></span> : <Tray size={18} />
+                const desk = leaving ? deskAtLeave.current : onDeskId(s)
                 return (
-                  <motion.button type="button" key={id} className="row" whileTap={{ scale: 0.98 }} onClick={() => { setLeaving(existing); startExisting(f) }}>
-                    <span className="glyph"><Play size={16} weight="fill" /></span>
-                    <span className="row-main"><span className="row-title">{title}</span><span className="row-sub">{id === onDeskId(s) ? 'On the desk now' : `${where} · start`}</span></span>
+                  <motion.button type="button" key={id} className="row search-row" whileTap={{ scale: 0.98 }} onClick={() => { setLeaving(existing); deskAtLeave.current = onDeskId(s); startExisting(f) }}>
+                    <span className="glyph">{icon}</span>
+                    <span className="row-main"><span className="row-title">{marked(title, foldSearch(text).split(' ').filter(Boolean))}</span><span className="row-sub">{id === desk ? 'On the desk now' : where}</span></span>
                   </motion.button>
                 )
               })}

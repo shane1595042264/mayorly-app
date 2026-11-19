@@ -128,8 +128,12 @@ export function findTasks(s: MayorlyState, query: string, limit = 8): FoundTask[
   return all
     .flatMap((x) => {
       const exact = words.every((w) => x.title.includes(w) || x.group.includes(w))
-      if (!exact && !words.every((w) => x.title.includes(w) || x.group.includes(w) || nearWord(x.title, w))) return []
-      const rank = !exact ? 4 : x.title.startsWith(q) ? 0 : words.every((w) => startsWord(x.title, w)) ? 1 : words.every((w) => x.title.includes(w)) ? 2 : 3
+      const near = exact || words.every((w) => x.title.includes(w) || x.group.includes(w) || nearWord(x.title, w))
+      // Said the way you would say it, one word more than the title holds ("book haircut
+      // tomorrow"): of three words or more, all but one is enough, ranked last.
+      const loose = !near && words.length >= 3 && words.filter((w) => x.title.includes(w) || nearWord(x.title, w)).length >= words.length - 1
+      if (!near && !loose) return []
+      const rank = loose ? 5 : !exact ? 4 : x.title.startsWith(q) ? 0 : words.every((w) => startsWord(x.title, w)) ? 1 : words.every((w) => x.title.includes(w)) ? 2 : 3
       return [{ found: x.found, rank }]
     })
     .sort((a, b) => a.rank - b.rank)

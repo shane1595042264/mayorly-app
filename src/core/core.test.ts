@@ -1743,6 +1743,8 @@ describe('the couch works like the flow', () => {
     expect(names('send my letter')).toEqual(['send the follow-up letter'])
     expect(names('fóotwork')).toEqual(['footwork drills'])
     expect(names('lamp 15m')).toEqual(['buy a lamp'])
+    expect(names('send letter tomorrow')).toEqual(['send the follow-up letter'])
+    expect(names('lamp tomorrow')).toEqual([])
     expect(prefixClerk.file('call mom 15m', w.s.ledgers)).toMatchObject({ title: 'call mom', estimateMin: 15 })
     expect(prefixClerk.file('read 1 h', w.s.ledgers)).toMatchObject({ title: 'read', estimateMin: 60 })
     expect(prefixClerk.file('run 5k', w.s.ledgers)).toMatchObject({ title: 'run 5k', estimateMin: null })
