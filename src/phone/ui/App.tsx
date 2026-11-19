@@ -68,7 +68,7 @@ export function App() {
           animate="center"
           exit="leave"
         >
-          {tab === 'desk' && <Timer openPicker={() => setPicking(true)} openSync={() => setTab('settings')} />}
+          {tab === 'desk' && <Timer openPicker={() => { tap(); setPicking(true) }} openSync={() => setTab('settings')} />}
           {tab === 'ledgers' && <Ledgers />}
           {tab === 'couch' && <Couch />}
           {tab === 'settings' && <Settings />}
@@ -93,9 +93,9 @@ export function App() {
       </nav>
       <AnimatePresence>
         {toast && (
-          <motion.div key={toast.id} className="toast" role="status" initial={{ opacity: 0, y: 24, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, transition: { duration: 0.14 } }} transition={{ type: 'spring', stiffness: 520, damping: 34 }}>
+          <motion.div key={toast.id} className="toast" role="status" initial={{ opacity: 0, y: 24, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 520, damping: 34, delay: 0.22 } }} exit={{ opacity: 0, y: 12, transition: { duration: 0.14 } }} transition={{ type: 'spring', stiffness: 520, damping: 34 }}>
             <span>{toast.text}</span>
-            {toast.undo && <motion.button type="button" whileTap={{ scale: 0.92 }} onClick={() => { toast.undo?.(); dismissToast() }}>Undo</motion.button>}
+            {toast.undo && <motion.button type="button" whileTap={{ scale: 0.92 }} onClick={() => { tap(); toast.undo?.(); dismissToast() }}>Undo</motion.button>}
           </motion.div>
         )}
       </AnimatePresence>

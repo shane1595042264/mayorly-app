@@ -6,6 +6,7 @@ import tomatoPng from '../../renderer/src/assets/tomato@1x.png'
 import coinPng from '../../renderer/src/assets/coin@1x.png'
 import { THEME_COLORS } from '../../renderer/src/lib/themes'
 import { tap } from '../feel'
+import { dismissToast } from '../toast'
 
 /** The founder's 16px drawings, only ever at whole multiples. */
 export function Tomato({ scale = 1 }: { scale?: number }) {
@@ -21,6 +22,8 @@ export function LedgerDot({ ledger }: { ledger: Ledger | null | undefined }) {
 
 /** A panel from the bottom: the picker, a form, a menu. Done closes it. */
 export function Sheet({ title, onClose, short, action, children }: { title: string; onClose: () => void; short?: boolean; action?: ReactNode; children: ReactNode }) {
+  // A sheet opening sends any toast away, so nothing ever sits over a sheet's buttons.
+  useEffect(() => dismissToast(), [])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)

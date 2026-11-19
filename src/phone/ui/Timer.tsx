@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowsLeftRight, CaretRight, Check, Couch as CouchIcon, Pause, Play, SkipForward, Stop } from '@phosphor-icons/react'
 import {
-  balance, blockView, clock, dayStats, objectives, onDeskId, openFlow, span, startOfDay, switchTarget, taskTomatoes, tomatoLabel,
+  balance, blockView, switchSession, clock, dayStats, objectives, onDeskId, openFlow, span, startOfDay, switchTarget, taskTomatoes, tomatoLabel,
   type MayorlyState,
 } from '@core/index'
 import { AnimatePresence, motion } from 'motion/react'
@@ -51,6 +51,10 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
   const remaining = dur === null ? null : Math.max(0, dur - elapsed)
   const progress = dur ? Math.min(1, elapsed / dur) : 0
   const idle = !v || d.status === 'idle'
+  // A new block starts its bar empty at once, rather than draining the old width over a second.
+  const lastProgress = useRef(0)
+  const drop = progress < lastProgress.current - 0.02
+  lastProgress.current = progress
   const running = d.status === 'running' || !!elsewhere
 
   const deskId = onDeskId(s)
@@ -65,7 +69,7 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
   const back = backName && s.ledgers.some((l) => l.name === backName) && !s.entries.some((e) => e.title === backName && e.doneAt === null) ? `${backName}, ledger time` : backName
   // Up next is what the desk will really do: the superset's next slots while one runs, else the
   // flow. The swap-back target already has its own row (Switch to), so it is left out here.
-  const backId = d.previous?.entryId ?? null
+  const backId = d.previous?.entryId ?? switchSession(s)?.block.entryId ?? null
   // Working out the plan runs the reducer forward, so it is done once per state, not per second.
   const peek = useMemo(() => (d.status !== 'idle' && d.block ? upcoming(s, Date.now(), 4) : []), [s]) // eslint-disable-line react-hooks/exhaustive-deps
   const planned = !idle && d.plan?.mode === 'superset'
@@ -158,7 +162,7 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
           <RollingText text={shown} />
         </motion.h1>
         <div className={`track ${v?.block.kind === 'rest' ? 'rest' : ''} ${!running ? 'still' : ''}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
-          <motion.i key={launch} initial={launch ? { scaleX: 0 } : false} animate={{ scaleX: 1 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }} style={{ width: `${idle ? 0 : progress * 100}%`, transformOrigin: 'left' }} />
+          <motion.i key={launch} initial={launch ? { scaleX: 0 } : false} animate={{ scaleX: 1 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }} style={{ width: `${idle ? 0 : progress * 100}%`, transformOrigin: 'left', transition: drop ? 'none' : undefined }} />
         </div>
         <p className="sub num">{sub}</p>
       </section>
@@ -174,12 +178,12 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
           </>
         ) : (<>
         <span className="ledger-line">
-          {leisure ? <><i className="dot" aria-hidden />Couch</> : ledger ? <><LedgerDot ledger={ledger} /><span className="code">{ledger.code}</span>{idle && nextUp ? `${ledger.name}, next up` : ledger.name}</> : entry ? <><i className="dot" aria-hidden />{idle && nextUp ? 'Tray, next up' : 'Tray'}</> : idle ? 'Nothing open yet' : <><i className="dot" aria-hidden />Ledger time</>}
+          {leisure ? <><i className="dot" aria-hidden />Couch</> : ledger ? <><LedgerDot ledger={ledger} /><span className="code">{ledger.code}</span>{idle && nextUp ? `${ledger.name}, next up` : ledger.name}</> : entry ? <><i className="dot" aria-hidden />{idle && nextUp ? 'Tray, next up' : 'Tray'}</> : idle ? 'Nothing open yet' : <><i className="dot" aria-hidden />Free focus</>}
         </span>
-        <span className={`task-title ${idle && !entry ? 'placeholder' : ''}`}>
-          {leisure ? leisure.title : entry ? entry.title : idle ? 'Your desk is clear' : 'Ledger time'}
+        <span className={`task-title ${(idle && !entry) || (!idle && !entry && !leisure && !ledger) ? 'placeholder' : ''}`}>
+          {leisure ? leisure.title : entry ? entry.title : idle ? 'Your desk is clear' : ledger ? 'Ledger time' : 'Nothing picked'}
         </span>
-        {crop === null ? <span className="crop num">{idle ? (nextUp ? 'Tap Start, or tap here for another' : 'Tap here to choose one') : 'Time on this ledger counts'}</span> : (
+        {crop === null ? <span className="crop num">{idle ? (nextUp ? 'Tap Start, or tap here for another' : 'Tap here to choose one') : ledger ? 'Time on this ledger counts' : 'The time counts; tap here to pick a task'}</span> : (
           <span className="crop num">
             <motion.span key={hop} style={{ display: 'inline-flex' }} initial={hop ? { y: 0, rotate: 0 } : false} animate={hop ? { y: [0, -14, 0, -5, 0], rotate: [0, -12, 8, 0, 0] } : {}} transition={{ duration: 0.7, ease: 'easeOut' }}>
               {leisure ? <CouchIcon size={16} /> : <Tomato />}

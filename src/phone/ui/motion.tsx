@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion, type HTMLMotionProps } from 'motion/react'
+import { motion, type HTMLMotionProps } from 'motion/react'
 import { onFeel, type Feel } from '../feel'
 
 // The phone's motion, in a few shared pieces. Everything moves with transform and opacity only,
@@ -9,27 +9,24 @@ export const spring = { type: 'spring', stiffness: 520, damping: 34, mass: 0.7 }
 export const soft = { type: 'spring', stiffness: 320, damping: 30 } as const
 
 /**
- * Text whose characters roll as they change: each digit slides up out of its slot as the next
- * rises in from below, clipped to the slot, the way an odometer turns. Characters that stay put
- * do not move.
+ * Text whose characters roll as they change: a new digit rises into its place and fades up, the
+ * way an odometer turns, and characters that stay put do not move. Only one copy of a character
+ * is ever drawn, so nothing shows outside the line however the font sits in its box.
  */
 export function RollingText({ text, className }: { text: string; className?: string }) {
   return (
     <span className={`rolling ${className ?? ''}`} aria-hidden>
       {text.split('').map((ch, i) => (
         <span className="rolling-slot" key={`${i}-${text.length}`}>
-          <AnimatePresence initial={false} mode="popLayout">
-            <motion.span
-              key={ch}
-              className="rolling-char"
-              initial={{ y: '100%' }}
-              animate={{ y: '0%' }}
-              exit={{ y: '-100%' }}
-              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
-            >
-              {ch}
-            </motion.span>
-          </AnimatePresence>
+          <motion.span
+            key={ch}
+            className="rolling-char"
+            initial={{ y: '28%', opacity: 0 }}
+            animate={{ y: '0%', opacity: 1 }}
+            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {ch}
+          </motion.span>
         </span>
       ))}
     </span>
@@ -58,7 +55,9 @@ export function rowIn(i: number): HTMLMotionProps<'button'> {
     layout: 'position',
     initial: { opacity: 0, y: 10 },
     animate: { opacity: 1, y: 0, transition: { ...soft, delay: Math.min(i, 14) * 0.028 } },
-    exit: { opacity: 0, height: 0, transition: { duration: 0.16 } },
+    // A row that goes leaves at once and the rows under it slide up into its place, so no two
+    // rows are ever drawn over each other.
+    exit: { opacity: 0, transition: { duration: 0 } },
     whileTap: { scale: 0.98 },
   }
 }

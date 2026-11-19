@@ -3,13 +3,14 @@ import { AnimatePresence, motion } from 'motion/react'
 import { rowIn } from './motion'
 import { ArrowCounterClockwise, ArrowDown, ArrowLeft, ArrowUp, CaretRight, Check, PencilSimple, Play, Plus, Trash, Tray } from '@phosphor-icons/react'
 import {
-  dayStats, deriveCode, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, openFlow, span, startOfDay, tomatoLabel,
+  dayStats, deriveCode, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, onDeskId, openFlow, span, startOfDay, tomatoLabel,
   type Entry, type Ledger, type LedgerTheme,
 } from '@core/index'
 import { Glyph, GLYPH_NAMES, glyphKey, localGlyph } from '../../renderer/src/lib/glyphs'
 import { distinctTheme, THEME_COLORS } from '../../renderer/src/lib/themes'
 import { act, useMayorly, useNow } from '../store'
 import { showToast } from '../toast'
+import { captured } from '../feel'
 import { LedgerDot, Sheet, Toggle } from './parts'
 
 // The shelf: every ledger with what is open in it and today's time, the tray of unfiled
@@ -91,6 +92,7 @@ function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () =>
   const add = () => {
     if (!title.trim()) return
     act({ type: 'entry/add', title, ledgerId: id, estimateMin: null })
+    captured()
     setTitle('')
   }
   return (
@@ -159,11 +161,14 @@ function EntryMenu({ entry, onClose }: { entry: Entry; onClose: () => void }) {
     if (est !== entry.estimateMin && (est === null || (Number.isFinite(est) && est > 0))) patch.estimateMin = est
     if (Object.keys(patch).length) act({ type: 'entry/update', id: entry.id, patch })
   }
-  if (!live || live.doneAt !== null) return null
+  // Once cleared or deleted the sheet keeps drawing what it had while it slides away.
+  const gone = !live || live.doneAt !== null
+  const onDesk = !gone && onDeskId(s) === entry.id && s.desk.status !== 'idle'
+  const crop = entryTomatoes(s, entry.id, Date.now())
   return (
     <Sheet title="Entry" short onClose={() => { saveText(); onClose() }}>
       <label className="label" htmlFor="et">Title</label>
-      <input id="et" className="field" value={title} onChange={(e) => setTitle(e.target.value)} onBlur={saveText} />
+      <textarea id="et" className="field entry-title" rows={2} value={title} onChange={(e) => setTitle(e.target.value)} onBlur={saveText} />
       <label className="label" htmlFor="ee">Estimate, minutes</label>
       <input id="ee" className="field num" inputMode="numeric" value={estimate} onChange={(e) => setEstimate(e.target.value.replace(/[^0-9]/g, ''))} onBlur={saveText} placeholder="None" />
       <label className="label" htmlFor="el">Ledger</label>
@@ -172,12 +177,12 @@ function EntryMenu({ entry, onClose }: { entry: Entry; onClose: () => void }) {
         {s.ledgers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
       </select>
       <div className="menu" style={{ marginTop: 16 }}>
-        <button type="button" onClick={done(() => { saveText(); act({ type: 'desk/select', entryId: entry.id, ledgerId: entry.ledgerId }) })}><Play size={20} />Start now</button>
+        {onDesk ? <button type="button" disabled><Play size={20} />On the desk now</button> : <button type="button" disabled={gone} onClick={done(() => { saveText(); act({ type: 'desk/select', entryId: entry.id, ledgerId: entry.ledgerId }) })}><Play size={20} />Start now</button>}
         <button type="button" onClick={done(() => { const place = openFlow(s).findIndex((x) => x.id === entry.id); act({ type: 'entry/complete', id: entry.id }); showToast(`Cleared ${entry.title}`, () => { act({ type: 'entry/reopen', id: entry.id }); act({ type: 'entry/move', id: entry.id, toIndex: place }) }) })}><Check size={20} />Clear</button>
         {index > 0 && <button type="button" onClick={() => act({ type: 'entry/move', id: entry.id, toIndex: index - 1 })}><ArrowUp size={20} />Earlier in the flow</button>}
         {index >= 0 && index < flow.length - 1 && <button type="button" onClick={() => act({ type: 'entry/move', id: entry.id, toIndex: index + 1 })}><ArrowDown size={20} />Later in the flow</button>}
         <button type="button" className="danger" onClick={() => (confirm ? done(() => { act({ type: 'entry/delete', id: entry.id }); showToast(`Deleted ${entry.title}`, () => act({ type: 'entry/restore', id: entry.id })) })() : setConfirm(true))}>
-          <Trash size={20} />{confirm ? 'Delete: its tomatoes go too' : 'Delete'}
+          <Trash size={20} />{confirm ? (crop >= 0.1 ? 'Delete: its tomatoes go too' : 'Tap again to delete') : 'Delete'}
         </button>
       </div>
     </Sheet>
@@ -209,6 +214,7 @@ function LedgerForm({ ledger, onClose }: { ledger: Ledger | null; onClose: () =>
   const save = () => {
     if (!name.trim() || taken) return
     saved.current = true
+    captured()
     if (ledger) act({ type: 'ledger/update', id: ledger.id, patch: { name, code: code || ledger.code, criterion, glyph, pays, theme } })
     else act({ type: 'ledger/create', name, code: code || undefined, criterion, glyph, pays, theme })
     onClose()
@@ -221,7 +227,7 @@ function LedgerForm({ ledger, onClose }: { ledger: Ledger | null; onClose: () =>
   return (
     <Sheet title={ledger ? 'Edit ledger' : 'New ledger'} onClose={close} action={<button type="button" className="btn white" onClick={save} disabled={!name.trim() || taken}>Save</button>}>
       <label className="label" htmlFor="ln">Name</label>
-      <input id="ln" className="field" value={name} maxLength={24} onChange={(e) => setName(e.target.value)} placeholder="Legal" />
+      <input id="ln" className="field" value={name} maxLength={24} onChange={(e) => setName(e.target.value)} placeholder="Reading" />
       <label className="label" htmlFor="lc">Code</label>
       <input id="lc" className="field" value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4))} placeholder={codeHint} autoCapitalize="characters" />
       {taken && <p className="error">{code} is already on the shelf.</p>}

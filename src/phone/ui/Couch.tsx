@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { AnimatePresence } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
+import { rowIn } from './motion'
 import { Play, Trash } from '@phosphor-icons/react'
 import { balance, leisureList, leisureSpentMs, leisureTokensSpent, span, type LeisureItem } from '@core/index'
 import { act, useMayorly, useNow } from '../store'
@@ -31,18 +32,20 @@ export function Couch() {
       <p className="help" style={{ padding: '2px 4px 14px' }}>{coins > 0 ? `A finished block here costs one coin of the ${coins} the desk has paid. Leaving early is free.` : 'A finished block here costs one coin, and the desk pays one for every tomato. Leaving early is free.'}</p>
       <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="Add something to enjoy" aria-label="New couch item" enterKeyHint="done" />
       <div className="list" style={{ marginTop: 10 }}>
-        {items.map((x) => {
+        <AnimatePresence initial={false}>
+        {items.map((x, i) => {
           const spent = leisureSpentMs(s, x.id, now)
           const paid = leisureTokensSpent(s, x.id)
           return (
-            <button type="button" key={x.id} className="row" onClick={() => setMenu(x)}>
+            <motion.button type="button" key={x.id} className="row" onClick={() => setMenu(x)} {...rowIn(i)}>
               <span className="row-main">
                 <span className="row-title">{x.title}</span>
                 <span className="row-sub">{spent > 0 ? `${span(spent)} so far, ${paid} ${paid === 1 ? 'coin' : 'coins'}` : 'Not yet'}</span>
               </span>
-            </button>
+            </motion.button>
           )
         })}
+        </AnimatePresence>
         {items.length === 0 && <p className="empty">Nothing on the couch list yet.</p>}
       </div>
       <AnimatePresence>{menu && (

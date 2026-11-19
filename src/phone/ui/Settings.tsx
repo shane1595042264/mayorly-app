@@ -98,7 +98,7 @@ function Account() {
         </div>
       ) : (
         <>
-          <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>Sign in with the Google account your computers use. Your ledgers, entries and the desk then sync with them, and what is on this phone now is kept.</p>
+          <p className="help" style={{ paddingTop: 0, paddingBottom: 10 }}>{google ? 'Sign in with the Google account your computers use.' : 'Link this phone to your computers with a code.'} Your ledgers, entries and the desk then sync with them, and what is on this phone now is kept.</p>
           {google && (
             <button type="button" className="primary" style={{ width: '100%' }} disabled={busy} onClick={() => void signIn()}>
               <GoogleLogo size={20} weight="bold" aria-hidden />

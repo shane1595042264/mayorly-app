@@ -8,6 +8,8 @@ import { Glyph } from '../../renderer/src/lib/glyphs'
 import { act, useMayorly, useNow } from '../store'
 import { captureLine, useClerk } from '../ai'
 import { LedgerDot, Sheet } from './parts'
+import { motion } from 'motion/react'
+import { tap } from '../feel'
 
 // Picking what the desk is on: every ledger's open entries, the tray, the couch, the saved
 // supersets, and a search that adds what it cannot find. A pick sends one desk/select: from an
@@ -76,7 +78,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const found = q.trim() ? findTasks(s, q, 12) : null
 
   return (
-    <Sheet title="Pick a task" onClose={onClose}>
+    <Sheet title="Pick a task" short={s.ledgers.length === 0 && flow.length === 0} onClose={onClose}>
       <input
         className="field"
         value={q}
@@ -87,9 +89,12 @@ export function Picker({ onClose }: { onClose: () => void }) {
         enterKeyHint="go"
         autoCapitalize="sentences"
       />
-      <div className="seg" role="radiogroup" aria-label="Mode" style={{ marginTop: 10 }}>
+      <div className="seg pilled" role="radiogroup" aria-label="Mode" style={{ marginTop: 10 }}>
         {MODES.map((m) => (
-          <button type="button" key={m.id} role="radio" aria-checked={mode === m.id} onClick={() => { setMode(m.id); setShowSets(m.id === 'superset') }}>{m.label}</button>
+          <button type="button" key={m.id} role="radio" aria-checked={mode === m.id} onClick={() => { tap(); setMode(m.id); setShowSets(m.id === 'superset') }}>
+            {mode === m.id && <motion.i layoutId="mode-pill" className="seg-pill" transition={{ type: 'spring', stiffness: 520, damping: 38 }} />}
+            <span>{m.label}</span>
+          </button>
         ))}
       </div>
 

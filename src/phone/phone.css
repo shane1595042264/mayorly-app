@@ -431,11 +431,20 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 16px; resize: non
 /* A sheet is solid from its first frame; Motion slides it up. */
 .sheet { animation: none; }
 /* Steppers line up whatever their unit says. */
-.stepper > span { width: 88px; min-width: 88px; }
+.stepper > span { width: 92px; min-width: 92px; white-space: nowrap; }
 /* The card keeps one height; its tomato line sits right under the title, one line or two. */
 .task-title { min-height: 0; }
 .task-body { min-height: 104px; align-content: start; }
 /* A rolling digit fades out at the slot's edges instead of showing above the row. */
-.clock .rolling-slot { -webkit-mask-image: linear-gradient(transparent, #000 9%, #000 91%, transparent); mask-image: linear-gradient(transparent, #000 9%, #000 91%, transparent); }
 /* Capture grows with what is typed rather than cutting a line in half. */
 .capture-field { field-sizing: content; max-height: 40dvh; }
+
+/* Round 5 fixes */
+/* The picker's mode pill slides between its places. */
+.seg.pilled button { position: relative; }
+.seg.pilled button[aria-checked='true'] { background: transparent; }
+.seg.pilled button > span { position: relative; z-index: 1; }
+.seg-pill { position: absolute; inset: 0; border-radius: 999px; background: var(--text); }
+/* A long title wraps in the entry sheet instead of running off its field. */
+.entry-title { min-height: 0; resize: none; line-height: 1.35; }
+.menu button:disabled { opacity: 0.5; }
