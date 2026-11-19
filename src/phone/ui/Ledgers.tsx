@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { rowIn } from './motion'
 import { ArrowCounterClockwise, ArrowDown, ArrowLeft, ArrowUp, CaretRight, Check, PencilSimple, Play, Plus, Trash, Tray } from '@phosphor-icons/react'
@@ -59,7 +59,7 @@ export function Ledgers() {
               <span className="glyph"><Glyph name={l.glyph} size={20} /></span>
               <span className="row-main">
                 <span className="row-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><LedgerDot ledger={l} />{l.name}</span>
-                <span className="row-sub">{l.code}, {n} open{t > 0 ? `, ${span(t)} today` : ''}{l.pays === false ? ', pays no coins' : ''}</span>
+                <span className="row-sub">{l.code}, {n} open{t >= 60_000 ? `, ${span(t)} today` : ''}{l.pays === false ? ', pays no coins' : ''}</span>
               </span>
               <CaretRight size={16} className="row-end" />
             </button>
@@ -115,7 +115,7 @@ function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () =>
                   <span className="row-title">{e.title}</span>
                   {e.estimateMin ? <span className="row-sub">{e.estimateMin} min</span> : null}
                 </span>
-                {crop > 0 && <span className="row-end num"><b>{tomatoLabel(crop)}</b></span>}
+                {crop >= 0.1 && <span className="row-end num"><b>{tomatoLabel(crop)}</b></span>}
               </motion.button>
             )
           })}
@@ -173,7 +173,7 @@ function EntryMenu({ entry, onClose }: { entry: Entry; onClose: () => void }) {
       </select>
       <div className="menu" style={{ marginTop: 16 }}>
         <button type="button" onClick={done(() => { saveText(); act({ type: 'desk/select', entryId: entry.id, ledgerId: entry.ledgerId }) })}><Play size={20} />Start now</button>
-        <button type="button" onClick={done(() => { act({ type: 'entry/complete', id: entry.id }); showToast(`Cleared ${entry.title}`, () => act({ type: 'entry/reopen', id: entry.id })) })}><Check size={20} />Clear</button>
+        <button type="button" onClick={done(() => { const place = openFlow(s).findIndex((x) => x.id === entry.id); act({ type: 'entry/complete', id: entry.id }); showToast(`Cleared ${entry.title}`, () => { act({ type: 'entry/reopen', id: entry.id }); act({ type: 'entry/move', id: entry.id, toIndex: place }) }) })}><Check size={20} />Clear</button>
         {index > 0 && <button type="button" onClick={() => act({ type: 'entry/move', id: entry.id, toIndex: index - 1 })}><ArrowUp size={20} />Earlier in the flow</button>}
         {index >= 0 && index < flow.length - 1 && <button type="button" onClick={() => act({ type: 'entry/move', id: entry.id, toIndex: index + 1 })}><ArrowDown size={20} />Later in the flow</button>}
         <button type="button" className="danger" onClick={() => (confirm ? done(() => { act({ type: 'entry/delete', id: entry.id }); showToast(`Deleted ${entry.title}`, () => act({ type: 'entry/restore', id: entry.id })) })() : setConfirm(true))}>
@@ -190,7 +190,7 @@ function LedgerForm({ ledger, onClose }: { ledger: Ledger | null; onClose: () =>
   const [name, setName] = useState(ledger?.name ?? '')
   const [code, setCode] = useState(ledger?.code ?? '')
   const [criterion, setCriterion] = useState(ledger?.criterion ?? '')
-  const [theme, setTheme] = useState<LedgerTheme>(ledger?.theme ?? distinctTheme(others.map((l) => l.theme)))
+  const [theme, setTheme] = useState<LedgerTheme>(ledger?.theme ?? distinctTheme([...others.map((l) => l.theme), 'amber']))
   const [glyph, setGlyph] = useState<string>(glyphKey(ledger?.glyph) ?? 'book-open')
   const [pays, setPays] = useState(ledger?.pays !== false)
   const [confirm, setConfirm] = useState(false)
@@ -201,8 +201,14 @@ function LedgerForm({ ledger, onClose }: { ledger: Ledger | null; onClose: () =>
     : name !== ledger.name || (code && code !== ledger.code) || criterion !== ledger.criterion || theme !== (ledger.theme ?? 'amber') || glyph !== (glyphKey(ledger.glyph) ?? 'book-open') || pays !== (ledger.pays !== false)
   // Done, a swipe down or a tap outside keeps what was typed, as Save does, when it can be kept.
   const close = () => (changed && name.trim() && !taken ? save() : onClose())
+  // The suggested code is worked out while typing and kept still once saved, as the sheet leaves.
+  const saved = useRef(false)
+  const hint = useRef('Two to four letters')
+  if (!saved.current) hint.current = name.trim() ? deriveCode(name, others.map((l) => l.code)) : 'Two to four letters'
+  const codeHint = hint.current
   const save = () => {
     if (!name.trim() || taken) return
+    saved.current = true
     if (ledger) act({ type: 'ledger/update', id: ledger.id, patch: { name, code: code || ledger.code, criterion, glyph, pays, theme } })
     else act({ type: 'ledger/create', name, code: code || undefined, criterion, glyph, pays, theme })
     onClose()
@@ -210,14 +216,14 @@ function LedgerForm({ ledger, onClose }: { ledger: Ledger | null; onClose: () =>
   const auto = () => {
     const g = localGlyph(name, criterion, worn)
     if (g) setGlyph(g)
-    setTheme(distinctTheme(others.map((l) => l.theme)))
+    setTheme(distinctTheme([...others.map((l) => l.theme), 'amber']))
   }
   return (
     <Sheet title={ledger ? 'Edit ledger' : 'New ledger'} onClose={close} action={<button type="button" className="btn white" onClick={save} disabled={!name.trim() || taken}>Save</button>}>
       <label className="label" htmlFor="ln">Name</label>
       <input id="ln" className="field" value={name} maxLength={24} onChange={(e) => setName(e.target.value)} placeholder="Legal" />
       <label className="label" htmlFor="lc">Code</label>
-      <input id="lc" className="field" value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4))} placeholder={name.trim() ? deriveCode(name, others.map((l) => l.code)) : 'Two to four letters'} autoCapitalize="characters" />
+      <input id="lc" className="field" value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4))} placeholder={codeHint} autoCapitalize="characters" />
       {taken && <p className="error">{code} is already on the shelf.</p>}
       <label className="label" htmlFor="lk">Criterion</label>
       <textarea id="lk" className="field" value={criterion} onChange={(e) => setCriterion(e.target.value)} placeholder="What belongs in this ledger, in one sentence." />

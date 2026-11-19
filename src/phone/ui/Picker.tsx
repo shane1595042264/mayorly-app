@@ -68,7 +68,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
           <span className="row-title">{e.title}</span>
           {e.estimateMin ? <span className="row-sub">{e.estimateMin} min</span> : null}
         </span>
-        {crop > 0 && <span className="row-end num"><b>{tomatoLabel(crop)}</b></span>}
+        {crop >= 0.1 && <span className="row-end num"><b>{tomatoLabel(crop)}</b></span>}
       </button>
     )
   }

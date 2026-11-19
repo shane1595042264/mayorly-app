@@ -47,6 +47,8 @@ export function App() {
   useEffect(() => onFeel((f) => {
     if (f === 'start') setDir(-1)
   }), [])
+  // A sheet opening sends the toast away, so nothing sits over the sheet's buttons.
+  useEffect(() => { if (picking || capturing) dismissToast() }, [picking, capturing])
   return (
     <div className="app">
       <div className="stage">

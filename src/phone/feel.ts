@@ -21,9 +21,10 @@ const tell = (f: Feel) => listeners.forEach((fn) => fn(f))
 const impact = (style: ImpactStyle) => void Haptics.impact({ style }).catch(() => {})
 const notify = (type: NotificationType) => void Haptics.notification({ type }).catch(() => {})
 /** A light tap for anything pressed: a tab, a toggle, a row. */
-export const tap = () => void Haptics.selectionChanged().catch(() => {})
+export const tap = () => impact(ImpactStyle.Light)
 
 let lastStart = 0
+const STARTS = new Set(['desk/select', 'desk/deploy', 'desk/switch', 'desk/resume', 'entry/capture', 'superset/run', 'recipe/run'])
 
 /** A person is acting: the events this step makes are theirs, already answered by afterAct. */
 export function beginAct() {
@@ -40,6 +41,11 @@ export function afterAct(before: MayorlyState, after: MayorlyState, kind?: strin
     tell('restore')
     return
   }
+  if (kind === 'entry/delete' || kind === 'leisure/delete' || kind === 'ledger/delete') {
+    sfx.close()
+    impact(ImpactStyle.Medium)
+    return
+  }
   if (kind === 'desk/skip' || kind === 'desk/skipRest') {
     sfx.swap()
     impact(ImpactStyle.Light)
@@ -51,7 +57,10 @@ export function afterAct(before: MayorlyState, after: MayorlyState, kind?: strin
   const wasRunning = b.status === 'running'
   const running = a.status === 'running'
   const moved = onDeskId(before) !== onDeskId(after) || b.plan?.mode !== a.plan?.mode
-  if ((running && !wasRunning && (b.status === 'idle' || !b.block)) || (running && moved)) {
+  // Only acts that pick what the desk is on count as a start; a delete or a move that changes the
+  // task under a running block is not one, and does not pull the person to the timer.
+  const picks = !kind || STARTS.has(kind)
+  if (picks && ((running && !wasRunning && (b.status === 'idle' || !b.block)) || (running && moved))) {
     lastStart = Date.now()
     sfx.block()
     impact(ImpactStyle.Medium)

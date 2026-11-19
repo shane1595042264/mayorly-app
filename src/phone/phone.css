@@ -424,3 +424,18 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 16px; resize: non
 .glyphs { max-height: none; overflow: visible; }
 .swatch.taken { position: relative; }
 .swatch.taken::after { content: ''; position: absolute; inset: 11px; border-radius: 50%; background: rgb(0 0 0 / 0.55); }
+
+/* Round 4 fixes */
+/* The toast stays under any sheet. */
+.toast { z-index: 19; }
+/* A sheet is solid from its first frame; Motion slides it up. */
+.sheet { animation: none; }
+/* Steppers line up whatever their unit says. */
+.stepper > span { width: 88px; min-width: 88px; }
+/* The card keeps one height; its tomato line sits right under the title, one line or two. */
+.task-title { min-height: 0; }
+.task-body { min-height: 104px; align-content: start; }
+/* A rolling digit fades out at the slot's edges instead of showing above the row. */
+.clock .rolling-slot { -webkit-mask-image: linear-gradient(transparent, #000 9%, #000 91%, transparent); mask-image: linear-gradient(transparent, #000 9%, #000 91%, transparent); }
+/* Capture grows with what is typed rather than cutting a line in half. */
+.capture-field { field-sizing: content; max-height: 40dvh; }

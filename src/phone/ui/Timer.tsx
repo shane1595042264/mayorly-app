@@ -60,7 +60,9 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
   const leisure = !idle && v?.block.kind === 'leisure' ? s.leisure.find((x) => x.id === v.block.leisureId) ?? null : null
   const ledger = s.ledgers.find((l) => l.id === (entry?.ledgerId ?? v?.block.ledgerId)) ?? null
   const crop = idle ? null : taskTomatoes(s, now)
-  const back = idle ? null : switchTarget(s)
+  // The way back can be a ledger itself (its entry was cleared): then it says ledger time.
+  const backName = idle ? null : switchTarget(s)
+  const back = backName && s.ledgers.some((l) => l.name === backName) && !s.entries.some((e) => e.title === backName && e.doneAt === null) ? `${backName}, ledger time` : backName
   // Up next is what the desk will really do: the superset's next slots while one runs, else the
   // flow. The swap-back target already has its own row (Switch to), so it is left out here.
   const backId = d.previous?.entryId ?? null
@@ -114,10 +116,12 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
     if (!entry || Date.now() - clearedAt.current < 900) return
     clearedAt.current = Date.now()
     const { id, ledgerId } = entry
+    const place = flow.findIndex((x) => x.id === id)
     act({ type: 'entry/complete', id })
     // Undo opens it again and puts it back on the desk, on the same block.
     showToast(`Cleared ${entry.title}`, () => {
       act({ type: 'entry/reopen', id })
+      act({ type: 'entry/move', id, toIndex: place })
       act({ type: 'desk/select', entryId: id, ledgerId })
     })
   }
@@ -229,7 +233,7 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
               {upNext.map((e, i) => {
                 const l = s.ledgers.find((x) => x.id === e.ledgerId)
                 return (
-                  <motion.button type="button" key={e.id} className="row" onClick={() => act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId })} {...rowIn(i)} exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.14 } }}>
+                  <motion.button type="button" key={e.id} className="row" onClick={() => act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId })} {...rowIn(i)} exit={{ opacity: 0, transition: { duration: 0 } }}>
                     <LedgerDot ledger={l} />
                     <span className="row-main"><span className="row-title">{e.title}</span></span>
                     <span className="row-end">{l?.code ?? 'Tray'}</span>
