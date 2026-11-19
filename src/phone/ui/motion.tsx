@@ -9,8 +9,9 @@ export const spring = { type: 'spring', stiffness: 520, damping: 34, mass: 0.7 }
 export const soft = { type: 'spring', stiffness: 320, damping: 30 } as const
 
 /**
- * Text whose characters roll as they change: each digit slides up out of view as the next slides
- * in, the way a split-flap clock turns. Characters that stay put do not move.
+ * Text whose characters roll as they change: each digit slides up out of its slot as the next
+ * rises in from below, clipped to the slot, the way an odometer turns. Characters that stay put
+ * do not move.
  */
 export function RollingText({ text, className }: { text: string; className?: string }) {
   return (
@@ -21,10 +22,10 @@ export function RollingText({ text, className }: { text: string; className?: str
             <motion.span
               key={ch}
               className="rolling-char"
-              initial={{ y: '-100%', opacity: 0 }}
-              animate={{ y: '0%', opacity: 1 }}
-              exit={{ y: '100%', opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 600, damping: 38 }}
+              initial={{ y: '100%' }}
+              animate={{ y: '0%' }}
+              exit={{ y: '-100%' }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
             >
               {ch}
             </motion.span>

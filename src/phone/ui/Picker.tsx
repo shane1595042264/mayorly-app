@@ -27,6 +27,8 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const running = s.desk.status !== 'idle' && !!s.desk.block
   const currentMode: Mode = s.desk.plan?.mode === 'couch' ? 'pomodoro' : s.desk.plan?.mode ?? 'pomodoro'
   const [mode, setMode] = useState<Mode>(currentMode)
+  // The picker opens on the tasks, even while a superset runs; the saved supersets show once that tab is chosen.
+  const [showSets, setShowSets] = useState(false)
   const [q, setQ] = useState('')
   const [ssLine, setSsLine] = useState('')
   const [ssError, setSsError] = useState<string | null>(null)
@@ -87,7 +89,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
       />
       <div className="seg" role="radiogroup" aria-label="Mode" style={{ marginTop: 10 }}>
         {MODES.map((m) => (
-          <button type="button" key={m.id} role="radio" aria-checked={mode === m.id} onClick={() => setMode(m.id)}>{m.label}</button>
+          <button type="button" key={m.id} role="radio" aria-checked={mode === m.id} onClick={() => { setMode(m.id); setShowSets(m.id === 'superset') }}>{m.label}</button>
         ))}
       </div>
 
@@ -107,7 +109,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </>
-      ) : mode === 'superset' ? (
+      ) : mode === 'superset' && showSets ? (
         <>
           <h3 className="section-title">Supersets</h3>
           <div className="list">

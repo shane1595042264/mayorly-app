@@ -1,4 +1,5 @@
-import { ArrowsLeftRight, CaretRight, Check, Pause, Play, SkipForward, Stop } from '@phosphor-icons/react'
+import { useMemo } from 'react'
+import { ArrowsLeftRight, CaretRight, Check, Couch as CouchIcon, Pause, Play, SkipForward, Stop } from '@phosphor-icons/react'
 import {
   balance, blockView, clock, dayStats, objectives, onDeskId, openFlow, span, startOfDay, switchTarget, taskTomatoes, tomatoLabel,
   type MayorlyState,
@@ -6,6 +7,7 @@ import {
 import { AnimatePresence, motion } from 'motion/react'
 import { useAccount } from '../account'
 import { Pop, RollingText, rowIn, spring, useFeelKey } from './motion'
+import { upcoming } from '../next'
 import { act, deviceId, useMayorly, useNow } from '../store'
 import { Coin, LedgerDot, Tomato } from './parts'
 
@@ -26,7 +28,8 @@ function phaseOf(s: MayorlyState): string {
   else if (d.plan?.mode === 'blitz') kind = 'Blitz'
   else if (obj) kind = `${obj.name || 'Superset'}, round ${obj.round}${obj.rounds ? ` of ${obj.rounds}` : ''}`
   else kind = `Focus, round ${Math.max(1, b.round)}`
-  if (d.status === 'paused') return `${kind}, paused`
+  // Held from another device the desk only looks paused here; the line under the clock says where it runs.
+  if (d.status === 'paused' && d.heldAt === null) return `${kind}, paused`
   if (d.status === 'ready') return `${kind}, waiting to start`
   return kind
 }
@@ -56,7 +59,15 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
   const ledger = s.ledgers.find((l) => l.id === (entry?.ledgerId ?? v?.block.ledgerId)) ?? null
   const crop = idle ? null : taskTomatoes(s, now)
   const back = idle ? null : switchTarget(s)
-  const upNext = flow.filter((e) => e.id !== entry?.id).slice(0, 3)
+  // Up next is what the desk will really do: the superset's next slots while one runs, else the
+  // flow. The swap-back target already has its own row (Switch to), so it is left out here.
+  const backId = d.previous?.entryId ?? null
+  // Working out the plan runs the reducer forward, so it is done once per state, not per second.
+  const peek = useMemo(() => (d.status !== 'idle' && d.block ? upcoming(s, Date.now(), 4) : []), [s]) // eslint-disable-line react-hooks/exhaustive-deps
+  const planned = !idle && d.plan?.mode === 'superset'
+    ? peek.map((u) => s.entries.find((e) => e.id === u.entryId)).filter((e): e is NonNullable<typeof e> => !!e)
+    : flow
+  const upNext = planned.filter((e, i, all) => e.id !== entry?.id && e.id !== backId && all.findIndex((x) => x.id === e.id) === i).slice(0, 3)
   const today = dayStats(s, startOfDay(now), now)
 
   const shown = idle ? clock(s.settings.focusMin * 60_000) : remaining === null ? clock(elapsed, false) : clock(remaining)
@@ -74,7 +85,7 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
     } else if (d.status === 'running') act({ type: 'desk/pause' })
     else act({ type: 'desk/resume' })
   }
-  const primaryLabel = elsewhere ? 'Take over here' : idle ? (nextUp ? 'Start' : 'Pick a task') : d.status === 'running' ? 'Pause' : d.status === 'ready' ? 'Start' : 'Resume'
+  const primaryLabel = elsewhere ? 'Take over' : idle ? (nextUp ? 'Start' : 'Pick a task') : d.status === 'running' ? 'Pause' : d.status === 'ready' ? 'Start' : 'Resume'
   const PrimaryIcon = !elsewhere && !idle && d.status === 'running' ? Pause : Play
 
   // One-shot animations, keyed by what the desk just did.
@@ -83,7 +94,11 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
   const cleared = useFeelKey(['clear', 'harvest'])
   const resting = !idle && v?.block.kind === 'rest'
   // During a rest the card says what comes back after it, not the rest itself.
-  const after = resting ? (entry ?? s.leisure.find((x) => x.id === deskId) ?? null) : null
+  // During a rest the card names what the plan will put on after it: the next superset slot, or
+  // the same task in a pomodoro.
+  const next = resting ? peek[0] : undefined
+  const after = next ? s.entries.find((e) => e.id === next.entryId) ?? s.leisure.find((x) => x.id === next.leisureId) ?? null : null
+  const afterLedger = next && !after ? s.ledgers.find((l) => l.id === next.ledgerId) ?? null : null
   const taskKey = resting ? `rest-${deskId ?? ''}` : leisure?.id ?? entry?.id ?? (idle ? 'idle' : `ledger-${v?.block.ledgerId ?? ''}`)
 
   let syncLine = ''
@@ -109,7 +124,7 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
         <motion.h1
           key={launch}
           className={`clock ${!running || idle ? 'dim' : ''}`}
-          aria-label={`${shown} ${remaining === null ? 'elapsed' : 'left'}`}
+          aria-label={idle ? `${shown}, the focus length` : `${shown} ${remaining === null ? 'elapsed' : 'left'}`}
           initial={launch ? { scale: 0.9, opacity: 0.4 } : false}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 380, damping: 18 }}
@@ -128,8 +143,8 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
         {resting ? (
           <>
             <span className="ledger-line"><i className="dot rest-dot" aria-hidden />Rest, then</span>
-            <span className={`task-title ${after ? '' : 'placeholder'}`}>{after ? after.title : 'Back to the desk'}</span>
-            <span className="crop num" aria-hidden><span className="crop-room" /></span>
+            <span className={`task-title ${after ? '' : 'placeholder'}`}>{after ? after.title : afterLedger ? `${afterLedger.name}, ledger time` : 'Back to the desk'}</span>
+            <span className="crop num">{s.settings.autoStartFocus ? 'Starts on its own when the rest ends' : 'Starts when you tap Start'}</span>
           </>
         ) : (<>
         <span className="ledger-line">
@@ -139,10 +154,10 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
         <span className={`task-title ${!entry && !leisure ? 'placeholder' : ''}`}>
           {leisure ? leisure.title : entry ? entry.title : idle ? 'Pick a task' : v?.block.label ?? 'Ledger time'}
         </span>
-        {crop === null ? <span className="crop num" aria-hidden><span className="crop-room" /></span> : (
+        {crop === null ? <span className="crop num">{idle ? (nextUp ? 'Tap Start, or tap here for another' : 'Tap here to choose one') : 'Time on this ledger counts'}</span> : (
           <span className="crop num">
             <motion.span key={hop} style={{ display: 'inline-flex' }} initial={hop ? { y: 0, rotate: 0 } : false} animate={hop ? { y: [0, -14, 0, -5, 0], rotate: [0, -12, 8, 0, 0] } : {}} transition={{ duration: 0.7, ease: 'easeOut' }}>
-              <Tomato />
+              {leisure ? <CouchIcon size={16} /> : <Tomato />}
             </motion.span>
             <b><Pop value={tomatoLabel(crop)} /></b>
             {leisure ? 'blocks on this' : 'on this task'}
@@ -156,8 +171,8 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
 
       <div className="controls">
         <motion.button type="button" className="primary" onClick={primary} whileTap={{ scale: 0.95 }} transition={spring}>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.span key={primaryLabel} className="primary-face" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0, transition: { type: 'spring', stiffness: 700, damping: 38 } }} exit={{ opacity: 0, y: -14, transition: { duration: 0.08 } }}>
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span key={primaryLabel} className="primary-face" initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0, transition: { type: 'spring', stiffness: 620, damping: 40 } }} exit={{ opacity: 0, y: -22, transition: { duration: 0.12 } }}>
               <PrimaryIcon size={20} weight="fill" aria-hidden />
               {primaryLabel}
             </motion.span>

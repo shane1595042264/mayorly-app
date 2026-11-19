@@ -24,9 +24,9 @@ export function Couch() {
     <>
       <header className="top">
         <h1 className="title" style={{ flex: 1, padding: 0 }}>Couch</h1>
-        <span className="coins num" aria-label={`${coins} coins`}><Coin scale={2} />{coins}</span>
+        <span className="coins num" aria-label={`${coins} coins`}><Coin scale={1} />{coins}</span>
       </header>
-      <p className="help" style={{ padding: '2px 4px 14px' }}>A finished block here costs one coin of the {coins} the desk has paid. Leaving early is free.</p>
+      <p className="help" style={{ padding: '2px 4px 14px' }}>{coins > 0 ? `A finished block here costs one coin of the ${coins} the desk has paid. Leaving early is free.` : 'A finished block here costs one coin, and the desk pays one for every tomato. Leaving early is free.'}</p>
       <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="Add something to enjoy" aria-label="New couch item" enterKeyHint="done" />
       <div className="list" style={{ marginTop: 10 }}>
         {items.map((x) => {

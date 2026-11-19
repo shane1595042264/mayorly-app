@@ -85,7 +85,7 @@ export function SettingRow({ title, sub, children }: { title: string; sub?: stri
     <div className="row">
       <div className="row-main">
         <span className="row-title">{title}</span>
-        {sub && <span className="row-sub">{sub}</span>}
+        {sub && <span className="row-sub wrap">{sub}</span>}
       </div>
       {children}
     </div>

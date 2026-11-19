@@ -386,7 +386,19 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 16px; resize: non
 .stage > .screen { position: absolute; inset: 0; background: var(--ground); }
 .primary { overflow: hidden; }
 /* The search band is opaque, edge to edge, so nothing scrolls visibly under it. */
-.settings-search { box-shadow: 0 -18px 0 6px var(--ground), 0 0 0 10px var(--ground); }
+.settings-search { box-shadow: 0 0 0 10px var(--ground); }
 /* On the phone amber is for data only: the search's match and ring are white. */
 .settings-search-label b { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
 .setting-flash::after { border-color: var(--text); background: rgb(255 255 255 / 0.06); }
+
+/* Round 2 fixes */
+/* The clock's digits roll inside a slot exactly one glyph tall, so nothing shows outside the line. */
+.clock .rolling-slot { height: 0.92em; vertical-align: top; }
+.rolling-char { display: block; line-height: inherit; }
+.row-sub.wrap { white-space: normal; text-overflow: clip; }
+.primary { padding: 0 18px; }
+.task-title { text-wrap: balance; }
+.capture-note { min-height: 3.6em; }
+.crop { color: var(--meta); }
+/* Rows in a sheet are there when the sheet arrives; only lists on a page stagger in. */
+.sheet .list > .row:not([style]), .sheet .list > .empty { animation: none; }
