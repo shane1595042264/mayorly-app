@@ -5,6 +5,7 @@ import { KeySync } from '../shared/ai/keysync'
 import { makeCapture } from '../shared/capture'
 import { onSessionToken } from './account'
 import type { PhoneEngine } from './engine'
+import { afterAct, beginAct } from './feel'
 import { API_URL, readJson, writeJson } from './platform'
 
 // The clerk on the phone: the same AiClerk, KeySync and capture as the computers. Keys come over
@@ -42,7 +43,20 @@ export async function startClerk(engine: PhoneEngine): Promise<void> {
     save: (text) => void writeJson(FILE, { text }).catch((err) => console.error('[clerk] could not save the keys:', err)),
   }, (ai) => set({ ai }))
   keySync = new KeySync(API_URL, clerk)
-  capture = makeCapture(engine, clerk, (notice) => set({ notice }))
+  // What capture does in the person's name goes through the same answer as a tap (feel.ts):
+  // Add and start takes them to the timer with its sound.
+  capture = makeCapture({
+    get state() {
+      return engine.state
+    },
+    act: (a) => {
+      const before = engine.state
+      beginAct()
+      engine.act(a)
+      afterAct(before, engine.state)
+    },
+    dispatch: (a) => engine.dispatch(a),
+  }, clerk, (notice) => set({ notice }))
   set({ ai: clerk.public() })
   // A key a provider turned away for a rate limit comes back on its own.
   setTimeout(() => void clerk?.heal(true), 20_000)

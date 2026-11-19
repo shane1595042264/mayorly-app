@@ -8,3 +8,5 @@ dist/
 .probe/
 # The phone app's built web layer (npm run phone:build)
 mobile/www/
+# Review runs of the end-to-end roasting skill
+.roast/

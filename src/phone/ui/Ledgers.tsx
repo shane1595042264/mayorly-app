@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { rowIn } from './motion'
 import { ArrowCounterClockwise, ArrowDown, ArrowLeft, ArrowUp, CaretRight, Check, PencilSimple, Play, Plus, Trash, Tray } from '@phosphor-icons/react'
 import {
   dayStats, deriveCode, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, openFlow, span, startOfDay, tomatoLabel,
@@ -33,7 +35,7 @@ export function Ledgers() {
     return (
       <>
         <LedgerView ledger={ledger} back={() => setOpen(null)} edit={() => ledger && setEditing(ledger)} />
-        {editing && <LedgerForm ledger={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
+        <AnimatePresence>{editing && <LedgerForm key="ledger-form" ledger={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}</AnimatePresence>
       </>
     )
   }
@@ -69,7 +71,7 @@ export function Ledgers() {
         )}
         {s.ledgers.length === 0 && <p className="empty">No ledgers yet. A ledger is a part of your life that work is filed into: Legal, Dance, Career.</p>}
       </div>
-      {editing && <LedgerForm ledger={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
+      <AnimatePresence>{editing && <LedgerForm key="ledger-form" ledger={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}</AnimatePresence>
     </>
   )
 }
@@ -101,18 +103,20 @@ function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () =>
       {ledger?.criterion && <p className="help" style={{ marginTop: -8, marginBottom: 12 }}>{ledger.criterion}</p>}
       <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder={ledger ? `Add to ${ledger.name}` : 'Add to the tray'} aria-label="New entry" enterKeyHint="done" />
       <div className="list" style={{ marginTop: 10 }}>
-        {entries.map((e) => {
-          const crop = entryTomatoes(s, e.id, now)
-          return (
-            <button type="button" key={e.id} className="row" onClick={() => setMenu(e)}>
-              <span className="row-main">
-                <span className="row-title">{e.title}</span>
-                {e.estimateMin ? <span className="row-sub">{e.estimateMin} min</span> : null}
-              </span>
-              {crop > 0 && <span className="row-end num"><b>{tomatoLabel(crop)}</b></span>}
-            </button>
-          )
-        })}
+        <AnimatePresence initial={false} mode="popLayout">
+          {entries.map((e, i) => {
+            const crop = entryTomatoes(s, e.id, now)
+            return (
+              <motion.button type="button" key={e.id} className="row" onClick={() => setMenu(e)} {...rowIn(i)}>
+                <span className="row-main">
+                  <span className="row-title">{e.title}</span>
+                  {e.estimateMin ? <span className="row-sub">{e.estimateMin} min</span> : null}
+                </span>
+                {crop > 0 && <span className="row-end num"><b>{tomatoLabel(crop)}</b></span>}
+              </motion.button>
+            )
+          })}
+        </AnimatePresence>
         {entries.length === 0 && <p className="empty">Nothing open here.</p>}
       </div>
       {cleared.length > 0 && (
@@ -128,7 +132,7 @@ function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () =>
           </div>
         </>
       )}
-      {menu && <EntryMenu entry={menu} onClose={() => setMenu(null)} />}
+      <AnimatePresence>{menu && <EntryMenu key="entry-menu" entry={menu} onClose={() => setMenu(null)} />}</AnimatePresence>
     </>
   )
 }

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { captured } from '../feel'
 import { Broom, Microphone, Play, Stop } from '@phosphor-icons/react'
 import { captureLine, clearNotice, sweepTray, useClerk } from '../ai'
 import { dictationAvailable, listen } from '../dictation'
@@ -57,6 +59,7 @@ export function Capture({ onClose }: { onClose: () => void }) {
     if (listening) await stopRef.current?.()
     setBusy(true)
     setText('')
+    captured()
     try {
       await captureLine(line, start)
     } finally {
@@ -85,17 +88,26 @@ export function Capture({ onClose }: { onClose: () => void }) {
       />
       <div className="capture-actions">
         {canTalk && (
-          <button type="button" className={`mic ${listening ? 'on' : ''}`} onClick={() => void toggleMic()} aria-label={listening ? 'Stop listening' : 'Say a task'} aria-pressed={listening}>
-            {listening ? <Stop size={26} weight="fill" /> : <Microphone size={26} weight="fill" />}
-          </button>
+          <motion.button type="button" className={`mic ${listening ? 'on' : ''}`} onClick={() => void toggleMic()} aria-label={listening ? 'Stop listening' : 'Say a task'} aria-pressed={listening} whileTap={{ scale: 0.88 }}>
+            {listening && [0, 0.6].map((d) => (
+              <motion.i key={d} className="mic-ring" initial={{ scale: 1, opacity: 0.55 }} animate={{ scale: 1.9, opacity: 0 }} transition={{ duration: 1.2, repeat: Infinity, delay: d, ease: 'easeOut' }} />
+            ))}
+            <AnimatePresence mode="popLayout" initial={false}>
+              <motion.span key={listening ? 'stop' : 'mic'} style={{ display: 'grid' }} initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.4, opacity: 0 }}>
+                {listening ? <Stop size={26} weight="fill" /> : <Microphone size={26} weight="fill" />}
+              </motion.span>
+            </AnimatePresence>
+          </motion.button>
         )}
-        <button type="button" className="btn white" disabled={!text.trim() || busy} onClick={() => void add(false)}>Add</button>
-        <button type="button" className="btn" disabled={!text.trim() || busy} onClick={() => void add(true)}><Play size={16} weight="fill" />Add and start</button>
+        <motion.button type="button" className="btn white" disabled={!text.trim() || busy} onClick={() => void add(false)} whileTap={{ scale: 0.94 }}>Add</motion.button>
+        <motion.button type="button" className="btn" disabled={!text.trim() || busy} onClick={() => void add(true)} whileTap={{ scale: 0.94 }}><Play size={16} weight="fill" />Add and start</motion.button>
       </div>
       {error && <p className="error">{error}</p>}
-      <p className="help capture-note" aria-live="polite">
-        {notice ? notice.text : keys > 0 ? 'The clerk files it into a ledger, or onto the couch.' : 'Without an AI key, a first word that names a ledger files it; the rest waits in the tray. Add a key in Settings.'}
-      </p>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.p key={notice?.text ?? 'hint'} className={`help capture-note ${notice ? 'said' : ''}`} aria-live="polite" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2 }}>
+          {notice ? notice.text : keys > 0 ? 'The clerk files it into a ledger, or onto the couch.' : 'Without an AI key, a first word that names a ledger files it; the rest waits in the tray. Add a key in Settings.'}
+        </motion.p>
+      </AnimatePresence>
       {keys > 0 && tray > 0 && (
         <button type="button" className="btn" style={{ marginTop: 12 }} onClick={() => void sweepTray()}>
           <Broom size={16} />Sort the tray, {tray} waiting

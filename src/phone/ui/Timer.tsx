@@ -3,7 +3,9 @@ import {
   balance, blockView, clock, dayStats, objectives, onDeskId, openFlow, span, startOfDay, switchTarget, taskTomatoes, tomatoLabel,
   type MayorlyState,
 } from '@core/index'
+import { AnimatePresence, motion } from 'motion/react'
 import { useAccount } from '../account'
+import { Pop, RollingText, rowIn, spring, useFeelKey } from './motion'
 import { act, deviceId, useMayorly, useNow } from '../store'
 import { Coin, LedgerDot, Tomato } from './parts'
 
@@ -75,6 +77,12 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
   const primaryLabel = elsewhere ? 'Take over here' : idle ? (nextUp ? 'Start' : 'Pick a task') : d.status === 'running' ? 'Pause' : d.status === 'ready' ? 'Start' : 'Resume'
   const PrimaryIcon = !elsewhere && !idle && d.status === 'running' ? Pause : Play
 
+  // One-shot animations, keyed by what the desk just did.
+  const launch = useFeelKey(['start', 'resume'])
+  const hop = useFeelKey(['tomato', 'harvest'])
+  const cleared = useFeelKey(['clear', 'harvest'])
+  const taskKey = leisure?.id ?? entry?.id ?? (idle ? 'idle' : `ledger-${v?.block.ledgerId ?? ''}`)
+
   let syncLine = ''
   if (account && sync.phase === 'error') syncLine = 'Sync failed'
   else if (account && sync.phase === 'syncing') syncLine = 'Syncing'
@@ -86,19 +94,34 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
         <span className="word">Mayorly</span>
         <span className="spacer" />
         {syncLine && <button type="button" className={`sync ${sync.phase === 'error' ? 'err' : ''}`} onClick={openSync}>{syncLine}</button>}
-        <span className="coins num" aria-label={`${balance(s)} coins`}><Coin scale={1} />{balance(s)}</span>
+        <span className="coins num" aria-label={`${balance(s)} coins`}><Coin scale={1} /><Pop value={balance(s)} /></span>
       </header>
 
       <section className="dial" aria-live="off">
-        <p className="phase">{phaseOf(s)}</p>
-        <h1 className={`clock ${!running || idle ? 'dim' : ''}`} aria-label={`${shown} ${remaining === null ? 'elapsed' : 'left'}`}>{shown}</h1>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.p key={phaseOf(s)} className="phase" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }} transition={{ duration: 0.16 }}>
+            {phaseOf(s)}
+          </motion.p>
+        </AnimatePresence>
+        <motion.h1
+          key={launch}
+          className={`clock ${!running || idle ? 'dim' : ''}`}
+          aria-label={`${shown} ${remaining === null ? 'elapsed' : 'left'}`}
+          initial={launch ? { scale: 0.9, opacity: 0.4 } : false}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 18 }}
+        >
+          <RollingText text={shown} />
+        </motion.h1>
         <div className={`track ${v?.block.kind === 'rest' ? 'rest' : ''} ${!running ? 'still' : ''}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
-          <i style={{ width: `${idle ? 0 : progress * 100}%` }} />
+          <motion.i key={launch} initial={launch ? { scaleX: 0 } : false} animate={{ scaleX: 1 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }} style={{ width: `${idle ? 0 : progress * 100}%`, transformOrigin: 'left' }} />
         </div>
         <p className="sub num">{sub}</p>
       </section>
 
-      <button type="button" className="task" onClick={openPicker} aria-label="Pick a task">
+      <motion.button type="button" className="task" onClick={openPicker} aria-label="Pick a task" whileTap={{ scale: 0.98 }} transition={spring}>
+        <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span key={taskKey} className="task-body" initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -28 }} transition={spring}>
         <span className="ledger-line">
           {leisure ? <><i className="dot" aria-hidden />Couch</> : ledger ? <><LedgerDot ledger={ledger} /><span className="code">{ledger.code}</span>{ledger.name}</> : entry ? <><i className="dot" aria-hidden />Tray</> : idle ? 'Nothing on the desk' : <><i className="dot" aria-hidden />Ledger time</>}
           {idle && nextUp && <span>, next up</span>}
@@ -108,60 +131,75 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
         </span>
         {crop !== null && (
           <span className="crop num">
-            <Tomato />
-            <b>{tomatoLabel(crop)}</b>
+            <motion.span key={hop} style={{ display: 'inline-flex' }} initial={hop ? { y: 0, rotate: 0 } : false} animate={hop ? { y: [0, -14, 0, -5, 0], rotate: [0, -12, 8, 0, 0] } : {}} transition={{ duration: 0.7, ease: 'easeOut' }}>
+              <Tomato />
+            </motion.span>
+            <b><Pop value={tomatoLabel(crop)} /></b>
             {leisure ? 'blocks on this' : 'on this task'}
           </span>
         )}
+        </motion.span>
+        </AnimatePresence>
         <CaretRight className="caret" size={18} weight="bold" aria-hidden />
-      </button>
+      </motion.button>
 
       <div className="controls">
-        <button type="button" className="primary" onClick={primary}>
-          <PrimaryIcon size={20} weight="fill" aria-hidden />
-          {primaryLabel}
-        </button>
-        <button type="button" className="round" aria-label="Skip to the next block" disabled={idle || !!elsewhere} onClick={() => act({ type: 'desk/skip' })}>
+        <motion.button type="button" className="primary" onClick={primary} whileTap={{ scale: 0.95 }} transition={spring}>
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span key={primaryLabel} className="primary-face" initial={{ opacity: 0, scale: 0.6, rotate: -40 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} exit={{ opacity: 0, scale: 0.6, rotate: 40 }} transition={spring}>
+              <PrimaryIcon size={20} weight="fill" aria-hidden />
+              {primaryLabel}
+            </motion.span>
+          </AnimatePresence>
+        </motion.button>
+        <motion.button type="button" className="round" aria-label="Skip to the next block" disabled={idle || !!elsewhere} onClick={() => act({ type: 'desk/skip' })} whileTap={{ scale: 0.88, rotate: 8 }} transition={spring}>
           <SkipForward size={22} />
-        </button>
-        <button type="button" className="round" aria-label="Clear this task" disabled={idle || !!elsewhere || !entry} onClick={() => entry && act({ type: 'entry/complete', id: entry.id })}>
+        </motion.button>
+        <motion.button type="button" className="round clear-btn" aria-label="Clear this task" disabled={idle || !!elsewhere || !entry} onClick={() => entry && act({ type: 'entry/complete', id: entry.id })} whileTap={{ scale: 0.88 }} transition={spring}>
           <Check size={22} />
-        </button>
-        <button type="button" className="round" aria-label="Stand down" disabled={idle || !!elsewhere} onClick={() => act({ type: 'desk/standDown' })}>
+          <AnimatePresence>
+            {cleared > 0 && <motion.i key={cleared} className="burst" initial={{ scale: 0.4, opacity: 0.9 }} animate={{ scale: 2.4, opacity: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.55, ease: 'easeOut' }} />}
+          </AnimatePresence>
+        </motion.button>
+        <motion.button type="button" className="round" aria-label="Stand down" disabled={idle || !!elsewhere} onClick={() => act({ type: 'desk/standDown' })} whileTap={{ scale: 0.88 }} transition={spring}>
           <Stop size={22} />
-        </button>
+        </motion.button>
       </div>
 
-      {back && !elsewhere && (
-        <button type="button" className="switch" onClick={() => act({ type: 'desk/switch' })}>
-          <ArrowsLeftRight size={18} aria-hidden />
-          Switch to <b>{back}</b>
-        </button>
-      )}
+      <AnimatePresence initial={false}>
+        {back && !elsewhere && (
+          <motion.button key="switch" type="button" className="switch" onClick={() => act({ type: 'desk/switch' })} initial={{ opacity: 0, height: 0, marginTop: 0 }} animate={{ opacity: 1, height: 48, marginTop: 10 }} exit={{ opacity: 0, height: 0, marginTop: 0 }} whileTap={{ scale: 0.98 }} transition={spring}>
+            <ArrowsLeftRight size={18} aria-hidden />
+            Switch to <b>{back}</b>
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {upNext.length > 0 && (
         <>
           <h2 className="section-title">Up next</h2>
           <div className="list">
-            {upNext.map((e) => {
-              const l = s.ledgers.find((x) => x.id === e.ledgerId)
-              return (
-                <button type="button" key={e.id} className="row" onClick={() => act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId })}>
-                  <LedgerDot ledger={l} />
-                  <span className="row-main"><span className="row-title">{e.title}</span></span>
-                  <span className="row-end">{l?.code ?? 'Tray'}</span>
-                </button>
-              )
-            })}
+            <AnimatePresence initial={false} mode="popLayout">
+              {upNext.map((e, i) => {
+                const l = s.ledgers.find((x) => x.id === e.ledgerId)
+                return (
+                  <motion.button type="button" key={e.id} className="row" onClick={() => act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId })} {...rowIn(i)}>
+                    <LedgerDot ledger={l} />
+                    <span className="row-main"><span className="row-title">{e.title}</span></span>
+                    <span className="row-end">{l?.code ?? 'Tray'}</span>
+                  </motion.button>
+                )
+              })}
+            </AnimatePresence>
           </div>
         </>
       )}
 
       <h2 className="section-title">Today</h2>
       <div className="stats">
-        <div className="stat lead"><b>{today.tomatoes}</b><span>tomatoes</span></div>
-        <div className="stat"><b>{span(today.focusMs)}</b><span>at the desk</span></div>
-        <div className="stat"><b>{today.cleared}</b><span>cleared</span></div>
+        <div className="stat lead"><b><Pop value={today.tomatoes} /></b><span>tomatoes</span></div>
+        <div className="stat"><b><Pop value={span(today.focusMs)} /></b><span>at the desk</span></div>
+        <div className="stat"><b><Pop value={today.cleared} /></b><span>cleared</span></div>
       </div>
     </>
   )

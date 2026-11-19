@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AnimatePresence } from 'motion/react'
 import { Play, Trash } from '@phosphor-icons/react'
 import { balance, leisureList, leisureSpentMs, leisureTokensSpent, span, type LeisureItem } from '@core/index'
 import { act, useMayorly, useNow } from '../store'
@@ -42,8 +43,8 @@ export function Couch() {
         })}
         {items.length === 0 && <p className="empty">Nothing on the couch list yet.</p>}
       </div>
-      {menu && (
-        <Sheet title={menu.title} short onClose={() => setMenu(null)}>
+      <AnimatePresence>{menu && (
+        <Sheet key="couch-menu" title={menu.title} short onClose={() => setMenu(null)}>
           <div className="menu">
             <button type="button" onClick={() => { act({ type: 'desk/select', leisureId: menu.id }); setMenu(null) }}><Play size={20} />Sit down now</button>
             <button type="button" className="danger" onClick={() => { act({ type: 'leisure/delete', id: menu.id }); setMenu(null) }}><Trash size={20} />Remove from the list</button>
@@ -55,7 +56,7 @@ export function Couch() {
             </>
           )}
         </Sheet>
-      )}
+      )}</AnimatePresence>
     </>
   )
 }

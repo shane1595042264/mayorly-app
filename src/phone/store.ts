@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { Action, MayorlyState } from '@core/index'
 import type { PhoneEngine } from './engine'
+import { afterAct, beginAct } from './feel'
 
 // The screens read the engine's state and send it what the person does. Nothing a screen
 // keeps for itself matters after a restart: picks in progress, an open sheet, a draft.
@@ -17,7 +18,11 @@ export function useMayorly(): MayorlyState {
 
 /** A person did this, here: the phone runs the desk from now on. */
 export function act(action: Action) {
-  engine?.act(action)
+  if (!engine) return
+  const before = engine.state
+  beginAct()
+  engine.act(action)
+  afterAct(before, engine.state)
 }
 
 export function current(): MayorlyState {
