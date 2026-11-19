@@ -62,7 +62,7 @@ export function switcherAction(s: MayorlyState, rows: FoundTask[], start: number
 
 /** Lower case, with punctuation folded away, so "follow-up" is found by "followup" and "follow up". */
 export function foldSearch(text: string): string {
-  return text.toLowerCase().replace(/[\u2018\u2019'\-]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+  return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[\u2018\u2019'\-]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
 }
 
 /** One letter wrong, missing, extra or two swapped: "fotwork" is near "footwork". */
@@ -95,6 +95,8 @@ function nearWord(text: string, w: string): boolean {
  * then matches on the group alone, then titles one typo away; most recently used first within each.
  * No search: what was used last, then the top of the list.
  */
+const STOP = new Set(['the', 'a', 'an', 'to', 'for', 'of', 'and', 'my', 'on', 'in', 'at', 'with'])
+
 export function findTasks(s: MayorlyState, query: string, limit = 8): FoundTask[] {
   const recent = new Map(recentTasks(s).map((f, i) => [idOf(f), i]))
   const soonest = (f: FoundTask) => recent.get(idOf(f)) ?? recent.size
@@ -117,7 +119,11 @@ export function findTasks(s: MayorlyState, query: string, limit = 8): FoundTask[
     .sort((a, b) => soonest(a.found) - soonest(b.found))
   const q = foldSearch(raw)
   if (!q) return all.slice(0, limit).map((x) => x.found)
-  const words = q.split(' ')
+  // Small words ("the", "a") that the title does not hold do not keep it out: "review the lease"
+  // finds "Review lease renewal". A search of only small words still needs them.
+  const allWords = q.split(' ')
+  const big = allWords.filter((w) => !STOP.has(w))
+  const words = big.length ? big : allWords
   const startsWord = (text: string, w: string) => text.startsWith(w) || text.includes(` ${w}`)
   return all
     .flatMap((x) => {

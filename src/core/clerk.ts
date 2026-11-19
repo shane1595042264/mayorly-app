@@ -27,6 +27,8 @@ export interface Clerk {
 }
 
 const ESTIMATE = /(?:^|\s)~\s*(\d+(?:\.\d+)?)\s*(h|hr|hrs|m|min|mins)?(?=\s|$)/i
+/** Without the tilde an estimate needs its unit and the end of the line: "call mom 15m", "read 1 h". */
+const TRAILING = /\s(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?|m|min|mins|minutes)\s*$/i
 const PREFIX = /^\s*([a-z][\w-]{0,23})\s*:\s*/i
 const TAG = /(?:^|\s)#([a-z][\w-]{0,23})(?=\s|$)/i
 
@@ -48,7 +50,7 @@ export function matchLedger(word: string, ledgers: Ledger[]): Ledger | null {
 }
 
 export function parseEstimate(text: string): { rest: string; minutes: number | null } {
-  const m = text.match(ESTIMATE)
+  const m = text.match(ESTIMATE) ?? text.match(TRAILING)
   if (!m) return { rest: text, minutes: null }
   const n = Number(m[1])
   const unit = (m[2] ?? 'm').toLowerCase()

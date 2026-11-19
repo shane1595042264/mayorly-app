@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { captured, tap } from '../feel'
+import { announce, captured, tap } from '../feel'
 import { Broom, Microphone, Play, Stop } from '@phosphor-icons/react'
 import { captureLine, clearNotice, sweepTray, useClerk } from '../ai'
 import { dictationAvailable, listen } from '../dictation'
@@ -31,9 +31,14 @@ export function Capture({ onClose }: { onClose: () => void }) {
   const shown = leaving ?? existing
   // The line is exactly a task you already have: Add and Return start that task, never a copy.
   const same = existing.find((f) => foldSearch(f.kind === 'entry' ? f.entry.title : f.item.title) === foldSearch(prefixClerk.file(text.trim(), s.ledgers).title || text))
+  const acting = useRef(false)
   const startExisting = (f: NonNullable<typeof same>) => {
+    if (acting.current) return
+    acting.current = true
     tap()
+    const onDesk = (f.kind === 'entry' ? f.entry.id : f.item.id) === onDeskId(s)
     act(f.kind === 'entry' ? { type: 'desk/select', entryId: f.entry.id, ledgerId: f.entry.ledgerId } : { type: 'desk/select', leisureId: f.item.id })
+    if (onDesk) announce('start')
     onClose()
   }
 
@@ -67,16 +72,20 @@ export function Capture({ onClose }: { onClose: () => void }) {
 
   const add = async (start: boolean) => {
     const line = text.trim()
-    if (!line || busy) return
+    // One press is one line: a second Return before the first is filed adds nothing.
+    if (!line || busy || acting.current) return
     if (same) return startExisting(same)
     if (listening) await stopRef.current?.()
     setBusy(true)
+    acting.current = true
     setText('')
     captured()
     try {
       await captureLine(line, start)
     } finally {
       setBusy(false)
+      // Add keeps the sheet open for the next line; Add and start has closed it for good.
+      if (!start) acting.current = false
     }
     if (start) onClose()
   }
@@ -127,9 +136,9 @@ export function Capture({ onClose }: { onClose: () => void }) {
                 const title = f.kind === 'entry' ? f.entry.title : f.item.title
                 const where = f.kind === 'entry' ? s.ledgers.find((l) => l.id === f.entry.ledgerId)?.name ?? 'Tray' : 'Couch'
                 return (
-                  <motion.button type="button" key={id} className="row" whileTap={{ scale: 0.98 }} onClick={() => { setLeaving(existing); tap(); act(f.kind === 'entry' ? { type: 'desk/select', entryId: id, ledgerId: f.entry.ledgerId } : { type: 'desk/select', leisureId: id }); onClose() }}>
+                  <motion.button type="button" key={id} className="row" whileTap={{ scale: 0.98 }} onClick={() => { setLeaving(existing); startExisting(f) }}>
                     <span className="glyph"><Play size={16} weight="fill" /></span>
-                    <span className="row-main"><span className="row-title">{title}</span><span className="row-sub">{id === onDeskId(s) ? 'On the desk now' : `${where}; start it`}</span></span>
+                    <span className="row-main"><span className="row-title">{title}</span><span className="row-sub">{id === onDeskId(s) ? 'On the desk now' : `${where} · start`}</span></span>
                   </motion.button>
                 )
               })}

@@ -29,7 +29,12 @@ export function Picker({ onClose }: { onClose: () => void }) {
   // moves or appears under the finger.
   const frozen = useRef<typeof live | null>(null)
   const s = frozen.current ?? live
-  const freeze = () => { frozen.current = live }
+  // A picker acts once: a second Return or tap while the sheet leaves does nothing.
+  const freeze = () => {
+    if (frozen.current) return false
+    frozen.current = live
+    return true
+  }
   const now = useNow(5000)
   const running = s.desk.status !== 'idle' && !!s.desk.block
   // A pick during a rest starts a pomodoro (the reducer's rule), so the picker says Pomodoro then.
@@ -63,14 +68,14 @@ export function Picker({ onClose }: { onClose: () => void }) {
   // Picking what is already on the desk resumes it in place and still takes you to the timer.
   const pickEntry = (e: Entry) => {
     const same = e.id === onDesk
+    if (!freeze()) return
     if (same) tap()
-    freeze()
     act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId, ...withMode() })
     if (same) announce('start')
     onClose()
   }
   const pickLeisure = (id: string) => {
-    freeze()
+    if (!freeze()) return
     act({ type: 'desk/select', leisureId: id })
     if (id === onDesk) announce('start')
     onClose()
@@ -78,7 +83,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const add = () => {
     const text = q.trim()
     if (!text || !preview.title) return tap()
-    freeze()
+    if (!freeze()) return
     void captureLine(text, true)
     onClose()
   }
@@ -116,22 +121,27 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const more = ordered.length - (found?.length ?? 0)
   const monthAgo = now - 30 * 86_400_000
   const holds = (title: string) => words.length > 0 && words.every((w) => foldSearch(title).includes(w))
-  const cleared = searching ? s.entries.filter((e) => e.doneAt !== null && e.doneAt >= monthAgo && holds(e.title)).sort((a, b) => b.doneAt! - a.doneAt!).slice(0, 3) : []
+  // A search that is just a ledger's name or code ("legal", "car:") offers that ledger's own time
+  // and what was cleared in it lately, so a ledger with nothing open is not a dead end.
+  const namedLedger = /^#?[^\s:]+:?$/.test(q.trim()) ? matchLedger(q.trim().replace(/[#:]/g, ''), s.ledgers) : null
+  const cleared = searching ? s.entries.filter((e) => e.doneAt !== null && e.doneAt >= monthAgo && (holds(e.title) || (!!namedLedger && e.ledgerId === namedLedger.id))).sort((a, b) => b.doneAt! - a.doneAt!).slice(0, 3) : []
   const sets = searching ? s.supersets.filter((x) => holds(x.name)) : []
   // What Return starts: the first open task, else a superset or a cleared task by that name, else
   // the task already on the desk, and only when nothing at all matches, a new line.
   const top: FoundTask | null = found?.[0] && idOf(found[0]) !== onDesk ? found[0] : null
-  const target = top ? 'task' : sets[0] ? 'set' : cleared[0] ? 'cleared' : found?.[0] ? 'desk' : 'add'
+  // A new line is offered only when it reads as a task: four letters or more, not a ledger's name.
+  const canAdd = foldSearch(q).length >= 4 && !namedLedger
+  const target = top ? 'task' : sets[0] ? 'set' : cleared[0] ? 'cleared' : found?.[0] ? 'desk' : namedLedger ? 'ledger' : canAdd ? 'add' : 'none'
   // How a new line would be filed: its ledger by prefix, its estimate, else the clerk or the tray.
   // The preview asks the same rules the reducer files by, so it says exactly where the line goes.
   const preview = (() => {
     const f = prefixClerk.file(q.trim(), s.ledgers)
     const ledger = s.ledgers.find((l) => l.id === f.ledgerId)
     const named = !!ledger || !!f.leisure
-    const where = f.leisure ? 'Couch, one coin a block' : ledger ? ledger.name : keys ? 'The clerk files it' : 'Tray'
-    // How to file by ledger is said once, on the only row, when nothing else matches.
-    const hint = !named && !keys && s.ledgers[0] && (hits.length === 0) ? `; ${s.ledgers[0].code.toLowerCase()}: files it in ${s.ledgers[0].name}` : ''
-    return { title: f.title, sub: `${where}${f.estimateMin && !f.leisure ? `, ${f.estimateMin} min` : ''}${hint}` }
+    const where = f.leisure ? 'Goes to the couch, one coin a block' : ledger ? `Goes to ${ledger.name}` : keys ? 'The clerk files it' : 'Goes to the tray'
+    // How to file by ledger is a line of its own under the list, shown when nothing matched.
+    const hint = !named && !keys && s.ledgers[0] ? `Start with ${s.ledgers[0].code.toLowerCase()}: to file it in ${s.ledgers[0].name}.` : ''
+    return { title: f.title, sub: `${where}${f.estimateMin && !f.leisure ? `, ${f.estimateMin} min` : ''}`, hint }
   })()
   // A line that is exactly a task you have (open or cleared) is not offered as a new one.
   const exact = [...hits.map((f) => (f.kind === 'entry' ? f.entry.title : f.item.title)), ...cleared.map((e) => e.title)].some((t) => foldSearch(t) === foldSearch(preview.title))
@@ -160,22 +170,34 @@ export function Picker({ onClose }: { onClose: () => void }) {
 
   const pick = (f: FoundTask) => (f.kind === 'entry' ? pickEntry(f.entry) : pickLeisure(f.item.id))
   const reopen = (e: Entry) => {
-    freeze()
+    if (!freeze()) return
     act({ type: 'entry/reopen', id: e.id })
     act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId, ...withMode() })
     onClose()
   }
-  const deploySet = (id: string) => { freeze(); act({ type: 'desk/deploy', mode: 'superset', supersetId: id }); onClose() }
+  const deploySet = (id: string) => { if (!freeze()) return; act({ type: 'desk/deploy', mode: 'superset', supersetId: id }); onClose() }
+  const pickLedger = (id: string) => {
+    if (!freeze()) return
+    act({ type: 'desk/select', ledgerId: id, ...withMode() })
+    onClose()
+  }
+  // Return lights the row it starts for a moment, then starts it, so you see what it took.
+  const [flash, setFlash] = useState<string | null>(null)
   const enter = () => {
-    if (!searching) return tap()
-    if (target === 'task' && top) return pick(top)
-    if (target === 'set') return deploySet(sets[0].id)
-    if (target === 'cleared') return reopen(cleared[0])
-    if (target === 'desk' && found?.[0]) return pick(found[0])
-    add()
+    if (!searching || target === 'none') return tap()
+    const go: [string, () => void] =
+      target === 'task' && top ? [idOf(top), () => pick(top)]
+      : target === 'set' ? [`set-${sets[0].id}`, () => deploySet(sets[0].id)]
+      : target === 'cleared' ? [`done-${cleared[0].id}`, () => reopen(cleared[0])]
+      : target === 'desk' && found?.[0] ? [idOf(found[0]), () => pick(found[0])]
+      : target === 'ledger' && namedLedger ? ['lt', () => pickLedger(namedLedger.id)]
+      : ['add', add]
+    if (frozen.current || flash) return
+    setFlash(go[0])
+    setTimeout(go[1], 110)
   }
   const resultRow = (key: string, i: number, icon: ReactNode, title: string, sub: string, onClick: () => void, opts: { on?: boolean; end?: ReactNode; add?: boolean } = {}) => (
-    <motion.button type="button" key={key} className={`row search-row ${opts.on ? 'on' : ''} ${opts.add ? 'add' : ''}`} onClick={onClick} initial={{ opacity: 0.3, y: 6 }} animate={{ opacity: 1, y: 0, transition: { duration: 0.18, delay: Math.min(i, 8) * 0.02, ease: [0.22, 1, 0.36, 1] } }} whileTap={{ scale: 0.98 }}>
+    <motion.button type="button" key={key} className={`row search-row ${opts.on ? 'on' : ''} ${opts.add ? 'add' : ''} ${flash === key ? 'pressing' : ''}`} onClick={onClick} initial={{ opacity: 0.3, y: 6 }} animate={{ opacity: 1, y: 0, transition: { duration: 0.18, delay: Math.min(i, 8) * 0.02, ease: [0.22, 1, 0.36, 1] } }} whileTap={{ scale: 0.98 }}>
       <span className="glyph">{icon}</span>
       <span className="row-main">
         <span className="row-title">{opts.add ? title : marked(title, words)}</span>
@@ -247,8 +269,10 @@ export function Picker({ onClose }: { onClose: () => void }) {
               })}
               {sets.map((x, i) => resultRow(`set-${x.id}`, found.length + i, <Repeat size={18} />, x.name || 'Superset', x.id === runningSet?.id ? 'Superset, running now' : 'Superset, starts at its first slot', () => (x.id === runningSet?.id ? (tap(), onClose()) : deploySet(x.id)), { end: target === 'set' && i === 0 ? returnMark : null }))}
               {cleared.map((e, i) => resultRow(`done-${e.id}`, found.length + sets.length + i, <ArrowCounterClockwise size={18} />, e.title, `Cleared ${new Date(e.doneAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, reopens it`, () => reopen(e), { end: target === 'cleared' && i === 0 ? returnMark : null }))}
-              {preview.title && !exact && !(found[0] && foldSearch(q).length < 3) && !(found[0] && foldSearch(found[0].kind === 'entry' ? found[0].entry.title : found[0].item.title).startsWith(foldSearch(preview.title))) && resultRow('add', found.length + sets.length + cleared.length, <Plus size={18} />, `Add and start “${preview.title}”`, preview.sub, add, { add: true, end: target === 'add' ? returnMark : null })}
+              {namedLedger && resultRow('lt', found.length + sets.length + cleared.length, <Glyph name={namedLedger.glyph} size={18} />, 'Ledger time', `${namedLedger.name}, the time counts to the ledger itself`, () => pickLedger(namedLedger.id), { end: target === 'ledger' ? returnMark : null })}
+              {preview.title && canAdd && !exact && !(found[0] && foldSearch(q).length < 3) && !(found[0] && foldSearch(found[0].kind === 'entry' ? found[0].entry.title : found[0].item.title).startsWith(foldSearch(preview.title))) && resultRow('add', found.length + sets.length + cleared.length, <Plus size={18} />, `Add and start “${preview.title}”`, preview.sub, add, { add: true, end: target === 'add' ? returnMark : null })}
           </div>
+          {!found.length && !cleared.length && !sets.length && !namedLedger && preview.hint && canAdd && <p className="help" style={{ padding: '10px 4px 0' }}>{preview.hint}</p>}
           {more > 0 && <p className="help" style={{ padding: '10px 4px 0' }}>{found.length} of {ordered.length} shown. Keep typing to narrow it.</p>}
         </>
       ) : mode === 'superset' && !inSuperset ? (
@@ -342,8 +366,13 @@ function marked(title: string, words: string[]): ReactNode {
   }
   const marks: [number, number][] = []
   for (const w of words) {
-    const f = folded.indexOf(w)
-    if (f >= 0) { marks.push([at[f], at[f + w.length - 1] + 1]); continue }
+    // Every place the word appears, not only the first.
+    let found = false
+    for (let f = folded.indexOf(w); f >= 0; f = folded.indexOf(w, f + w.length)) {
+      marks.push([at[f], at[f + w.length - 1] + 1])
+      found = true
+    }
+    if (found) continue
     // A typo: mark the word it was near, so it shows why the row is here.
     if (w.length < 4) continue
     let p = 0
@@ -355,6 +384,13 @@ function marked(title: string, words: string[]): ReactNode {
   }
   if (!marks.length) return title
   marks.sort((a, b) => a[0] - b[0])
+  // Runs next to each other (only a space between) read as one.
+  for (let k = marks.length - 1; k > 0; k--) {
+    if (/^\s*$/.test(title.slice(marks[k - 1][1], marks[k][0]))) {
+      marks[k - 1] = [marks[k - 1][0], Math.max(marks[k - 1][1], marks[k][1])]
+      marks.splice(k, 1)
+    }
+  }
   const out: ReactNode[] = []
   let i = 0
   for (const [a, b] of marks) {
