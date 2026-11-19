@@ -2,6 +2,14 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The phone answers back
+
+- Starting anything, from anywhere, takes you to the timer, with a sound and a tap in the hand. Pause, clear, skip and a ripe tomato each have their own.
+- Clear and Delete show a line with Undo, which puts the task back where it was, on the desk if it was there.
+- Away from the desk, the Desk tab shows the time left, and a block that ends says what comes next.
+- Sheets close with a swipe down, from the head or anywhere on a short sheet. Opening a ledger slides it in over the list.
+- A ledger's add line reads estimates: "File the court form ~40m".
+
 ## Tell the clerk what to do
 
 - Type an instruction into Capture (Alt+N) and the clerk does it: "set work schedule to workdays 7am to 4pm", "no work this Friday", "sessions 45 minutes to 90". Start a line with ! to make sure it is read as an instruction; a line that turns out to be a task is filed as one.
