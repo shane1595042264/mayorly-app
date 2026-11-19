@@ -7,7 +7,7 @@ import { setSoundEnabled, sfx } from '../renderer/src/lib/sfx'
 // another task while running), and what the desk did on its own arrives as the reducer's events.
 // The screens listen: a start takes them to the timer and the clock lands with a pop.
 
-export type Feel = 'start' | 'pause' | 'resume' | 'stop' | 'skip' | 'clear' | 'tomato' | 'harvest' | 'block' | 'capture'
+export type Feel = 'start' | 'pause' | 'resume' | 'stop' | 'skip' | 'clear' | 'tomato' | 'harvest' | 'block' | 'capture' | 'restore'
 
 const listeners = new Set<(f: Feel) => void>()
 export function onFeel(fn: (f: Feel) => void): () => void {
@@ -33,6 +33,13 @@ export function beginAct() {
 /** After something the person did here: what changed on the desk, felt and heard. */
 export function afterAct(before: MayorlyState, after: MayorlyState, kind?: string) {
   setSoundEnabled(after.settings.sound)
+  // A stand down with a session parked brings it back paused: a stop, and a word that it is back.
+  if (kind === 'desk/standDown' && after.desk.status !== 'idle') {
+    sfx.swap()
+    impact(ImpactStyle.Heavy)
+    tell('restore')
+    return
+  }
   if (kind === 'desk/skip' || kind === 'desk/skipRest') {
     sfx.swap()
     impact(ImpactStyle.Light)

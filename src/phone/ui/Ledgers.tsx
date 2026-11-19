@@ -9,6 +9,7 @@ import {
 import { Glyph, GLYPH_NAMES, glyphKey, localGlyph } from '../../renderer/src/lib/glyphs'
 import { distinctTheme, THEME_COLORS } from '../../renderer/src/lib/themes'
 import { act, useMayorly, useNow } from '../store'
+import { showToast } from '../toast'
 import { LedgerDot, Sheet, Toggle } from './parts'
 
 // The shelf: every ledger with what is open in it and today's time, the tray of unfiled
@@ -172,10 +173,10 @@ function EntryMenu({ entry, onClose }: { entry: Entry; onClose: () => void }) {
       </select>
       <div className="menu" style={{ marginTop: 16 }}>
         <button type="button" onClick={done(() => { saveText(); act({ type: 'desk/select', entryId: entry.id, ledgerId: entry.ledgerId }) })}><Play size={20} />Start now</button>
-        <button type="button" onClick={done(() => act({ type: 'entry/complete', id: entry.id }))}><Check size={20} />Clear</button>
+        <button type="button" onClick={done(() => { act({ type: 'entry/complete', id: entry.id }); showToast(`Cleared ${entry.title}`, () => act({ type: 'entry/reopen', id: entry.id })) })}><Check size={20} />Clear</button>
         {index > 0 && <button type="button" onClick={() => act({ type: 'entry/move', id: entry.id, toIndex: index - 1 })}><ArrowUp size={20} />Earlier in the flow</button>}
         {index >= 0 && index < flow.length - 1 && <button type="button" onClick={() => act({ type: 'entry/move', id: entry.id, toIndex: index + 1 })}><ArrowDown size={20} />Later in the flow</button>}
-        <button type="button" className="danger" onClick={() => (confirm ? done(() => act({ type: 'entry/delete', id: entry.id }))() : setConfirm(true))}>
+        <button type="button" className="danger" onClick={() => (confirm ? done(() => { act({ type: 'entry/delete', id: entry.id }); showToast(`Deleted ${entry.title}`, () => act({ type: 'entry/restore', id: entry.id })) })() : setConfirm(true))}>
           <Trash size={20} />{confirm ? 'Delete: its tomatoes go too' : 'Delete'}
         </button>
       </div>
@@ -223,7 +224,7 @@ function LedgerForm({ ledger, onClose }: { ledger: Ledger | null; onClose: () =>
       <span className="label">Colour</span>
       <div className="swatches" role="radiogroup" aria-label="Colour">
         {LEDGER_THEMES.map((t) => (
-          <button type="button" key={t} role="radio" aria-checked={t === theme} aria-label={t} className="swatch" style={{ background: THEME_COLORS[t], opacity: others.some((l) => (l.theme ?? 'amber') === t) && t !== theme ? 0.35 : 1 }} onClick={() => setTheme(t)} />
+          <button type="button" key={t} role="radio" aria-checked={t === theme} aria-label={t} className={`swatch ${others.some((l) => (l.theme ?? 'amber') === t) && t !== theme ? 'taken' : ''}`} style={{ background: THEME_COLORS[t] }} onClick={() => setTheme(t)} />
         ))}
       </div>
       <span className="label" style={{ display: 'flex', alignItems: 'center' }}>

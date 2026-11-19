@@ -109,7 +109,7 @@ function Account() {
             <button type="button" className="help" style={{ display: 'block', margin: '10px auto 0', padding: 8 }} onClick={() => setWithCode(true)}>Use a code from a computer instead</button>
           )}
           {withCode && <>
-          {google && <p className="help" style={{ paddingTop: 16, paddingBottom: 10 }}>On a computer, open Settings, Account, Link a phone, and type the code here.</p>}
+          <p className="help" style={{ paddingTop: google ? 16 : 0, paddingBottom: 10 }}>On a computer, open Settings, Account, Link a phone, and type the code here.</p>
           <input className="field link-code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))} onKeyDown={(e) => e.key === 'Enter' && code.length === 8 && void link()} placeholder="Code" aria-label="Code from your computer" autoCapitalize="characters" autoCorrect="off" spellCheck={false} inputMode="text" enterKeyHint="go" />
           <div className="btn-row">
             <button type="button" className="btn white" disabled={code.length !== 8 || busy} onClick={() => void link()}>{busy ? 'Linking' : 'Link this phone'}</button>

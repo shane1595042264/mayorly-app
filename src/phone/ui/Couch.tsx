@@ -3,6 +3,7 @@ import { AnimatePresence } from 'motion/react'
 import { Play, Trash } from '@phosphor-icons/react'
 import { balance, leisureList, leisureSpentMs, leisureTokensSpent, span, type LeisureItem } from '@core/index'
 import { act, useMayorly, useNow } from '../store'
+import { captured } from '../feel'
 import { Coin, Sheet } from './parts'
 
 // The couch: what you would like to spend a coin on. A finished couch block costs one coin,
@@ -18,6 +19,7 @@ export function Couch() {
   const add = () => {
     if (!title.trim()) return
     act({ type: 'leisure/add', title })
+    captured()
     setTitle('')
   }
   return (

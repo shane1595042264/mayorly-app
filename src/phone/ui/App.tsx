@@ -8,6 +8,7 @@ import { Ledgers } from './Ledgers'
 import { Picker } from './Picker'
 import { Settings } from './Settings'
 import { Timer } from './Timer'
+import { dismissToast, useToast } from '../toast'
 
 // Four places, the desk first, and the inbox in the middle of them: one tap from anywhere to type
 // or say a task. The picker and the capture are sheets over whichever place is open.
@@ -21,6 +22,7 @@ const TABS = [
 ] as const
 
 export function App() {
+  const toast = useToast()
   const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(location.search).get('tab') as Tab) || 'desk')
   const [picking, setPicking] = useState(() => new URLSearchParams(location.search).has('pick'))
   const closePicker = useCallback(() => setPicking(false), [])
@@ -87,6 +89,14 @@ export function App() {
           </span>
         ))}
       </nav>
+      <AnimatePresence>
+        {toast && (
+          <motion.div key={toast.id} className="toast" role="status" initial={{ opacity: 0, y: 24, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 12, transition: { duration: 0.14 } }} transition={{ type: 'spring', stiffness: 520, damping: 34 }}>
+            <span>{toast.text}</span>
+            {toast.undo && <motion.button type="button" whileTap={{ scale: 0.92 }} onClick={() => { toast.undo?.(); dismissToast() }}>Undo</motion.button>}
+          </motion.div>
+        )}
+      </AnimatePresence>
       <AnimatePresence>{picking && <Picker key="picker" onClose={closePicker} />}</AnimatePresence>
       <AnimatePresence>{capturing && <Capture key="capture" onClose={closeCapture} />}</AnimatePresence>
     </div>

@@ -402,3 +402,25 @@ textarea.field { height: auto; min-height: 88px; padding: 12px 16px; resize: non
 .crop { color: var(--meta); }
 /* Rows in a sheet are there when the sheet arrives; only lists on a page stagger in. */
 .sheet .list > .row:not([style]), .sheet .list > .empty { animation: none; }
+
+/* Round 3 fixes */
+/* A clear or a delete says what went, with Undo, just above the tab bar. */
+.toast {
+  position: fixed; left: var(--gutter); right: var(--gutter);
+  bottom: calc(var(--safe-b) + 74px); z-index: 40;
+  display: flex; align-items: center; gap: 12px;
+  min-height: 48px; padding: 6px 6px 6px 16px;
+  background: #1f1f1f; border-radius: 14px; box-shadow: 0 10px 30px rgb(0 0 0 / 0.5);
+  font-size: 15px; color: var(--text);
+}
+.toast > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast > button { height: 36px; padding: 0 14px; border-radius: 10px; background: var(--text); color: #000; font-weight: 600; font-size: 14px; }
+/* The task card lets one body leave while the next arrives, so it is never empty. */
+.task { position: relative; }
+.list { position: relative; }
+/* The search ring sits over the rows around it, so all of it shows. */
+.setting-flash { z-index: 1; }
+/* The icon grid flows in the sheet; colours other ledgers use carry a small ring, not a fade. */
+.glyphs { max-height: none; overflow: visible; }
+.swatch.taken { position: relative; }
+.swatch.taken::after { content: ''; position: absolute; inset: 11px; border-radius: 50%; background: rgb(0 0 0 / 0.55); }
