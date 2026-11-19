@@ -52,12 +52,11 @@ export function Pop({ value, children, className }: { value: string | number; ch
 /** A row that arrives in a short stagger and leaves by sliding off. */
 export function rowIn(i: number): HTMLMotionProps<'button'> {
   return {
-    layout: 'position',
     initial: { opacity: 0, y: 10 },
     animate: { opacity: 1, y: 0, transition: { ...soft, delay: Math.min(i, 14) * 0.028 } },
-    // A row that goes leaves at once and the rows under it slide up into its place, so no two
-    // rows are ever drawn over each other.
-    exit: { opacity: 0, transition: { duration: 0 } },
+    // A row that goes fades as it folds shut, and the rows under it rise with it: none is ever
+    // drawn over another.
+    exit: { opacity: 0, height: 0, minHeight: 0, paddingTop: 0, paddingBottom: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } },
     whileTap: { scale: 0.98 },
   }
 }

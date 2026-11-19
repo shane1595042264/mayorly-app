@@ -66,7 +66,8 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
   const crop = idle ? null : taskTomatoes(s, now)
   // The way back can be a ledger itself (its entry was cleared): then it says ledger time.
   const backName = idle ? null : switchTarget(s)
-  const back = backName && s.ledgers.some((l) => l.name === backName) && !s.entries.some((e) => e.title === backName && e.doneAt === null) ? `${backName}, ledger time` : backName
+  // A way back that is only a ledger (its entry was cleared) is not offered: it reads as nothing.
+  const back = backName && s.ledgers.some((l) => l.name === backName) && !s.entries.some((e) => e.title === backName && e.doneAt === null) && !s.leisure.some((x) => x.title === backName) ? null : backName
   // Up next is what the desk will really do: the superset's next slots while one runs, else the
   // flow. The swap-back target already has its own row (Switch to), so it is left out here.
   const backId = d.previous?.entryId ?? switchSession(s)?.block.entryId ?? null
@@ -146,11 +147,10 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
       </header>
 
       <section className="dial" aria-live="off">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.p key={said ?? phaseOf(s)} className="phase" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }} transition={{ duration: 0.16 }}>
-            {said ?? phaseOf(s)}
-          </motion.p>
-        </AnimatePresence>
+        {/* The phase line changes in place: the new words drop in, never a blank line. */}
+        <motion.p key={said ?? phaseOf(s)} className="phase" initial={{ opacity: 0.2, y: -5 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
+          {said ?? phaseOf(s)}
+        </motion.p>
         <motion.h1
           key={launch}
           className={`clock ${!running || idle ? 'dim' : ''}`}
@@ -169,7 +169,7 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
 
       <motion.button type="button" className="task" onClick={openPicker} aria-label="Pick a task" whileTap={{ scale: 0.98 }} transition={spring}>
         {/* The new task replaces the old at once and slides in from a little way off: never empty, never two at once. */}
-        <motion.span key={taskKey} className="task-body" initial={{ opacity: 0.3, x: 18 }} animate={{ opacity: 1, x: 0 }} transition={{ type: 'spring', stiffness: 520, damping: 36 }}>
+        <motion.span key={taskKey} className={`task-body ${idle && !nextUp ? 'empty' : ''}`} initial={{ opacity: 0.3, x: 18 }} animate={{ opacity: 1, x: 0 }} transition={{ type: 'spring', stiffness: 520, damping: 36 }}>
         {resting ? (
           <>
             <span className="ledger-line"><i className="dot rest-dot" aria-hidden />Rest, then</span>
@@ -177,9 +177,9 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
             <span className="crop num">{s.settings.autoStartFocus ? 'Starts on its own when the rest ends' : 'Starts when you tap Start'}</span>
           </>
         ) : (<>
-        <span className="ledger-line">
-          {leisure ? <><i className="dot" aria-hidden />Couch</> : ledger ? <><LedgerDot ledger={ledger} /><span className="code">{ledger.code}</span>{idle && nextUp ? `${ledger.name}, next up` : ledger.name}</> : entry ? <><i className="dot" aria-hidden />{idle && nextUp ? 'Tray, next up' : 'Tray'}</> : idle ? 'Nothing open yet' : <><i className="dot" aria-hidden />Free focus</>}
-        </span>
+        {!(idle && !nextUp) && <span className="ledger-line">
+          {leisure ? <><i className="dot" aria-hidden />Couch</> : ledger ? <><LedgerDot ledger={ledger} /><span className="code">{ledger.code}</span>{idle && nextUp ? `${ledger.name}, next up` : ledger.name}</> : entry ? <><i className="dot" aria-hidden />{idle && nextUp ? 'Tray, next up' : 'Tray'}</> : <><i className="dot" aria-hidden />Free focus</>}
+        </span>}
         <span className={`task-title ${(idle && !entry) || (!idle && !entry && !leisure && !ledger) ? 'placeholder' : ''}`}>
           {leisure ? leisure.title : entry ? entry.title : idle ? 'Your desk is clear' : ledger ? 'Ledger time' : 'Nothing picked'}
         </span>
@@ -233,11 +233,11 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
         <>
           <h2 className="section-title">Up next</h2>
           <div className="list">
-            <AnimatePresence initial={false} mode="popLayout">
+            <AnimatePresence initial={false}>
               {upNext.map((e, i) => {
                 const l = s.ledgers.find((x) => x.id === e.ledgerId)
                 return (
-                  <motion.button type="button" key={e.id} className="row" onClick={() => act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId })} {...rowIn(i)} exit={{ opacity: 0, transition: { duration: 0 } }}>
+                  <motion.button type="button" key={e.id} className="row" onClick={() => act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId })} {...rowIn(i)}>
                     <LedgerDot ledger={l} />
                     <span className="row-main"><span className="row-title">{e.title}</span></span>
                     <span className="row-end">{l?.code ?? 'Tray'}</span>

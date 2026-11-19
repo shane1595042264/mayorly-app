@@ -24,29 +24,30 @@ export function Ledgers() {
   const now = useNow(30_000)
   const [open, setOpen] = useState<Open>(null)
   const [editing, setEditing] = useState<Ledger | 'new' | null>(null)
-  // The shelf slides back in from the left only when coming back from a ledger.
-  const [cameBack, setCameBack] = useState(false)
   const flow = openFlow(s)
   const today = dayStats(s, startOfDay(now), now)
   const todayOf = (id: string | null) => today.byLedger.find((b) => b.ledgerId === id)?.focusMs ?? 0
 
-  if (open) {
-    const ledger = open.id ? s.ledgers.find((l) => l.id === open.id) ?? null : null
-    if (open.id && !ledger) {
-      setOpen(null)
-      return null
-    }
-    return (
-      <motion.div key={`ledger-${open.id ?? 'tray'}`} initial={{ x: 60, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 420, damping: 38 }}>
-        <LedgerView ledger={ledger} back={() => { setOpen(null); setCameBack(true) }} edit={() => ledger && setEditing(ledger)} />
-        <AnimatePresence>{editing && <LedgerForm key="ledger-form" ledger={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}</AnimatePresence>
-      </motion.div>
-    )
+  const openLedger = open?.id ? s.ledgers.find((l) => l.id === open.id) ?? null : null
+  if (open?.id && !openLedger) {
+    setOpen(null)
+    return null
   }
-
+  const form = <AnimatePresence>{editing && <LedgerForm key="ledger-form" ledger={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}</AnimatePresence>
   const tray = flow.filter((e) => e.ledgerId === null)
+  // A ledger opens like an iOS push: it slides in over the shelf, which slips back and dims under
+  // it, and Back plays it in reverse. Both pages are drawn for the whole move, so no frame is empty.
+  const dir = open ? 1 : -1
   return (
-    <motion.div key="shelf" initial={cameBack ? { x: -60, opacity: 0 } : false} animate={{ x: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 420, damping: 38 }}>
+    <div className="push">
+      <AnimatePresence initial={false} custom={dir} mode="popLayout">
+        {open ? (
+          <motion.div key={`ledger-${open.id ?? 'tray'}`} className="push-page" custom={dir} variants={PUSH} initial="enter" animate="center" exit="leave">
+            <LedgerView ledger={openLedger} back={() => setOpen(null)} edit={() => openLedger && setEditing(openLedger)} />
+            {form}
+          </motion.div>
+        ) : (
+    <motion.div key="shelf" className="push-page" custom={dir} variants={PUSH} initial="enter" animate="center" exit="leave">
       <header className="top">
         <h1 className="title" style={{ flex: 1, padding: 0 }}>Ledgers</h1>
         <button type="button" className="btn" onClick={() => setEditing('new')} disabled={s.ledgers.length >= LEDGER_CAP}><Plus size={16} />New</button>
@@ -75,9 +76,19 @@ export function Ledgers() {
         )}
         {s.ledgers.length === 0 && <p className="empty">No ledgers yet. A ledger is a part of your life that work is filed into: Legal, Dance, Career.</p>}
       </div>
-      <AnimatePresence>{editing && <LedgerForm key="ledger-form" ledger={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}</AnimatePresence>
+      {form}
     </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
+}
+
+const pushSpring = { type: 'spring', stiffness: 360, damping: 38 } as const
+const PUSH = {
+  enter: (d: number) => (d > 0 ? { x: '100%', opacity: 1, zIndex: 2 } : { x: '-28%', opacity: 0.4, zIndex: 0 }),
+  center: { x: 0, opacity: 1, zIndex: 1, transition: pushSpring },
+  leave: (d: number) => (d > 0 ? { x: '-28%', opacity: 0.4, zIndex: 0, transition: pushSpring } : { x: '100%', opacity: 1, zIndex: 2, transition: pushSpring }),
 }
 
 function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () => void; edit: () => void }) {
@@ -196,10 +207,12 @@ function LedgerForm({ ledger, onClose }: { ledger: Ledger | null; onClose: () =>
   const [code, setCode] = useState(ledger?.code ?? '')
   const [criterion, setCriterion] = useState(ledger?.criterion ?? '')
   const [theme, setTheme] = useState<LedgerTheme>(ledger?.theme ?? distinctTheme([...others.map((l) => l.theme), 'amber']))
-  const [glyph, setGlyph] = useState<string>(glyphKey(ledger?.glyph) ?? 'book-open')
+  // A new ledger's icon follows its name until one is chosen.
+  const [chosen, setGlyph] = useState<string | null>(glyphKey(ledger?.glyph) ?? null)
   const [pays, setPays] = useState(ledger?.pays !== false)
   const [confirm, setConfirm] = useState(false)
   const worn = others.map((l) => glyphKey(l.glyph)).filter((g): g is string => !!g)
+  const glyph = chosen ?? (name.trim() ? localGlyph(name, criterion, worn) : null) ?? 'book-open'
   const taken = others.some((l) => l.code === code.toUpperCase())
   const changed = !ledger
     ? !!name.trim()
@@ -225,7 +238,7 @@ function LedgerForm({ ledger, onClose }: { ledger: Ledger | null; onClose: () =>
     setTheme(distinctTheme([...others.map((l) => l.theme), 'amber']))
   }
   return (
-    <Sheet title={ledger ? 'Edit ledger' : 'New ledger'} onClose={close} action={<button type="button" className="btn white" onClick={save} disabled={!name.trim() || taken}>Save</button>}>
+    <Sheet title={ledger ? 'Edit ledger' : 'New ledger'} onClose={close}>
       <label className="label" htmlFor="ln">Name</label>
       <input id="ln" className="field" value={name} maxLength={24} onChange={(e) => setName(e.target.value)} placeholder="Reading" />
       <label className="label" htmlFor="lc">Code</label>

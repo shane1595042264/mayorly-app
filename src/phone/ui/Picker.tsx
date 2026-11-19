@@ -29,14 +29,18 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const running = s.desk.status !== 'idle' && !!s.desk.block
   const currentMode: Mode = s.desk.plan?.mode === 'couch' ? 'pomodoro' : s.desk.plan?.mode ?? 'pomodoro'
   const [mode, setMode] = useState<Mode>(currentMode)
-  // The picker opens on the tasks, even while a superset runs; the saved supersets show once that tab is chosen.
-  const [showSets, setShowSets] = useState(false)
+  // One list per mode, whatever was tapped before: in Superset the saved supersets, and while one
+  // runs the tasks first, since a pick then takes the slot that is running.
+  const inSuperset = running && currentMode === 'superset'
+  const runningSet = inSuperset ? s.supersets.find((x) => x.id === s.desk.plan?.supersetId) ?? null : null
   const [q, setQ] = useState('')
   const [ssLine, setSsLine] = useState('')
   const [ssError, setSsError] = useState<string | null>(null)
   const onDesk = onDeskId(s)
   const keys = (useClerk().ai?.keys.filter((k) => k.status === 'ok').length ?? 0) > 0
   const flow = openFlow(s)
+  // The sheet keeps the height it opened with, so a line added from it does not stretch it as it leaves.
+  const [short] = useState(() => s.ledgers.length === 0 && flow.length === 0)
 
   // The mode goes with the pick only when it is a change, so a swap keeps the block's clock.
   const withMode = () => (!running || mode !== currentMode ? { mode } : {})
@@ -76,9 +80,29 @@ export function Picker({ onClose }: { onClose: () => void }) {
   }
 
   const found = q.trim() ? findTasks(s, q, 12) : null
+  const supersets = (
+        <>
+          <h3 className="section-title">Supersets</h3>
+          <div className="list">
+            {s.supersets.map((ss) => (
+              <button type="button" key={ss.id} className="row" onClick={() => { act({ type: 'desk/deploy', mode: 'superset', supersetId: ss.id }); onClose() }}>
+                <span className="glyph"><Repeat size={18} /></span>
+                <span className="row-main">
+                  <span className="row-title">{ss.name || 'Superset'}{ss.id === runningSet?.id ? ', running' : ''}</span>
+                  <span className="row-sub">{formatSuperset(ss, s.ledgers, s.entries)}</span>
+                </span>
+              </button>
+            ))}
+            {s.supersets.length === 0 && <p className="empty">No supersets yet. Write one below.</p>}
+          </div>
+          <label className="label" htmlFor="ss">New superset</label>
+          <input id="ss" className="field" value={ssLine} onChange={(e) => setSsLine(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveSuperset()} placeholder="legal 25, dance 20 x3" enterKeyHint="done" autoCapitalize="none" />
+          {ssError ? <p className="error">{ssError}</p> : <p className="help">Ledger codes or names with minutes, then the rounds.</p>}
+        </>
+  )
 
   return (
-    <Sheet title="Pick a task" short={s.ledgers.length === 0 && flow.length === 0} onClose={onClose}>
+    <Sheet title="Pick a task" short={short} onClose={onClose}>
       <input
         className="field"
         value={q}
@@ -91,7 +115,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
       />
       <div className="seg pilled" role="radiogroup" aria-label="Mode" style={{ marginTop: 10 }}>
         {MODES.map((m) => (
-          <button type="button" key={m.id} role="radio" aria-checked={mode === m.id} onClick={() => { tap(); setMode(m.id); setShowSets(m.id === 'superset') }}>
+          <button type="button" key={m.id} role="radio" aria-checked={mode === m.id} onClick={() => { tap(); setMode(m.id) }}>
             {mode === m.id && <motion.i layoutId="mode-pill" className="seg-pill" transition={{ type: 'spring', stiffness: 520, damping: 38 }} />}
             <span>{m.label}</span>
           </button>
@@ -114,27 +138,11 @@ export function Picker({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </>
-      ) : mode === 'superset' && showSets ? (
-        <>
-          <h3 className="section-title">Supersets</h3>
-          <div className="list">
-            {s.supersets.map((ss) => (
-              <button type="button" key={ss.id} className="row" onClick={() => { act({ type: 'desk/deploy', mode: 'superset', supersetId: ss.id }); onClose() }}>
-                <span className="glyph"><Repeat size={18} /></span>
-                <span className="row-main">
-                  <span className="row-title">{ss.name || 'Superset'}</span>
-                  <span className="row-sub">{formatSuperset(ss, s.ledgers, s.entries)}</span>
-                </span>
-              </button>
-            ))}
-            {s.supersets.length === 0 && <p className="empty">No supersets yet. Write one below.</p>}
-          </div>
-          <label className="label" htmlFor="ss">New superset</label>
-          <input id="ss" className="field" value={ssLine} onChange={(e) => setSsLine(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && saveSuperset()} placeholder="legal 25, dance 20 x3" enterKeyHint="done" autoCapitalize="none" />
-          {ssError ? <p className="error">{ssError}</p> : <p className="help">Ledger codes or names with minutes, then the rounds.</p>}
-        </>
+      ) : mode === 'superset' && !inSuperset ? (
+        supersets
       ) : (
         <>
+          {inSuperset && mode === 'superset' && <p className="help" style={{ padding: '14px 4px 0' }}>A pick goes into the slot of {runningSet?.name || 'the superset'} that is running.</p>}
           {s.ledgers.map((l) => {
             const entries = flow.filter((e) => e.ledgerId === l.id)
             return (
@@ -172,6 +180,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
             </section>
           )}
           {s.ledgers.length === 0 && flow.length === 0 && <p className="empty" style={{ marginTop: 16 }}>Nothing here yet. Type a task above to add it and start.</p>}
+          {inSuperset && mode === 'superset' && supersets}
         </>
       )}
     </Sheet>
