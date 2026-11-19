@@ -9,8 +9,8 @@ export const spring = { type: 'spring', stiffness: 520, damping: 34, mass: 0.7 }
 export const soft = { type: 'spring', stiffness: 320, damping: 30 } as const
 
 /**
- * Text whose characters roll as they change: a new digit rises into its place and fades up, the
- * way an odometer turns, and characters that stay put do not move. Only one copy of a character
+ * Text whose characters roll as they change: a new digit rises into its place from a little below,
+ * already partly drawn so a full change never leaves the clock blank, the way an odometer turns, and characters that stay put do not move. Only one copy of a character
  * is ever drawn, so nothing shows outside the line however the font sits in its box.
  */
 export function RollingText({ text, className }: { text: string; className?: string }) {
@@ -21,7 +21,7 @@ export function RollingText({ text, className }: { text: string; className?: str
           <motion.span
             key={ch}
             className="rolling-char"
-            initial={{ y: '28%', opacity: 0 }}
+            initial={{ y: '24%', opacity: 0.35 }}
             animate={{ y: '0%', opacity: 1 }}
             transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
           >

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowsLeftRight, CaretRight, Check, Couch as CouchIcon, Pause, Play, SkipForward, Stop } from '@phosphor-icons/react'
+import { ArrowsLeftRight, CaretRight, ListBullets, Check, Couch as CouchIcon, Pause, Play, SkipForward, Stop } from '@phosphor-icons/react'
 import {
   balance, blockView, switchSession, clock, dayStats, objectives, onDeskId, openFlow, span, startOfDay, switchTarget, taskTomatoes, tomatoLabel,
   type MayorlyState,
@@ -38,7 +38,8 @@ function phaseOf(s: MayorlyState): string {
 
 export function Timer({ openPicker, openSync }: { openPicker: () => void; openSync: () => void }) {
   const s = useMayorly()
-  const now = useNow(1000)
+  // A quarter-second tick, so a new block's clock turns over a second after it starts, not two.
+  const now = useNow(250)
   const { account, sync } = useAccount()
   const d = s.desk
   const me = deviceId()
@@ -67,7 +68,7 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
   // The way back can be a ledger itself (its entry was cleared): then it says ledger time.
   const backName = idle ? null : switchTarget(s)
   // A way back that is only a ledger (its entry was cleared) is not offered: it reads as nothing.
-  const back = backName && s.ledgers.some((l) => l.name === backName) && !s.entries.some((e) => e.title === backName && e.doneAt === null) && !s.leisure.some((x) => x.title === backName) ? null : backName
+  const back = backName && (backName === entry?.title || backName === leisure?.title) ? null : backName && s.ledgers.some((l) => l.name === backName) && !s.entries.some((e) => e.title === backName && e.doneAt === null) && !s.leisure.some((x) => x.title === backName) ? null : backName
   // Up next is what the desk will really do: the superset's next slots while one runs, else the
   // flow. The swap-back target already has its own row (Switch to), so it is left out here.
   const backId = d.previous?.entryId ?? switchSession(s)?.block.entryId ?? null
@@ -94,7 +95,7 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
     else act({ type: 'desk/resume' })
   }
   const primaryLabel = elsewhere ? 'Take over' : idle ? (nextUp ? 'Start' : 'Pick a task') : d.status === 'running' ? 'Pause' : d.status === 'ready' ? 'Start' : 'Resume'
-  const PrimaryIcon = !elsewhere && !idle && d.status === 'running' ? Pause : Play
+  const PrimaryIcon = !elsewhere && !idle && d.status === 'running' ? Pause : idle && !nextUp ? ListBullets : Play
 
   // One-shot animations, keyed by what the desk just did.
   const launch = useFeelKey(['start', 'resume'])
@@ -199,12 +200,11 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
 
       <div className="controls">
         <motion.button type="button" className="primary" onClick={primary} whileTap={{ scale: 0.95 }} transition={spring}>
-          <AnimatePresence mode="popLayout" initial={false}>
-            <motion.span key={primaryLabel} className="primary-face" initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0, transition: { type: 'spring', stiffness: 620, damping: 40 } }} exit={{ opacity: 0, y: -22, transition: { duration: 0.12 } }}>
-              <PrimaryIcon size={20} weight="fill" aria-hidden />
-              {primaryLabel}
-            </motion.span>
-          </AnimatePresence>
+          {/* The new label takes the old one's place at once and rises in: one label, never two. */}
+          <motion.span key={primaryLabel} className="primary-face" initial={{ opacity: 0.3, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 620, damping: 40 }}>
+            <PrimaryIcon size={20} weight="fill" aria-hidden />
+            {primaryLabel}
+          </motion.span>
         </motion.button>
         <motion.button type="button" className="round" aria-label="Skip to the next block" disabled={idle || !!elsewhere} onClick={() => act({ type: 'desk/skip' })} whileTap={{ scale: 0.88, rotate: 8 }} transition={spring}>
           <SkipForward size={22} />

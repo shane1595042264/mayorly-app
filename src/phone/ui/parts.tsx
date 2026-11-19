@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, useDragControls, type PanInfo } from 'motion/react'
 import { Minus, Plus } from '@phosphor-icons/react'
 import type { Ledger } from '@core/index'
@@ -34,7 +35,9 @@ export function Sheet({ title, onClose, short, action, children }: { title: stri
   const release = (_: unknown, info: PanInfo) => {
     if (info.offset.y > 110 || info.velocity.y > 650) onClose()
   }
-  return (
+  // Drawn at the root of the page, so a sheet opened inside a screen never moves with that
+  // screen when the tab changes; it slides down where it is.
+  return createPortal(
     <>
       <motion.div className="sheet-back" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} />
       <motion.div
@@ -60,7 +63,8 @@ export function Sheet({ title, onClose, short, action, children }: { title: stri
         </div>
         <div className="sheet-body">{children}</div>
       </motion.div>
-    </>
+    </>,
+    document.body,
   )
 }
 

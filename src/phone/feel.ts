@@ -78,6 +78,10 @@ export function afterAct(before: MayorlyState, after: MayorlyState, kind?: strin
     sfx.swap()
     impact(ImpactStyle.Heavy)
     tell('stop')
+  } else if (picks && moved) {
+    // A switch or a pick that leaves the clock where it was (a paused desk) is still felt.
+    sfx.swap()
+    impact(ImpactStyle.Light)
   }
 }
 

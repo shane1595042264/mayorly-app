@@ -273,6 +273,7 @@ describe('superset syntax', () => {
     let k = 0
     const s = sampleState(T0, () => `L${++k}`)
     expect(parseSuperset('legal 25, cooking 20', s.ledgers, () => 'y')).toEqual({ ok: false, error: 'No ledger called "cooking"' })
+    expect(parseSuperset('legal 25 dance', s.ledgers, () => 'y')).toEqual({ ok: false, error: 'Put a comma between slots, like: legal 25, dance 20' })
   })
 })
 

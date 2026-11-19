@@ -46,6 +46,8 @@ export function parseSuperset(src: string, ledgers: Ledger[], newId: () => Id, n
     const m = part.match(/^(.+?)\s+(\d{1,3})\s*m?$/i) ?? part.match(/^(.+)$/)
     if (!m) return { ok: false, error: `Cannot read "${part}"` }
     const word = m[1].trim()
+    // "legal 25 dance" is two slots missing a comma, not a slot called "legal 25 dance".
+    if (!m[2] && /\d/.test(word)) return { ok: false, error: `Put a comma between slots, like: legal 25, dance 20` }
     const ledger = matchLedger(word, ledgers) ?? matchLedger(word.split(/\s+/)[0], ledgers)
     if (!ledger) return { ok: false, error: `No ledger called "${word}"` }
     const minutes = m[2] ? Number(m[2]) : 25

@@ -15,6 +15,8 @@ export function Couch() {
   const now = useNow(30_000)
   const [title, setTitle] = useState('')
   const [menu, setMenu] = useState<LeisureItem | null>(null)
+  // Removing asks for a second tap, as deleting an entry does.
+  const [removing, setRemoving] = useState(false)
   const items = leisureList(s)
   const coins = balance(s)
   const add = () => {
@@ -37,7 +39,7 @@ export function Couch() {
           const spent = leisureSpentMs(s, x.id, now)
           const paid = leisureTokensSpent(s, x.id)
           return (
-            <motion.button type="button" key={x.id} className="row" onClick={() => setMenu(x)} {...rowIn(i)}>
+            <motion.button type="button" key={x.id} className="row" onClick={() => { setRemoving(false); setMenu(x) }} {...rowIn(i)}>
               <span className="row-main">
                 <span className="row-title">{x.title}</span>
                 <span className="row-sub">{spent > 0 ? `${span(spent)} so far, ${paid} ${paid === 1 ? 'coin' : 'coins'}` : 'Not yet'}</span>
@@ -52,7 +54,7 @@ export function Couch() {
         <Sheet key="couch-menu" title={menu.title} short onClose={() => setMenu(null)}>
           <div className="menu">
             <button type="button" onClick={() => { act({ type: 'desk/select', leisureId: menu.id }); setMenu(null) }}><Play size={20} />Sit down now</button>
-            <button type="button" className="danger" onClick={() => { act({ type: 'leisure/delete', id: menu.id }); setMenu(null) }}><Trash size={20} />Remove from the list</button>
+            <button type="button" className="danger" onClick={() => (removing ? (act({ type: 'leisure/delete', id: menu.id }), setMenu(null), setRemoving(false)) : setRemoving(true))}><Trash size={20} />{removing ? 'Tap again to remove it' : 'Remove from the list'}</button>
           </div>
           {menu.cues.length > 0 && (
             <>

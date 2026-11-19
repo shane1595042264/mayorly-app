@@ -75,12 +75,17 @@ export async function captureLine(text: string, start = false): Promise<void> {
   const s = engineRef.state
   const entry = s.entries.find((e) => !before.has(e.id))
   const couch = s.leisure.find((x) => !before.has(x.id))
-  const short = (t: string) => (t.length > 34 ? `${t.slice(0, 33)}…` : t)
+  // Cut at a word, with an ellipsis, in curly quotes.
+  const short = (t: string) => {
+    if (t.length <= 34) return t
+    const cut = t.slice(0, 34)
+    return `${cut.slice(0, cut.lastIndexOf(' ') > 16 ? cut.lastIndexOf(' ') : 33).trimEnd()}…`
+  }
   if (view.notice?.phase === 'done' && view.notice.at && Date.now() - view.notice.at < 3000) return
-  if (couch) set({ notice: { phase: 'done', text: `'${short(couch.title)}' is on the couch list`, at: Date.now() } })
+  if (couch) set({ notice: { phase: 'done', text: `“${short(couch.title)}” is on the couch list`, at: Date.now() } })
   else if (entry) {
     const ledger = s.ledgers.find((l) => l.id === entry.ledgerId)
-    set({ notice: { phase: 'done', text: ledger ? `'${short(entry.title)}' went to ${ledger.name}` : `'${short(entry.title)}' is in the tray`, at: Date.now() } })
+    set({ notice: { phase: 'done', text: ledger ? `“${short(entry.title)}” went to ${ledger.name}` : `“${short(entry.title)}” is in the tray`, at: Date.now() } })
   }
 }
 

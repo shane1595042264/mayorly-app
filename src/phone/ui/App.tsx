@@ -38,8 +38,15 @@ export function App() {
   // Which way a tab change slides: toward the tab's place in the bar.
   const [dir, setDir] = useState(1)
   const order = TABS.map((t) => t.id as Tab)
+  // Tapping the tab you are on takes that place back to its top: the shelf from inside a ledger.
+  const [home, setHome] = useState(0)
   const go = (t: Tab) => {
-    if (t === tab) return
+    if (t === tab) {
+      tap()
+      setHome((n) => n + 1)
+      document.querySelector('.stage > .screen')?.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
     tap()
     setDir(order.indexOf(t) > order.indexOf(tab) ? 1 : -1)
     setTab(t)
@@ -69,7 +76,7 @@ export function App() {
           exit="leave"
         >
           {tab === 'desk' && <Timer openPicker={() => { tap(); setPicking(true) }} openSync={() => setTab('settings')} />}
-          {tab === 'ledgers' && <Ledgers />}
+          {tab === 'ledgers' && <Ledgers home={home} />}
           {tab === 'couch' && <Couch />}
           {tab === 'settings' && <Settings />}
         </motion.main>

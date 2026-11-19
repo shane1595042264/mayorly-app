@@ -81,7 +81,7 @@ const TOUR = [
   { name: 'picker-pomodoro', do: "__roast.tap('.sheet .seg button', 0)", frames: [0, 150, 400] },
   { name: 'pick-another-task', do: "__roast.tap('.sheet .row', 2)", frames: [0, 120, 300, 700] },
   { name: 'tab-ledgers', do: "__roast.tap('.tab:not(.capture-tab)', 1)", frames: [0, 80, 200, 600] },
-  { name: 'open-ledger', do: "__roast.tap('.screen .row', 0)", frames: [0, 120, 500] },
+  { name: 'open-ledger', do: "__roast.tap('.screen .row', 0)", frames: [0, 120, 500, 1000] },
   { name: 'entry-menu', do: "__roast.tap('.screen .list .row', 0)", frames: [0, 100, 260, 600] },
   { name: 'start-from-entry-menu', do: "__roast.tap('.sheet .menu button', 0)", frames: [0, 120, 300, 700] },
   { name: 'clear-task', do: "__roast.tap('.clear-btn')", frames: [0, 80, 200, 450, 900] },

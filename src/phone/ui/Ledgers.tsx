@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { rowIn } from './motion'
 import { ArrowCounterClockwise, ArrowDown, ArrowLeft, ArrowUp, CaretRight, Check, PencilSimple, Play, Plus, Trash, Tray } from '@phosphor-icons/react'
@@ -19,10 +19,11 @@ import { LedgerDot, Sheet, Toggle } from './parts'
 
 type Open = { kind: 'ledger'; id: string | null } | null
 
-export function Ledgers() {
+export function Ledgers({ home = 0 }: { home?: number }) {
   const s = useMayorly()
   const now = useNow(30_000)
   const [open, setOpen] = useState<Open>(null)
+  useEffect(() => setOpen(null), [home])
   const [editing, setEditing] = useState<Ledger | 'new' | null>(null)
   const flow = openFlow(s)
   const today = dayStats(s, startOfDay(now), now)
@@ -42,12 +43,12 @@ export function Ledgers() {
     <div className="push">
       <AnimatePresence initial={false} custom={dir} mode="popLayout">
         {open ? (
-          <motion.div key={`ledger-${open.id ?? 'tray'}`} className="push-page" custom={dir} variants={PUSH} initial="enter" animate="center" exit="leave">
+          <motion.div key={`ledger-${open.id ?? 'tray'}`} className="push-page" style={{ zIndex: 2 }} custom={dir} variants={PUSH} initial="enter" animate="center" exit="leave">
             <LedgerView ledger={openLedger} back={() => setOpen(null)} edit={() => openLedger && setEditing(openLedger)} />
             {form}
           </motion.div>
         ) : (
-    <motion.div key="shelf" className="push-page" custom={dir} variants={PUSH} initial="enter" animate="center" exit="leave">
+    <motion.div key="shelf" className="push-page" style={{ zIndex: 0 }} custom={dir} variants={PUSH} initial="enter" animate="center" exit="leave">
       <header className="top">
         <h1 className="title" style={{ flex: 1, padding: 0 }}>Ledgers</h1>
         <button type="button" className="btn" onClick={() => setEditing('new')} disabled={s.ledgers.length >= LEDGER_CAP}><Plus size={16} />New</button>
@@ -86,9 +87,10 @@ export function Ledgers() {
 
 const pushSpring = { type: 'spring', stiffness: 360, damping: 38 } as const
 const PUSH = {
-  enter: (d: number) => (d > 0 ? { x: '100%', opacity: 1, zIndex: 2 } : { x: '-28%', opacity: 0.4, zIndex: 0 }),
-  center: { x: 0, opacity: 1, zIndex: 1, transition: pushSpring },
-  leave: (d: number) => (d > 0 ? { x: '-28%', opacity: 0.4, zIndex: 0, transition: pushSpring } : { x: '100%', opacity: 1, zIndex: 2, transition: pushSpring }),
+  // The ledger page is always above the shelf (a static z-index on each), whichever way it moves.
+  enter: (d: number) => (d > 0 ? { x: '100%', opacity: 1 } : { x: '-28%', opacity: 0.4 }),
+  center: { x: 0, opacity: 1, transition: pushSpring },
+  leave: (d: number) => (d > 0 ? { x: '-28%', opacity: 0.4, transition: pushSpring } : { x: '100%', opacity: 1, transition: pushSpring }),
 }
 
 function LedgerView({ ledger, back, edit }: { ledger: Ledger | null; back: () => void; edit: () => void }) {
@@ -158,9 +160,15 @@ function EntryMenu({ entry, onClose }: { entry: Entry; onClose: () => void }) {
   const [title, setTitle] = useState(entry.title)
   const [estimate, setEstimate] = useState(entry.estimateMin ? String(entry.estimateMin) : '')
   const [confirm, setConfirm] = useState(false)
-  const flow = openFlow(s)
-  const index = flow.findIndex((e) => e.id === entry.id)
   const live = s.entries.find((e) => e.id === entry.id)
+  const goneNow = !live || live.doneAt !== null
+  // Once the entry is cleared or deleted the sheet keeps what it showed while it slides away.
+  // What it says about the desk is read once, as it opens: a Start now from here must not turn into
+  // On the desk now as the sheet leaves.
+  const kept = useRef({ flow: openFlow(s), onDesk: onDeskId(s) === entry.id && s.desk.status !== 'idle' })
+  if (!goneNow) kept.current = { ...kept.current, flow: openFlow(s) }
+  const flow = kept.current.flow
+  const index = flow.findIndex((e) => e.id === entry.id)
   const done = (a: () => void) => () => {
     a()
     onClose()
@@ -173,8 +181,8 @@ function EntryMenu({ entry, onClose }: { entry: Entry; onClose: () => void }) {
     if (Object.keys(patch).length) act({ type: 'entry/update', id: entry.id, patch })
   }
   // Once cleared or deleted the sheet keeps drawing what it had while it slides away.
-  const gone = !live || live.doneAt !== null
-  const onDesk = !gone && onDeskId(s) === entry.id && s.desk.status !== 'idle'
+  const gone = goneNow
+  const onDesk = kept.current.onDesk
   const crop = entryTomatoes(s, entry.id, Date.now())
   return (
     <Sheet title="Entry" short onClose={() => { saveText(); onClose() }}>

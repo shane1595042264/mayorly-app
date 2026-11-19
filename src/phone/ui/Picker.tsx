@@ -8,8 +8,8 @@ import { Glyph } from '../../renderer/src/lib/glyphs'
 import { act, useMayorly, useNow } from '../store'
 import { captureLine, useClerk } from '../ai'
 import { LedgerDot, Sheet } from './parts'
-import { motion } from 'motion/react'
-import { tap } from '../feel'
+import { AnimatePresence, motion } from 'motion/react'
+import { captured, tap } from '../feel'
 
 // Picking what the desk is on: every ledger's open entries, the tray, the couch, the saved
 // supersets, and a search that adds what it cannot find. A pick sends one desk/select: from an
@@ -62,6 +62,9 @@ export function Picker({ onClose }: { onClose: () => void }) {
     const r = parseSuperset(ssLine, s.ledgers, () => crypto.randomUUID())
     if (!r.ok) return setSsError(r.error)
     act({ type: 'superset/save', superset: r.superset })
+    captured()
+    // The new superset is the last row; bring it into view.
+    setTimeout(() => document.querySelector('.sheet .ss-list > :last-child')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
     setSsLine('')
     setSsError(null)
   }
@@ -83,7 +86,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const supersets = (
         <>
           <h3 className="section-title">Supersets</h3>
-          <div className="list">
+          <div className="list ss-list">
             {s.supersets.map((ss) => (
               <button type="button" key={ss.id} className="row" onClick={() => { act({ type: 'desk/deploy', mode: 'superset', supersetId: ss.id }); onClose() }}>
                 <span className="glyph"><Repeat size={18} /></span>
@@ -142,7 +145,13 @@ export function Picker({ onClose }: { onClose: () => void }) {
         supersets
       ) : (
         <>
-          {inSuperset && mode === 'superset' && <p className="help" style={{ padding: '14px 4px 0' }}>A pick goes into the slot of {runningSet?.name || 'the superset'} that is running.</p>}
+          <AnimatePresence initial={false}>
+            {inSuperset && mode === 'superset' && (
+              <motion.p key="slot-hint" className="help" style={{ padding: '14px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
+                A pick goes into the slot of {runningSet?.name || 'the superset'} that is running.
+              </motion.p>
+            )}
+          </AnimatePresence>
           {s.ledgers.map((l) => {
             const entries = flow.filter((e) => e.ledgerId === l.id)
             return (
