@@ -146,6 +146,8 @@ export function Capture({ onClose }: { onClose: () => void }) {
                   <motion.button type="button" key={id} className="row search-row" whileTap={{ scale: 0.98 }} onClick={() => { setLeaving(existing); deskAtLeave.current = onDeskId(s); startExisting(f) }}>
                     <span className="glyph">{icon}</span>
                     <span className="row-main"><span className="row-title">{marked(title, foldSearch(text).split(' ').filter(Boolean))}</span><span className="row-sub">{id === desk ? 'On the desk now' : where}</span></span>
+                    {/* What a tap does, said at the row's end. */}
+                    {id !== desk && <span className="row-go"><Play size={12} weight="fill" />Start</span>}
                   </motion.button>
                 )
               })}

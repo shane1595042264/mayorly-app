@@ -23,7 +23,10 @@ const MODES: { id: Mode; label: string }[] = [
   { id: 'superset', label: 'Superset' },
 ]
 
-export function Picker({ onClose }: { onClose: () => void }) {
+/** Where the picker was opened from: the Couch tab puts the couch first, an open ledger itself. */
+export type PickerScope = { couch?: boolean; ledgerId?: string | null }
+
+export function Picker({ onClose, scope }: { onClose: () => void; scope?: PickerScope }) {
   const live = useMayorly()
   // Once a pick is made the sheet keeps showing what it showed as it slides away: no row flips,
   // moves or appears under the finger.
@@ -104,7 +107,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
       <button type="button" key={e.id} className={`row ${e.id === onDesk ? 'on' : ''}`} onClick={() => pickEntry(e)}>
         <span className="row-main">
           <span className="row-title">{e.title}</span>
-          {e.estimateMin ? <span className="row-sub">{e.estimateMin} min</span> : null}
+          {e.id === onDesk ? <span className="row-sub">On the desk now</span> : e.estimateMin ? <span className="row-sub">{e.estimateMin} min</span> : null}
         </span>
         {crop >= 0.1 && <span className="row-end num row-crop"><Tomato /><b>{tomatoLabel(crop)}</b></span>}
       </button>
@@ -116,11 +119,32 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const words = foldSearch(parseEstimate(q).rest.replace(/^#?\S+:\s*/, (m) => (matchLedger(m.replace(/[#:\s]/g, ''), s.ledgers) || /^#?tray:?\s*$/i.test(m) ? '' : m))).split(' ').filter(Boolean)
   const searching = !!q.trim()
   const hits = searching ? findTasks(s, q, 60) : []
-  const ordered = [...hits.filter((f) => idOf(f) !== onDesk), ...hits.filter((f) => idOf(f) === onDesk)]
+  // What belongs where the picker was opened comes first (it wins Return); the desk's task last.
+  const inScope = (f: FoundTask) => (scope?.couch ? f.kind === 'leisure' : scope?.ledgerId !== undefined ? f.kind === 'entry' && f.entry.ledgerId === scope.ledgerId : false)
+  const notDesk = hits.filter((f) => idOf(f) !== onDesk)
+  const ordered = [...notDesk.filter(inScope), ...notDesk.filter((f) => !inScope(f)), ...hits.filter((f) => idOf(f) === onDesk)]
+  const ledgersInOrder = scope?.ledgerId ? [...s.ledgers.filter((l) => l.id === scope.ledgerId), ...s.ledgers.filter((l) => l.id !== scope.ledgerId)] : s.ledgers
+  const couchSection = (leisureList(s).length > 0 || scope?.couch) && (
+    <section>
+      <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Couch size={15} />Couch, one coin a block</h3>
+      <div className="list">
+        {leisureList(s).map((x) => (
+          <button type="button" key={x.id} className={`row ${x.id === onDesk ? 'on' : ''}`} onClick={() => pickLeisure(x.id)}>
+            <span className="row-main"><span className="row-title">{x.title}</span>{x.id === onDesk && <span className="row-sub">On the desk now</span>}</span>
+          </button>
+        ))}
+        {leisureList(s).length === 0 && <p className="empty">Nothing on the couch list yet. Add to it on the Couch tab, or type couch: and what you would enjoy.</p>}
+      </div>
+    </section>
+  )
   const found = searching ? ordered.slice(0, 12) : null
   const more = ordered.length - (found?.length ?? 0)
   const monthAgo = now - 30 * 86_400_000
-  const holds = (title: string) => words.length > 0 && words.every((w) => foldSearch(title).includes(w))
+  // As search itself reads them: one letter, or two typed alone, only where a word starts.
+  const holds = (title: string) => {
+    const t = foldSearch(title)
+    return words.length > 0 && words.every((w) => (w.length === 1 || (w.length === 2 && words.length === 1) ? t.startsWith(w) || t.includes(` ${w}`) : t.includes(w)))
+  }
   // A search that is just a ledger's name or code ("legal", "car:") offers that ledger's own time
   // and what was cleared in it lately, so a ledger with nothing open is not a dead end.
   const namedLedger = /^#?[^\s:]+:?$/.test(q.trim()) ? matchLedger(q.trim().replace(/[#:]/g, ''), s.ledgers) : null
@@ -145,9 +169,11 @@ export function Picker({ onClose }: { onClose: () => void }) {
     const where = f.leisure ? 'Goes to the couch, one coin a block' : ledger ? `Goes to ${ledger.name}` : keys ? 'The clerk files it' : 'Goes to the tray'
     // How to file by ledger is a line of its own under the list, shown when nothing matched.
     // A first word that names a ledger, typed without its colon, gets the hint for that ledger.
-    const first = matchLedger(q.trim().split(/\s+/)[0] ?? '', s.ledgers)
-    const shown = first ?? s.ledgers[0]
-    const hint = !named && !keys && shown ? `Start with ${(first ? q.trim().split(/\s+/)[0] : shown.code).toLowerCase()}: to file it in ${shown.name}.` : ''
+    // The hint shows only when the first word is (nearly) a ledger's name or code, typed without
+    // its colon: then it says how to file there. Any other new line needs no lesson.
+    const word = (q.trim().split(/\s+/)[0] ?? '').toLowerCase()
+    const first = word.length >= 3 ? matchLedger(word, s.ledgers) ?? s.ledgers.find((l) => oneEdit(word, l.name.toLowerCase()) || oneEdit(word, l.code.toLowerCase())) ?? null : null
+    const hint = !named && !keys && first ? `Start with ${first.code.toLowerCase()}: to file it in ${first.name}.` : ''
     return { title: f.title, sub: `${where}${f.estimateMin && !f.leisure ? `, ${f.estimateMin} min` : ''}`, hint }
   })()
   // A line that is exactly a task you have (open or cleared) is not offered as a new one.
@@ -272,10 +298,10 @@ export function Picker({ onClose }: { onClose: () => void }) {
         )}
         {inSuperset && mode === 'superset' && (
           <motion.p key="slot-hint" className="help" style={{ padding: '14px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
-            A pick goes into the slot of {runningSet?.name || 'the superset'} that is running.
+            {s.desk.status === 'running' ? <>A pick goes into the slot of {runningSet?.name || 'the superset'} that is running.</> : <>A pick goes into the paused slot of {runningSet?.name || 'the superset'} and starts it.</>}
           </motion.p>
         )}
-        {searching && mode === 'superset' && !inSuperset && (
+        {searching && mode === 'superset' && !inSuperset && !!(found?.length || cleared.length) && (
           <motion.p key="no-set" className="help" style={{ padding: '12px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
             No superset is running, so a task picked here starts a pomodoro.
           </motion.p>
@@ -287,6 +313,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
           <h3 className="section-title">{found.length || cleared.length || sets.length ? 'Matches' : 'Nothing matches'}</h3>
           {couchWord && !hits.length && <p className="empty">The couch list is empty. Add to it with couch: and what you would enjoy, like couch: watch an episode.</p>}
           {!preview.title && !found.length && <p className="empty">Type what the task is, then the estimate: call the notary ~30m.</p>}
+          {preview.title && nothing && !namedLedger && !couchWord && foldSearch(q).length < 3 && <p className="empty">Type a few more letters.</p>}
           <div className="list">
             {/* Rows come in with a short rise; a row that no longer matches is gone at once, so no
                 two rows are ever drawn over each other while you type. */}
@@ -325,7 +352,8 @@ export function Picker({ onClose }: { onClose: () => void }) {
               </div>
             </section>
           )}
-          {s.ledgers.map((l) => {
+          {scope?.couch && couchSection}
+          {ledgersInOrder.map((l) => {
             const entries = flow.filter((e) => e.ledgerId === l.id)
             return (
               <section key={l.id}>
@@ -349,18 +377,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
               <div className="list">{flow.filter((e) => e.ledgerId === null).map(entryRow)}</div>
             </section>
           )}
-          {leisureList(s).length > 0 && (
-            <section>
-              <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Couch size={15} />Couch, one coin a block</h3>
-              <div className="list">
-                {leisureList(s).map((x) => (
-                  <button type="button" key={x.id} className={`row ${x.id === onDesk ? 'on' : ''}`} onClick={() => pickLeisure(x.id)}>
-                    <span className="row-main"><span className="row-title">{x.title}</span></span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
+          {!scope?.couch && couchSection}
           {s.ledgers.length === 0 && flow.length === 0 && <p className="empty" style={{ marginTop: 16 }}>Nothing here yet. Type a task above to add it and start.</p>}
           {inSuperset && mode === 'superset' && supersets}
         </>

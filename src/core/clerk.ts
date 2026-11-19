@@ -51,7 +51,15 @@ export function matchLedger(word: string, ledgers: Ledger[]): Ledger | null {
   )
 }
 
+/** Hours and minutes together, at either end: "1h30m", "1h 30m", "~1 hr 30 min". */
+const COMPOUND = /(^\s*|\s)~?(\d+)\s*(?:h|hr|hrs|hours?)\s*(\d+)\s*(?:m|min|mins|minutes)\b\s*/i
+
 export function parseEstimate(text: string): { rest: string; minutes: number | null } {
+  const c = text.match(COMPOUND)
+  if (c && (c.index === 0 || text.slice((c.index ?? 0) + c[0].length).trim() === '')) {
+    const minutes = Number(c[2]) * 60 + Number(c[3])
+    return { rest: text.replace(c[0], ' '), minutes: minutes > 0 ? minutes : null }
+  }
   const m = text.match(ESTIMATE) ?? text.match(TRAILING) ?? text.match(LEADING)
   if (!m) return { rest: text, minutes: null }
   const n = Number(m[1])

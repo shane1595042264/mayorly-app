@@ -130,8 +130,9 @@ export function findTasks(s: MayorlyState, query: string, limit = 8): FoundTask[
   const startsWord = (text: string, w: string) => text.startsWith(w) || text.includes(` ${w}`)
   return all
     .flatMap((x) => {
-      // A single letter counts only where a word starts, so "e" does not match every title.
-      const has = (text: string, w: string) => (w.length === 1 ? startsWord(text, w) : text.includes(w))
+      // One letter, or two typed alone, count only where a word starts, so "e" or "le" does not
+      // match every title; "up" in "folow up" still finds "follow-up".
+      const has = (text: string, w: string) => (w.length === 1 || (w.length === 2 && words.length === 1) ? startsWord(text, w) : text.includes(w))
       const exact = words.every((w) => has(x.title, w) || has(x.group, w))
       const near = exact || words.every((w) => has(x.title, w) || has(x.group, w) || nearWord(x.title, w))
       // Said the way you would say it, one word more than the title holds ("book haircut

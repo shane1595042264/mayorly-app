@@ -20,7 +20,7 @@ import { LedgerDot, Sheet, Toggle, Tomato } from './parts'
 type Open = { kind: 'ledger'; id: string | null } | null
 let lastOpen: Open = null
 
-export function Ledgers({ home = 0, onSearch }: { home?: number; onSearch?: () => void }) {
+export function Ledgers({ home = 0, onSearch }: { home?: number; onSearch?: (ledgerId?: string | null) => void }) {
   const s = useMayorly()
   const now = useNow(30_000)
   // The open ledger is remembered while the app runs, so leaving the tab and coming back keeps it;
@@ -56,7 +56,7 @@ export function Ledgers({ home = 0, onSearch }: { home?: number; onSearch?: () =
     <motion.div key="shelf" className="push-page" style={{ zIndex: 0 }} custom={dir} variants={PUSH} initial="enter" animate="center" exit="leave">
       <header className="top">
         <h1 className="title" style={{ flex: 1, padding: 0 }}>Ledgers</h1>
-        {onSearch && <motion.button type="button" className="btn icon-btn" aria-label="Find a task and start it" onClick={onSearch} whileTap={{ scale: 0.9 }}><MagnifyingGlass size={18} /></motion.button>}
+        {onSearch && <motion.button type="button" className="btn icon-btn" aria-label="Find a task and start it" onClick={() => onSearch()} whileTap={{ scale: 0.9 }}><MagnifyingGlass size={18} /></motion.button>}
         <button type="button" className="btn" onClick={() => setEditing('new')} disabled={s.ledgers.length >= LEDGER_CAP}><Plus size={16} />New</button>
       </header>
       <div className="list" style={{ marginTop: 8 }}>
@@ -99,7 +99,7 @@ const PUSH: Variants = {
   leave: (d: number) => (d > 0 ? { x: '-28%', opacity: 0, transition: { duration: 0.32, ease: [0.22, 1, 0.36, 1] } } : { x: '100%', opacity: 1, transition: pushSpring }),
 }
 
-function LedgerView({ ledger, back, edit, onSearch }: { ledger: Ledger | null; back: () => void; edit: () => void; onSearch?: () => void }) {
+function LedgerView({ ledger, back, edit, onSearch }: { ledger: Ledger | null; back: () => void; edit: () => void; onSearch?: (ledgerId?: string | null) => void }) {
   const s = useMayorly()
   const now = useNow(10_000)
   const [title, setTitle] = useState('')
@@ -121,7 +121,7 @@ function LedgerView({ ledger, back, edit, onSearch }: { ledger: Ledger | null; b
       <header className="top">
         <button type="button" className="btn" onClick={back} style={{ paddingLeft: 12 }}><ArrowLeft size={18} />Ledgers</button>
         <span className="spacer" />
-        {onSearch && <motion.button type="button" className="btn icon-btn" aria-label="Find a task and start it" onClick={onSearch} whileTap={{ scale: 0.9 }}><MagnifyingGlass size={18} /></motion.button>}
+        {onSearch && <motion.button type="button" className="btn icon-btn" aria-label="Find a task and start it" onClick={() => onSearch(ledger?.id ?? null)} whileTap={{ scale: 0.9 }}><MagnifyingGlass size={18} /></motion.button>}
         {ledger && <button type="button" className="btn" onClick={edit}><PencilSimple size={16} />Edit</button>}
       </header>
       <h1 className="title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

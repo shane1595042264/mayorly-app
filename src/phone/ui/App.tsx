@@ -5,7 +5,8 @@ import { Couch as CouchIcon, GearSix, Plus, SquaresFour, Timer as TimerIcon } fr
 import { Capture } from './Capture'
 import { Couch } from './Couch'
 import { Ledgers } from './Ledgers'
-import { Picker } from './Picker'
+import { Picker, type PickerScope } from './Picker'
+import { ac } from '../../renderer/src/lib/sfx'
 import { Settings } from './Settings'
 import { Timer } from './Timer'
 import { dismissToast, showToast, useToast } from '../toast'
@@ -30,8 +31,13 @@ export function App() {
   // Each opening is a new picker, so a quick reopen never brings back the last search.
   const [opens, setOpens] = useState(0)
   const kbProxy = useRef<HTMLInputElement>(null)
-  const openPicker = () => {
+  const [scope, setScope] = useState<PickerScope | undefined>(undefined)
+  const openPicker = (where?: PickerScope) => {
     tap()
+    // The first sound of a session builds the audio context; do it now, inside this tap, so the
+    // first pick does not stall while it is made.
+    ac()
+    setScope(where)
     kbProxy.current?.focus({ preventScroll: true })
     setOpens((n) => n + 1)
     setPicking(true)
@@ -100,9 +106,9 @@ export function App() {
           animate="center"
           exit="leave"
         >
-          {tab === 'desk' && <Timer openPicker={openPicker} openSync={() => setTab('settings')} />}
-          {tab === 'ledgers' && <Ledgers home={home} onSearch={openPicker} />}
-          {tab === 'couch' && <Couch onSearch={openPicker} />}
+          {tab === 'desk' && <Timer openPicker={() => openPicker()} openSync={() => setTab('settings')} />}
+          {tab === 'ledgers' && <Ledgers home={home} onSearch={(ledgerId) => openPicker(ledgerId === undefined ? undefined : { ledgerId })} />}
+          {tab === 'couch' && <Couch onSearch={() => openPicker({ couch: true })} />}
           {tab === 'settings' && <Settings />}
         </motion.main>
       </AnimatePresence>
@@ -135,7 +141,7 @@ export function App() {
       {/* A stand-in field focused inside the tap that opens the picker: iOS raises the keyboard only
           for a focus a touch made, and keeps it up as focus moves on to the picker's search. */}
       <input ref={kbProxy} className="kb-proxy" aria-hidden tabIndex={-1} />
-      <AnimatePresence>{picking && <Picker key={`picker-${opens}`} onClose={closePicker} />}</AnimatePresence>
+      <AnimatePresence>{picking && <Picker key={`picker-${opens}`} scope={scope} onClose={closePicker} />}</AnimatePresence>
       <AnimatePresence>{capturing && <Capture key="capture" onClose={closeCapture} />}</AnimatePresence>
     </div>
   )
