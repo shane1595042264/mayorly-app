@@ -519,3 +519,5 @@ body:has(.toast) .screen { padding-bottom: 96px; }
 .row-title .hit, .row-sub .hit { color: var(--text); font-weight: 700; background: rgb(255 255 255 / 0.1); border-radius: 4px; padding: 0 1px; }
 .sheet.capture-sheet { min-height: min(600px, 82dvh); }
 .icon-btn { width: 40px; height: 40px; padding: 0; display: grid; place-items: center; border-radius: 50%; }
+/* A short picker (a first run) keeps one height while you type, so nothing in its head moves. */
+.sheet.short.picker-sheet { min-height: min(560px, 76dvh); }

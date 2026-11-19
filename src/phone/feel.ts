@@ -15,6 +15,8 @@ export function onFeel(fn: (f: Feel) => void): () => void {
   return () => listeners.delete(fn)
 }
 const tell = (f: Feel) => listeners.forEach((fn) => fn(f))
+/** Say a feel without the sound: a pick of what is already on the desk still takes you to it. */
+export const announce = (f: Feel) => tell(f)
 
 // In a browser Capacitor's Haptics falls back to navigator.vibrate, which is how the review tour
 // counts them; on the phone they are the Taptic Engine.

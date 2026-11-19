@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ArrowCounterClockwise, Couch, KeyReturn, MagnifyingGlass, Plus, Repeat, Tray, X } from '@phosphor-icons/react'
 import {
-  findTasks, foldSearch, formatSuperset, leisureList, matchLedger, onDeskId, openFlow, parseSuperset, prefixClerk, recentTasks, tomatoLabel, entryTomatoes,
+  findTasks, foldSearch, formatSuperset, oneEdit, leisureList, matchLedger, onDeskId, openFlow, parseSuperset, prefixClerk, recentTasks, tomatoLabel, entryTomatoes,
   type Entry, type FoundTask, type Mode,
 } from '@core/index'
 import { Glyph } from '../../renderer/src/lib/glyphs'
@@ -9,7 +9,7 @@ import { act, useMayorly, useNow } from '../store'
 import { captureLine, useClerk } from '../ai'
 import { LedgerDot, Sheet, Tomato } from './parts'
 import { AnimatePresence, motion } from 'motion/react'
-import { captured, tap } from '../feel'
+import { announce, captured, tap } from '../feel'
 
 // Picking what the desk is on: every ledger's open entries, the tray, the couch, the saved
 // supersets, and a search that adds what it cannot find. A pick sends one desk/select: from an
@@ -60,15 +60,19 @@ export function Picker({ onClose }: { onClose: () => void }) {
   // pomodoro, as the list under the search says.
   const taskMode: Mode = mode === 'superset' && !inSuperset ? 'pomodoro' : mode
   const withMode = () => (!running || taskMode !== currentMode ? { mode: taskMode } : {})
+  // Picking what is already on the desk resumes it in place and still takes you to the timer.
   const pickEntry = (e: Entry) => {
-    if (e.id === onDesk) tap()
+    const same = e.id === onDesk
+    if (same) tap()
     freeze()
     act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId, ...withMode() })
+    if (same) announce('start')
     onClose()
   }
   const pickLeisure = (id: string) => {
     freeze()
     act({ type: 'desk/select', leisureId: id })
+    if (id === onDesk) announce('start')
     onClose()
   }
   const add = () => {
@@ -127,11 +131,12 @@ export function Picker({ onClose }: { onClose: () => void }) {
     const where = f.leisure ? 'Couch, one coin a block' : ledger ? ledger.name : keys ? 'The clerk files it' : 'Tray'
     // How to file by ledger is said once, on the only row, when nothing else matches.
     const hint = !named && !keys && s.ledgers[0] && (hits.length === 0) ? `; ${s.ledgers[0].code.toLowerCase()}: files it in ${s.ledgers[0].name}` : ''
-    return { title: f.title, sub: `${where}${f.estimateMin ? `, ${f.estimateMin} min` : ''}${hint}` }
+    return { title: f.title, sub: `${where}${f.estimateMin && !f.leisure ? `, ${f.estimateMin} min` : ''}${hint}` }
   })()
   // A line that is exactly a task you have (open or cleared) is not offered as a new one.
   const exact = [...hits.map((f) => (f.kind === 'entry' ? f.entry.title : f.item.title)), ...cleared.map((e) => e.title)].some((t) => foldSearch(t) === foldSearch(preview.title))
-  const recent = !searching ? recentTasks(s, 6).filter((f) => idOf(f) !== onDesk).slice(0, 3) : []
+  // Recent is a shortcut for a long list; in a short one it only repeats the rows under it.
+  const recent = !searching && flow.length > 8 ? recentTasks(s, 6).filter((f) => idOf(f) !== onDesk).slice(0, 3) : []
   const supersets = (
         <>
           <h3 className="section-title">Supersets</h3>
@@ -183,7 +188,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
   const returnMark = <span className="return-mark" aria-label="Return picks this"><KeyReturn size={16} /></span>
 
   return (
-    <Sheet title="Pick a task" short={short} onClose={onClose}>
+    <Sheet title="Pick a task" short={short} className="picker-sheet" onClose={onClose}>
       <div className="picker-head">
       <label className="search-field">
         <MagnifyingGlass size={18} className="search-icon" aria-hidden />
@@ -214,7 +219,7 @@ export function Picker({ onClose }: { onClose: () => void }) {
       <div className="seg pilled" role="radiogroup" aria-label="Mode" style={{ marginTop: 10 }}>
         {MODES.map((m) => (
           <button type="button" key={m.id} role="radio" aria-checked={mode === m.id} onClick={() => { tap(); setMode(m.id) }}>
-            {mode === m.id && <motion.i layoutId="mode-pill" className="seg-pill" transition={{ type: 'spring', stiffness: 520, damping: 38 }} />}
+            {mode === m.id && <motion.i layoutId="mode-pill" layoutDependency={mode} className="seg-pill" transition={{ type: 'spring', stiffness: 520, damping: 38 }} />}
             <span>{m.label}</span>
           </button>
         ))}
@@ -223,7 +228,9 @@ export function Picker({ onClose }: { onClose: () => void }) {
 
       {found ? (
         <>
+          {mode === 'superset' && !inSuperset && <p className="help" style={{ padding: '12px 4px 0' }}>No superset is running, so a task picked here starts a pomodoro.</p>}
           <h3 className="section-title">{found.length || cleared.length || sets.length ? 'Matches' : 'Nothing matches'}</h3>
+          {!preview.title && !found.length && <p className="empty">Type what the task is, then the estimate: call the notary ~30m.</p>}
           <div className="list">
             {/* Rows come in with a short rise; a row that no longer matches is gone at once, so no
                 two rows are ever drawn over each other while you type. */}
@@ -232,13 +239,15 @@ export function Picker({ onClose }: { onClose: () => void }) {
                 const e = f.entry
                 const l = s.ledgers.find((x) => x.id === e.ledgerId)
                 const crop = entryTomatoes(s, e.id, now)
-                const sub = e.id === onDesk ? 'On the desk now' : `${l?.name ?? 'Tray'}${e.estimateMin ? `, ${e.estimateMin} min` : ''}`
+                // A search by ledger code (lgl) shows the code, so the mark shows why the row is here.
+                const byCode = !!l && words.some((w) => w.length >= 2 && l.code.toLowerCase().startsWith(w) && !foldSearch(e.title).includes(w))
+                const sub = e.id === onDesk ? 'On the desk now' : `${l ? `${l.name}${byCode ? ` (${l.code})` : ''}` : 'Tray'}${e.estimateMin ? `, ${e.estimateMin} min` : ''}`
                 const end = top === f || (target === 'desk' && i === 0) ? returnMark : crop >= 0.1 ? <span className="row-end num row-crop"><Tomato /><b>{tomatoLabel(crop)}</b></span> : null
                 return resultRow(e.id, i, l ? <span className="glyph-dot" style={{ color: 'var(--muted)' }}><Glyph name={l.glyph} size={18} /><LedgerDot ledger={l} /></span> : <Tray size={18} />, e.title, sub, () => pick(f), { on: e.id === onDesk, end })
               })}
               {sets.map((x, i) => resultRow(`set-${x.id}`, found.length + i, <Repeat size={18} />, x.name || 'Superset', x.id === runningSet?.id ? 'Superset, running now' : 'Superset, starts at its first slot', () => (x.id === runningSet?.id ? (tap(), onClose()) : deploySet(x.id)), { end: target === 'set' && i === 0 ? returnMark : null }))}
               {cleared.map((e, i) => resultRow(`done-${e.id}`, found.length + sets.length + i, <ArrowCounterClockwise size={18} />, e.title, `Cleared ${new Date(e.doneAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, reopens it`, () => reopen(e), { end: target === 'cleared' && i === 0 ? returnMark : null }))}
-              {preview.title && !exact && resultRow('add', found.length + sets.length + cleared.length, <Plus size={18} />, `Add and start “${preview.title}”`, preview.sub, add, { add: true, end: target === 'add' ? returnMark : null })}
+              {preview.title && !exact && !(found[0] && foldSearch(q).length < 3) && !(found[0] && foldSearch(found[0].kind === 'entry' ? found[0].entry.title : found[0].item.title).startsWith(foldSearch(preview.title))) && resultRow('add', found.length + sets.length + cleared.length, <Plus size={18} />, `Add and start “${preview.title}”`, preview.sub, add, { add: true, end: target === 'add' ? returnMark : null })}
           </div>
           {more > 0 && <p className="help" style={{ padding: '10px 4px 0' }}>{found.length} of {ordered.length} shown. Keep typing to narrow it.</p>}
         </>
@@ -334,7 +343,15 @@ function marked(title: string, words: string[]): ReactNode {
   const marks: [number, number][] = []
   for (const w of words) {
     const f = folded.indexOf(w)
-    if (f >= 0) marks.push([at[f], at[f + w.length - 1] + 1])
+    if (f >= 0) { marks.push([at[f], at[f + w.length - 1] + 1]); continue }
+    // A typo: mark the word it was near, so it shows why the row is here.
+    if (w.length < 4) continue
+    let p = 0
+    for (const t of folded.split(' ')) {
+      const near = oneEdit(w, t) || oneEdit(w, t.slice(0, w.length)) || oneEdit(w, t.slice(0, w.length + 1))
+      if (near && t) { marks.push([at[p], at[p + Math.min(t.length, w.length + 1) - 1] + 1]); break }
+      p += t.length + 1
+    }
   }
   if (!marks.length) return title
   marks.sort((a, b) => a[0] - b[0])

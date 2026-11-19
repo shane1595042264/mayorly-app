@@ -2,7 +2,7 @@ import type { Block, Entry, Id, Ledger, LeisureItem, MayorlyState, Ms, TokenTx }
 import { entryTomatoes } from './accounting'
 import { openFlow, supersetOf } from './planner'
 import { restSession, switchBack, switchSession, type Action } from './reducer'
-import { matchLedger } from './clerk'
+import { matchLedger, parseEstimate } from './clerk'
 
 
 export type FoundTask = { kind: 'entry'; entry: Entry } | { kind: 'leisure'; item: LeisureItem }
@@ -66,7 +66,7 @@ export function foldSearch(text: string): string {
 }
 
 /** One letter wrong, missing, extra or two swapped: "fotwork" is near "footwork". */
-function oneEdit(a: string, b: string): boolean {
+export function oneEdit(a: string, b: string): boolean {
   if (a === b) return true
   if (Math.abs(a.length - b.length) > 1) return false
   let i = 0
@@ -81,7 +81,9 @@ function oneEdit(a: string, b: string): boolean {
 /** A search word of four letters or more that is one edit from a word in the text, or from its start. */
 function nearWord(text: string, w: string): boolean {
   if (w.length < 4) return false
-  return text.split(' ').some((t) => oneEdit(w, t) || (t.length > w.length && oneEdit(w, t.slice(0, w.length))))
+  // Against the word, and against its start one letter either side, so a letter dropped from
+  // "followup" (folow) or added still lands.
+  return text.split(' ').some((t) => oneEdit(w, t) || (t.length > w.length && (oneEdit(w, t.slice(0, w.length)) || oneEdit(w, t.slice(0, w.length + 1)))))
 }
 
 /**
@@ -97,7 +99,8 @@ export function findTasks(s: MayorlyState, query: string, limit = 8): FoundTask[
   const recent = new Map(recentTasks(s).map((f, i) => [idOf(f), i]))
   const soonest = (f: FoundTask) => recent.get(idOf(f)) ?? recent.size
   const ledgers = new Map(s.ledgers.map((l) => [l.id, foldSearch(`${l.name} ${l.code}`)]))
-  let raw = query.trim()
+  // An estimate at the end ("~20m") is how long, not what: it is not searched for.
+  let raw = parseEstimate(query.trim()).rest.trim()
   let only: Id | null | undefined
   const filing = raw.match(/^#(\S+)\s*(.*)$/) ?? raw.match(/^([^\s:]+):\s*(.*)$/)
   if (filing) {
