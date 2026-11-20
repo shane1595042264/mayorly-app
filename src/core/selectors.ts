@@ -121,7 +121,10 @@ export function findTasks(s: MayorlyState, query: string, limit = 8): FoundTask[
     .filter((x) => only === undefined || (x.found.kind === 'entry' && x.ledgerId === only))
     .sort((a, b) => soonest(a.found) - soonest(b.found))
   const q = foldSearch(raw)
-  if (!q) return all.slice(0, limit).map((x) => x.found)
+  // Nothing typed lists what was used last. Something typed that folds to nothing (only an
+  // estimate, only marks) is not a search for everything: it finds nothing, unless a filing
+  // ("legal:") chose a ledger to list.
+  if (!q) return query.trim() && only === undefined ? [] : all.slice(0, limit).map((x) => x.found)
   // Small words ("the", "a") that the title does not hold do not keep it out: "review the lease"
   // finds "Review lease renewal". A search of only small words still needs them.
   const allWords = q.split(' ')

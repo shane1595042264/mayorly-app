@@ -147,7 +147,7 @@ export function Capture({ onClose }: { onClose: () => void }) {
                     <span className="glyph">{icon}</span>
                     <span className="row-main"><span className="row-title">{marked(title, foldSearch(text).split(' ').filter(Boolean))}</span><span className="row-sub">{id === desk ? 'On the desk now' : where}</span></span>
                     {/* What a tap does, said at the row's end. */}
-                    {id !== desk && <span className="row-go"><Play size={12} weight="fill" />Start</span>}
+                    {id !== desk && <span className="row-go" aria-label="Start it"><Play size={14} weight="fill" /></span>}
                   </motion.button>
                 )
               })}

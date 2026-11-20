@@ -22,6 +22,8 @@ export const announce = (f: Feel) => tell(f)
 // counts them; on the phone they are the Taptic Engine.
 const impact = (style: ImpactStyle) => void Haptics.impact({ style }).catch(() => {})
 const notify = (type: NotificationType) => void Haptics.notification({ type }).catch(() => {})
+/** A soft sound for a pick that changes nothing: the task already on the desk. */
+export const softConfirm = () => sfx.open()
 /** A light tap for anything pressed: a tab, a toggle, a row. */
 export const tap = () => impact(ImpactStyle.Light)
 

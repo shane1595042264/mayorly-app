@@ -9,7 +9,7 @@ import { act, useMayorly, useNow } from '../store'
 import { captureLine, useClerk } from '../ai'
 import { LedgerDot, Sheet, Tomato } from './parts'
 import { AnimatePresence, motion } from 'motion/react'
-import { announce, captured, tap } from '../feel'
+import { announce, captured, softConfirm, tap } from '../feel'
 
 // Picking what the desk is on: every ledger's open entries, the tray, the couch, the saved
 // supersets, and a search that adds what it cannot find. A pick sends one desk/select: from an
@@ -72,7 +72,7 @@ export function Picker({ onClose, scope }: { onClose: () => void; scope?: Picker
   const pickEntry = (e: Entry) => {
     const same = e.id === onDesk
     if (!freeze()) return
-    if (same) tap()
+    if (same) { tap(); softConfirm() }
     act({ type: 'desk/select', entryId: e.id, ledgerId: e.ledgerId, ...withMode() })
     if (same) announce('start')
     onClose()
@@ -123,6 +123,7 @@ export function Picker({ onClose, scope }: { onClose: () => void; scope?: Picker
   const inScope = (f: FoundTask) => (scope?.couch ? f.kind === 'leisure' : scope?.ledgerId !== undefined ? f.kind === 'entry' && f.entry.ledgerId === scope.ledgerId : false)
   const notDesk = hits.filter((f) => idOf(f) !== onDesk)
   const ordered = [...notDesk.filter(inScope), ...notDesk.filter((f) => !inScope(f)), ...hits.filter((f) => idOf(f) === onDesk)]
+  const scopeName = scope?.couch ? 'the couch' : scope?.ledgerId !== undefined ? (s.ledgers.find((l) => l.id === scope.ledgerId)?.name ?? 'the tray') : null
   const ledgersInOrder = scope?.ledgerId ? [...s.ledgers.filter((l) => l.id === scope.ledgerId), ...s.ledgers.filter((l) => l.id !== scope.ledgerId)] : s.ledgers
   const couchSection = (leisureList(s).length > 0 || scope?.couch) && (
     <section>
@@ -141,6 +142,10 @@ export function Picker({ onClose, scope }: { onClose: () => void; scope?: Picker
   const more = ordered.length - (found?.length ?? 0)
   const monthAgo = now - 30 * 86_400_000
   // As search itself reads them: one letter, or two typed alone, only where a word starts.
+  const holdsWord = (title: string, w: string) => {
+    const t = foldSearch(title)
+    return w.length === 1 || (w.length === 2 && words.length === 1) ? t.startsWith(w) || t.includes(` ${w}`) : t.includes(w)
+  }
   const holds = (title: string) => {
     const t = foldSearch(title)
     return words.length > 0 && words.every((w) => (w.length === 1 || (w.length === 2 && words.length === 1) ? t.startsWith(w) || t.includes(` ${w}`) : t.includes(w)))
@@ -171,7 +176,7 @@ export function Picker({ onClose, scope }: { onClose: () => void; scope?: Picker
     // A first word that names a ledger, typed without its colon, gets the hint for that ledger.
     // The hint shows only when the first word is (nearly) a ledger's name or code, typed without
     // its colon: then it says how to file there. Any other new line needs no lesson.
-    const word = (q.trim().split(/\s+/)[0] ?? '').toLowerCase()
+    const word = (q.trim().split(/\s+/)[0] ?? '').toLowerCase().replace(/^#|:$/g, '')
     const first = word.length >= 3 ? matchLedger(word, s.ledgers) ?? s.ledgers.find((l) => oneEdit(word, l.name.toLowerCase()) || oneEdit(word, l.code.toLowerCase())) ?? null : null
     const hint = !named && !keys && first ? `Start with ${first.code.toLowerCase()}: to file it in ${first.name}.` : ''
     return { title: f.title, sub: `${where}${f.estimateMin && !f.leisure ? `, ${f.estimateMin} min` : ''}`, hint }
@@ -237,12 +242,12 @@ export function Picker({ onClose, scope }: { onClose: () => void; scope?: Picker
     setTimeout(go[1], 60)
   }
   const resultRow = (key: string, i: number, icon: ReactNode, title: string, sub: string, onClick: () => void, opts: { on?: boolean; end?: ReactNode; add?: boolean } = {}) => (
-    <motion.button type="button" key={key} className={`row search-row ${opts.on ? 'on' : ''} ${opts.add ? 'add' : ''} ${flash === key ? 'pressing' : ''}`} onClick={onClick} initial={{ opacity: 0.3, y: 6 }} animate={{ opacity: 1, y: 0, transition: { duration: 0.18, delay: Math.min(i, 8) * 0.02, ease: [0.22, 1, 0.36, 1] } }} whileTap={{ scale: 0.98 }}>
+    <motion.button type="button" key={key} className={`row search-row ${opts.on ? 'on' : ''} ${opts.add ? 'add' : ''} ${flash === key ? 'pressing' : ''} ${opts.end === returnMark ? 'target' : ''}`} onClick={onClick} initial={{ opacity: 0.3, y: 6 }} animate={{ opacity: 1, y: 0, transition: { duration: 0.18, delay: Math.min(i, 8) * 0.02, ease: [0.22, 1, 0.36, 1] } }} whileTap={{ scale: 0.98 }}>
       <span className="glyph">{icon}</span>
       <span className="row-main">
         <span className="row-title">{opts.add ? title : marked(title, words)}</span>
         {/* The subtitle is marked only for a word the title does not show (a ledger name, "tray"). */}
-        <span className="row-sub">{opts.add ? sub : marked(sub, words.filter((w) => w.length >= 2 && !foldSearch(title).includes(w)))}</span>
+        <span className="row-sub">{opts.add ? sub : marked(sub, words.filter((w) => w.length >= 2 && !holdsWord(title, w)))}</span>
       </span>
       {opts.end}
     </motion.button>
@@ -264,7 +269,7 @@ export function Picker({ onClose, scope }: { onClose: () => void; scope?: Picker
             // Escape empties the search first; a second Escape closes the sheet.
             if (e.key === 'Escape' && q) { e.preventDefault(); setQ('') }
           }}
-          placeholder="Find or add a task"
+          placeholder={scopeName ? `Find in ${scopeName}, or anywhere` : 'Find or add a task'}
           aria-label="Find or add a task"
           enterKeyHint="go"
           autoCapitalize="sentences"
@@ -301,9 +306,21 @@ export function Picker({ onClose, scope }: { onClose: () => void; scope?: Picker
             {s.desk.status === 'running' ? <>A pick goes into the slot of {runningSet?.name || 'the superset'} that is running.</> : <>A pick goes into the paused slot of {runningSet?.name || 'the superset'} and starts it.</>}
           </motion.p>
         )}
-        {searching && mode === 'superset' && !inSuperset && !!(found?.length || cleared.length) && (
+        {/* Shown whenever the pill is on Superset with none running, not on the first letter, so
+            typing never pushes the rows down. */}
+        {mode === 'superset' && !inSuperset && !resting && (
           <motion.p key="no-set" className="help" style={{ padding: '12px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
-            No superset is running, so a task picked here starts a pomodoro.
+            No superset is running: pick one below, or a task to start a pomodoro.
+          </motion.p>
+        )}
+        {inSuperset && mode !== 'superset' && (
+          <motion.p key="leave-set" className="help" style={{ padding: '12px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}>
+            A pick leaves {runningSet?.name || 'the superset'} and starts a {mode === 'blitz' ? 'blitz' : 'pomodoro'}.
+          </motion.p>
+        )}
+        {!inSuperset && !resting && running && s.desk.status !== 'running' && mode === currentMode && (
+          <motion.p key="paused" className="help" style={{ padding: '12px 4px 0', overflow: 'hidden' }} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
+            The desk is paused; a pick starts it again.
           </motion.p>
         )}
       </AnimatePresence>

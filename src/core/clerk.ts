@@ -29,6 +29,8 @@ export interface Clerk {
 const ESTIMATE = /(?:^|\s)~\s*(\d+(?:\.\d+)?)\s*(h|hr|hrs|m|min|mins)?(?=\s|$)/i
 /** Without the tilde an estimate needs its unit and the end of the line: "call mom 15m", "read 1 h". */
 /** At the start of the line, with its unit: "1 h freestyle", "30m call mom". */
+/** A line that is nothing but an estimate ("30m", "~2h") is an estimate with no title. */
+const WHOLE = /^\s*~?(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?|m|min|mins|minutes)\s*$/i
 const LEADING = /^\s*~?(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?|m|min|mins|minutes)\s+/i
 const TRAILING = /\s(\d+(?:\.\d+)?)\s*(h|hr|hrs|hours?|m|min|mins|minutes)\s*$/i
 const PREFIX = /^\s*([a-z][\w-]{0,23})\s*:\s*/i
@@ -60,7 +62,7 @@ export function parseEstimate(text: string): { rest: string; minutes: number | n
     const minutes = Number(c[2]) * 60 + Number(c[3])
     return { rest: text.replace(c[0], ' '), minutes: minutes > 0 ? minutes : null }
   }
-  const m = text.match(ESTIMATE) ?? text.match(TRAILING) ?? text.match(LEADING)
+  const m = text.match(WHOLE) ?? text.match(ESTIMATE) ?? text.match(TRAILING) ?? text.match(LEADING)
   if (!m) return { rest: text, minutes: null }
   const n = Number(m[1])
   const unit = (m[2] ?? 'm').toLowerCase()

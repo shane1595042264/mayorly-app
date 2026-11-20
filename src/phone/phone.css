@@ -524,3 +524,5 @@ body:has(.toast) .screen { padding-bottom: 96px; }
 .row-title .hit, .row-sub .hit { color: var(--text); font-weight: 700; }
 .search-row.pressing { background: var(--raised); box-shadow: inset 0 0 0 1.5px var(--text); }
 .row-go { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); flex: none; }
+/* The row Return will start carries a faint ring as well as the key mark, so the eye finds it. */
+.search-row.target { box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.16); }
