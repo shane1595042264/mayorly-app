@@ -138,8 +138,18 @@ function boot() {
   let dialogOpen = false
   // Off macOS the overlay is a topmost window over the whole work area, so a dialog nobody owns
   // opens beneath it; owned by the overlay it stays on top. The Mac panel gets no sheet.
-  const openDialog = (options: OpenDialogOptions) => (process.platform === 'darwin' ? dialog.showOpenDialog(options) : dialog.showOpenDialog(overlay.win, options))
-  const saveDialog = (options: SaveDialogOptions) => (process.platform === 'darwin' ? dialog.showSaveDialog(options) : dialog.showSaveDialog(overlay.win, options))
+  // On a Mac it is app-modal while the deck floats above everything, so the overlay yields
+  // (drops to an ordinary level) until it is answered, or the dialog would be hidden and frozen.
+  const underMacDialog = async <T,>(show: () => Promise<T>): Promise<T> => {
+    overlay.yieldTo(true)
+    try {
+      return await show()
+    } finally {
+      overlay.yieldTo(false)
+    }
+  }
+  const openDialog = (options: OpenDialogOptions) => (process.platform === 'darwin' ? underMacDialog(() => dialog.showOpenDialog(options)) : dialog.showOpenDialog(overlay.win, options))
+  const saveDialog = (options: SaveDialogOptions) => (process.platform === 'darwin' ? underMacDialog(() => dialog.showSaveDialog(options)) : dialog.showSaveDialog(overlay.win, options))
   const alarmFiles = new AlarmFiles(dataDir)
   ipcMain.handle(IPC.alarmRead, (_e, id: string) => alarmFiles.read(id))
   ipcMain.handle(IPC.alarmPick, async () => {
@@ -294,10 +304,13 @@ function boot() {
   ipcMain.handle(IPC.aiRecheckKey, (_e, id: string) => clerk.recheckKey(String(id)))
   ipcMain.handle(IPC.aiPreferredModel, (_e, id: string, model: string | null) => clerk.setPreferredModel(String(id), model))
   ipcMain.handle(IPC.aiPreferredProvider, (_e, provider: AiProvider | null) => clerk.setPreferredProvider(provider))
+  // Set once the update prompt exists: a panel closing is when a waiting prompt may show.
+  let onFieldMode: (() => void) | null = null
   ipcMain.on(IPC.setMode, (_e, mode: UiMode) => {
     overlay.setMode(mode)
     if (mode === 'plus') armsOn()
     else armsOff()
+    if (mode === 'field') onFieldMode?.()
   })
   ipcMain.on(IPC.setHit, (_e, hit: boolean) => overlay.setHit(hit))
 
@@ -628,14 +641,19 @@ function boot() {
     void updates.install()
     return
   }
-  // "There's a new update, want it?" Asked once per version, and never over a running focus
-  // block: it waits for the block to stop. Later leaves it in the tray, and it installs on quit.
+  // "There's a new update, want it?" Asked once per version, never over a running focus block
+  // and never over an open panel: it waits for the block to stop and the deck (or the What
+  // changed card, or the Plus menu) to close. On a Mac the prompt is app-modal and the overlay
+  // floats above everything, so a prompt shown under an open deck froze both; while it is up the
+  // overlay also yields, so a panel opened meanwhile (a hotkey) still sits under it. Later leaves
+  // it for the next launch.
   let offered: string | null = null
   const offerUpdate = async () => {
     const version = updates.ready()
     if (!version || version === offered || dialogOpen) return
     const { status, block } = engine.state.desk
     if (status === 'running' && block?.kind === 'focus') return
+    if (overlay.mode !== 'field') return
     offered = version
     dialogOpen = true
     try {
@@ -651,12 +669,13 @@ function boot() {
       }
       // A menu bar app is not frontmost by itself, and off macOS only a dialog the overlay owns stays above it.
       if (process.platform === 'darwin') app.focus({ steal: true })
-      const { response } = await (process.platform === 'darwin' ? dialog.showMessageBox(options) : dialog.showMessageBox(overlay.win, options))
+      const { response } = await (process.platform === 'darwin' ? underMacDialog(() => dialog.showMessageBox(options)) : dialog.showMessageBox(overlay.win, options))
       if (response === 0) await updates.install()
     } finally {
       dialogOpen = false
     }
   }
+  onFieldMode = () => void offerUpdate()
   updates.onReady(() => void offerUpdate())
   engine.on(() => void offerUpdate())
   createTray(engine, overlay, { command, togglePause, dataDir, updates })

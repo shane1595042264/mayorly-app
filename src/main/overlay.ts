@@ -296,7 +296,19 @@ export class Overlay {
 
   /** Re-assert topmost. Some focus changes on Windows quietly drop the level. 'screen-saver' is also the right macOS level: above the Dock and menu bar. */
   private pin() {
-    this.win.setAlwaysOnTop(true, 'screen-saver')
+    if (this.yielding) this.win.setAlwaysOnTop(false)
+    else this.win.setAlwaysOnTop(true, 'screen-saver')
+  }
+
+  /**
+   * A native dialog of ours is up (the update prompt on a Mac). It is app-modal: until it is
+   * answered no window of ours takes a click, so this window must never sit above it, or neither
+   * could be clicked. While yielding the window keeps an ordinary level, under the dialog.
+   */
+  private yielding = false
+  yieldTo(on: boolean) {
+    this.yielding = on
+    if (!this.win.isDestroyed()) this.pin()
   }
 
   setMode(mode: UiMode) {

@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## No more stuck update prompt
+
+- The update prompt now waits until the deck and the What changed card are closed, and Mayorly always stays under it, so you can always click Update now or Later.
+- The same goes for picking a sound file or a backup to import.
+
 ## The phone answers back
 
 - Starting anything, from anywhere, takes you to the timer, with a sound and a tap in the hand. Pause, clear, skip and a ripe tomato each have their own.
