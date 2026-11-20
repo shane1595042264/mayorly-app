@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BrowserWindow, screen, type Display, type Rectangle } from 'electron'
 import { IPC, type CaptionStyle, type Effect, type Layout, type UiMode } from '../shared/bridge'
-import { CAPTION, DRAWER, TASKBAR, TOMATO, anchorInBox, captionBox, clampAnchor, cornerAnchor, drawerBox, homeAnchor, petBox, sideOf, type Side } from '../shared/pet'
+import { CAPTION, DRAWER, TASKBAR, TOMATO, anchorInBox, captionBox, clampAnchor, cornerAnchor, drawerBox, homeAnchor, nearPet, petBox, sideOf, type Side } from '../shared/pet'
 
 // One transparent, always-on-top, frameless window.
 //
@@ -23,8 +23,10 @@ const debug = process.env.MAYORLY_DEBUG ? (...a: unknown[]) => console.error('[o
 
 // The pet's sizes, and the rules for where it, its caption and the drawer sit, are in
 // src/shared/pet.ts, shared with the page, which draws the same boxes in the Windows overlay.
-/** How often the cursor is sampled for hover on macOS. */
+/** How often the cursor is sampled for hover: on macOS always, on Windows beside the forwarded moves. */
 const HOVER_POLL_MS = 40
+/** Windows: how near the pet the pointer must be before its moves are fed to the page. */
+const PET_NEAR_PX = 24
 /** How often a held tomato checks which display the pointer is on. */
 const HELD_POLL_MS = 16
 /** The poll rate while the pointer is far from the pet: enough to notice it coming. */
@@ -327,7 +329,9 @@ export class Overlay {
       }
       this.startHoverPoll()
     } else {
-      this.stopHoverPoll()
+      // Windows, the quick drawer: the pet and the drawer still take the pointer through the click-through overlay.
+      if (mac || mode !== 'drawer') this.stopHoverPoll()
+      else this.startHoverPoll()
       if (mac) this.fit()
       if (!this.win.isVisible()) this.win.showInactive()
       // Windows, the quick drawer: like the Mac's small drawer window, only the drawer and the pet take
@@ -669,12 +673,19 @@ export class Overlay {
     }
   }
 
-  // ---- hover on macOS ------------------------------------------------------------
-  // AppKit only delivers mouse-moved events to the key window, and in field mode the
+  // ---- hover --------------------------------------------------------------------
+  // macOS: AppKit only delivers mouse-moved events to the key window, and in field mode the
   // panel never is one, so the cursor is sampled and the page gets the same mousemove.
+  //
+  // Windows: the click-through overlay hears the pointer through Electron's forwarded moves,
+  // which ride a low-level mouse hook. Windows gives that hook nothing while a program running
+  // as administrator is in front (League of Legends, with its anti-cheat), and drops it for good
+  // when a busy machine answers it late, so the pet stopped taking clicks and drags. The cursor's
+  // position can always be read, so it is sampled here too, near the pet, and the page gets the
+  // move it missed; the page's own hit test then lets the pet take the pointer.
 
   private startHoverPoll() {
-    if (!mac || this.hoverTimer) return
+    if (this.hoverTimer) return
     this.scheduleHoverPoll(HOVER_POLL_MS)
   }
   /** Fast while the pointer is near the pet, slow while it is across the screen: an all-day app should cost nothing idle. */
@@ -695,6 +706,7 @@ export class Overlay {
 
   /** Feeds the page the pointer; true when the pointer is near enough to keep polling fast. */
   private pollCursor(): boolean {
+    if (!mac) return this.pollCursorWin()
     if (this.win.isDestroyed() || this.mode !== 'field' || !this.win.isVisible()) return false
     const p = screen.getCursorScreenPoint()
     const b = this.win.getBounds()
@@ -708,6 +720,24 @@ export class Overlay {
     const wc = this.win.webContents
     if (inside) wc.sendInputEvent({ type: 'mouseMove', x, y })
     else if (wasInside) wc.sendInputEvent({ type: 'mouseLeave', x: 0, y: 0 })
+    return near
+  }
+
+  /** Windows: the pointer near the pet (or anywhere over the open drawer) goes to the page as a move; true while near. */
+  private pollCursorWin(): boolean {
+    if (this.win.isDestroyed() || (this.mode !== 'field' && this.mode !== 'drawer') || !this.win.isVisible() || this.dragging) return false
+    const p = screen.getCursorScreenPoint()
+    const b = this.win.getBounds()
+    const x = p.x - b.x
+    const y = p.y - b.y
+    const inside = x >= 0 && y >= 0 && x < b.width && y < b.height
+    const a = this.anchor ?? this.defaultAnchor(b)
+    const near = inside && (this.mode === 'drawer' || nearPet(p, a, b, this.scale, this.text, PET_NEAR_PX))
+    if (p.x === this.cursor.x && p.y === this.cursor.y) return near
+    // `inside` here means near: one more move after leaving lets the page let go of the pointer.
+    const was = this.cursor.inside
+    this.cursor = { x: p.x, y: p.y, inside: near }
+    if (near || was) this.win.webContents.sendInputEvent({ type: 'mouseMove', x, y })
     return near
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchorInBox, captionBox, clampAnchor, drawerBox, homeAnchor, petBox, sideOf, type Point, type Rect } from './pet'
+import { anchorInBox, captionBox, clampAnchor, drawerBox, homeAnchor, nearPet, petBox, sideOf, type Point, type Rect } from './pet'
 
 // The Mac pet window's geometry as overlay.ts computed it before it moved here, kept verbatim
 // so the shared functions are held to it: the Mac must not move by a pixel.
@@ -126,6 +126,16 @@ describe('pet geometry matches the Mac pet window', () => {
     const wa = { x: 0, y: 0, width: 1920, height: 1040 }
     expect(captionBox({ x: 1800, y: 1000 }, wa, 'right', 1).below).toBe(false)
     expect(captionBox({ x: 1800, y: 60 }, wa, 'right', 1).below).toBe(true)
+  })
+
+  it('knows when the pointer is on or close to the pet, and not across the screen', () => {
+    const wa = { x: 0, y: 0, width: 1920, height: 1040 }
+    const a = { x: 1800, y: 1000 }
+    const box = petBox(a, wa, 1, 1)
+    expect(nearPet({ x: box.x + 5, y: box.y + 5 }, a, wa, 1, 1, 24)).toBe(true)
+    expect(nearPet({ x: box.x - 20, y: box.y + 5 }, a, wa, 1, 1, 24)).toBe(true)
+    expect(nearPet({ x: box.x - 30, y: box.y + 5 }, a, wa, 1, 1, 24)).toBe(false)
+    expect(nearPet({ x: 200, y: 200 }, a, wa, 1, 1, 24)).toBe(false)
   })
 
   it('puts the schedule line under the tomato when the bottom of the area allows, over it otherwise', () => {

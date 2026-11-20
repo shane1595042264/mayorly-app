@@ -87,6 +87,15 @@ export function petHeight(text: number): number {
   return PET.height + Math.ceil(TASK_LINES * (text - 1))
 }
 
+/**
+ * Windows: whether the pointer is on or close to the pet, so the shell feeds the page its moves.
+ * `margin` is how close is close: enough for the page to see the pointer arrive and leave.
+ */
+export function nearPet(p: Point, a: Point, area: Rect, scale: number, text: number, margin: number): boolean {
+  const b = petBox(a, area, scale, text)
+  return p.x >= b.x - margin && p.x < b.x + b.width + margin && p.y >= b.y - margin && p.y < b.y + b.height + margin
+}
+
 /** The pet's box (the Mac pet window), hung off the tomato on the side it favours, kept inside the area. */
 export function petBox(a: Point, area: Rect, scale: number, text: number): Rect {
   const width = Math.ceil(PET.width * scale) + INSET.x * 2

@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The tomato answers while you play
+
+- While a game runs, League of Legends among them, you can click and drag the tomato again. Mayorly now watches the pointer itself instead of waiting for Windows to tell it, which Windows stops doing while a program running as administrator is in front.
+- Keyboard shortcuts still cannot reach Mayorly while the game window itself has focus. Click the tomato for the swap menu, or click outside the game, and they work again.
+
 ## A date in a search is a date
 
 - Searching for "CWILL 11/20" no longer offers CWILL 11/19 and the other days: 11/20 is read as one date, so when no task has it, Enter creates and starts the new one. "CWILL 11/1" still finds every day from 11/10 to 11/19.
