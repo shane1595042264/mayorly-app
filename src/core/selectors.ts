@@ -60,13 +60,25 @@ export function switcherAction(s: MayorlyState, rows: FoundTask[], start: number
   return row ? switchToAction(s, row) : null
 }
 
-/** Lower case, with punctuation folded away, so "follow-up" is found by "followup" and "follow up". */
+/**
+ * Lower case, with punctuation folded away, so "follow-up" is found by "followup" and "follow up".
+ * Digits joined by a slash, a colon or a dot stay one word ("11/20", "7:30", "1.5"): a date is a
+ * date, and "11/20" is not "11" and "20".
+ */
 export function foldSearch(text: string): string {
   return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     // Letters with dots between them are one word: "n.d.a." is "nda".
     .replace(/(?<![\p{L}\p{N}])((?:\p{L}\.){2,}\p{L}?)/gu, (m) => m.replace(/\./g, ''))
-    .toLowerCase().replace(/[\u2018\u2019'\-]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim()
+    .toLowerCase().replace(/[\u2018\u2019'\-]/g, '')
+    .replace(/(\p{N})([/:.])(?=\p{N})/gu, (_m, d: string, sep: string) => `${d}${JOIN[sep as keyof typeof JOIN]}`)
+    .replace(/[^\p{L}\p{N}\s\u0001-\u0003]/gu, ' ').replace(/\s+/g, ' ').trim()
+    .replace(/[\u0001-\u0003]/g, (c) => UNJOIN[c])
 }
+
+const JOIN = { '/': '\u0001', ':': '\u0002', '.': '\u0003' } as const
+const UNJOIN: Record<string, string> = { '\u0001': '/', '\u0002': ':', '\u0003': '.' }
+/** A word with a digit in it: a date, a time, a count. It says which task, so it is never a typo nor the word too many. */
+const NUMBERED = /\p{N}/u
 
 /** One letter wrong, missing, extra or two swapped: "fotwork" is near "footwork". */
 export function oneEdit(a: string, b: string): boolean {
@@ -83,7 +95,7 @@ export function oneEdit(a: string, b: string): boolean {
 
 /** A search word of four letters or more that is one edit from a word in the text, or from its start. */
 function nearWord(text: string, w: string): boolean {
-  if (w.length < 4) return false
+  if (w.length < 4 || NUMBERED.test(w)) return false
   // Against the word, and against its start one letter either side, so a letter dropped from
   // "followup" (folow) or added still lands.
   return text.split(' ').some((t) => oneEdit(w, t) || (t.length > w.length && (oneEdit(w, t.slice(0, w.length)) || oneEdit(w, t.slice(0, w.length + 1)))))
@@ -141,7 +153,7 @@ export function findTasks(s: MayorlyState, query: string, limit = 8): FoundTask[
       // Said the way you would say it, one word more than the title holds ("book haircut
       // tomorrow"): of three words or more, all but one is enough, ranked last.
       const matched = words.filter((w) => has(x.title, w) || nearWord(x.title, w))
-      const loose = !near && words.length >= 3 && matched.length >= words.length - 1
+      const loose = !near && words.length >= 3 && matched.length >= words.length - 1 && words.every((w) => !NUMBERED.test(w) || has(x.title, w))
       if (!near && !loose) return []
       const rank = loose ? 5 : !exact ? 4 : x.title.startsWith(q) ? 0 : words.every((w) => startsWord(x.title, w)) ? 1 : words.every((w) => x.title.includes(w)) ? 2 : 3
       return [{ found: x.found, rank }]

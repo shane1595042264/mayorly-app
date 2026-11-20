@@ -29,6 +29,16 @@ describe('finding a task', () => {
     expect(titles(findTasks(s, 'report'))[0]).toBe('Report the bug')
   })
 
+  it('reads a date as one word: 11/20 finds none of 11/16 to 11/19, while 11/1 finds them all', () => {
+    const work = { id: 'p', name: 'Professional Work', code: 'PRO' } as Ledger
+    const days = withEntries(['CWILL 11/16', 'cwill 11/17', 'CWILL 11/18', 'cwill 11/19'].map((t, i) => entry(`w${i}`, t, i, { ledgerId: 'p' })), [work])
+    expect(findTasks(days, 'CWILL 11/20')).toEqual([])
+    expect(findTasks(days, 'cwill 11/21 standup')).toEqual([])
+    expect(titles(findTasks(days, 'CWILL 11/1'))).toHaveLength(4)
+    expect(titles(findTasks(days, 'cwill 11/18'))).toEqual(['CWILL 11/18'])
+    expect(titles(findTasks(days, 'PRO: cwill 11/19'))).toEqual(['cwill 11/19'])
+  })
+
   it('needs every word, in any order', () => {
     expect(titles(findTasks(s, 'landlord reply'))).toEqual(['reply to the landlord'])
     expect(findTasks(s, 'landlord taxes')).toEqual([])

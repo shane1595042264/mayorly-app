@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## A date in a search is a date
+
+- Searching for "CWILL 11/20" no longer offers CWILL 11/19 and the other days: 11/20 is read as one date, so when no task has it, Enter creates and starts the new one. "CWILL 11/1" still finds every day from 11/10 to 11/19.
+- A number is never taken for a typo or an extra word, on the desktop and the phone alike.
+
 ## No more stuck update prompt
 
 - The update prompt now waits until the deck and the What changed card are closed, and Mayorly always stays under it, so you can always click Update now or Later.
