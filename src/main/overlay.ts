@@ -723,9 +723,18 @@ export class Overlay {
     return near
   }
 
-  /** Windows: the pointer near the pet (or anywhere over the open drawer) goes to the page as a move; true while near. */
+  /**
+   * Windows: the pointer near the pet (or anywhere over the open drawer) goes to the page as a move,
+   * only while the overlay still lets the pointer through. Once the page has said the pointer is on
+   * the pet (`hit`), or the tomato is held, the window takes real mouse events, buttons and all; a
+   * made-up move then would say no button is down and end a drag the moment it starts. True while near.
+   */
   private pollCursorWin(): boolean {
     if (this.win.isDestroyed() || (this.mode !== 'field' && this.mode !== 'drawer') || !this.win.isVisible() || this.dragging) return false
+    if (this.hit || this.heldTimer) {
+      this.cursor = { x: NaN, y: NaN, inside: true }
+      return true
+    }
     const p = screen.getCursorScreenPoint()
     const b = this.win.getBounds()
     const x = p.x - b.x

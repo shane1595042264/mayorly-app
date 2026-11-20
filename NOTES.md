@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Dragging the tomato works again
+
+- The last update broke dragging the tomato on Windows: a drag stopped as soon as it started. It holds again, and the tomato still answers clicks and drags while a game is in front.
+
 ## The tomato answers while you play
 
 - While a game runs, League of Legends among them, you can click and drag the tomato again. Mayorly now watches the pointer itself instead of waiting for Windows to tell it, which Windows stops doing while a program running as administrator is in front.
