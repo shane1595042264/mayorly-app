@@ -1836,20 +1836,22 @@ describe('resizing the tomato', () => {
 describe('auto switch rules', () => {
   it('are this computer\'s, on by default, and carry over what 0.1.66 to 0.1.68 kept', () => {
     const w = world()
-    expect(w.s.settings.autoSwitch).toEqual({ aiBreak: true, aiReturn: true })
-    expect(isDeviceOnly({ type: 'settings/update', patch: { autoSwitch: { aiBreak: false, aiReturn: true } } })).toBe(true)
+    expect(w.s.settings.autoSwitch).toEqual({ aiPrompt: true })
+    expect(isDeviceOnly({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: false } } })).toBe(true)
     const save = (settings: Record<string, unknown>) => {
       const old = JSON.parse(JSON.stringify(w.s)) as { settings: Record<string, unknown> }
       delete old.settings.autoSwitch
       Object.assign(old.settings, settings)
       return migrate(old)!.settings.autoSwitch
     }
-    expect(save({ claudeSwitch: false })).toEqual({ aiBreak: false, aiReturn: true })
-    expect(save({ autoSwitch: { claude: false } })).toEqual({ aiBreak: false, aiReturn: true })
-    expect(save({ autoSwitch: { claude: true } })).toEqual({ aiBreak: true, aiReturn: true })
+    expect(save({ claudeSwitch: false })).toEqual({ aiPrompt: false })
+    expect(save({ autoSwitch: { claude: false } })).toEqual({ aiPrompt: false })
+    expect(save({ autoSwitch: { claude: true } })).toEqual({ aiPrompt: true })
+    expect(save({ autoSwitch: { aiBreak: false, aiReturn: true } })).toEqual({ aiPrompt: false })
+    expect(save({ autoSwitch: { aiBreak: true, aiReturn: false } })).toEqual({ aiPrompt: true })
     // A leftover key never outvotes a choice made since, and goes.
-    w.do({ type: 'settings/update', patch: { claudeSwitch: true, autoSwitch: { aiBreak: false, aiReturn: false } } as never })
-    expect(w.s.settings.autoSwitch).toEqual({ aiBreak: false, aiReturn: false })
+    w.do({ type: 'settings/update', patch: { claudeSwitch: true, autoSwitch: { aiPrompt: false } } as never })
+    expect(w.s.settings.autoSwitch).toEqual({ aiPrompt: false })
     expect('claudeSwitch' in w.s.settings).toBe(false)
   })
 })

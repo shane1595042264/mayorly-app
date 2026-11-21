@@ -472,14 +472,12 @@ export interface Settings {
 }
 
 /**
- * The built-in auto switch rules. aiBreak: a prompt you send an AI (Claude Code, Gemini CLI, Codex,
- * ChatGPT or Gemini in Chrome) takes the desk to your last task while it works, as Alt+Q would;
- * never during a rest or from an idle desk, never for a scheduled or automatic prompt. aiReturn:
- * its answer brings the desk back, unless you moved on.
+ * The built-in auto switch rules. aiPrompt: a prompt you type an AI (Claude Code, Gemini CLI, Codex,
+ * ChatGPT or Gemini in Chrome) is Alt+Q, onto your recent task while it thinks; never during a rest
+ * or from an idle desk, never for a scheduled or automatic prompt.
  */
 export interface AutoSwitchRules {
-  aiBreak: boolean
-  aiReturn: boolean
+  aiPrompt: boolean
 }
 
 /** What the clerk does with an instruction of that kind: do it (with Undo), ask first, or never. */

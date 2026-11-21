@@ -3,12 +3,11 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, rmS
 import { createServer } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { AGENT_APPS, type AgentApp, type AgentEvent } from '../shared/aibreak'
+import { AGENT_APPS, type AgentApp, type AgentPrompt } from '../shared/aiswitch'
 
-// When you send an AI a prompt, and when it has answered. Claude Code, Gemini CLI and Codex run
-// AGENT_HOOK from their own hooks (UserPromptSubmit and Stop, BeforeAgent and AfterAgent), which
-// appends one line to AGENT_INBOX: the app, the event, the session, the time, and whether a person
-// typed it; never the prompt. ChatGPT and Gemini in Chrome come through the Mayorly extension in
+// When you send an AI a prompt. Claude Code, Gemini CLI and Codex run AGENT_HOOK from their own
+// prompt hooks (UserPromptSubmit, BeforeAgent), which appends one line to AGENT_INBOX: the app,
+// the time, and whether a person typed it; never the prompt. ChatGPT and Gemini in Chrome come through the Mayorly extension in
 // EXTENSION_DIR, which posts the same to a listener on 127.0.0.1 with the token in TOKEN_FILE.
 // Everything lives in the home folder, not AppData: the Claude desktop app is a packaged Windows
 // app, and the AppData its hooks see is a private copy of their own.
@@ -22,11 +21,12 @@ const TOKEN_FILE = join(AGENT_DIR, 'token')
 export const AGENT_PORT = 47731
 
 /**
- * The hook script: `node ai-hook.cjs <app> <prompt|done>`, the hook's JSON on stdin. Prints nothing,
- * except `{}` for Gemini, which reads a hook's stdout as JSON.
+ * The hook script: `node ai-hook.cjs <app> prompt`, the hook's JSON on stdin. Prints nothing,
+ * except `{}` for Gemini, which reads a hook's stdout as JSON. A `done` from a hook 0.1.69 set up
+ * on an answer is written too, and ignored.
  */
-const HOOK = `// Mayorly: one line when you send an AI a prompt, and one when it has answered, so the desk can
-// take a break meanwhile. Keeps the app, the event, the session and whether you typed it; never the prompt.
+const HOOK = `// Mayorly: one line when you send an AI a prompt, so the desk can switch to your recent task
+// meanwhile. Keeps the app and whether you typed it; never the prompt.
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
@@ -44,7 +44,7 @@ const finish = () => {
     const manual = event !== 'prompt' ? true : kind ? kind === 'human' : !/^\\s*<(scheduled-task|task-notification|system-reminder)/.test(String(j.prompt || ''))
     const dir = path.join(os.homedir(), '.mayorly')
     fs.mkdirSync(dir, { recursive: true })
-    fs.appendFileSync(path.join(dir, 'ai.jsonl'), JSON.stringify({ at: Date.now(), app, event, session: String(j.session_id || j.sessionId || ''), manual }) + '\\n')
+    fs.appendFileSync(path.join(dir, 'ai.jsonl'), JSON.stringify({ at: Date.now(), app, event, manual }) + '\\n')
   } catch {}
   if (app === 'gemini') process.stdout.write('{}')
 }
@@ -57,15 +57,15 @@ setTimeout(finish, 2000).unref()
 
 const MANIFEST = {
   manifest_version: 3,
-  name: 'Mayorly AI break',
-  version: '1.0.0',
-  description: 'Tells Mayorly when you send ChatGPT or Gemini a prompt, and when the answer is done, so the desk can take a break meanwhile.',
+  name: 'Mayorly AI switch',
+  version: '1.1.0',
+  description: 'Tells Mayorly when you send ChatGPT or Gemini a prompt, so the desk can switch to your recent task meanwhile.',
   background: { service_worker: 'background.js' },
   content_scripts: [{ matches: ['https://chatgpt.com/*', 'https://gemini.google.com/*'], js: ['content.js'], run_at: 'document_idle' }],
   host_permissions: [`http://127.0.0.1:${AGENT_PORT}/*`],
 }
 
-const BACKGROUND = `// Mayorly AI break: hands the page's news to Mayorly on this computer.
+const BACKGROUND = `// Mayorly AI switch: hands the page's news to Mayorly on this computer.
 importScripts('config.js')
 chrome.runtime.onMessage.addListener((m) => {
   fetch('http://127.0.0.1:' + self.MAYORLY.port + '/agent', {
@@ -76,24 +76,17 @@ chrome.runtime.onMessage.addListener((m) => {
 })
 `
 
-/** The page is writing an answer while its Stop button shows: that starting is the prompt, that ending is the answer. */
-const CONTENT = `// Mayorly AI break: watches for an answer being written (the Stop button), nothing else.
+/** The page is writing an answer while its Stop button shows: that starting is the prompt. */
+const CONTENT = `// Mayorly AI switch: watches for an answer starting to be written (the Stop button), nothing else.
 (() => {
   const app = location.host.includes('gemini') ? 'gemini-web' : 'chatgpt-web'
-  let id = sessionStorage.getItem('mayorly-tab')
-  if (!id) {
-    id = Math.random().toString(36).slice(2)
-    sessionStorage.setItem('mayorly-tab', id)
-  }
-  const send = (event) => {
-    try { chrome.runtime.sendMessage({ app, event, session: id }) } catch {}
-  }
   const busy = () => !!document.querySelector('[data-testid="stop-button"], button[aria-label^="Stop" i], button[aria-label*="stop response" i], button[aria-label*="stop generating" i]')
   let was = busy()
   setInterval(() => {
     const now = busy()
-    if (now && !was) send('prompt')
-    if (!now && was) send('done')
+    if (now && !was) {
+      try { chrome.runtime.sendMessage({ app, event: 'prompt' }) } catch {}
+    }
     was = now
   }, 500)
 })()
@@ -107,8 +100,8 @@ const writeIfChanged = (file: string, text: string) => {
   if (!existsSync(file) || readFileSync(file, 'utf8') !== text) writeFileSync(file, text)
 }
 
-/** Writes the hook, the token and the extension, then hands every fresh event to `onEvent`. */
-export function watchAgents(onEvent: (e: AgentEvent) => void): void {
+/** Writes the hook, the token and the extension, then hands every fresh prompt to `onPrompt`. */
+export function watchAgents(onPrompt: (e: AgentPrompt) => void): void {
   let token: string
   try {
     mkdirSync(EXTENSION_DIR, { recursive: true })
@@ -153,7 +146,7 @@ export function watchAgents(onEvent: (e: AgentEvent) => void): void {
     offset = cur.size
     for (const line of text.split('\n')) {
       const e = eventOf(line)
-      if (e && Date.now() - e.at < FRESH_MS) onEvent(e)
+      if (e && Date.now() - e.at < FRESH_MS) onPrompt(e)
     }
     if (offset > KEEP_BYTES) {
       try {
@@ -179,7 +172,7 @@ export function watchAgents(onEvent: (e: AgentEvent) => void): void {
     })
     req.on('end', () => {
       const e = eventOf(JSON.stringify({ ...safeJson(body), at: Date.now(), manual: true }))
-      if (e && (e.app === 'chatgpt-web' || e.app === 'gemini-web')) onEvent(e)
+      if (e && (e.app === 'chatgpt-web' || e.app === 'gemini-web')) onPrompt(e)
       res.writeHead(204).end()
     })
   })
@@ -196,10 +189,10 @@ function safeJson(text: string): Record<string, unknown> {
   }
 }
 
-/** One line of the inbox, checked; null when it is not one. */
-export function eventOf(line: string): AgentEvent | null {
+/** One line of the inbox, checked; null when it is not a prompt. */
+export function eventOf(line: string): AgentPrompt | null {
   const j = safeJson(line)
   const app = j.app as AgentApp
-  if (!AGENT_APPS.includes(app) || (j.event !== 'prompt' && j.event !== 'done') || typeof j.at !== 'number') return null
-  return { at: j.at, app, event: j.event, session: String(j.session ?? '').slice(0, 120), manual: j.manual === true }
+  if (!AGENT_APPS.includes(app) || j.event !== 'prompt' || typeof j.at !== 'number') return null
+  return { at: j.at, app, manual: j.manual === true }
 }

@@ -457,14 +457,9 @@ function ClerkShelf({ clerk, set, ai }: { clerk: ClerkSettings; set: (p: Partial
 /** The rules that move the desk on their own. Each is built in and only turned on or off here. */
 const AUTO_SWITCH: { key: keyof AutoSwitchRules; label: string; help: string }[] = [
   {
-    key: 'aiBreak',
-    label: 'When you send an AI a prompt, switch to your last task while it works',
-    help: 'What Alt+Q does. Claude Code, Gemini CLI and Codex through their hooks; ChatGPT and Gemini in Chrome through the Mayorly extension (load ~/.mayorly/chrome-extension in chrome://extensions, Developer mode, Load unpacked). Not during a rest or when the desk is idle; scheduled tasks and background notices never count.',
-  },
-  {
-    key: 'aiReturn',
-    label: 'When it has answered, switch back',
-    help: 'Only if you are still on the task it switched you to. With several AIs at work, after the last one answers.',
+    key: 'aiPrompt',
+    label: 'When you send an AI a prompt, switch to your recent task',
+    help: 'What Alt+Q does, so the wait goes to something else; the next prompt or Alt+Q switches again. Claude Code, Gemini CLI and Codex through their hooks; ChatGPT and Gemini in Chrome through the Mayorly extension (load ~/.mayorly/chrome-extension in chrome://extensions, Developer mode, Load unpacked). Not during a rest or when the desk is idle; scheduled tasks and background notices never count.',
   },
 ]
 

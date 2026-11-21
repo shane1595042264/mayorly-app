@@ -8,6 +8,7 @@ import { plan } from './Capture'
 
 // Search and capture in one line. Typing narrows the open tasks and the couch list; Enter starts
 // the one selected. A line nothing matches is a new task, read the way the capture box reads it.
+// Shift+Enter makes the typed line a new task without starting it, whatever is selected.
 
 type Row = FoundTask | { kind: 'new' }
 
@@ -41,14 +42,22 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
     close()
   }
 
+  // Filed as the capture box files it, the desk left alone. An order (/hold) just runs.
+  const add = () => {
+    if (!query || !create.run) return
+    create.run()
+    close()
+  }
+
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.nativeEvent.isComposing) return
     if (e.key === 'Escape') return close()
     const action = actionFor(e.nativeEvent, 'find', s.settings)
-    if (!action || (action === 'find.start' && e.repeat)) return
+    if (!action || ((action === 'find.start' || action === 'find.add') && e.repeat)) return
     e.preventDefault()
     recordUse(action)
     if (action === 'find.start') start(rows[at])
+    else if (action === 'find.add') add()
     else if (rows.length) setPicked((at + (action === 'find.down' ? 1 : rows.length - 1)) % rows.length)
   }
 
@@ -141,6 +150,7 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
         )}
         <footer className="hint-row">
           <span><i className="key">{label('find.start')}</i> Start</span>
+          {query && !query.startsWith('/') && create.run && <span><i className="key">{label('find.add')}</i> Add, not start</span>}
           <span><i className="key">{label('find.up')}</i> <i className="key">{label('find.down')}</i> Choose</span>
           <span><i className="key">Esc</i> Close</span>
         </footer>

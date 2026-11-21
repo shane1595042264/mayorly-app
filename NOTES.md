@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## An AI prompt is just Alt+Q, and Find can add without starting
+
+- When you type Claude Code, Gemini CLI, Codex, ChatGPT or Gemini a prompt, the desk switches to your recent task, exactly as Alt+Q would. It doesn't switch back when the answer comes: your next prompt, or Alt+Q, switches again. Nothing to remember, so restarting Mayorly loses nothing.
+- Settings, Auto switch, now has one rule for it. Not during a rest or when the desk is idle, and only prompts you type. If you loaded the Chrome extension already, reload it once in chrome://extensions.
+- In Find (Alt+F), Shift+Enter adds what you typed as a new task and leaves the desk as it is. Enter still starts it. The key can be changed in the keymap (?).
+
 ## Context switch rules on every task
 
 - Every task now has context switch rules, like the couch list: cues in your words for when to leave it for something else, such as "stuck 20 minutes, read the hint".

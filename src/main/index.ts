@@ -10,7 +10,7 @@ import { makeCapture } from '../shared/capture'
 import { INSTRUCT_SYSTEM, instructContext, parseInstruction, permit, resolveInstruction, stripInstruction, type InstructionPlan } from '../shared/instruct'
 import { dayKey, recipeRunsOn, wallClock } from '../shared/windows'
 import { watchAgents } from './agents'
-import { AGENT_NAME, breakStep, type AiBreak } from '../shared/aibreak'
+import { AGENT_NAME, promptStep } from '../shared/aiswitch'
 import { sealedClerkStore } from './ai/store'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
@@ -613,21 +613,15 @@ function boot() {
   setTimeout(runRecipes, 15_000)
   setInterval(runRecipes, 60_000)
 
-  // Auto switch, the AI break: a prompt you send an AI takes the desk to your last task while it
-  // works (what Alt+Q does), and its answer brings the desk back, unless you moved on (aibreak.ts).
-  let aiBreak: AiBreak | null = null
+  // Auto switch: a prompt you type an AI is Alt+Q, onto your recent task while it thinks. Nothing
+  // is remembered; the next prompt or Alt+Q switches again (aiswitch.ts).
   const deskTitle = (id: string | null) => (id ? (engine.state.entries.find((e) => e.id === id)?.title ?? engine.state.leisure.find((l) => l.id === id)?.title ?? '') : '')
   watchAgents((e) => {
-    const step = breakStep(engine.state, aiBreak, e)
-    aiBreak = step.brk
-    log.info('[agents]', `${e.app} ${e.event}${e.manual ? '' : ' (not typed)'}: ${step.why}`)
+    const step = promptStep(engine.state, e)
+    log.info('[agents]', `${e.app} prompt${e.manual ? '' : ' (not typed)'}: ${step.why}`)
     if (!step.act) return
     engine.act(step.act)
-    const now = onDeskId(engine.state)
-    if (e.event === 'prompt') {
-      if (aiBreak) aiBreak = { ...aiBreak, to: now }
-      say({ phase: 'done', text: `${AGENT_NAME[e.app]} is working: on ${short(deskTitle(now))}` })
-    } else say({ phase: 'done', text: `${AGENT_NAME[e.app]} answered: back on ${short(deskTitle(now))}` })
+    say({ phase: 'done', text: `${AGENT_NAME[e.app]} prompt: on ${short(deskTitle(onDeskId(engine.state)))}` })
   })
 
   // An instruction from Alt+N: the clerk reads it into steps; what the permissions allow is done

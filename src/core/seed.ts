@@ -41,7 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
   keymap: {},
   openAtLogin: false,
   gaming: false,
-  autoSwitch: { aiBreak: true, aiReturn: true },
+  autoSwitch: { aiPrompt: true },
   clerk: { createLedgers: true, consolidate: true, minConfidence: null, allow: { settings: 'ask', recipes: 'ask' } },
 }
 
@@ -110,16 +110,12 @@ export function sampleState(now: number, newId: () => string): MayorlyState {
 
 /**
  * The auto switch rules of a save. 0.1.66 kept the Claude rule as `claudeSwitch`, 0.1.67 and 0.1.68
- * as `autoSwitch.claude`; turned off there, the AI break starts off.
+ * as `autoSwitch.claude`, 0.1.69 and 0.1.70 as `autoSwitch.aiBreak`; turned off there, it starts off.
  */
 function autoSwitchOf(s: Partial<Settings> | undefined): Settings['autoSwitch'] {
-  const base = DEFAULT_SETTINGS.autoSwitch
-  const rules = s?.autoSwitch as (Partial<Settings['autoSwitch']> & { claude?: unknown }) | undefined
-  const old = rules?.claude ?? (s as { claudeSwitch?: unknown } | undefined)?.claudeSwitch
-  return {
-    aiBreak: typeof rules?.aiBreak === 'boolean' ? rules.aiBreak : old !== false,
-    aiReturn: typeof rules?.aiReturn === 'boolean' ? rules.aiReturn : base.aiReturn,
-  }
+  const rules = s?.autoSwitch as (Partial<Settings['autoSwitch']> & { aiBreak?: unknown; claude?: unknown }) | undefined
+  const old = rules?.aiBreak ?? rules?.claude ?? (s as { claudeSwitch?: unknown } | undefined)?.claudeSwitch
+  return { aiPrompt: typeof rules?.aiPrompt === 'boolean' ? rules.aiPrompt : old !== false }
 }
 
 /** Bring older or partial saves up to the current shape. Never drops user data. */

@@ -69,6 +69,7 @@ export const KEYS: KeyDef[] = [
   { id: 'capture.keep', scope: 'capture', label: 'File and keep the box open', keys: ['Shift+Enter'] },
 
   { id: 'find.start', scope: 'find', label: 'Start the selected task', keys: ['Enter'], note: 'A line nothing matches is created and started. A running focus block swaps to the task, the clock where it is; otherwise a pomodoro starts on it.' },
+  { id: 'find.add', scope: 'find', label: 'Create the line as a task, without starting it', keys: ['Shift+Enter'], note: 'Whatever is selected: the typed line becomes a new task, filed as the capture box files it, and the desk stays as it is.' },
   { id: 'find.down', scope: 'find', label: 'Next result', keys: ['ArrowDown'] },
   { id: 'find.up', scope: 'find', label: 'Previous result', keys: ['ArrowUp'] },
 
