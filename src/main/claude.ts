@@ -27,7 +27,11 @@ process.stdin.on('end', () => {
     const j = JSON.parse(data || '{}')
     const dir = path.join(os.homedir(), '.mayorly')
     fs.mkdirSync(dir, { recursive: true })
-    fs.appendFileSync(path.join(dir, 'claude.jsonl'), JSON.stringify({ at: Date.now(), cwd: String(j.cwd || ''), session: String(j.session_id || '') }) + '\\n')
+    // Typed by you, or sent by Claude itself (a scheduled task, a background notice): where the
+    // payload says where the prompt came from that decides, else the way such prompts begin.
+    const kind = (j.origin && j.origin.kind) || j.turnOrigin || j.turn_origin || ''
+    const manual = kind ? kind === 'human' : !/^\\s*<(scheduled-task|task-notification|system-reminder)/.test(String(j.prompt || ''))
+    fs.appendFileSync(path.join(dir, 'claude.jsonl'), JSON.stringify({ at: Date.now(), cwd: String(j.cwd || ''), session: String(j.session_id || ''), manual }) + '\\n')
   } catch {}
 })
 `
@@ -41,6 +45,8 @@ export interface ClaudePrompt {
   at: number
   cwd: string
   session: string
+  /** Typed by a person; false for a scheduled task or a background notice. */
+  manual: boolean
 }
 
 export function watchClaude(onPrompt: (p: ClaudePrompt) => void): void {
@@ -78,7 +84,8 @@ export function watchClaude(onPrompt: (p: ClaudePrompt) => void): void {
     for (const line of text.split('\n')) {
       try {
         const j = JSON.parse(line) as Partial<ClaudePrompt>
-        if (typeof j.at === 'number' && typeof j.cwd === 'string' && j.cwd) latest = { at: j.at, cwd: j.cwd, session: String(j.session ?? '') }
+        // Only what a person typed moves the desk.
+        if (typeof j.at === 'number' && typeof j.cwd === 'string' && j.cwd && j.manual === true) latest = { at: j.at, cwd: j.cwd, session: String(j.session ?? ''), manual: true }
       } catch {
         // A half-written line: the next read has it whole.
       }

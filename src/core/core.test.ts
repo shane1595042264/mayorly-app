@@ -1824,6 +1824,19 @@ describe('following Claude Code', () => {
   })
 })
 
+describe('auto switch rules', () => {
+  it('are this computer\'s, on by default, and take the setting 0.1.66 kept under another name', () => {
+    const w = world()
+    expect(w.s.settings.autoSwitch).toEqual({ claude: true })
+    expect(isDeviceOnly({ type: 'settings/update', patch: { autoSwitch: { claude: false } } })).toBe(true)
+    w.do({ type: 'settings/update', patch: { claudeSwitch: false } as never })
+    expect(w.s.settings.autoSwitch).toEqual({ claude: false })
+    expect('claudeSwitch' in w.s.settings).toBe(false)
+    w.do({ type: 'settings/update', patch: { autoSwitch: { claude: true } } })
+    expect(w.s.settings.autoSwitch.claude).toBe(true)
+  })
+})
+
 describe('gaming mode', () => {
   it('belongs to this computer alone, is off by default, and has its own key', () => {
     const w = world()

@@ -612,11 +612,16 @@ function boot() {
   setTimeout(runRecipes, 15_000)
   setInterval(runRecipes, 60_000)
 
-  // A Claude Code prompt puts the desk on that project's task: the open task named like its folder.
+  // Auto switch, the Claude rule: a prompt you type puts the desk on that project's task, the open
+  // task named like its folder. Never during a rest; scheduled and automatic prompts never get here.
   watchClaude((p) => {
     const st = engine.state
-    if (!st.settings.claudeSwitch) return
+    if (!st.settings.autoSwitch.claude) return
     const folder = p.cwd.split(/[\\/]+/).filter(Boolean).slice(-2).join('/')
+    if (st.desk.block?.kind === 'rest') {
+      log.info('[claude] prompt in', folder, ': resting, left alone')
+      return
+    }
     const entry = taskForFolder(st, p.cwd)
     if (!entry) {
       log.info('[claude] prompt in', folder, ': no open task by that name')

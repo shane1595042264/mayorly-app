@@ -500,21 +500,19 @@ body.effects { background: transparent; }
 .order-say { margin: 0; font-size: 13px; color: var(--ink-2); }
 .order-card .form-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-/* ------------------------------------------------------------ gaming mode: the tomato on fire
-   The founder's tomato, untouched, with two frames of pixel flames (assets/flames@1x.png, 16 x 6
-   each, side by side) over its top at the same 3x, flickering. Absolute, so nothing moves. */
-.pet-flames {
+/* ------------------------------------------------------------ gaming mode: the gaming tomato
+   assets/tomato_gaming.png, drawn by the founder, takes the tomato's place: centred on it and
+   scaled 3x like it, so a canvas bigger than 16 x 16 spreads round the tomato evenly. The usual
+   sprite stays, unseen, as the drag handle's size. */
+.pet-sprite.is-gaming { visibility: hidden; }
+.pet-sprite-gaming {
   position: absolute;
-  left: 0;
-  top: -12px;
-  width: 48px;
-  height: 18px;
-  background-size: 96px 18px;
-  background-repeat: no-repeat;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(3);
   image-rendering: pixelated;
   pointer-events: none;
-  animation: pet-flicker 0.36s steps(1) infinite;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 0.7px 1px rgb(0 0 0 / 0.55));
 }
-@keyframes pet-flicker { 0% { background-position: 0 0; } 50% { background-position: -48px 0; } }
-.pet-sprite.on-fire { filter: drop-shadow(0 0 5px rgb(255 140 40 / 0.55)) drop-shadow(0 2px 3px rgb(0 0 0 / 0.55)); }
-@media (prefers-reduced-motion: reduce) { .pet-flames { animation: none; } }

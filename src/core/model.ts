@@ -463,10 +463,18 @@ export interface Settings {
   openAtLogin: boolean
   /** Gaming mode, on this machine: every global shortcut but the one that turns it off is let go, so a game gets those keys. The desk runs on. */
   gaming: boolean
-  /** On this machine: a Claude Code prompt puts the desk on the task named like its project folder. */
-  claudeSwitch: boolean
+  /** Rules that move the desk on their own, each on or off, on this machine. */
+  autoSwitch: AutoSwitchRules
   /** What the AI clerk may do to the shelf on its own. Syncs. */
   clerk: ClerkSettings
+}
+
+/**
+ * The built-in auto switch rules. claude: a Claude Code prompt you type puts the desk on the task
+ * named like its project folder; never during a rest, never for a scheduled or automatic prompt.
+ */
+export interface AutoSwitchRules {
+  claude: boolean
 }
 
 /** What the clerk does with an instruction of that kind: do it (with Undo), ask first, or never. */

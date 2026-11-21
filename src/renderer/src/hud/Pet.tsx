@@ -4,7 +4,7 @@ import { blockView, clock, dayStats, nextBlock, startOfDay, switchTarget, taskTo
 import type { UiMode } from '../../../shared/bridge'
 import { INSET, anchorInBox, captionBox, dragScale, petBox, type Point } from '../../../shared/pet'
 import tomato from '../assets/tomato@1x.png'
-import flames from '../assets/flames@1x.png'
+import tomatoGaming from '../assets/tomato_gaming.png'
 import { bridge } from '../bridge'
 import { hotkeyLabel } from '../lib/keys'
 import { ledgerVars } from '../lib/themes'
@@ -278,9 +278,10 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
                   : { duration: 0.2 }
             }
           >
-            <img className={`pet-sprite ${gaming ? 'on-fire' : ''}`} src={tomato} alt="" draggable={false} />
-            {/* Gaming mode: the tomato burns. Two frames of the flames over its top, flickering. */}
-            {gaming && <span className="pet-flames" aria-hidden style={{ backgroundImage: `url(${flames})` }} />}
+            <img className={`pet-sprite ${gaming ? 'is-gaming' : ''}`} src={tomato} alt="" draggable={false} />
+            {/* Gaming mode: the founder's own gaming tomato, centred on the usual one at the same 3x, so a
+                larger canvas (fire all around) still lines up as long as the tomato stays in its middle. */}
+            {gaming && <img className="pet-sprite-gaming" src={tomatoGaming} alt="" draggable={false} />}
             {moving && <span className="pet-resize" title="Drag to resize" aria-hidden {...handle} />}
           </motion.div>
         </div>

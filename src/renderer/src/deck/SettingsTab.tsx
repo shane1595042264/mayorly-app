@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowsClockwise, GoogleLogo, Keyboard, Play, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
-import { ALARM_TONES, LEDGER_CAP, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type ClerkSettings, type MayorlyState, type Recipe, type Settings, type ClerkAllow } from '@core/index'
+import { ALARM_TONES, LEDGER_CAP, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type ClerkSettings, type MayorlyState, type Recipe, type Settings, type ClerkAllow, type AutoSwitchRules } from '@core/index'
 import type { AiKeySync, AiProvider, AiPublic, AppInfo } from '../../../shared/bridge'
 import { DEFAULT_THRESHOLD, TRIALS } from '../../../shared/ai/tuning'
 import { builtOn } from '../../../shared/build'
@@ -42,12 +42,7 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
           <Check label="Start rests on their own" value={st.autoStartRest} onChange={(autoStartRest) => set({ autoStartRest })} />
           <Check label="Sound cues" value={st.sound} onChange={(sound) => set({ sound })} />
           {kind === 'electron' && <Check label="Open at login" value={st.openAtLogin} onChange={(openAtLogin) => set({ openAtLogin })} />}
-          {kind === 'electron' && (
-            <div data-setting="claude code, claude, prompt, hook, auto switch, project">
-              <Check label="Follow Claude Code: a prompt starts the project's task" value={st.claudeSwitch} onChange={(claudeSwitch) => set({ claudeSwitch })} />
-              <p className="field-help">When you prompt Claude Code, the desk goes to the open task named like its project folder: Documents/Mayorly/app is Mayorly. Needs the Mayorly hook in Claude Code&apos;s settings.</p>
-            </div>
-          )}
+          {kind === 'electron' && <AutoSwitchRulesField rules={st.autoSwitch} set={(autoSwitch) => set({ autoSwitch })} />}
           {kind === 'electron' && IS_MAC && <Check label="Timer beside the menu bar tomato" value={st.trayTimer} onChange={(trayTimer) => set({ trayTimer })} />}
         </div>
       </section>
@@ -459,6 +454,29 @@ function ClerkShelf({ clerk, set, ai }: { clerk: ClerkSettings; set: (p: Partial
 }
 
 /** Electron wraps an error thrown in main: "Error invoking remote method 'x': Error: text". */
+/** The rules that move the desk on their own. Each is built in and only turned on or off here. */
+const AUTO_SWITCH: { key: keyof AutoSwitchRules; label: string; help: string }[] = [
+  {
+    key: 'claude',
+    label: 'Claude Code: a prompt you type starts that project\'s task',
+    help: 'The open task named like the project folder: Documents/Mayorly/app is Mayorly. Not during a rest, and not for scheduled tasks or background notices. Needs the Mayorly hook in Claude Code\'s settings.',
+  },
+]
+
+function AutoSwitchRulesField({ rules, set }: { rules: AutoSwitchRules; set: (r: AutoSwitchRules) => void }) {
+  return (
+    <div className="auto-switch" data-setting="auto switch, rules, claude code, claude, prompt, hook, project">
+      <span className="field-label caps">Auto switch</span>
+      {AUTO_SWITCH.map((r) => (
+        <div key={r.key}>
+          <Check label={r.label} value={rules[r.key]} onChange={(on) => set({ ...rules, [r.key]: on })} />
+          <p className="field-help">{r.help}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const ALLOW: [ClerkAllow, string][] = [['auto', 'Do it'], ['ask', 'Ask first'], ['never', 'Never']]
 
 /** What the clerk may do with an instruction typed into Alt+N, by kind. Done is always undoable from the box. */

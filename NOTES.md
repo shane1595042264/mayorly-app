@@ -4,13 +4,16 @@ The top section is what the app shows once per build, the first time that build 
 
 ## Mayorly follows Claude Code
 
-- When you send Claude Code a prompt, the desk switches to the open task named like the project's folder. Working in Documents/Mayorly/app puts you on Mayorly, and the tomato says so. A held timer on that task resumes.
-- Folders like app, src or Documents are skipped on the way up. Turn it off in Settings, under the general options.
+- When you type a prompt to Claude Code, the desk switches to the open task named like the project's folder. Working in Documents/Mayorly/app puts you on Mayorly, and the tomato says so. A held timer on that task resumes.
+- Folders like app, src or Documents are skipped on the way up.
+- It never switches during a rest, and scheduled tasks or background notices in Claude never count: only what you type.
+- Settings now has an Auto switch list. This is its first rule, and it can be turned off there; more rules will follow.
+- In gaming mode the tomato wears your own drawing: the headphones tomato.
 
 ## Gaming mode
 
 - Alt+Shift+G (Option+Shift+G on a Mac) turns every other Mayorly shortcut off, so a game gets Alt+G, Alt+Q and the rest. Press it again to turn them back on. The timer keeps running, and the tomato still takes clicks.
-- In gaming mode the tomato is on fire. The key can be changed in Settings, under Hotkeys.
+- The key can be changed in Settings, under Hotkeys.
 
 ## Alt+I always gives you something to do
 

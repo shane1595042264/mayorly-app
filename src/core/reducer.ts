@@ -14,7 +14,7 @@ import { ledgerKey, ledgerTomatoes, unharvestedTomatoes, wholeTomatoes } from '.
 import { completionHistory } from './history'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
-export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'alarms', 'trayTimer', 'text', 'gaming', 'claudeSwitch'] as const
+export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'alarms', 'trayTimer', 'text', 'gaming', 'autoSwitch'] as const
 
 /** Only settings that belong to this computer: changing them says nothing about who is at the desk. */
 export const isDeviceOnly = (a: Action): boolean =>
@@ -1501,8 +1501,10 @@ function validFiling(s: MayorlyState, f: Filing): boolean {
 }
 
 export function sanitiseSettings(x: Settings): Settings {
+  // 0.1.66 kept the Claude rule as `claudeSwitch`; it now lives among the auto switch rules.
+  const { claudeSwitch: oldClaude, ...rest } = x as Settings & { claudeSwitch?: boolean }
   return {
-    ...x,
+    ...rest,
     focusMin: clampInt(x.focusMin, 1, 180, 25),
     shortRestMin: clampInt(x.shortRestMin, 0, 60, 5),
     longRestMin: clampInt(x.longRestMin, 0, 120, 15),
@@ -1514,7 +1516,7 @@ export function sanitiseSettings(x: Settings): Settings {
     alarms: sanitiseAlarms(x.alarms),
     clerk: sanitiseClerk(x.clerk),
     gaming: x.gaming === true,
-    claudeSwitch: x.claudeSwitch !== false,
+    autoSwitch: { claude: (oldClaude ?? x.autoSwitch?.claude) !== false },
   }
 }
 
