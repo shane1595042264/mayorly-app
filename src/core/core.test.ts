@@ -1829,7 +1829,13 @@ describe('auto switch rules', () => {
     const w = world()
     expect(w.s.settings.autoSwitch).toEqual({ claude: true })
     expect(isDeviceOnly({ type: 'settings/update', patch: { autoSwitch: { claude: false } } })).toBe(true)
-    w.do({ type: 'settings/update', patch: { claudeSwitch: false } as never })
+    // A 0.1.66 save: its choice carries over once, as it loads.
+    const old = JSON.parse(JSON.stringify(w.s)) as { settings: Record<string, unknown> }
+    delete old.settings.autoSwitch
+    old.settings.claudeSwitch = false
+    expect(migrate(old)!.settings.autoSwitch).toEqual({ claude: false })
+    // A leftover key never outvotes a choice made since: turning the rule off holds, and the key goes.
+    w.do({ type: 'settings/update', patch: { claudeSwitch: true, autoSwitch: { claude: false } } as never })
     expect(w.s.settings.autoSwitch).toEqual({ claude: false })
     expect('claudeSwitch' in w.s.settings).toBe(false)
     w.do({ type: 'settings/update', patch: { autoSwitch: { claude: true } } })

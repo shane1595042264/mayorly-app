@@ -1501,8 +1501,8 @@ function validFiling(s: MayorlyState, f: Filing): boolean {
 }
 
 export function sanitiseSettings(x: Settings): Settings {
-  // 0.1.66 kept the Claude rule as `claudeSwitch`; it now lives among the auto switch rules.
-  const { claudeSwitch: oldClaude, ...rest } = x as Settings & { claudeSwitch?: boolean }
+  // 0.1.66 kept the Claude rule as `claudeSwitch`; `migrate` carried it into the auto switch rules, and it goes.
+  const { claudeSwitch: _old, ...rest } = x as Settings & { claudeSwitch?: boolean }
   return {
     ...rest,
     focusMin: clampInt(x.focusMin, 1, 180, 25),
@@ -1516,7 +1516,7 @@ export function sanitiseSettings(x: Settings): Settings {
     alarms: sanitiseAlarms(x.alarms),
     clerk: sanitiseClerk(x.clerk),
     gaming: x.gaming === true,
-    autoSwitch: { claude: (oldClaude ?? x.autoSwitch?.claude) !== false },
+    autoSwitch: { claude: x.autoSwitch?.claude !== false },
   }
 }
 

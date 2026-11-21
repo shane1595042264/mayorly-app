@@ -108,6 +108,13 @@ export function sampleState(now: number, newId: () => string): MayorlyState {
   return s
 }
 
+/** The auto switch rules of a save; one from 0.1.66 kept the Claude rule as `claudeSwitch`. */
+function autoSwitchOf(s: Partial<Settings> | undefined): Settings['autoSwitch'] {
+  const old = (s as { claudeSwitch?: unknown } | undefined)?.claudeSwitch
+  if (s?.autoSwitch) return { ...DEFAULT_SETTINGS.autoSwitch, ...s.autoSwitch }
+  return { ...DEFAULT_SETTINGS.autoSwitch, ...(typeof old === 'boolean' ? { claude: old } : {}) }
+}
+
 /** Bring older or partial saves up to the current shape. Never drops user data. */
 export function migrate(raw: unknown): MayorlyState | null {
   if (!raw || typeof raw !== 'object') return null
@@ -121,7 +128,7 @@ export function migrate(raw: unknown): MayorlyState | null {
     leisure: (x.leisure ?? []).map((it) => ({ ...it, cues: Array.isArray(it.cues) ? it.cues : [] })),
     entries: (x.entries ?? []).map((e) => ({ ...e, tomatoes: Number.isFinite(e.tomatoes) ? e.tomatoes : 0 })),
     trash: (Array.isArray(x.trash) ? x.trash : []).filter((t) => t && typeof t.id === 'string' && Number.isFinite(t.deletedAt)).map((t) => ({ ...t, tomatoes: Number.isFinite(t.tomatoes) ? t.tomatoes : 0 })),
-    settings: { ...base.settings, ...x.settings, alarms: sanitiseAlarms(x.settings?.alarms), hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys }, calendar: { ...base.settings.calendar, ...x.settings?.calendar }, clerk: { ...base.settings.clerk, ...x.settings?.clerk, allow: { ...base.settings.clerk.allow, ...x.settings?.clerk?.allow } } },
+    settings: { ...base.settings, ...x.settings, autoSwitch: autoSwitchOf(x.settings), alarms: sanitiseAlarms(x.settings?.alarms), hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys }, calendar: { ...base.settings.calendar, ...x.settings?.calendar }, clerk: { ...base.settings.clerk, ...x.settings?.clerk, allow: { ...base.settings.clerk.allow, ...x.settings?.clerk?.allow } } },
     calendar: { ...emptyCalendar(), ...x.calendar },
     recipes: Array.isArray(x.recipes) ? x.recipes : [],
   } as MayorlyState)))
