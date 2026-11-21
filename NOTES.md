@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Panels stay on one screen
+
+- Find, Capture, the deck and the swap menu open in the middle of the screen the tomato is on, all of it on that screen. Windows could shift Mayorly's layer when a monitor woke up or was rearranged, which split a panel across two screens; Mayorly now puts it back by itself.
+
 ## Dragging the tomato works again
 
 - The last update broke dragging the tomato on Windows: a drag stopped as soon as it started. It holds again, and the tomato still answers clicks and drags while a game is in front.

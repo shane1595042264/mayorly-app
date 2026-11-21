@@ -23,6 +23,8 @@ const debug = process.env.MAYORLY_DEBUG ? (...a: unknown[]) => console.error('[o
 
 // The pet's sizes, and the rules for where it, its caption and the drawer sit, are in
 // src/shared/pet.ts, shared with the page, which draws the same boxes in the Windows overlay.
+/** Windows: how long after the system moved the overlay it is put back on its display. */
+const REFIT_SETTLE_MS = 250
 /** How often the cursor is sampled for hover: on macOS always, on Windows beside the forwarded moves. */
 const HOVER_POLL_MS = 40
 /** Windows: how near the pet the pointer must be before its moves are fed to the page. */
@@ -126,6 +128,23 @@ export class Overlay {
     this.startHoverPoll()
 
     screen.on('display-metrics-changed', () => this.fit())
+    screen.on('display-added', () => this.fit())
+    // Windows: the overlay is exactly the work area of the pet's display. Windows moves windows on
+    // its own when a monitor sleeps, wakes or is rearranged, and left the overlay straddling two
+    // displays, with every panel centred across the border. Whatever moved it, it goes back.
+    if (!mac) {
+      let check: NodeJS.Timeout | null = null
+      const later = () => {
+        if (this.fitting) return
+        if (check) clearTimeout(check)
+        check = setTimeout(() => {
+          check = null
+          this.ensureFit()
+        }, REFIT_SETTLE_MS)
+      }
+      this.win.on('move', later)
+      this.win.on('resize', later)
+    }
     // The pet's display went away: it moves to the primary one, at its default spot there.
     screen.on('display-removed', (_e, d) => {
       if (d.id === this.displayId) {
@@ -329,6 +348,8 @@ export class Overlay {
       }
       this.startHoverPoll()
     } else {
+      // A panel opens in the middle of the pet's display, all of it on that display.
+      this.ensureFit()
       // Windows, the quick drawer: the pet and the drawer still take the pointer through the click-through overlay.
       if (mac || mode !== 'drawer') this.stopHoverPoll()
       else this.startHoverPoll()
@@ -520,6 +541,16 @@ export class Overlay {
 
   private display(): Display {
     return screen.getAllDisplays().find((d) => d.id === this.displayId) ?? screen.getPrimaryDisplay()
+  }
+
+  /** Windows: put the overlay back on its display's work area when anything left it elsewhere; says so in the log. */
+  private ensureFit() {
+    if (mac || this.win.isDestroyed()) return
+    const b = this.win.getBounds()
+    const wa = this.display().workArea
+    if (b.x === wa.x && b.y === wa.y && b.width === wa.width && b.height === wa.height) return
+    console.warn(`[overlay] was at ${b.x},${b.y} ${b.width}x${b.height}, off its display; back to ${wa.x},${wa.y} ${wa.width}x${wa.height}`)
+    this.fit()
   }
 
   private fit() {
