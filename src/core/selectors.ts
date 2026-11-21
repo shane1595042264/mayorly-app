@@ -221,6 +221,17 @@ export function scheduledNow(s: MayorlyState, now: number): { entryId: Id; start
   return b ? { entryId: b.entryId, start: b.start, end: b.end } : null
 }
 
+/**
+ * Alt+I with nothing on the calendar: an open task at random, never the one already on the desk,
+ * so pressing again offers another. `r` is a random number in [0, 1), from the caller.
+ */
+export function randomTask(s: MayorlyState, r: number): Entry | null {
+  const desk = onDeskId(s)
+  const open = openFlow(s).filter((e) => e.id !== desk)
+  if (open.length === 0) return null
+  return open[Math.min(open.length - 1, Math.floor(Math.max(0, r) * open.length))]
+}
+
 export function nextBlock(s: MayorlyState, now: number) {
   let best: MayorlyState['calendar']['blocks'][number] | null = null
   for (const b of s.calendar.blocks) if (b.end > now && (!best || b.start < best.start)) best = b

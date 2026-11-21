@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Alt+I always gives you something to do
+
+- When nothing is on the calendar right now, Alt+I (Option+I on a Mac) picks one of your open tasks at random and starts it, so you never have to dig through the list. Press it again for a different one.
+
 ## Panels stay on one screen
 
 - Find, Capture, the deck and the swap menu open in the middle of the screen the tomato is on, all of it on that screen. Windows could shift Mayorly's layer when a monitor woke up or was rearranged, which split a panel across two screens; Mayorly now puts it back by itself.

@@ -7,7 +7,7 @@ import {
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
   findTasks, taskTomatoes, tomatoLabel, onDeskId, recentTasks, switchToAction, switcherAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
-  scheduledNow,
+  scheduledNow, randomTask,
 } from './index'
 
 const MIN = 60_000
@@ -382,6 +382,20 @@ describe('the calendar', () => {
       { op: 'place', entryId: w.entry('job').id, start: w.now + 90 * MIN, minutes: 30 },
     ] })
     expect(w.s.calendar.events.map((e) => [e.title, (e.start - w.now) / MIN])).toEqual([['job', 90]])
+  })
+
+  it('with nothing scheduled, a task at random, never the one on the desk', () => {
+    const w = calWorld()
+    w.do({ type: 'entry/capture', text: 'legal: a ~60', start: true })
+    w.do({ type: 'entry/capture', text: 'dance: b ~60' })
+    w.do({ type: 'entry/capture', text: 'dance: c ~60' })
+    const open = ['b', 'c'].map((t) => w.entry(t).id)
+    expect(randomTask(w.s, 0)?.id).toBe(open[0])
+    expect(randomTask(w.s, 0.99)?.id).toBe(open[1])
+    for (const r of [0, 0.3, 0.6, 0.999]) expect(randomTask(w.s, r)?.id).not.toBe(w.entry('a').id)
+    w.do({ type: 'entry/complete', id: w.entry('b').id })
+    w.do({ type: 'entry/complete', id: w.entry('c').id })
+    expect(randomTask(w.s, 0.5)).toBeNull()
   })
 
   it('what is scheduled now is a pin of yours over the plan, and nothing between blocks', () => {

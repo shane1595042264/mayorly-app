@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type MessageBoxOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
-import { isDeviceOnly, migrate, nextBlock, onDeskId, scheduledNow, switchToAction, type Action, type ClerkCommand, type HudEvent, type MayorlyState, type Settings } from '@core/index'
+import { isDeviceOnly, migrate, onDeskId, randomTask, scheduledNow, switchToAction, type Action, type ClerkCommand, type HudEvent, type MayorlyState, type Settings } from '@core/index'
 import { IPC, type AiProvider, type Arrangement, type CaptionStyle, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from '../shared/ai/service'
@@ -488,20 +488,20 @@ function boot() {
     if (id) engine.act({ type: 'entry/complete', id })
     else say({ phase: 'done', text: 'Nothing on the desk to clear' })
   }
-  /** Alt+I: onto what the calendar says now, the way the switcher would go there, so a parked or swapped-back session keeps its clock. */
+  /**
+   * Alt+I: onto what the calendar says now, the way the switcher would go there, so a parked or
+   * swapped-back session keeps its clock. Nothing on the calendar: a task at random, and another
+   * on the next press, so there is always something to do without reading the whole list.
+   */
   const goScheduled = () => {
     const st = engine.state
-    const now = Date.now()
-    const at = scheduledNow(st, now)
-    const time = (t: number) => new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: st.settings.calendar.tz || undefined }).format(t)
-    if (!at) {
-      const next = nextBlock(st, now)
-      const e = next ? st.entries.find((x) => x.id === next.entryId) : null
-      say({ phase: 'done', text: e && next ? `Nothing scheduled now. Next: ${short(e.title)}, ${time(next.start)}` : 'Nothing scheduled now' })
+    const at = scheduledNow(st, Date.now())
+    const entry = at ? st.entries.find((x) => x.id === at.entryId) : randomTask(st, Math.random())
+    if (!entry) {
+      say({ phase: 'done', text: 'Nothing open to do' })
       return
     }
-    const entry = st.entries.find((x) => x.id === at.entryId)
-    if (!entry) return
+    if (!at) say({ phase: 'done', text: `Nothing scheduled. At random: ${short(entry.title)}` })
     if (onDeskId(st) === entry.id && st.desk.status !== 'idle') {
       say({ phase: 'done', text: `On schedule: ${short(entry.title)}` })
       return

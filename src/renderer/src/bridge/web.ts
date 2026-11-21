@@ -1,5 +1,5 @@
 import {
-  firstRunState, migrate, reduce, scheduledNow, SLEEP_GAP_MS, switchToAction,
+  firstRunState, migrate, randomTask, reduce, scheduledNow, SLEEP_GAP_MS, switchToAction,
   type Action, type HudEvent, type MayorlyState,
 } from '@core/index'
 import type { Bridge, Command, Layout, UiMode } from '../../../shared/bridge'
@@ -126,7 +126,7 @@ export function createWebBridge(): Bridge {
       // A browser tab has nothing to hide behind.
     } else if (cmd === 'scheduled') {
       const at = scheduledNow(state, Date.now())
-      const entry = at ? state.entries.find((x) => x.id === at.entryId) : null
+      const entry = at ? state.entries.find((x) => x.id === at.entryId) : randomTask(state, Math.random())
       const act = entry ? switchToAction(state, { kind: 'entry', entry }) : null
       if (act) dispatch(act)
     } else cmdSubs.forEach((f) => f(cmd))
