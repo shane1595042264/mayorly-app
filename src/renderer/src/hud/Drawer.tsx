@@ -5,8 +5,8 @@ import { blockView, type Entry, type MayorlyState } from '@core/index'
 import { bridge } from '../bridge'
 import { dispatch, useMayorly } from '../store'
 
-// The quick drawer: what is on the desk, with room to write under it. An entry gets a few
-// lines of notes and a checklist; a leisure item gets its context switch rules. It hangs
+// The quick drawer: what is on the desk, with room to write under it. A task and a couch
+// item alike get their context switch rules, a few lines of notes and a checklist. It hangs
 // beside the pet, never the whole deck. Esc, a click outside or losing focus closes it.
 // On a Mac it is the shell's own window (?drawer), so the pet's window never changes.
 
@@ -50,14 +50,7 @@ export function Drawer({ s, close, style }: { s: MayorlyState; close: () => void
             <span className="drawer-kicker caps">Couch</span>
             <h2 className="drawer-title">{leisure.title}</h2>
           </header>
-          <p className="drawer-label caps">Switch when</p>
-          <Lines
-            items={leisure.cues ?? []}
-            placeholder="A rule, in your words: one game, then the desk"
-            onAdd={(text) => dispatch({ type: 'leisure/cue-add', id: leisure.id, text })}
-            onEdit={(i, text) => dispatch({ type: 'leisure/cue-edit', id: leisure.id, index: i, text })}
-            onDelete={(i) => dispatch({ type: 'leisure/cue-delete', id: leisure.id, index: i })}
-          />
+          <SwitchWhen task={leisure} example="one game, then the desk" />
           <NotesAndSteps task={leisure} />
         </>
       ) : entry ? (
@@ -66,6 +59,7 @@ export function Drawer({ s, close, style }: { s: MayorlyState; close: () => void
             <span className="drawer-kicker caps">{ledger?.code ?? 'Tray'}</span>
             <h2 className="drawer-title">{entry.title}</h2>
           </header>
+          <SwitchWhen task={entry} example="stuck 20 minutes, read the hint" />
           <NotesAndSteps task={entry} />
         </>
       ) : (
@@ -82,6 +76,23 @@ export function Drawer({ s, close, style }: { s: MayorlyState; close: () => void
         <span><i className="key">Esc</i> Close</span>
       </footer>
     </motion.section>
+  )
+}
+
+/** Context switch rules: when to leave this for something else, in your words. The same under an entry and a couch item. */
+function SwitchWhen({ task, example }: { task: Pick<Entry, 'id' | 'cues'>; example: string }) {
+  const cues = task.cues ?? []
+  return (
+    <>
+      <p className="drawer-label caps">Switch when</p>
+      <Lines
+        items={cues}
+        placeholder={`A rule, in your words: ${example}`}
+        onAdd={(text) => dispatch({ type: 'entry/cue-add', id: task.id, text })}
+        onEdit={(i, text) => dispatch({ type: 'entry/cue-edit', id: task.id, index: i, text })}
+        onDelete={(i) => dispatch({ type: 'entry/cue-delete', id: task.id, index: i })}
+      />
+    </>
   )
 }
 

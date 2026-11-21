@@ -12,6 +12,7 @@ import { dispatch, useAi, useNow } from '../store'
 import { ledgerVars } from '../lib/themes'
 import { Tomatoes } from './Tomatoes'
 import { EntryHistory } from './EntryHistory'
+import { CueCount, CueToggle, Cues } from './Cues'
 
 export function FlowTab({ s }: { s: MayorlyState }) {
   const now = useNow(5000)
@@ -47,6 +48,7 @@ export function FlowTab({ s }: { s: MayorlyState }) {
 
   // The keyboard: j and k pick a row, the list keys act on it.
   const [rename, setRename] = useState({ id: '', n: 0 })
+  const [open, setOpen] = useState<string | null>(null)
   const { sel } = useListKeys(ids, ({ action, id, index }) => {
     if (action === 'list.new') {
       document.getElementById('flow-add')?.focus()
@@ -73,6 +75,7 @@ export function FlowTab({ s }: { s: MayorlyState }) {
     }
     else if (action === 'list.delete') dispatch({ type: 'entry/delete', id: e.id })
     else if (action === 'list.rename') setRename((r) => ({ id: e.id, n: r.n + 1 }))
+    else if (action === 'list.cues') setOpen((o) => (o === e.id ? null : e.id))
     else if (action === 'list.ledgerNext' || action === 'list.ledgerPrev') {
       dispatch({ type: 'entry/update', id: e.id, patch: { ledgerId: cycleLedger(s, e.ledgerId, action === 'list.ledgerNext' ? 1 : -1) } })
     } else if (action === 'list.moveDown') {
@@ -131,7 +134,7 @@ export function FlowTab({ s }: { s: MayorlyState }) {
             {ids.map((id, i) => {
               const e = byId.get(id)
               return e ? (
-                <Row key={id} e={e} s={s} index={i} live={live === id} selected={sel === id} renameTick={rename.id === id ? rename.n : 0} now={now} onDrop={() => dispatch({ type: 'entry/move', id, toIndex: ids.indexOf(id) })} />
+                <Row key={id} e={e} s={s} index={i} live={live === id} selected={sel === id} renameTick={rename.id === id ? rename.n : 0} now={now} onDrop={() => dispatch({ type: 'entry/move', id, toIndex: ids.indexOf(id) })} expanded={open === id} onToggle={() => setOpen((o) => (o === id ? null : id))} />
               ) : null
             })}
           </Reorder.Group>
@@ -166,7 +169,7 @@ export function FlowTab({ s }: { s: MayorlyState }) {
   )
 }
 
-function Row({ e, s, index, live, selected, renameTick, now, onDrop }: { e: Entry; s: MayorlyState; index: number; live: boolean; selected: boolean; renameTick: number; now: number; onDrop: () => void }) {
+function Row({ e, s, index, live, selected, renameTick, now, onDrop, expanded, onToggle }: { e: Entry; s: MayorlyState; index: number; live: boolean; selected: boolean; renameTick: number; now: number; onDrop: () => void; expanded: boolean; onToggle: () => void }) {
   const controls = useDragControls()
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(e.title)
@@ -178,11 +181,12 @@ function Row({ e, s, index, live, selected, renameTick, now, onDrop }: { e: Entr
   const est = e.estimateMin
 
   return (
-    <Reorder.Item value={e.id} dragListener={false} dragControls={controls} onDragEnd={onDrop} className={`row ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} style={ledgerVars(s.ledgers.find((l) => l.id === e.ledgerId))} data-row={e.id} aria-current={selected ? 'true' : undefined} as="li">
+    <Reorder.Item value={e.id} dragListener={false} dragControls={controls} onDragEnd={onDrop} className={`row has-cues ${live ? 'live' : ''} ${selected ? 'is-selected' : ''} ${expanded ? 'expanded' : ''}`} style={ledgerVars(s.ledgers.find((l) => l.id === e.ledgerId))} data-row={e.id} aria-current={selected ? 'true' : undefined} as="li">
       <span className="grip" role="button" onPointerDown={(ev) => controls.start(ev)} aria-label="Drag to reorder">
         <DotsSixVertical size={16} />
       </span>
       <span className="row-n mono num dim">{String(index + 1).padStart(2, '0')}</span>
+      <CueToggle open={expanded} onToggle={onToggle} />
       <select
         className="code-select mono"
         value={e.ledgerId ?? ''}
@@ -218,6 +222,7 @@ function Row({ e, s, index, live, selected, renameTick, now, onDrop }: { e: Entr
       ) : (
         <span className="row-title ellipsis" onDoubleClick={() => setEditing(true)} title="Double-click to rename">
           {e.title}
+          <CueCount cues={e.cues} />
         </span>
       )}
       <span className="row-time mono num">
@@ -245,6 +250,7 @@ function Row({ e, s, index, live, selected, renameTick, now, onDrop }: { e: Entr
           <Trash size={14} />
         </button>
       </span>
+      {expanded && <Cues inRow id={e.id} title={e.title} cues={e.cues ?? []} live={live} example="stuck 20 minutes: read the hint" />}
     </Reorder.Item>
   )
 }

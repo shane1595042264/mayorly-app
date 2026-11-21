@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Context switch rules on every task
+
+- Every task now has context switch rules, like the couch list: cues in your words for when to leave it for something else, such as "stuck 20 minutes, read the hint".
+- Write them in the quick drawer (Alt+Shift+R) under Switch when, or in the deck: the arrow beside a task's number in the Flow or a ledger opens them, and so does Space on the selected row.
+- A task that has some shows how many beside its title. A task the clerk moves to the couch list keeps its rules.
+
 ## A break while an AI works
 
 - When you send Claude Code, Gemini CLI, Codex, ChatGPT or Gemini a prompt, the desk does what Alt+Q does: it goes to the task you were on before, so you can spend the wait on something else.

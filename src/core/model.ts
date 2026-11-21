@@ -52,6 +52,8 @@ export interface Entry {
   /** The quick drawer: a few lines of your own, and a checklist under the entry. */
   notes?: string
   subtasks?: Subtask[]
+  /** Context switch rules, as on a couch item: cues, in your words, for when to leave this for something else. */
+  cues?: string[]
   /** Clearing/reopening never erases earlier completions or their notes and checklist. */
   history?: EntryHistoryEvent[]
   /** Put back from the trash at this time; a merge lets it beat an older deletion. */

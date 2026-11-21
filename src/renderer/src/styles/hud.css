@@ -188,7 +188,7 @@ body.drawer-page .drawer { position: fixed; inset: 4px; width: auto; height: aut
 }
 .drawer-notes::placeholder, .drawer-add input::placeholder { color: rgb(237 240 241 / 0.4); }
 .drawer-notes:focus, .drawer-text:focus, .drawer-add input:focus { outline: none; border-color: var(--accent-2); }
-.drawer-lines { list-style: none; margin: 0; padding: 0; display: grid; align-content: start; gap: 2px; overflow: auto; min-height: 0; flex: 1; }
+.drawer-lines { list-style: none; margin: 0; padding: 0; display: grid; align-content: start; gap: 2px; overflow: auto; min-height: 0; flex: 0 1 auto; }
 .drawer-line { display: flex; align-items: center; gap: 8px; min-height: 28px; }
 .drawer-line.done .drawer-text { color: var(--ink-3); text-decoration: line-through; }
 .drawer-tick { flex: none; width: 16px; height: 16px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line-2); background: transparent; color: var(--void); cursor: pointer; }

@@ -700,8 +700,8 @@ describe('the quick drawer', () => {
     expect(w.entry('a').notes).toBeUndefined()
     w.do({ type: 'leisure/add', title: 'twitch stream' })
     const it = w.s.leisure[0]
-    w.do({ type: 'leisure/cue-add', id: it.id, text: 'one game' })
-    w.do({ type: 'leisure/cue-edit', id: it.id, index: 0, text: 'one game, then the desk' })
+    w.do({ type: 'entry/cue-add', id: it.id, text: 'one game' })
+    w.do({ type: 'entry/cue-edit', id: it.id, index: 0, text: 'one game, then the desk' })
     expect(w.s.leisure[0].cues).toEqual(['one game, then the desk'])
     expect(DEFAULT_HOTKEYS.drawer).toBe('Alt+Shift+R')
   })
@@ -1294,11 +1294,36 @@ describe('the quick switch', () => {
     const w = world()
     w.do({ type: 'leisure/add', title: 'twitch stream' })
     const id = w.s.leisure[0].id
-    w.do({ type: 'leisure/cue-add', id, text: 'rookie dies in game' })
-    w.do({ type: 'leisure/cue-add', id, text: 'ad break' })
+    w.do({ type: 'entry/cue-add', id, text: 'rookie dies in game' })
+    w.do({ type: 'entry/cue-add', id, text: 'ad break' })
     expect(w.s.leisure[0].cues).toEqual(['rookie dies in game', 'ad break'])
-    w.do({ type: 'leisure/cue-delete', id, index: 0 })
+    w.do({ type: 'entry/cue-delete', id, index: 0 })
     expect(w.s.leisure[0].cues).toEqual(['ad break'])
+    w.do({ type: 'entry/cue-delete', id, index: 0 })
+    expect(w.s.leisure[0].cues).toEqual([])
+  })
+
+  it('cues are plain words on a task too, and go with it to the couch list', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'leetcode 2026' })
+    const id = w.entry('leetcode 2026').id
+    expect(w.entry('leetcode 2026').cues).toBeUndefined()
+    w.do({ type: 'entry/cue-add', id, text: '  stuck 20 minutes: read the hint  ' })
+    w.do({ type: 'entry/cue-add', id, text: '   ' })
+    w.do({ type: 'entry/cue-add', id, text: 'two problems solved' })
+    expect(w.entry('leetcode 2026').cues).toEqual(['stuck 20 minutes: read the hint', 'two problems solved'])
+    w.do({ type: 'entry/cue-edit', id, index: 1, text: 'three problems solved' })
+    w.do({ type: 'entry/cue-edit', id, index: 5, text: 'nothing there' })
+    expect(w.entry('leetcode 2026').cues).toEqual(['stuck 20 minutes: read the hint', 'three problems solved'])
+    w.do({ type: 'entry/cue-delete', id, index: 0 })
+    expect(w.entry('leetcode 2026').cues).toEqual(['three problems solved'])
+    w.do({ type: 'entry/toLeisure', id })
+    expect(w.s.leisure.find((x) => x.title === 'leetcode 2026')?.cues).toEqual(['three problems solved'])
+    w.do({ type: 'entry/capture', text: 'second' })
+    const b = w.entry('second').id
+    w.do({ type: 'entry/cue-add', id: b, text: 'one' })
+    w.do({ type: 'entry/cue-delete', id: b, index: 0 })
+    expect('cues' in w.entry('second')).toBe(false)
   })
 
   it('the switch hotkey exists on an older save', () => {

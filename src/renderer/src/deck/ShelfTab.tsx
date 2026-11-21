@@ -12,6 +12,7 @@ import { noteOrigin } from '../lib/origin'
 import { current, dispatch, useNow } from '../store'
 import { Tomatoes } from './Tomatoes'
 import { EntryHistory } from './EntryHistory'
+import { CueCount, CueToggle, Cues } from './Cues'
 
 // The ledger shelf: nine bays. Every ledger here is hand-written by you, so the
 // clerk may file into it but never rename, merge or remove it. A bay opens the
@@ -142,6 +143,7 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
 
   // The keyboard: the list keys on the rows; Backspace back to the shelf, f focuses here.
   const [rename, setRename] = useState({ id: '', n: 0 })
+  const [open, setOpen] = useState<string | null>(null)
   const { sel } = useListKeys(entries.map((e) => e.id), ({ action, id }) => {
     if (action === 'list.history') {
       setHistory('')
@@ -156,6 +158,7 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
     }
     else if (action === 'list.delete') dispatch({ type: 'entry/delete', id: e.id })
     else if (action === 'list.rename') setRename((r) => ({ id: e.id, n: r.n + 1 }))
+    else if (action === 'list.cues') setOpen((o) => (o === e.id ? null : e.id))
     else if (action === 'list.ledgerNext' || action === 'list.ledgerPrev') {
       dispatch({ type: 'entry/update', id: e.id, patch: { ledgerId: cycleLedger(s, e.ledgerId, action === 'list.ledgerNext' ? 1 : -1) } })
     } else return false
@@ -204,7 +207,7 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
         </div>
       ) : (
         <ol className="flow-list">
-          {entries.map((e, i) => <LedgerRow key={e.id} s={s} e={e} index={i} now={now} live={live === e.id} selected={sel === e.id} renameTick={rename.id === e.id ? rename.n : 0} />)}
+          {entries.map((e, i) => <LedgerRow key={e.id} s={s} e={e} index={i} now={now} live={live === e.id} selected={sel === e.id} renameTick={rename.id === e.id ? rename.n : 0} expanded={open === e.id} onToggle={() => setOpen((o) => (o === e.id ? null : e.id))} />)}
         </ol>
       )}
 
@@ -228,7 +231,7 @@ function LedgerView({ s, ledger, now, back, edit }: { s: MayorlyState; ledger: L
   )
 }
 
-function LedgerRow({ s, e, index, now, live, selected, renameTick }: { s: MayorlyState; e: Entry; index: number; now: number; live: boolean; selected: boolean; renameTick: number }) {
+function LedgerRow({ s, e, index, now, live, selected, renameTick, expanded, onToggle }: { s: MayorlyState; e: Entry; index: number; now: number; live: boolean; selected: boolean; renameTick: number; expanded: boolean; onToggle: () => void }) {
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(e.title)
   useEffect(() => {
@@ -236,8 +239,9 @@ function LedgerRow({ s, e, index, now, live, selected, renameTick }: { s: Mayorl
   }, [renameTick])
   const spent = entrySpentMs(s, e.id, now)
   return (
-    <li className={`row no-grip ${live ? 'live' : ''} ${selected ? 'is-selected' : ''}`} style={ledgerVars(s.ledgers.find((l) => l.id === e.ledgerId))} data-row={e.id} aria-current={selected ? 'true' : undefined}>
+    <li className={`row no-grip has-cues ${live ? 'live' : ''} ${selected ? 'is-selected' : ''} ${expanded ? 'expanded' : ''}`} style={ledgerVars(s.ledgers.find((l) => l.id === e.ledgerId))} data-row={e.id} aria-current={selected ? 'true' : undefined}>
       <span className="row-n mono num dim">{String(index + 1).padStart(2, '0')}</span>
+      <CueToggle open={expanded} onToggle={onToggle} />
       <select
         className="code-select mono"
         value={e.ledgerId ?? ''}
@@ -266,7 +270,7 @@ function LedgerRow({ s, e, index, now, live, selected, renameTick }: { s: Mayorl
           }}
         />
       ) : (
-        <span className="row-title ellipsis" onDoubleClick={() => setEditing(true)} title="Double-click to rename">{e.title}</span>
+        <span className="row-title ellipsis" onDoubleClick={() => setEditing(true)} title="Double-click to rename">{e.title}<CueCount cues={e.cues} /></span>
       )}
       <span className="row-time mono num">
         <Tomatoes n={entryTomatoes(s, e.id, now)} />
@@ -287,6 +291,7 @@ function LedgerRow({ s, e, index, now, live, selected, renameTick }: { s: Mayorl
         <button className="icon-btn" aria-label={`Clear ${e.title}`} title="Clear" onClick={(ev) => { noteOrigin(ev.currentTarget); dispatch({ type: 'entry/complete', id: e.id }) }}><Check size={14} /></button>
         <button className="icon-btn" aria-label={`Delete ${e.title}`} title="Delete" onClick={() => dispatch({ type: 'entry/delete', id: e.id })}><Trash size={14} /></button>
       </span>
+      {expanded && <Cues inRow id={e.id} title={e.title} cues={e.cues ?? []} live={live} example="stuck 20 minutes: read the hint" />}
     </li>
   )
 }

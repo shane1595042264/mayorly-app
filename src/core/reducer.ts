@@ -28,13 +28,15 @@ export type Action =
    */
   | { type: 'entry/capture'; text: string; filing?: Filing; start?: boolean }
   | { type: 'entry/add'; title: string; ledgerId: Id | null; estimateMin: number | null }
-  /** The quick drawer: notes and a checklist under an entry; the rules under a leisure item are leisure/cue-*. */
+  /** The quick drawer: notes, a checklist and context switch rules (cues), the same under an entry and a couch item. */
   | { type: 'entry/note'; id: Id; text: string }
   | { type: 'entry/subtask-add'; id: Id; text: string }
   | { type: 'entry/subtask-edit'; id: Id; subId: Id; text: string }
   | { type: 'entry/subtask-toggle'; id: Id; subId: Id }
   | { type: 'entry/subtask-delete'; id: Id; subId: Id }
-  | { type: 'leisure/cue-edit'; id: Id; index: number; text: string }
+  | { type: 'entry/cue-add'; id: Id; text: string }
+  | { type: 'entry/cue-edit'; id: Id; index: number; text: string }
+  | { type: 'entry/cue-delete'; id: Id; index: number }
   /** The clerk filed an existing entry (a tray sweep): ledger, an estimate if it had none, and its log line. */
   | { type: 'entry/file'; id: Id; ledgerId: Id | null; estimateMin: number | null; log: string; model?: string; confidence?: 'sure' | 'unsure'; sessionMin?: number | null }
   /** You looked at an unsure filing and left it: the question mark goes, no rule is learned. */
@@ -89,8 +91,6 @@ export type Action =
   | { type: 'leisure/add'; title: string }
   | { type: 'leisure/update'; id: Id; patch: { title?: string } }
   | { type: 'leisure/delete'; id: Id }
-  | { type: 'leisure/cue-add'; id: Id; text: string }
-  | { type: 'leisure/cue-delete'; id: Id; index: number }
   /** The quick switch: park the current session with its clock where it is and pick up the parked one where it was. */
   | { type: 'desk/switch' }
   /** The clerk says a tray entry is entertainment: it becomes a couch item and leaves the flow. */
@@ -245,11 +245,25 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       e.subtasks = (e.subtasks ?? []).filter((t) => t.id !== action.subId)
       break
     }
-    case 'leisure/cue-edit': {
-      const it = s.leisure.find((x) => x.id === action.id)
+    case 'entry/cue-add': {
+      const it = taskOf(s, action.id)
+      const text = action.text.trim().slice(0, 160)
+      if (!it || !text) break
+      it.cues = [...(it.cues ?? []), text]
+      break
+    }
+    case 'entry/cue-edit': {
+      const it = taskOf(s, action.id)
       const text = action.text.trim().slice(0, 160)
       if (!it || !text || !(it.cues ?? [])[action.index]) break
       it.cues = (it.cues ?? []).map((c, i) => (i === action.index ? text : c))
+      break
+    }
+    case 'entry/cue-delete': {
+      const it = taskOf(s, action.id)
+      if (!it) break
+      it.cues = (it.cues ?? []).filter((_, i) => i !== action.index)
+      if (!it.cues.length && 'ledgerId' in it) delete it.cues
       break
     }
     case 'entry/file': {
@@ -536,19 +550,6 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       const title = action.title.trim().slice(0, 120)
       if (!title) break
       s.leisure.push({ id: ctx.newId(), title, createdAt: now, archivedAt: null, cues: [] })
-      break
-    }
-    case 'leisure/cue-add': {
-      const it = s.leisure.find((x) => x.id === action.id)
-      const text = action.text.trim().slice(0, 160)
-      if (!it || !text) break
-      it.cues = [...(it.cues ?? []), text]
-      break
-    }
-    case 'leisure/cue-delete': {
-      const it = s.leisure.find((x) => x.id === action.id)
-      if (!it) break
-      it.cues = (it.cues ?? []).filter((_, i) => i !== action.index)
       break
     }
     case 'desk/switch': {
@@ -1384,7 +1385,7 @@ function openSegment(s: MayorlyState, ctx: Ctx, at: number) {
   })
 }
 
-/** What the drawer writes under: an entry or a couch item, the same notes and checklist. */
+/** What the drawer writes under: an entry or a couch item, the same notes, checklist and cues. */
 const taskOf = (s: MayorlyState, id: Id) => s.entries.find((x) => x.id === id) ?? s.leisure.find((x) => x.id === id)
 
 /** The couch list's item with this title, made if there is none. */
@@ -1392,7 +1393,7 @@ function couchItem(s: MayorlyState, ctx: Ctx, title: string, from?: Entry): Leis
   const key = title.toLowerCase()
   const have = s.leisure.find((x) => x.archivedAt === null && x.title.toLowerCase() === key)
   if (have) return have
-  const item: LeisureItem = { id: ctx.newId(), title, createdAt: ctx.now, archivedAt: null, cues: [], notes: from?.notes, subtasks: from?.subtasks }
+  const item: LeisureItem = { id: ctx.newId(), title, createdAt: ctx.now, archivedAt: null, cues: from?.cues ?? [], notes: from?.notes, subtasks: from?.subtasks }
   s.leisure.push(item)
   return item
 }

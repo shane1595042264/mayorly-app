@@ -559,9 +559,16 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 
 /* ------------------------------------------------------------ context switch rules
    The leisure row has no ledger column. Its cues are a band attached under the row,
-   never a cell inside it. */
+   never a cell inside it. A task's row (the flow, a ledger) takes a caret column after
+   its number, and its cues are the row's own second line, since the flow drags a row
+   as one piece. */
 
 .row.leisure-row { grid-template-columns: 22px 24px minmax(0, 1fr) auto auto; }
+.row.has-cues { grid-template-columns: 22px 24px 24px 76px minmax(0, 1fr) auto auto; }
+.row.no-grip.has-cues { grid-template-columns: 24px 24px 76px minmax(0, 1fr) auto auto; }
+.row.has-cues.expanded { background: rgb(237 240 241 / 0.045); }
+.row > .cues-band.in-row { grid-column: 1 / -1; margin: 4px -8px -5px; padding: 10px 12px 12px 66px; border: 0; border-top: 1px solid var(--line); background: transparent; }
+.cues-band.in-row .cue { border-color: var(--ledger-2, var(--accent-2)); }
 .row.leisure-row.expanded { border-color: var(--line); border-bottom-color: transparent; background: rgb(237 240 241 / 0.045); }
 .row-cue-count { margin-left: 10px; font-size: 11px; }
 
