@@ -41,6 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
   keymap: {},
   openAtLogin: false,
   gaming: false,
+  claudeSwitch: true,
   clerk: { createLedgers: true, consolidate: true, minConfidence: null, allow: { settings: 'ask', recipes: 'ask' } },
 }
 

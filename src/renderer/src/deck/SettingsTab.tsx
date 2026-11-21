@@ -42,6 +42,12 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
           <Check label="Start rests on their own" value={st.autoStartRest} onChange={(autoStartRest) => set({ autoStartRest })} />
           <Check label="Sound cues" value={st.sound} onChange={(sound) => set({ sound })} />
           {kind === 'electron' && <Check label="Open at login" value={st.openAtLogin} onChange={(openAtLogin) => set({ openAtLogin })} />}
+          {kind === 'electron' && (
+            <div data-setting="claude code, claude, prompt, hook, auto switch, project">
+              <Check label="Follow Claude Code: a prompt starts the project's task" value={st.claudeSwitch} onChange={(claudeSwitch) => set({ claudeSwitch })} />
+              <p className="field-help">When you prompt Claude Code, the desk goes to the open task named like its project folder: Documents/Mayorly/app is Mayorly. Needs the Mayorly hook in Claude Code&apos;s settings.</p>
+            </div>
+          )}
           {kind === 'electron' && IS_MAC && <Check label="Timer beside the menu bar tomato" value={st.trayTimer} onChange={(trayTimer) => set({ trayTimer })} />}
         </div>
       </section>

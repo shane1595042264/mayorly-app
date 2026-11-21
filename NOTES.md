@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Mayorly follows Claude Code
+
+- When you send Claude Code a prompt, the desk switches to the open task named like the project's folder. Working in Documents/Mayorly/app puts you on Mayorly, and the tomato says so. A held timer on that task resumes.
+- Folders like app, src or Documents are skipped on the way up. Turn it off in Settings, under the general options.
+
 ## Gaming mode
 
 - Alt+Shift+G (Option+Shift+G on a Mac) turns every other Mayorly shortcut off, so a game gets Alt+G, Alt+Q and the rest. Press it again to turn them back on. The timer keeps running, and the tomato still takes clicks.

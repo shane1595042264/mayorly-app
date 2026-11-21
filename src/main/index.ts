@@ -2,13 +2,14 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type MessageBoxOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
-import { isDeviceOnly, migrate, onDeskId, randomTask, scheduledNow, switchToAction, type Action, type ClerkCommand, type HudEvent, type MayorlyState, type Settings } from '@core/index'
+import { isDeviceOnly, migrate, onDeskId, randomTask, scheduledNow, switchToAction, taskForFolder, type Action, type ClerkCommand, type HudEvent, type MayorlyState, type Settings } from '@core/index'
 import { IPC, type AiProvider, type Arrangement, type CaptionStyle, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from '../shared/ai/service'
 import { makeCapture } from '../shared/capture'
 import { INSTRUCT_SYSTEM, instructContext, parseInstruction, permit, resolveInstruction, stripInstruction, type InstructionPlan } from '../shared/instruct'
 import { dayKey, recipeRunsOn, wallClock } from '../shared/windows'
+import { watchClaude } from './claude'
 import { sealedClerkStore } from './ai/store'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
@@ -610,6 +611,26 @@ function boot() {
   }
   setTimeout(runRecipes, 15_000)
   setInterval(runRecipes, 60_000)
+
+  // A Claude Code prompt puts the desk on that project's task: the open task named like its folder.
+  watchClaude((p) => {
+    const st = engine.state
+    if (!st.settings.claudeSwitch) return
+    const folder = p.cwd.split(/[\\/]+/).filter(Boolean).slice(-2).join('/')
+    const entry = taskForFolder(st, p.cwd)
+    if (!entry) {
+      log.info('[claude] prompt in', folder, ': no open task by that name')
+      return
+    }
+    if (onDeskId(st) === entry.id) {
+      if (st.desk.status === 'paused') engine.act({ type: 'desk/resume' })
+      return
+    }
+    const act = switchToAction(st, { kind: 'entry', entry }) ?? { type: 'desk/select' as const, entryId: entry.id, ledgerId: entry.ledgerId }
+    engine.act(act)
+    say({ phase: 'done', text: `Claude: on ${short(entry.title)}` })
+    log.info('[claude] prompt in', folder, ': on', entry.title)
+  })
 
   // An instruction from Alt+N: the clerk reads it into steps; what the permissions allow is done
   // now (the box offers Undo), the rest waits for Apply in the box.

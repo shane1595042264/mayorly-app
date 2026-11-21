@@ -7,7 +7,7 @@ import {
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
   findTasks, taskTomatoes, tomatoLabel, onDeskId, recentTasks, switchToAction, switcherAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
-  scheduledNow, randomTask,
+  scheduledNow, randomTask, taskForFolder,
 } from './index'
 
 const MIN = 60_000
@@ -1805,6 +1805,22 @@ describe('resizing the tomato', () => {
     expect(isDeviceOnly({ type: 'settings/update', patch: { hudScale: 1.2 } })).toBe(true)
     expect(isDeviceOnly({ type: 'settings/update', patch: { hudScale: 1.2, focusMin: 30 } })).toBe(false)
     expect(isDeviceOnly({ type: 'desk/pause' })).toBe(false)
+  })
+})
+
+describe('following Claude Code', () => {
+  it('finds the task named like the project folder, past generic folder names', () => {
+    const w = world()
+    w.do({ type: 'entry/capture', text: 'legal: Mayorly' })
+    w.do({ type: 'entry/capture', text: 'dance: battle prep for WOD' })
+    w.do({ type: 'entry/capture', text: 'legal: mayorly-design notes' })
+    expect(taskForFolder(w.s, 'C:\\Users\\me\\Documents\\Mayorly\\app')?.title).toBe('Mayorly')
+    expect(taskForFolder(w.s, '/Users/me/code/mayorly-design')?.title).toBe('mayorly-design notes')
+    expect(taskForFolder(w.s, '/Users/me/projects/battle')?.title).toBe('battle prep for WOD')
+    expect(taskForFolder(w.s, 'C:\\Users\\me')).toBeNull()
+    expect(taskForFolder(w.s, '/Users/me/Documents/app')).toBeNull()
+    w.do({ type: 'entry/complete', id: w.entry('Mayorly').id })
+    expect(taskForFolder(w.s, 'C:/Users/me/Documents/Mayorly/app')).toBeNull()
   })
 })
 

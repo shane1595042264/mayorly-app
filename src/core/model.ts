@@ -463,6 +463,8 @@ export interface Settings {
   openAtLogin: boolean
   /** Gaming mode, on this machine: every global shortcut but the one that turns it off is let go, so a game gets those keys. The desk runs on. */
   gaming: boolean
+  /** On this machine: a Claude Code prompt puts the desk on the task named like its project folder. */
+  claudeSwitch: boolean
   /** What the AI clerk may do to the shelf on its own. Syncs. */
   clerk: ClerkSettings
 }
