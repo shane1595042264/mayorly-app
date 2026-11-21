@@ -2,14 +2,15 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type MessageBoxOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
-import { isDeviceOnly, migrate, onDeskId, randomTask, scheduledNow, switchToAction, taskForFolder, type Action, type ClerkCommand, type HudEvent, type MayorlyState, type Settings } from '@core/index'
+import { isDeviceOnly, migrate, onDeskId, randomTask, scheduledNow, switchToAction, type Action, type ClerkCommand, type HudEvent, type MayorlyState, type Settings } from '@core/index'
 import { IPC, type AiProvider, type Arrangement, type CaptionStyle, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from '../shared/ai/service'
 import { makeCapture } from '../shared/capture'
 import { INSTRUCT_SYSTEM, instructContext, parseInstruction, permit, resolveInstruction, stripInstruction, type InstructionPlan } from '../shared/instruct'
 import { dayKey, recipeRunsOn, wallClock } from '../shared/windows'
-import { watchClaude } from './claude'
+import { watchAgents } from './agents'
+import { AGENT_NAME, breakStep, type AiBreak } from '../shared/aibreak'
 import { sealedClerkStore } from './ai/store'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
@@ -612,29 +613,21 @@ function boot() {
   setTimeout(runRecipes, 15_000)
   setInterval(runRecipes, 60_000)
 
-  // Auto switch, the Claude rule: a prompt you type puts the desk on that project's task, the open
-  // task named like its folder. Never during a rest; scheduled and automatic prompts never get here.
-  watchClaude((p) => {
-    const st = engine.state
-    if (!st.settings.autoSwitch.claude) return
-    const folder = p.cwd.split(/[\\/]+/).filter(Boolean).slice(-2).join('/')
-    if (st.desk.block?.kind === 'rest') {
-      log.info('[claude] prompt in', folder, ': resting, left alone')
-      return
-    }
-    const entry = taskForFolder(st, p.cwd)
-    if (!entry) {
-      log.info('[claude] prompt in', folder, ': no open task by that name')
-      return
-    }
-    if (onDeskId(st) === entry.id) {
-      if (st.desk.status === 'paused') engine.act({ type: 'desk/resume' })
-      return
-    }
-    const act = switchToAction(st, { kind: 'entry', entry }) ?? { type: 'desk/select' as const, entryId: entry.id, ledgerId: entry.ledgerId }
-    engine.act(act)
-    say({ phase: 'done', text: `Claude: on ${short(entry.title)}` })
-    log.info('[claude] prompt in', folder, ': on', entry.title)
+  // Auto switch, the AI break: a prompt you send an AI takes the desk to your last task while it
+  // works (what Alt+Q does), and its answer brings the desk back, unless you moved on (aibreak.ts).
+  let aiBreak: AiBreak | null = null
+  const deskTitle = (id: string | null) => (id ? (engine.state.entries.find((e) => e.id === id)?.title ?? engine.state.leisure.find((l) => l.id === id)?.title ?? '') : '')
+  watchAgents((e) => {
+    const step = breakStep(engine.state, aiBreak, e)
+    aiBreak = step.brk
+    log.info('[agents]', `${e.app} ${e.event}${e.manual ? '' : ' (not typed)'}: ${step.why}`)
+    if (!step.act) return
+    engine.act(step.act)
+    const now = onDeskId(engine.state)
+    if (e.event === 'prompt') {
+      if (aiBreak) aiBreak = { ...aiBreak, to: now }
+      say({ phase: 'done', text: `${AGENT_NAME[e.app]} is working: on ${short(deskTitle(now))}` })
+    } else say({ phase: 'done', text: `${AGENT_NAME[e.app]} answered: back on ${short(deskTitle(now))}` })
   })
 
   // An instruction from Alt+N: the clerk reads it into steps; what the permissions allow is done

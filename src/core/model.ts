@@ -470,11 +470,14 @@ export interface Settings {
 }
 
 /**
- * The built-in auto switch rules. claude: a Claude Code prompt you type puts the desk on the task
- * named like its project folder; never during a rest, never for a scheduled or automatic prompt.
+ * The built-in auto switch rules. aiBreak: a prompt you send an AI (Claude Code, Gemini CLI, Codex,
+ * ChatGPT or Gemini in Chrome) takes the desk to your last task while it works, as Alt+Q would;
+ * never during a rest or from an idle desk, never for a scheduled or automatic prompt. aiReturn:
+ * its answer brings the desk back, unless you moved on.
  */
 export interface AutoSwitchRules {
-  claude: boolean
+  aiBreak: boolean
+  aiReturn: boolean
 }
 
 /** What the clerk does with an instruction of that kind: do it (with Undo), ask first, or never. */

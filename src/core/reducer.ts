@@ -1516,7 +1516,7 @@ export function sanitiseSettings(x: Settings): Settings {
     alarms: sanitiseAlarms(x.alarms),
     clerk: sanitiseClerk(x.clerk),
     gaming: x.gaming === true,
-    autoSwitch: { claude: x.autoSwitch?.claude !== false },
+    autoSwitch: { aiBreak: x.autoSwitch?.aiBreak !== false, aiReturn: x.autoSwitch?.aiReturn !== false },
   }
 }
 

@@ -80,25 +80,6 @@ const UNJOIN: Record<string, string> = { '\u0001': '/', '\u0002': ':', '\u0003':
 /** A word with a digit in it: a date, a time, a count. It says which task, so it is never a typo nor the word too many. */
 const NUMBERED = /\p{N}/u
 
-/** Folder names that say nothing about the project: the walk up the path skips them. */
-const GENERIC_FOLDERS = new Set(['app', 'apps', 'src', 'source', 'code', 'repo', 'repos', 'projects', 'project', 'dev', 'documents', 'docs', 'desktop', 'downloads', 'users', 'home', 'github', 'git', 'work', 'workspace', 'workspaces', 'packages', 'web', 'client', 'server', 'frontend', 'backend', 'main', 'onedrive'])
-
-/**
- * The open task a Claude Code session's folder stands for: from the deepest folder up, past
- * generic names (app, src, Documents), the first that an open task is titled exactly, or starts
- * with as a word ("Mayorly" for C:/Users/me/Documents/Mayorly/app). Null when none is.
- */
-export function taskForFolder(s: MayorlyState, cwd: string): Entry | null {
-  const open = openFlow(s).map((e) => ({ e, t: foldSearch(e.title) }))
-  for (const part of cwd.split(/[\\/]+/).filter(Boolean).reverse()) {
-    const name = foldSearch(part)
-    if (name.length < 3 || GENERIC_FOLDERS.has(name)) continue
-    const hit = open.find((x) => x.t === name) ?? open.find((x) => x.t.startsWith(`${name} `))
-    if (hit) return hit.e
-  }
-  return null
-}
-
 /** One letter wrong, missing, extra or two swapped: "fotwork" is near "footwork". */
 export function oneEdit(a: string, b: string): boolean {
   if (a === b) return true

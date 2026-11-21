@@ -7,7 +7,7 @@ import {
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
   findTasks, taskTomatoes, tomatoLabel, onDeskId, recentTasks, switchToAction, switcherAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
-  scheduledNow, randomTask, taskForFolder,
+  scheduledNow, randomTask,
 } from './index'
 
 const MIN = 60_000
@@ -1808,38 +1808,24 @@ describe('resizing the tomato', () => {
   })
 })
 
-describe('following Claude Code', () => {
-  it('finds the task named like the project folder, past generic folder names', () => {
-    const w = world()
-    w.do({ type: 'entry/capture', text: 'legal: Mayorly' })
-    w.do({ type: 'entry/capture', text: 'dance: battle prep for WOD' })
-    w.do({ type: 'entry/capture', text: 'legal: mayorly-design notes' })
-    expect(taskForFolder(w.s, 'C:\\Users\\me\\Documents\\Mayorly\\app')?.title).toBe('Mayorly')
-    expect(taskForFolder(w.s, '/Users/me/code/mayorly-design')?.title).toBe('mayorly-design notes')
-    expect(taskForFolder(w.s, '/Users/me/projects/battle')?.title).toBe('battle prep for WOD')
-    expect(taskForFolder(w.s, 'C:\\Users\\me')).toBeNull()
-    expect(taskForFolder(w.s, '/Users/me/Documents/app')).toBeNull()
-    w.do({ type: 'entry/complete', id: w.entry('Mayorly').id })
-    expect(taskForFolder(w.s, 'C:/Users/me/Documents/Mayorly/app')).toBeNull()
-  })
-})
-
 describe('auto switch rules', () => {
-  it('are this computer\'s, on by default, and take the setting 0.1.66 kept under another name', () => {
+  it('are this computer\'s, on by default, and carry over what 0.1.66 to 0.1.68 kept', () => {
     const w = world()
-    expect(w.s.settings.autoSwitch).toEqual({ claude: true })
-    expect(isDeviceOnly({ type: 'settings/update', patch: { autoSwitch: { claude: false } } })).toBe(true)
-    // A 0.1.66 save: its choice carries over once, as it loads.
-    const old = JSON.parse(JSON.stringify(w.s)) as { settings: Record<string, unknown> }
-    delete old.settings.autoSwitch
-    old.settings.claudeSwitch = false
-    expect(migrate(old)!.settings.autoSwitch).toEqual({ claude: false })
-    // A leftover key never outvotes a choice made since: turning the rule off holds, and the key goes.
-    w.do({ type: 'settings/update', patch: { claudeSwitch: true, autoSwitch: { claude: false } } as never })
-    expect(w.s.settings.autoSwitch).toEqual({ claude: false })
+    expect(w.s.settings.autoSwitch).toEqual({ aiBreak: true, aiReturn: true })
+    expect(isDeviceOnly({ type: 'settings/update', patch: { autoSwitch: { aiBreak: false, aiReturn: true } } })).toBe(true)
+    const save = (settings: Record<string, unknown>) => {
+      const old = JSON.parse(JSON.stringify(w.s)) as { settings: Record<string, unknown> }
+      delete old.settings.autoSwitch
+      Object.assign(old.settings, settings)
+      return migrate(old)!.settings.autoSwitch
+    }
+    expect(save({ claudeSwitch: false })).toEqual({ aiBreak: false, aiReturn: true })
+    expect(save({ autoSwitch: { claude: false } })).toEqual({ aiBreak: false, aiReturn: true })
+    expect(save({ autoSwitch: { claude: true } })).toEqual({ aiBreak: true, aiReturn: true })
+    // A leftover key never outvotes a choice made since, and goes.
+    w.do({ type: 'settings/update', patch: { claudeSwitch: true, autoSwitch: { aiBreak: false, aiReturn: false } } as never })
+    expect(w.s.settings.autoSwitch).toEqual({ aiBreak: false, aiReturn: false })
     expect('claudeSwitch' in w.s.settings).toBe(false)
-    w.do({ type: 'settings/update', patch: { autoSwitch: { claude: true } } })
-    expect(w.s.settings.autoSwitch.claude).toBe(true)
   })
 })
 

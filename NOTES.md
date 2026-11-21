@@ -2,12 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
-## Mayorly follows Claude Code
+## A break while an AI works
 
-- When you type a prompt to Claude Code, the desk switches to the open task named like the project's folder. Working in Documents/Mayorly/app puts you on Mayorly, and the tomato says so. A held timer on that task resumes.
-- Folders like app, src or Documents are skipped on the way up.
-- It never switches during a rest, and scheduled tasks or background notices in Claude never count: only what you type.
-- Settings now has an Auto switch list. This is its first rule, and it can be turned off there; more rules will follow.
+- When you send Claude Code, Gemini CLI, Codex, ChatGPT or Gemini a prompt, the desk does what Alt+Q does: it goes to the task you were on before, so you can spend the wait on something else.
+- When the AI has answered, the desk comes back to where you were, unless you moved on yourself. With several AIs at work, it comes back after the last one answers.
+- Not during a rest or when the desk is idle, and scheduled tasks or background notices never count: only what you type.
+- Both are rules in Settings, under Auto switch, each with its own switch.
+- ChatGPT and Gemini in Chrome need the Mayorly extension: in chrome://extensions turn on Developer mode, choose Load unpacked, and pick the chrome-extension folder in .mayorly in your home folder.
 - In gaming mode the tomato wears your own drawing: the headphones tomato.
 
 ## Gaming mode
