@@ -499,3 +499,22 @@ body.effects { background: transparent; }
 .order-step.is-never, .order-step.is-undone { color: var(--ink-3); }
 .order-say { margin: 0; font-size: 13px; color: var(--ink-2); }
 .order-card .form-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ------------------------------------------------------------ gaming mode: the tomato on fire
+   The founder's tomato, untouched, with two frames of pixel flames (assets/flames@1x.png, 16 x 6
+   each, side by side) over its top at the same 3x, flickering. Absolute, so nothing moves. */
+.pet-flames {
+  position: absolute;
+  left: 0;
+  top: -12px;
+  width: 48px;
+  height: 18px;
+  background-size: 96px 18px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  pointer-events: none;
+  animation: pet-flicker 0.36s steps(1) infinite;
+}
+@keyframes pet-flicker { 0% { background-position: 0 0; } 50% { background-position: -48px 0; } }
+.pet-sprite.on-fire { filter: drop-shadow(0 0 5px rgb(255 140 40 / 0.55)) drop-shadow(0 2px 3px rgb(0 0 0 / 0.55)); }
+@media (prefers-reduced-motion: reduce) { .pet-flames { animation: none; } }

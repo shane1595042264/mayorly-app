@@ -4,6 +4,7 @@ import { blockView, clock, dayStats, nextBlock, startOfDay, switchTarget, taskTo
 import type { UiMode } from '../../../shared/bridge'
 import { INSET, anchorInBox, captionBox, dragScale, petBox, type Point } from '../../../shared/pet'
 import tomato from '../assets/tomato@1x.png'
+import flames from '../assets/flames@1x.png'
 import { bridge } from '../bridge'
 import { hotkeyLabel } from '../lib/keys'
 import { ledgerVars } from '../lib/themes'
@@ -90,7 +91,10 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
   const next = !v ? nextBlock(s, now) : null
   const nextEntry = next && next.start - now < 2 * 3_600_000 ? s.entries.find((e) => e.id === next.entryId) : null
   const nextAt = next ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: s.settings.calendar.tz || undefined }).format(Math.max(next.start, now)) : ''
-  const hint = !v
+  const gaming = s.settings.gaming
+  const hint = gaming
+    ? `Gaming mode: shortcuts off. ${hotkeyLabel(s.settings.hotkeys.gaming)} turns them on.`
+    : !v
     ? nextEntry ? `Next: ${nextEntry.title}, ${nextAt}. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.` : `Desk idle. ${hotkeyLabel(s.settings.hotkeys.plus)} to deploy.`
     : s.desk.heldAt !== null && s.desk.device && s.desk.device.id !== here ? `Running on ${s.desk.device.name}. Anything you do here takes it over.`
     : back ? `${hotkeyLabel(s.settings.hotkeys.switch)}: back to ${back}` : ''
@@ -274,7 +278,9 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
                   : { duration: 0.2 }
             }
           >
-            <img className="pet-sprite" src={tomato} alt="" draggable={false} />
+            <img className={`pet-sprite ${gaming ? 'on-fire' : ''}`} src={tomato} alt="" draggable={false} />
+            {/* Gaming mode: the tomato burns. Two frames of the flames over its top, flickering. */}
+            {gaming && <span className="pet-flames" aria-hidden style={{ backgroundImage: `url(${flames})` }} />}
             {moving && <span className="pet-resize" title="Drag to resize" aria-hidden {...handle} />}
           </motion.div>
         </div>

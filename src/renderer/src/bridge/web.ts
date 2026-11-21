@@ -108,14 +108,17 @@ export function createWebBridge(): Bridge {
     // By key position: with Option held, macOS reports the composed character, not the letter.
     const k = physicalKey(e)
     const combo = `Alt+${e.shiftKey ? 'Shift+' : ''}${k.length === 1 ? k.toUpperCase() : k}`
-    const map: Record<string, Command | 'pause' | 'skipRest' | 'clear' | 'hide' | 'scheduled'> = {
+    const map: Record<string, Command | 'pause' | 'skipRest' | 'clear' | 'hide' | 'scheduled' | 'gaming'> = {
       [hk.plus]: 'plus', [hk.capture]: 'capture', [hk.find]: 'find', [hk.deck]: 'deck', [hk.drawer]: 'drawer', [hk.pause]: 'pause', [hk.move]: 'move', [hk.switch]: 'switcher', [hk.clear]: 'clear', [hk.hide]: 'hide',
-      [hk.skipRest]: 'skipRest', [hk.schedule]: 'schedule', [hk.scheduled]: 'scheduled',
+      [hk.skipRest]: 'skipRest', [hk.schedule]: 'schedule', [hk.scheduled]: 'scheduled', [hk.gaming]: 'gaming',
     }
     const cmd = map[combo]
     if (!cmd) return
+    // Gaming mode: only its own key, as on the desktop.
+    if (state.settings.gaming && cmd !== 'gaming') return
     e.preventDefault()
-    if (cmd === 'pause') {
+    if (cmd === 'gaming') dispatch({ type: 'settings/update', patch: { gaming: !state.settings.gaming } })
+    else if (cmd === 'pause') {
       const st = state.desk.status
       dispatch(st === 'running' ? { type: 'desk/pause' } : { type: 'desk/resume' })
     } else if (cmd === 'skipRest') dispatch({ type: 'desk/skipRest' })

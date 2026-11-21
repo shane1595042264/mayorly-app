@@ -437,7 +437,7 @@ export interface ClerkLine {
   text: string
 }
 
-export type HotkeyAction = 'plus' | 'capture' | 'find' | 'deck' | 'pause' | 'skipRest' | 'hide' | 'switch' | 'clear' | 'move' | 'drawer' | 'schedule' | 'scheduled'
+export type HotkeyAction = 'plus' | 'capture' | 'find' | 'deck' | 'pause' | 'skipRest' | 'hide' | 'switch' | 'clear' | 'move' | 'drawer' | 'schedule' | 'scheduled' | 'gaming'
 
 export interface Settings {
   /** Focus length, and the tomato interval. */
@@ -461,6 +461,8 @@ export interface Settings {
   /** In-app keys the user changed, by action id, up to two keys each. Missing ids use the HUD's defaults; syncs with the account. */
   keymap: Record<string, string[]>
   openAtLogin: boolean
+  /** Gaming mode, on this machine: every global shortcut but the one that turns it off is let go, so a game gets those keys. The desk runs on. */
+  gaming: boolean
   /** What the AI clerk may do to the shelf on its own. Syncs. */
   clerk: ClerkSettings
 }

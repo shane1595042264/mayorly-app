@@ -535,16 +535,25 @@ function boot() {
     }
     engine.act({ type: 'recipe/run', id: r.id, day, start: r.start })
   }
+  // Gaming mode: one key turns every other shortcut off, so a game gets Alt+G and the rest, and on again.
+  const toggleGaming = () => {
+    const on = !engine.state.settings.gaming
+    engine.dispatch({ type: 'settings/update', patch: { gaming: on } })
+    const key = (a: string) => (process.platform === 'darwin' ? a.replace('Alt', 'Option') : a)
+    say({ phase: 'done', text: on ? `Gaming mode: shortcuts off. ${key(engine.state.settings.hotkeys.gaming)} turns them on.` : 'Gaming mode off: shortcuts on' })
+  }
   let applied: Settings | null = null
   let appliedRecipes = ''
   const applySettings = (s: Settings) => {
     overlay.setScale(s.hudScale)
     overlay.setTextSize(s.text.pet)
     const recipes = JSON.stringify(recipeKeys(engine.state))
-    if (applied && JSON.stringify(applied.hotkeys) === JSON.stringify(s.hotkeys) && applied.openAtLogin === s.openAtLogin && recipes === appliedRecipes) return
-    if (!applied || JSON.stringify(applied.hotkeys) !== JSON.stringify(s.hotkeys) || recipes !== appliedRecipes) {
+    if (applied && JSON.stringify(applied.hotkeys) === JSON.stringify(s.hotkeys) && applied.openAtLogin === s.openAtLogin && applied.gaming === s.gaming && recipes === appliedRecipes) return
+    if (!applied || JSON.stringify(applied.hotkeys) !== JSON.stringify(s.hotkeys) || applied.gaming !== s.gaming || recipes !== appliedRecipes) {
       appliedRecipes = recipes
-      const failed = registerHotkeys(s.hotkeys, {
+      // In gaming mode only the gaming key is held; every other combo goes to the game.
+      const keys = s.gaming ? { ...Object.fromEntries(Object.keys(s.hotkeys).map((k) => [k, ''])), gaming: s.hotkeys.gaming } as Settings['hotkeys'] : s.hotkeys
+      const failed = registerHotkeys(keys, {
         plus: () => {
           command('plus')
           if (overlay.mode !== 'plus') armsOn()
@@ -562,7 +571,8 @@ function boot() {
         clear: clearDesk,
         schedule: () => command('schedule'),
         scheduled: goScheduled,
-      }, recipeKeys(engine.state).map((r) => ({ key: r.key, run: () => runKeyRecipe(r.id) })))
+        gaming: toggleGaming,
+      }, s.gaming ? [] : recipeKeys(engine.state).map((r) => ({ key: r.key, run: () => runKeyRecipe(r.id) })))
       if (failed.length) {
         const failures = { keys: failed, reason: refusedAsOptionOnly(failed) ? ('option-only' as const) : undefined }
         overlay.win.webContents.once('did-finish-load', () => send(IPC.hotkeyFailures, failures))

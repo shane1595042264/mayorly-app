@@ -1808,6 +1808,23 @@ describe('resizing the tomato', () => {
   })
 })
 
+describe('gaming mode', () => {
+  it('belongs to this computer alone, is off by default, and has its own key', () => {
+    const w = world()
+    expect(w.s.settings.gaming).toBe(false)
+    expect(DEFAULT_HOTKEYS.gaming).toBe('Alt+Shift+G')
+    expect(isDeviceOnly({ type: 'settings/update', patch: { gaming: true } })).toBe(true)
+    w.do({ type: 'settings/update', patch: { gaming: 'yes' as never } })
+    expect(w.s.settings.gaming).toBe(false)
+    w.do({ type: 'settings/update', patch: { gaming: true } })
+    // Another computer's copy never turns it off here.
+    const theirs = structuredClone(w.s)
+    theirs.settings.gaming = false
+    w.do({ type: 'sync/merge', state: theirs, syncedAt: null })
+    expect(w.s.settings.gaming).toBe(true)
+  })
+})
+
 describe('recent tasks', () => {
   const titles = (w: ReturnType<typeof world>) => recentTasks(w.s).map((x) => (x.kind === 'entry' ? x.entry.title : x.item.title))
   const three = () => {

@@ -14,7 +14,7 @@ import { ledgerKey, ledgerTomatoes, unharvestedTomatoes, wholeTomatoes } from '.
 import { completionHistory } from './history'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
-export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'alarms', 'trayTimer', 'text'] as const
+export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'alarms', 'trayTimer', 'text', 'gaming'] as const
 
 /** Only settings that belong to this computer: changing them says nothing about who is at the desk. */
 export const isDeviceOnly = (a: Action): boolean =>
@@ -1513,6 +1513,7 @@ export function sanitiseSettings(x: Settings): Settings {
     calendar: sanitiseCalendar(x.calendar),
     alarms: sanitiseAlarms(x.alarms),
     clerk: sanitiseClerk(x.clerk),
+    gaming: x.gaming === true,
   }
 }
 

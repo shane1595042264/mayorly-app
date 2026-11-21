@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Gaming mode
+
+- Alt+Shift+G (Option+Shift+G on a Mac) turns every other Mayorly shortcut off, so a game gets Alt+G, Alt+Q and the rest. Press it again to turn them back on. The timer keeps running, and the tomato still takes clicks.
+- In gaming mode the tomato is on fire. The key can be changed in Settings, under Hotkeys.
+
 ## Alt+I always gives you something to do
 
 - When nothing is on the calendar right now, Alt+I (Option+I on a Mac) picks one of your open tasks at random and starts it, so you never have to dig through the list. Press it again for a different one.

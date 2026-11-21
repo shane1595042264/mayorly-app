@@ -17,6 +17,7 @@ export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   drawer: 'Alt+Shift+R',
   schedule: 'Alt+S',
   scheduled: 'Alt+I',
+  gaming: 'Alt+Shift+G',
 }
 
 /** Nine to five, minutes from midnight. */
@@ -39,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hotkeys: DEFAULT_HOTKEYS,
   keymap: {},
   openAtLogin: false,
+  gaming: false,
   clerk: { createLedgers: true, consolidate: true, minConfidence: null, allow: { settings: 'ask', recipes: 'ask' } },
 }
 
