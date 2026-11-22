@@ -463,8 +463,8 @@ const AUTO_SWITCH: { key: keyof AutoSwitchRules; label: string; help: string }[]
   },
   {
     key: 'streamDeath',
-    label: 'When the streamer dies in League, switch to your recent task',
-    help: 'For a couch item or task with a context switch rule such as "streamer dies" (or any rule that someone dies, on an item whose name says stream or watch), or one whose rules you set to Watching the stream with the eye button. While it runs here and a League of Legends stream plays in Chrome, on Twitch, YouTube, Kick, Bilibili, Huya or Douyu, Mayorly reads the stream\'s own video and does what Alt+Q does the moment the game goes grey, once per death. It reads the page, never your screen, so your own games never count, and it waits while a League match of yours is running. Needs the Mayorly extension; after an update, press its reload button once in chrome://extensions, then reload the stream page.',
+    label: 'When the streamer dies in League or GTA, switch to your recent task',
+    help: 'For a couch item or task with a context switch rule such as "streamer dies" (or any rule that someone dies or is wasted, on an item whose name says stream or watch), or one whose rules you set to Watching the stream with the eye button. While it runs here and a League of Legends or GTA stream plays in Chrome, on Twitch, YouTube, Kick, Bilibili, Huya or Douyu, Mayorly reads the stream\'s own video and does what Alt+Q does the moment the game goes grey (a League death, GTA\'s WASTED), once per death. A stream of another game, or Just Chatting, is never read. It reads the page, never your screen, so your own games never count, and it waits while a League match of yours is running. Needs the Mayorly extension; after an update, press its reload button once in chrome://extensions, then reload the stream page.',
   },
   {
     key: 'streamOpen',

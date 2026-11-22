@@ -8,7 +8,9 @@ import {
   deathStep,
   FRAME_H,
   FRAME_W,
+  gameOf,
   graceStep,
+  greyStep,
   LEAGUE,
   leagueFeatures,
   leagueOf,
@@ -68,6 +70,8 @@ interface Scene {
   panel?: number
   /** A black and white clip over the world and the bar, the minimap and webcam still showing. */
   clip?: boolean
+  /** No League HUD: world where the bar and the minimap would be (GTA). */
+  noHud?: boolean
 }
 
 /** A colour wheel: for each of 256 hues, how far red, green and blue sit from the grey. */
@@ -96,9 +100,9 @@ function paint(scene: Scene, t: number): Uint8ClampedArray {
     for (let x = 0; x < FRAME_W; x++) {
       const fx = x / FRAME_W
       const fy = y / FRAME_H
-      const inMap = map !== 'none' && (scene.mapSmall ? fy >= 0.83 && (map === 'right' ? fx >= 0.905 : fx <= 0.095) : fy >= 0.73 && (map === 'right' ? fx >= 0.855 : fx <= 0.145))
+      const inMap = !scene.noHud && map !== 'none' && (scene.mapSmall ? fy >= 0.83 && (map === 'right' ? fx >= 0.905 : fx <= 0.095) : fy >= 0.73 && (map === 'right' ? fx >= 0.855 : fx <= 0.145))
       const inLogo = scene.logoLeft && fy >= 0.73 && fx <= 0.145
-      const inBar = fx >= 0.35 && fx <= 0.65 && fy >= 0.87
+      const inBar = !scene.noHud && fx >= 0.35 && fx <= 0.65 && fy >= 0.87
       const inCam = cam && fx >= 0.05 && fx <= 0.45 && fy >= 0.4 && fy <= 0.72
       const inBoard = scoreboard && fx >= 0.25 && fx <= 0.75 && fy >= 0.15 && fy <= 0.6
       const inChat = fx < 0.08 && fy > 0.2 && fy < 0.7
@@ -135,7 +139,7 @@ function paint(scene: Scene, t: number): Uint8ClampedArray {
 const grid = (scene: Scene, t: number) => mayorlyGrid(paint(scene, t), FRAME_W, FRAME_H)
 
 /** Feeds a timeline of scenes, a sample every `every` ms, as the shell does; returns each tick. */
-function play(timeline: [number, Scene][], o: { every?: number; ad?: (t: number) => boolean; memory?: DeathMemory | null; from?: number } = {}) {
+function play(timeline: [number, Scene][], o: { every?: number; ad?: (t: number) => boolean; memory?: DeathMemory | null; from?: number; step?: typeof leagueStep } = {}) {
   const every = o.every ?? 500
   let memory = o.memory ?? null
   let prev: StreamGrid | null = null
@@ -144,7 +148,7 @@ function play(timeline: [number, Scene][], o: { every?: number; ad?: (t: number)
   for (const [ms, scene] of timeline) {
     for (const end = t + ms; t < end; t += every) {
       const g = grid(scene, t)
-      const tick = leagueStep(memory, leagueFeatures(g, prev, now + t), { ad: o.ad?.(t) ?? false }, now + t)
+      const tick = (o.step ?? leagueStep)(memory, leagueFeatures(g, prev, now + t), { ad: o.ad?.(t) ?? false }, now + t)
       prev = g
       memory = tick.memory
       ticks.push({ ...tick, t })
@@ -379,6 +383,45 @@ function desk(o: { cue?: string; title?: string; at?: number } = {}) {
   return { get s() { return s }, act, stream, bg3, alpha }
 }
 
+// A GTA stream: a moving, coloured city and a webcam, no League HUD. WASTED drains it to grey.
+const city: Scene = { cam: true, noHud: true }
+const wasted: Scene = { cam: true, noHud: true, world: 0.05, light: 0.9 }
+const gta = (timeline: [number, Scene][], o: Parameters<typeof play>[1] = {}) => play(timeline, { ...o, step: greyStep })
+
+describe('a GTA streamer wasted', { timeout: 30_000 }, () => {
+  it('is one death, a second and a half after the picture drains to grey, and back up when the colour is', () => {
+    const r = gta([[10_000, city], [7000, wasted], [6000, city]])
+    expect(r.events).toEqual(['learned@6000', 'death@11500', 'respawn@17500'])
+  })
+
+  it('counts the grey, the fade to black and the loading after it as one death', () => {
+    const r = gta([[10_000, city], [6000, wasted], [3000, { ...city, light: 0.03 }], [4000, { ...wasted, still: true }], [8000, city]])
+    expect(r.deaths).toEqual([11_500])
+  })
+
+  it('is not the lighter greys of GTA: the weapon wheel, the pause map, a night, a slow fade, a flat card', () => {
+    expect(gta([[10_000, city], [6000, { ...city, world: 0.55, light: 0.7 }], [4000, city]]).deaths).toEqual([])
+    expect(gta([[10_000, city], [6000, { ...city, world: 0.4 }], [4000, city]]).deaths).toEqual([])
+    expect(gta([[10_000, city], [20_000, { ...city, light: 0.45 }]]).deaths).toEqual([])
+    const fade: [number, Scene][] = Array.from({ length: 40 }, (_, i) => [500, { ...city, world: 1 - (0.95 * (i + 1)) / 40 }] as [number, Scene])
+    expect(gta([[10_000, city], ...fade, [6000, wasted]]).deaths).toEqual([])
+    expect(gta([[10_000, city], [6000, { ...wasted, panel: 110 }]]).deaths).toEqual([])
+    expect(gta([[10_000, city], [6000, { ...wasted, white: true }]]).deaths).toEqual([])
+  })
+
+  it('is not a second of grey, an ad, or a death it came back into', () => {
+    expect(gta([[10_000, city], [1000, wasted], [5000, city]]).deaths).toEqual([])
+    expect(gta([[10_000, city], [6000, wasted]], { ad: (t) => t >= 10_000 }).deaths).toEqual([])
+    const late = gta([[3000, wasted], [10_000, city], [6000, wasted]])
+    expect(late.events).toEqual(['learned@9000', 'death@14500'])
+  })
+
+  it('wastes him again after he is back up, once each time', () => {
+    const r = gta([[10_000, city], [6000, wasted], [8000, city], [6000, wasted], [4000, city]])
+    expect(r.deaths).toEqual([11_500, 25_500])
+  })
+})
+
 describe('a watched rule', () => {
   it('is a death on a stream: on an item named for a stream, or a rule that names the streamer', () => {
     expect(watchedCues({ title: 'Stream watch', cues: ['catilyn dies', "Kai'sa dies", 'finish the game'] })).toEqual(['catilyn dies', "Kai'sa dies"])
@@ -546,12 +589,23 @@ describe('the stream tabs', () => {
     expect(leagueOf(null, 'a cooking video - YouTube')).toBeNull()
   })
 
+  it('know the game by the name the page gives it, or its title; a game no detector knows is never read', () => {
+    expect(gameOf('League of Legends', 'Caedrel - Twitch')).toBe('league')
+    expect(gameOf('Grand Theft Auto VI', 'xQc - Twitch')).toBe('gta')
+    expect(gameOf('Grand Theft Auto V', 'xQc - Kick')).toBe('gta')
+    expect(gameOf('Just Chatting', 'GTA 6 later - Twitch')).toBe('other')
+    expect(gameOf('VALORANT', 'tarik - Twitch')).toBe('other')
+    expect(gameOf(null, 'xQc plays GTA 6 day 3 - YouTube')).toBe('gta')
+    expect(gameOf(null, 'T1 vs GEN - YouTube')).toBe('league')
+    expect(watchedCues({ title: 'Stream watch', cues: ['xqc wasted'] })).toEqual(['xqc wasted'])
+  })
+
   it('pick one tab: the one named like the task, then the one in front, then the bigger video', () => {
-    const tab = (id: string, o: Partial<TabSeen> = {}): TabSeen => ({ tab: id, site: 'twitch', title: `${id} - Twitch`, category: 'League of Legends', league: true, visible: true, active: false, area: 1000, tainted: false, at: now, ...o })
+    const tab = (id: string, o: Partial<TabSeen> = {}): TabSeen => ({ tab: id, site: 'twitch', title: `${id} - Twitch`, category: 'League of Legends', game: 'league', visible: true, active: false, area: 1000, tainted: false, at: now, ...o })
     expect(pickTab([tab('a', { area: 2000 }), tab('b', { active: true })], 'Stream watch', now)?.tab).toBe('b')
     expect(pickTab([tab('a', { active: true }), tab('caedrel')], 'Caedrel stream', now)?.tab).toBe('caedrel')
     expect(pickTab([tab('a', { area: 2000 }), tab('b')], 'Stream watch', now)?.tab).toBe('a')
-    expect(pickTab([tab('a', { at: now - 20_000 }), tab('b', { visible: false }), tab('c', { league: false }), tab('d', { tainted: true })], 'Stream watch', now)).toBeNull()
+    expect(pickTab([tab('a', { at: now - 20_000 }), tab('b', { visible: false }), tab('c', { game: 'other' }), tab('d', { tainted: true })], 'Stream watch', now)).toBeNull()
   })
 
   it('take a post only in this version, with whole grids', () => {

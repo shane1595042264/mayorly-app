@@ -127,7 +127,7 @@ export function streamPostOf(j: unknown): StreamPost | null {
 // ---------------------------------------------------------------------------------------------
 // Which rules are watched
 
-const DEATH = /\b(die|dies|died|dying|dead|death|killed)\b|死|阵亡|陣亡|挂了|寄了/i
+const DEATH = /\b(die|dies|died|dying|dead|death|killed|wasted)\b|死|阵亡|陣亡|挂了|寄了/i
 const STREAM = /\bstream(s|er|ers|ing)?\b|\bwatch(es|ing)?\b|\btwitch\b|主播|直播|bilibili|b站|虎牙|斗鱼|鬥魚|huya|douyu/i
 
 /** A task as far as the stream rule cares: its name, its context switch rules, and the eye's switch. */
@@ -160,6 +160,20 @@ export function isWatched(task: WatchTask): boolean {
 const LEAGUE_NAME = /league of legends|英雄联盟|英雄聯盟|리그 오브 레전드/i
 
 /** Is the page League: true or false when its game or title says, null when neither does. */
+/** The games a death is read for: League by its HUD (leagueStep), GTA by its WASTED screen going grey (greyStep). */
+export type StreamGame = 'league' | 'gta'
+const GTA_NAME = /grand theft auto|\bgta\b/i
+
+/**
+ * The game a page shows, by the game it names (Twitch, Kick) or its title; 'other' when it names
+ * a game, or Just Chatting, that no detector here knows, so it is never read. A page that names no
+ * game (YouTube, Bilibili) is League unless its title says GTA: League's detector asks for its own HUD.
+ */
+export function gameOf(category: string | null, title: string): StreamGame | 'other' {
+  if (category) return leagueOf(category, title) ? 'league' : GTA_NAME.test(category) ? 'gta' : 'other'
+  return GTA_NAME.test(title) ? 'gta' : 'league'
+}
+
 export function leagueOf(category: string | null, title: string): boolean | null {
   if (category) return LEAGUE_NAME.test(category) || /^lol$/i.test(category.trim())
   return LEAGUE_NAME.test(title) || /\blol\b/i.test(title) ? true : null
@@ -206,7 +220,7 @@ export interface TabSeen {
   site: StreamSite
   title: string
   category: string | null
-  league: boolean | null
+  game: StreamGame | 'other'
   visible: boolean
   active: boolean
   area: number
@@ -237,7 +251,7 @@ const shareWord = (a: Set<string>, b: Set<string>) => [...a].some((x) => [...b].
 export function pickTab(tabs: TabSeen[], taskTitle: string, now: number): TabSeen | null {
   const want = words(taskTitle)
   const score = (t: TabSeen) => (shareWord(words(t.title), want) ? 4 : 0) + (t.active ? 2 : 0)
-  const fit = tabs.filter((t) => now - t.at <= TAB_STALE_MS && t.visible && !t.tainted && t.league !== false)
+  const fit = tabs.filter((t) => now - t.at <= TAB_STALE_MS && t.visible && !t.tainted && t.game !== 'other')
   fit.sort((a, b) => score(b) - score(a) || b.area - a.area || b.at - a.at)
   return fit[0] ?? null
 }
@@ -757,6 +771,176 @@ export function leagueStep(mem: DeathMemory | null, f: LeagueFeatures | null, hi
 }
 
 // ---------------------------------------------------------------------------------------------
+// GTA: the WASTED screen
+
+/**
+ * GTA's death (WASTED, and BUSTED) drains the whole picture to grey in a beat, in slow motion with
+ * the word over it, for several seconds. There is no HUD to lean on, and GTA greys a little for
+ * lesser things (the weapon wheel, the pause map, a character switch), so the grey has to be deep:
+ * the world's colour for its brightness under 35% of usual and its colour under 45%, its texture
+ * kept (a flat card is not it), the picture neither black nor white, for a second and a half,
+ * stepping down from colour. Learned from the colour around it, as League's is; down until the
+ * colour is back, and never sooner than 4 s.
+ */
+export const GREY = {
+  baseMax: 40,
+  baseMin: 12,
+  baseMinMs: 6000,
+  satRatio: 0.35,
+  worldRatio: 0.45,
+  texRatio: 0.4,
+  lightRatio: 0.25,
+  lightMax: 1.6,
+  upSat: 0.7,
+  upSamples: 2,
+  edgeRatio: 0.75,
+  edgeMs: 2500,
+  stepDrop: 0.3,
+  fallMs: 10_000,
+  deathMs: 1500,
+  deathSamples: 3,
+  minDeadMs: 4000,
+  deadMaxMs: 60_000,
+  refractoryMs: 6000,
+  gapMs: 5000,
+  forgetMs: 180_000,
+} as const
+
+/** One sample of a GTA stream: as leagueStep, for the WASTED screen. */
+export function greyStep(mem: DeathMemory | null, f: LeagueFeatures | null, hints: { ad: boolean }, at: number): DeathTick {
+  let m: DeathMemory = mem ? { ...mem, base: mem.base.slice(), recent: mem.recent.slice(), run: mem.run && { ...mem.run } } : fresh(at)
+  let event: DeathEvent | null = null
+  const lose = () => {
+    m.run = null
+    m.fall = null
+    m.recent = []
+    m.liveN = 0
+    m.up = false
+  }
+  if (mem && at - mem.lastAt > GREY.forgetMs) {
+    m = fresh(at)
+    event = 'reset'
+  } else if (mem && at - mem.lastAt > GREY.gapMs) lose()
+  m.lastAt = at
+  const keep = (w: number) => {
+    m.recent.push({ at, w })
+    m.recent = m.recent.filter((x) => at - x.at <= 2 * GREY.edgeMs)
+  }
+  const done = (seen: string, near = false): DeathTick => ({ memory: m, event, near, seen })
+  if (hints.ad) {
+    lose()
+    return done('an ad')
+  }
+  if (!f) {
+    if (m.run) {
+      if (m.run.miss) m.run = null
+      else m.run.miss = true
+    }
+    keep(0)
+    return done('dark')
+  }
+  const admit = () => {
+    m.base.push(f)
+    m.base = m.base.filter((b) => at - b.at <= GREY.forgetMs).slice(-GREY.baseMax)
+  }
+  const med = (xs: number[]) => {
+    const s = [...xs].sort((a, b) => a - b)
+    return s.length ? s[s.length >> 1] : 0
+  }
+  if (m.phase === 'learning') {
+    // Only unbroken colour: a drop to grey while learning starts it over, and so does colour coming
+    // back after a start on a grey screen, so a death is never learned as usual.
+    const usual = m.base.length ? med(m.base.map((b) => b.s)) : null
+    if (usual !== null && f.s < 0.5 * usual) m.base = []
+    else if (usual !== null && f.s > 2 * usual) m.base = [f]
+    else admit()
+    const span = m.base.length ? m.base[m.base.length - 1].at - m.base[0].at : 0
+    if (m.base.length >= GREY.baseMin && span >= GREY.baseMinMs) {
+      m.phase = 'watching'
+      m.up = false
+      m.liveN = 0
+      event = 'learned'
+    }
+    keep(f.w)
+    return done(`learning: world ${r1(f.w)} sat ${r1(f.s)}`)
+  }
+  const b = { w: med(m.base.map((x) => x.w)), s: med(m.base.map((x) => x.s)), l: med(m.base.map((x) => x.l)), tex: med(m.base.map((x) => x.tex)) }
+  const seen = `world ${r1(f.w)}/${r1(b.w)} sat ${r1(f.s)}/${r1(b.s)} tex ${r1(f.tex)}/${r1(b.tex)} light ${r1(f.l)}/${r1(b.l)} ${m.phase}${m.up ? ' up' : ''}`
+  const up = f.s >= GREY.upSat * b.s && f.w >= 0.7 * b.w
+  if (m.phase === 'dead') {
+    m.liveN = up ? m.liveN + 1 : 0
+    const deadFor = at - (m.deadAt ?? at)
+    if (m.liveN >= GREY.upSamples && deadFor >= GREY.minDeadMs) {
+      m.phase = 'watching'
+      m.up = true
+      m.liveN = 0
+      m.run = null
+      event = 'respawn'
+    } else if (deadFor >= GREY.deadMaxMs) {
+      m.phase = 'watching'
+      m.up = false
+      m.liveN = 0
+      m.run = null
+      event = 'respawn'
+    }
+    keep(f.w)
+    return done(seen)
+  }
+  if (!m.up) {
+    m.liveN = up ? m.liveN + 1 : 0
+    if (m.liveN >= GREY.upSamples) {
+      m.up = true
+      m.liveN = 0
+    }
+  }
+  if (up) m.fall = null
+  const grey = f.s <= GREY.satRatio * b.s && f.w <= GREY.worldRatio * b.w && f.tex >= GREY.texRatio * b.tex && f.l >= GREY.lightRatio * b.l && f.l <= GREY.lightMax * b.l
+  const stepTo = (since: number) => {
+    const before = m.recent.filter((x) => x.at >= since - GREY.edgeMs && x.at < since)
+    const top = before.length ? Math.max(...before.map((x) => x.w)) : 0
+    return m.up && top >= GREY.edgeRatio * b.w && top - f.w >= GREY.stepDrop * b.w
+  }
+  if (grey) {
+    if (!m.run) {
+      const step = stepTo(at)
+      const fell = m.fall !== null && at - m.fall <= GREY.fallMs
+      if (step && !fell) m.fall = at
+      m.run = { since: at, last: at, n: 1, edge: step || fell, miss: false }
+    } else {
+      m.run.n++
+      m.run.last = at
+      m.run.miss = false
+      if (!m.run.edge && stepTo(m.run.since)) {
+        m.run.edge = true
+        m.fall ??= at
+      }
+    }
+    const r = m.run
+    if (r.edge && r.n >= GREY.deathSamples && r.last - r.since >= GREY.deathMs && (m.lastDeathAt === null || at - m.lastDeathAt >= GREY.refractoryMs)) {
+      m.phase = 'dead'
+      m.deadAt = at
+      m.lastDeathAt = at
+      m.run = null
+      m.fall = null
+      m.liveN = 0
+      m.up = false
+      event = 'death'
+    }
+    keep(f.w)
+    return done(seen)
+  }
+  if (m.run && !m.run.miss && !up) {
+    m.run.miss = true
+    keep(f.w)
+    return done(seen)
+  }
+  m.run = null
+  if (m.up && m.fall === null) admit()
+  keep(f.w)
+  return done(seen, f.s <= 0.6 * b.s && f.w <= 0.7 * b.w)
+}
+
+// ---------------------------------------------------------------------------------------------
 // What a death does
 
 /** A death switches only when the rule may still run, no League match of yours is on, and it did not just switch for another. */
@@ -865,7 +1049,7 @@ export type StreamWord =
   | 'No stream seen'
   | 'Stream hidden'
   | 'Stream cannot be read'
-  | 'Not League'
+  | 'Not a game it knows'
   | 'Off in Settings'
 
 export interface StreamStatus {

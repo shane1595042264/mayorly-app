@@ -8,7 +8,8 @@ import {
   graceStep,
   HELLO_MS,
   leagueFeatures,
-  leagueOf,
+  gameOf,
+  greyStep,
   leagueStep,
   learningWhy,
   pickTab,
@@ -129,10 +130,10 @@ export function streamRule(o: {
     const pick = pickTab(recent, a.title ?? '', now)
     if (!pick) {
       const shown = recent.filter((t) => t.visible)
-      return word(!shown.length ? 'Stream hidden' : shown.some((t) => t.tainted && t.league !== false) ? 'Stream cannot be read' : 'Not League')
+      return word(!shown.length ? 'Stream hidden' : shown.some((t) => t.tainted && t.game !== 'other') ? 'Stream cannot be read' : 'Not a game it knows')
     }
     const m = tabs.get(pick.tab)?.memory
-    if (!m || m.phase === 'learning') return word(m && learningWhy(m) === 'no minimap' ? 'No minimap in view' : 'Learning the stream')
+    if (!m || m.phase === 'learning') return word(m && pick.game === 'league' && learningWhy(m) === 'no minimap' ? 'No minimap in view' : 'Learning the stream')
     return word(m.phase === 'dead' ? 'Streamer is down' : 'Watching the stream')
   }
 
@@ -205,9 +206,11 @@ export function streamRule(o: {
     const now = Date.now()
     heard = true
     const prev = tabs.get(p.tab)
-    const league = leagueOf(p.category, p.title)
+    const game = gameOf(p.category, p.title)
     const tab: Tab = prev ?? { seen: null as unknown as TabSeen, memory: null, grid: null, tick: null, mute: false, mutedFor: null, trail: [], focusSeen: null }
-    tab.seen = { tab: p.tab, site: p.site, title: p.title, category: p.category, league, visible: p.visible, active: p.active, area: p.area, tainted: p.kind === 'tainted', at: now }
+    // Another game on the same tab (the streamer switched): its detector learns the picture afresh.
+    if (prev && prev.seen.game !== game) prev.memory = null
+    tab.seen = { tab: p.tab, site: p.site, title: p.title, category: p.category, game, visible: p.visible, active: p.active, area: p.area, tainted: p.kind === 'tainted', at: now }
     tabs.set(p.tab, tab)
     for (const [k, t] of tabs) if (now - t.seen.at > LEAGUE.forgetMs) tabs.delete(k)
 
@@ -274,7 +277,7 @@ export function streamRule(o: {
     const f = p.grid ? leagueFeatures(p.grid, tab.grid, now) : null
     if (p.grid) tab.grid = p.grid
     const was = tab.memory?.phase ?? null
-    const tick = leagueStep(tab.memory, f, { ad: p.ad }, now)
+    const tick = (game === 'gta' ? greyStep : leagueStep)(tab.memory, f, { ad: p.ad }, now)
     tab.memory = tick.memory
     tab.tick = tick
     tab.trail.push({ at: now, seen: tick.seen, grid: p.grid, ad: p.ad })

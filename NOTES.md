@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## GTA streams count too: WASTED is a switch
+
+- A stream of GTA (the game Twitch or Kick names, or GTA in a YouTube title) is now watched like a League one: when the picture drains to grey for WASTED, Mayorly does what Alt+Q does, once per death, and mutes the stream on the way out. A rule can say "wasted" now as well as "dies".
+- Only the deep grey of a death counts, held for a second and a half; the weapon wheel, the pause map or a night scene do not. If a death is missed, switch away by hand as usual: that moment is kept to tune it from.
+- A stream of a game it does not know, or Just Chatting, is still never read.
+
 ## Leaving the stream mutes it, wherever its tab is
 
 - Whenever the desk leaves your stream task (an AI prompt, Alt+Q, a pick, a death), every stream playing in Chrome is muted, even in a tab behind another one. Coming back to the stream task unmutes them. No more visiting the stream only to mute it, which brought it to the front and switched you right back. Settings, Auto switch, turns muting off.

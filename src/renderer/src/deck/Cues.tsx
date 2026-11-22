@@ -7,7 +7,7 @@ import { current, dispatch } from '../store'
 // else ("rookie dies in game", "stuck 20 minutes: read the hint"). No logic behind them;
 // the drawer shows them while you are on it and the quick switch does the leaving. The
 // same on a task and a couch item (`entry/cue-*`). One kind is watched: a rule that the streamer
-// dies, on a stream, carries an eye, and Mayorly does the switch when a League streamer goes down
+// dies, on a stream, carries an eye, and Mayorly does the switch when a League or GTA streamer goes down
 // (shared/streamdeath.ts). The band's eye button turns watching on or off for the task whatever its
 // words say (`entry/watch`).
 
@@ -58,8 +58,8 @@ export function Cues({ id, title, cues, live, example, inRow }: { id: string; ti
               !ruleOn
                 ? 'Watching streams is off in Settings, Auto switch'
                 : watching
-                  ? 'Mayorly watches a League stream while this runs, and switches when the streamer dies. Click to stop.'
-                  : 'Watch a League stream while this runs: when the streamer dies, Mayorly switches for you.'
+                  ? 'Mayorly watches a League or GTA stream while this runs, and switches when the streamer dies. Click to stop.'
+                  : 'Watch a League or GTA stream while this runs: when the streamer dies, Mayorly switches for you.'
             }
             onClick={() => dispatch({ type: 'entry/watch', id, watch: !watching })}
           >
@@ -74,7 +74,7 @@ export function Cues({ id, title, cues, live, example, inRow }: { id: string; ti
           {cues.map((c, i) => (
             <li key={i} className={`cue ${watched.includes(c) ? 'watched' : ''}`}>
               {watched.includes(c) && (
-                <span className="cue-eye" role="img" aria-label="Watched" title="Mayorly watches the stream for this: when a League streamer dies, it switches for you">
+                <span className="cue-eye" role="img" aria-label="Watched" title="Mayorly watches the stream for this: when a League or GTA streamer dies, it switches for you">
                   <Eye size={12} weight="bold" />
                 </span>
               )}
