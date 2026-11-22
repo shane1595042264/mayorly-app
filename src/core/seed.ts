@@ -1,7 +1,7 @@
 import type { Calendar, HoursWindow } from './model'
 import type { HotkeyAction, MayorlyState, Settings } from './model'
 import { DEFAULT_ALARMS, sanitiseAlarms } from './alarms'
-import { focusFromLog, reconcileTomatoes, settleLegacyCoins } from './accounting'
+import { focusFromLog, reconcileTomatoes, settleCouch, settleLegacyCoins, untangle } from './accounting'
 
 export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   plus: 'Alt+T',
@@ -125,7 +125,7 @@ export function migrate(raw: unknown): MayorlyState | null {
   const x = raw as Partial<MayorlyState>
   if (x.schema !== 1) return null
   const base = emptyState()
-  return focusFromLog(reconcileTomatoes(settleLegacyCoins({
+  return focusFromLog(reconcileTomatoes(settleCouch(untangle(settleLegacyCoins({
     ...base,
     ...x,
     desk: { ...base.desk, ...x.desk },
@@ -136,5 +136,5 @@ export function migrate(raw: unknown): MayorlyState | null {
     calendar: { ...emptyCalendar(), ...x.calendar },
     recipes: Array.isArray(x.recipes) ? x.recipes : [],
     market: (Array.isArray(x.market) ? x.market : []).filter((m) => m && typeof m.id === 'string' && Number.isFinite(m.price)),
-  } as MayorlyState)))
+  } as MayorlyState)))))
 }

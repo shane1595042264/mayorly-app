@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Couch, Play, Stop, Storefront, Trash } from '@phosphor-icons/react'
-import { balance, blockView, clock, leisureList, marketList, leisureSpentMs, leisureTokensSpent, LEISURE_TOKENS_PER_BLOCK, span, type LeisureItem, type MayorlyState } from '@core/index'
+import { balance, blockView, clock, leisureList, marketList, leisureSpentMs, leisureTokensSpent, COUCH_COINS_PER_TOMATO, span, type LeisureItem, type MayorlyState } from '@core/index'
 import { hotkeyLabel } from '../lib/keys'
 import { actionFor, keyLabel, keymapOpen, keysFor, recordUse } from '../lib/keymap'
 import { useListKeys } from '../lib/listkeys'
@@ -69,7 +69,7 @@ function CouchList({ s }: { s: MayorlyState }) {
   const [draft, setDraft] = useState('')
   const [open, setOpen] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const price = LEISURE_TOKENS_PER_BLOCK
+  const price = COUCH_COINS_PER_TOMATO
   const onItem = onCouch ? items.find((x) => x.id === onCouch.block.leisureId) : null
 
   const add = () => {
@@ -106,12 +106,12 @@ function CouchList({ s }: { s: MayorlyState }) {
             <button type="submit" className="btn" disabled={!draft.trim()}>Add</button>
           </div>
           <p className="field-help">
-            Games, shows, streams, anything with no productive value. Outside the ledgers, never earns. Runs like a pomodoro: {s.settings.focusMin} minutes on, {s.settings.shortRestMin} off. Each completed block costs {price} coin; rests are free, and a block left early costs nothing.
+            Games, shows, streams, anything with no productive value. Outside the ledgers, never earns. Runs like a pomodoro: {s.settings.focusMin} minutes on, {s.settings.shortRestMin} off. Every {s.settings.focusMin} minutes on the couch costs {price} coin, however it is split up; rests are free.
           </p>
         </form>
 
         <div className="leisure-buy">
-          <span className={`leisure-banked ${have < price ? 'field-error' : 'dim'}`}><b className="mono num">{have}</b> {have === 1 ? 'coin' : 'coins'}, so <b className="mono num">{have}</b> {have === 1 ? 'block' : 'blocks'} on the couch</span>
+          <span className={`leisure-banked ${have < price ? 'field-error' : 'dim'}`}><b className="mono num">{have}</b> {have === 1 ? 'coin' : 'coins'}, so <b className="mono num">{span(have * s.settings.focusMin * 60_000)}</b> on the couch</span>
         </div>
 
         {onCouch && (
@@ -157,7 +157,7 @@ function CouchList({ s }: { s: MayorlyState }) {
                       <CueCount cues={it.cues} />
                     </span>
                   )}
-                  <span className="row-time mono num" title="Time on the couch, and the coins its finished blocks cost (a block left early is free)">
+                  <span className="row-time mono num" title="Time on the couch, and the coins it cost: one for each whole tomato of it">
                     {spent >= 60_000 && <span>{span(spent)}</span>}
                     {tokens > 0 && <span className="row-paid">{tokens} {tokens === 1 ? 'coin' : 'coins'} paid</span>}
                   </span>
@@ -165,7 +165,7 @@ function CouchList({ s }: { s: MayorlyState }) {
                     <button
                       className="icon-btn"
                       aria-label={`Sit down with ${it.title}`}
-                      title={have < price ? 'Needs a coin: earn one at the desk' : `${s.settings.focusMin} minutes for ${price} coin, then a rest`}
+                      title={have < price ? 'Needs a coin: earn one at the desk' : `${price} coin for every ${s.settings.focusMin} minutes`}
                       disabled={have < price || live}
                       onClick={() => dispatch({ type: 'desk/deploy', mode: 'couch', leisureId: it.id })}
                     >

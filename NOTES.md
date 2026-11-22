@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The couch costs what its time shows, and time counts once
+
+- The couch now costs one coin for each tomato of time on it, however you switch in and out. The number beside the timer is what that game or show has cost so far: nine hours at 30 minutes a tomato is 18 coins. Each coin goes, with its sound, the moment its tomato completes, not at the end of a block.
+- Couch time from before this version was settled once: whatever it had not yet paid for was taken from your coins.
+- Since November 19, a slip in how the desk closed its intervals counted time two or three times over, on tasks and on the couch. That is fixed, and the counts are back to the time you actually spent. Coins already paid stay paid.
+- With no coin left for the next tomato, the couch sends you back to the desk.
+
 ## The market
 
 - Leisure now has two sides: the Couch, time bought by the block as before, and the Market. Press m, or click the switch at the top, to go between them.

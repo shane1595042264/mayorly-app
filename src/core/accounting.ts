@@ -1,4 +1,5 @@
-import type { Id, MayorlyState, Segment } from './model'
+import type { Id, MayorlyState, Segment, TokenTx } from './model'
+import { COUCH_COINS_PER_TOMATO } from './rules'
 
 /** Both time and tomatoes come from the same start/end intervals. */
 export function segmentMs(seg: Segment, now: number): number {
@@ -9,12 +10,12 @@ export function wholeTomatoes(n: number): number {
   return Math.floor(n + 1e-9)
 }
 
-/** Keep each sitting's original tomato length, even after Settings changes. */
-function units(s: MayorlyState, now: number, match: (seg: Segment) => boolean): number {
+/** Keep each sitting's original tomato length, even after Settings changes. Focus time unless told otherwise. */
+function units(s: MayorlyState, now: number, match: (seg: Segment) => boolean, kind: Segment['kind'] = 'focus'): number {
   const intervals = new Map(s.sittings.map(x => [x.id, x.tomatoMs]))
   const time = new Map<number, number>()
   for (const seg of s.segments) {
-    if (seg.kind !== 'focus' || !match(seg)) continue
+    if (seg.kind !== kind || !match(seg)) continue
     const interval = intervals.get(seg.sittingId) ?? s.settings.focusMin * 60_000
     if (interval <= 0) continue
     time.set(interval, (time.get(interval) ?? 0) + segmentMs(seg, now))
@@ -25,6 +26,61 @@ function units(s: MayorlyState, now: number, match: (seg: Segment) => boolean): 
 /** Lifetime work on this entry, including partial tomatoes while away from the desk. */
 export function entryTomatoes(s: MayorlyState, entryId: Id, now: number): number {
   return units(s, now, seg => seg.entryId === entryId)
+}
+
+/** Lifetime time on a couch item in tomatoes, at each sitting's tomato length, as for a task. */
+export function couchTomatoes(s: MayorlyState, leisureId: Id, now: number): number {
+  return units(s, now, seg => seg.leisureId === leisureId, 'leisure')
+}
+
+/** Coins a couch item has paid, under this rule or the per-block one before it. */
+export function couchCoinsPaid(s: MayorlyState, leisureId: Id): number {
+  return s.tokens.filter(t => t.reason === 'leisure' && t.leisureId === leisureId).reduce((n, t) => n - t.amount, 0)
+}
+
+export type CouchCharge = { k: number; at: number; sittingId: Id }
+
+/**
+ * The coins a couch item owes at `now`: one for each whole tomato of its couch time not yet paid,
+ * each dated when that tomato completed. The k-th tomato is counted over all its intervals in order,
+ * so however the time was split, the coins paid come to its whole tomatoes. Coins the per-block rule
+ * took cover the first tomatoes, and one it took for a block partly spent on a task covers the next.
+ */
+export function couchCharges(s: MayorlyState, leisureId: Id, now: number): CouchCharge[] {
+  const paid = couchCoinsPaid(s, leisureId)
+  const lengths = new Map(s.sittings.map(x => [x.id, x.tomatoMs]))
+  const segs = s.segments.filter(seg => seg.kind === 'leisure' && seg.leisureId === leisureId).sort((a, b) => a.start - b.start)
+  const out: CouchCharge[] = []
+  let acc = 0
+  for (const seg of segs) {
+    const len = lengths.get(seg.sittingId) ?? s.settings.focusMin * 60_000
+    if (len <= 0) continue
+    const end = seg.end ?? now
+    const after = acc + Math.max(0, end - seg.start) / len
+    for (let k = wholeTomatoes(acc) + 1; k <= wholeTomatoes(after); k++) {
+      if (k > paid) out.push({ k, at: Math.min(end, Math.round(seg.start + (k - acc) * len)), sittingId: seg.sittingId })
+    }
+    acc = after
+  }
+  return out
+}
+
+/** The coin record for a couch tomato. Its id is the item and the count, so two computers that settle the same time make one record. */
+export function couchCoin(leisureId: Id, c: CouchCharge): TokenTx {
+  return { id: `couch:${leisureId}:${c.k}`, at: c.at, amount: -COUCH_COINS_PER_TOMATO, reason: 'leisure', sittingId: c.sittingId, leisureId }
+}
+
+/**
+ * Settles the couch time in closed intervals that has not been paid for, on load and after a merge,
+ * quietly: a save from before this rule, or time another computer sat, comes to what it cost.
+ */
+export function settleCouch(s: MayorlyState): MayorlyState {
+  const closed = { ...s, segments: s.segments.filter(seg => seg.end !== null) }
+  const items = new Set(closed.segments.flatMap(seg => (seg.kind === 'leisure' && seg.leisureId ? [seg.leisureId] : [])))
+  const add = [...items].flatMap(id => couchCharges(closed, id, 0).map(c => couchCoin(id, c)))
+  const have = new Set(s.tokens.map(t => t.id))
+  const fresh = add.filter(t => !have.has(t.id))
+  return fresh.length ? { ...s, tokens: [...s.tokens, ...fresh] } : s
 }
 
 /** Only whole, unpaid tomatoes can be harvested. Existing coin records stay unchanged. */
@@ -55,6 +111,27 @@ export function settleLegacyCoins(s: MayorlyState): MayorlyState {
     return { ...tx, reason: 'harvest' as const, tomatoes: 1, entryId: seg.entryId }
   })
   return { ...s, tokens }
+}
+
+/**
+ * The desk has one clock, so its intervals follow one another and never overlap. From 2026-11-19 two
+ * copies of the desk each ended one block and both rests came through a merge, so two intervals were
+ * open at once; closing only the first open one then kept a stray open through every switch after it,
+ * and time was counted two and three times over. Each interval ends no later than the next one
+ * starts, which is when the desk moved on. Run on load and after every merge, so a copy that still
+ * has the longer ends cannot bring them back: the same intervals always come out the same.
+ */
+export function untangle(s: MayorlyState): MayorlyState {
+  const order = s.segments.map((seg, i) => ({ seg, i })).sort((a, b) => a.seg.start - b.seg.start || a.i - b.i)
+  let segments: Segment[] | null = null
+  for (let n = 0; n + 1 < order.length; n++) {
+    const { seg, i } = order[n]
+    const next = order[n + 1].seg.start
+    if (seg.end !== null && seg.end <= next) continue
+    segments ??= s.segments.slice()
+    segments[i] = { ...seg, end: Math.max(seg.start, next) }
+  }
+  return segments ? { ...s, segments } : s
 }
 
 /** Rebuild derived counts from closed intervals on load/merge, never replay old payments. */

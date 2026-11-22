@@ -1,5 +1,5 @@
 import type { Block, Entry, Id, Ledger, LeisureItem, MayorlyState, Ms, TokenTx } from './model'
-import { entryTomatoes } from './accounting'
+import { couchTomatoes, entryTomatoes } from './accounting'
 import { openFlow, supersetOf } from './planner'
 import { restSession, switchBack, switchSession, type Action } from './reducer'
 import { matchLedger, parseEstimate } from './clerk'
@@ -267,7 +267,7 @@ export function tomatoProgress(s: MayorlyState, now: number): number {
   return (sittingFocus(s, now) % sitting.tomatoMs) / sitting.tomatoMs
 }
 
-export { entryTomatoes } from './accounting'
+export { couchTomatoes, entryTomatoes } from './accounting'
 
 /** What the quick switch brings back: the entry before the last swap, else the parked session. Null when nothing. */
 export function switchTarget(s: MayorlyState): string | null {
@@ -387,13 +387,13 @@ export function leisureTokensSpent(s: MayorlyState, leisureId: Id): number {
 
 /**
  * Tomatoes on the task the desk is on, over its whole life and counting the one ripening now: an
- * entry's focus time in tomatoes; a couch item's time in blocks of the focus length. A rest counts
+ * entry's focus time in tomatoes; a couch item's time in tomatoes too, the coins it has cost and is costing. A rest counts
  * for the task it follows. Null when the desk is on no task (idle, or ledger time with no entry).
  */
 export function taskTomatoes(s: MayorlyState, now: number): number | null {
   const block = restSession(s)?.block ?? s.desk.block
   if (!block || block.kind === 'rest') return null
-  if (block.kind === 'leisure') return block.leisureId ? leisureSpentMs(s, block.leisureId, now) / Math.max(1, s.settings.focusMin * 60_000) : null
+  if (block.kind === 'leisure') return block.leisureId ? couchTomatoes(s, block.leisureId, now) : null
   return block.entryId ? entryTomatoes(s, block.entryId, now) : null
 }
 

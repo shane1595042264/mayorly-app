@@ -4,7 +4,7 @@ import {
   Check, Couch, Lightning, Pause, Play, Repeat, SkipForward, SquaresFour, Stop, Timer, Tray,
 } from '@phosphor-icons/react'
 import {
-  balance, blockView, clock, leisureList, LEISURE_TOKENS_PER_BLOCK, openFlow, type Action, type HudEvent, type Id, type MayorlyState, type Mode,
+  balance, blockView, clock, leisureList, COUCH_COINS_PER_TOMATO, openFlow, type Action, type HudEvent, type Id, type MayorlyState, type Mode,
 } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
 import { Glyph } from '../lib/glyphs'
@@ -118,9 +118,9 @@ export function PlusMenu({ s, close, open, stage }: Props) {
           key: it.id,
           label: it.title,
           n: i + 1,
-          meta: coins < LEISURE_TOKENS_PER_BLOCK ? 'no coin' : undefined,
+          meta: coins < COUCH_COINS_PER_TOMATO ? 'no coin' : undefined,
           current: pick.leisureId === it.id,
-          disabled: coins < LEISURE_TOKENS_PER_BLOCK && !(couchNow && v!.block.leisureId === it.id),
+          disabled: coins < COUCH_COINS_PER_TOMATO && !(couchNow && v!.block.leisureId === it.id),
           apply: () => choose({ ...pick, couch: true, leisureId: it.id }),
         }))
       : inLedger.slice(0, 7).map((e, i) => ({

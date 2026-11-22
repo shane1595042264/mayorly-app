@@ -7,7 +7,7 @@ import {
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
   findTasks, taskTomatoes, tomatoLabel, onDeskId, recentTasks, switchToAction, switcherAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
-  scheduledNow, randomTask, marketList, marketBought, purchases, MARKET_UNDO_MS,
+  scheduledNow, randomTask, marketList, marketBought, purchases, MARKET_UNDO_MS, couchTomatoes,
 } from './index'
 
 const MIN = 60_000
@@ -2153,14 +2153,18 @@ describe('tasks and the couch share one clock', () => {
     expect(left()).toBe(16 * MIN)
   })
 
-  it('a block that finishes on the couch costs its coin, and the task keeps the tomato time it earned', () => {
+  it('the couch costs its own time, not the block: the task keeps the tomato time it earned', () => {
     const { w, brief, civ } = setup()
     const before = coins(w)
     w.do({ type: 'desk/select', leisureId: civ.id })
     w.wait(18 * MIN)
-    expect(coins(w)).toBe(before - 1)
-    expect(entryTomatoes(w.s, brief.id, w.now)).toBeCloseTo(13 / 30, 5)
+    // 18 minutes of a 30-minute tomato: the block is over, the couch's first coin is not due yet.
     expect(w.s.desk.block?.kind).toBe('rest')
+    expect(coins(w)).toBe(before)
+    expect(entryTomatoes(w.s, brief.id, w.now)).toBeCloseTo(13 / 30, 5)
+    // The next block is the couch again; 12 more minutes make its first whole tomato.
+    w.wait(w.s.settings.shortRestMin * MIN + 12 * MIN + 1_000)
+    expect(coins(w)).toBe(before - 1)
   })
 
   it('a block left before the end costs nothing, and the next block after a rest is the same kind', () => {
@@ -2189,7 +2193,8 @@ describe('tasks and the couch share one clock', () => {
     expect(blockView(w.s, w.now)?.remainingMs).toBe(15 * MIN)
     const before = balance(w.s)
     w.wait(15 * MIN + 1_000)
-    expect(balance(w.s)).toBe(before - 1)
+    // A quarter-hour of the couch is not a whole tomato of it yet.
+    expect(balance(w.s)).toBe(before)
     expect(w.s.desk.plan?.mode).toBe('superset')
   })
 
@@ -2198,5 +2203,202 @@ describe('tasks and the couch share one clock', () => {
     const r = w.do({ type: 'desk/select', leisureId: civ.id })
     expect(w.s.desk.block?.kind).toBe('focus')
     expect(r.events.some((e) => e.type === 'notice' && e.text.startsWith('No coins'))).toBe(true)
+  })
+})
+
+describe('the couch costs what its time shows', () => {
+  const MS30 = 30 * MIN
+  const rich = (coins = 40) => {
+    const w = world((s) => {
+      s.tokens.push({ id: 'seed', at: T0, amount: coins, reason: 'tomato', sittingId: null } as never)
+      s.settings.focusMin = 30
+    })
+    w.do({ type: 'entry/capture', text: 'legal: brief' })
+    w.do({ type: 'leisure/add', title: 'Baldurs Gate 3' })
+    return { w, game: w.s.leisure.find((x) => x.title === 'Baldurs Gate 3')!, brief: w.entry('brief') }
+  }
+  const couchCoins = (w: ReturnType<typeof world>) => w.s.tokens.filter((t) => t.reason === 'leisure').reduce((n, t) => n - t.amount, 0)
+
+  it('nine hours in 20-minute sittings cost eighteen coins, the count beside the timer', () => {
+    const { w, game, brief } = rich()
+    for (let i = 0; i < 27; i++) {
+      w.do({ type: 'desk/deploy', mode: 'couch', leisureId: game.id })
+      w.wait(20 * MIN)
+      w.do({ type: 'desk/select', entryId: brief.id, ledgerId: brief.ledgerId })
+      w.wait(3 * MIN)
+    }
+    expect(couchTomatoes(w.s, game.id, w.now)).toBeCloseTo(18, 5)
+    expect(couchCoins(w)).toBe(18)
+  })
+
+  it('however the couch and a task trade one clock, the coins paid are its whole tomatoes', () => {
+    const { w, game, brief } = rich()
+    w.do({ type: 'desk/select', entryId: brief.id, ledgerId: brief.ledgerId })
+    for (let i = 0; i < 40; i++) {
+      w.do({ type: 'desk/select', leisureId: game.id })
+      w.wait((7 + (i % 5) * 4) * MIN)
+      w.do({ type: 'desk/select', entryId: brief.id, ledgerId: brief.ledgerId })
+      w.wait((2 + (i % 3)) * MIN)
+    }
+    const tomatoes = couchTomatoes(w.s, game.id, w.now)
+    expect(tomatoes).toBeGreaterThan(5)
+    expect(couchCoins(w)).toBe(Math.floor(tomatoes + 1e-9))
+    expect(taskTomatoes({ ...w.s, desk: { ...w.s.desk, block: { ...w.s.desk.block!, kind: 'leisure', leisureId: game.id } } } as MayorlyState, w.now)).toBeCloseTo(tomatoes, 9)
+  })
+
+  it('takes each coin the moment its tomato completes, mid-block, and the HUD hears it', () => {
+    const { w, game } = rich()
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: game.id })
+    const before = balance(w.s)
+    const t0 = w.now
+    w.wait(29 * MIN)
+    expect(balance(w.s)).toBe(before)
+    w.wait(MIN + 1_000)
+    expect(balance(w.s)).toBe(before - 1)
+    const coin = w.s.tokens.find((t) => t.reason === 'leisure')!
+    expect(coin).toMatchObject({ id: `couch:${game.id}:1`, at: t0 + MS30, leisureId: game.id })
+    expect(w.events.filter((e) => e.type === 'spend')).toEqual([expect.objectContaining({ tokens: 1, leisureId: game.id })])
+  })
+
+  it('a stand down mid-tomato carries the part over to the next sitting', () => {
+    const { w, game } = rich()
+    const before = balance(w.s)
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: game.id })
+    w.wait(20 * MIN)
+    w.do({ type: 'desk/standDown' })
+    expect(balance(w.s)).toBe(before)
+    w.wait(60 * MIN)
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: game.id })
+    w.wait(10 * MIN + 1_000)
+    expect(balance(w.s)).toBe(before - 1)
+  })
+
+  it('with the last coin spent the couch ends where that tomato does, mid-block', () => {
+    const { w, game } = rich(1)
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: game.id })
+    w.wait(15 * MIN)
+    w.do({ type: 'desk/standDown' })
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: game.id })
+    w.wait(15 * MIN + 2_000)
+    expect(balance(w.s)).toBe(0)
+    expect(w.s.desk.status).toBe('idle')
+    expect(w.events.some((e) => e.type === 'notice' && e.text === 'Out of coins: back to the desk')).toBe(true)
+    expect(couchTomatoes(w.s, game.id, w.now)).toBeLessThan(1.01)
+  })
+
+  it('a coin spent at the market while on the couch sends it back to the desk on the next beat', () => {
+    const { w, game } = rich(3)
+    w.do({ type: 'market/add', title: 'A night off', price: 3 })
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: game.id })
+    w.wait(5 * MIN)
+    w.do({ type: 'market/buy', id: marketList(w.s)[0].id })
+    w.wait(2_000)
+    expect(w.s.desk.status).toBe('idle')
+    expect(balance(w.s)).toBe(0)
+  })
+
+  it('an older save is settled once on load: per-block coins count, the rest is charged, dated when each tomato completed', () => {
+    const { w, game } = rich()
+    const s = structuredClone(w.s)
+    const H = 3600_000
+    // Three hours on the game in one segment, one coin taken by the old per-block rule.
+    s.sittings.push({ id: 'old', startedAt: T0 - 10 * H, endedAt: T0 - 7 * H, tomatoMs: MS30, focusMs: 0, tomatoes: 0, ledgerTomatoes: {}, tokens: 0 })
+    s.segments.push({ id: 'seg-old', sittingId: 'old', kind: 'leisure', ledgerId: null, entryId: null, leisureId: game.id, start: T0 - 10 * H, end: T0 - 7 * H })
+    s.tokens.push({ id: 'old:leisure:1', at: T0 - 9.5 * H, amount: -1, reason: 'leisure', sittingId: 'old', leisureId: game.id })
+    const a = migrate(JSON.parse(JSON.stringify(s)))!
+    const charged = a.tokens.filter((t) => t.reason === 'leisure')
+    expect(charged.length).toBe(6)
+    expect(charged.map((t) => t.id).slice(1)).toEqual([2, 3, 4, 5, 6].map((k) => `couch:${game.id}:${k}`))
+    expect(charged[1].at).toBe(T0 - 10 * H + 2 * MS30)
+    expect(charged.at(-1)!.at).toBe(T0 - 7 * H)
+    // Again changes nothing.
+    expect(migrate(JSON.parse(JSON.stringify(a)))!.tokens.length).toBe(a.tokens.length)
+  })
+
+  it('two computers settling the same couch time make the same coins, so a merge keeps one of each', () => {
+    const { w, game } = rich()
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId: game.id })
+    w.wait(65 * MIN)
+    w.do({ type: 'desk/standDown' })
+    const here = w.s
+    const ids = (x: MayorlyState) => x.tokens.filter((t) => t.reason === 'leisure').map((t) => t.id).sort()
+    const there = migrate(JSON.parse(JSON.stringify({ ...here, tokens: here.tokens.filter((t) => t.reason !== 'leisure') })))!
+    expect(ids(there)).toEqual(ids(here))
+    expect(ids(here)).toHaveLength(2)
+    expect(ids(mergeStates(here, there, T0))).toHaveLength(2)
+  })
+})
+
+describe('the desk has one clock: its intervals never overlap', () => {
+  const MS = (m: number) => m * MIN
+  const open = (x: MayorlyState) => x.segments.filter((g) => g.end === null)
+  const overlap = (x: MayorlyState, now: number) => {
+    const g = [...x.segments].sort((a, b) => a.start - b.start)
+    let ms = 0
+    for (let i = 1; i < g.length; i++) ms += Math.max(0, Math.min(g[i - 1].end ?? now, g[i].end ?? now) - g[i].start)
+    return ms
+  }
+  const setup = () => {
+    const w = world((s) => {
+      s.tokens.push({ id: 'seed', at: T0, amount: 20, reason: 'tomato', sittingId: null } as never)
+      s.settings.focusMin = 30
+    })
+    w.do({ type: 'entry/capture', text: 'legal: a' })
+    w.do({ type: 'entry/capture', text: 'legal: b' })
+    w.do({ type: 'leisure/add', title: 'game' })
+    return { w, a: w.entry('a'), b: w.entry('b'), game: w.s.leisure.find((x) => x.title === 'game')! }
+  }
+
+  it('a stray open interval (two rests from two copies of one block end) is closed by the next switch, not carried through it', () => {
+    const { w, a, b } = setup()
+    w.do({ type: 'desk/select', entryId: a.id, ledgerId: a.ledgerId })
+    w.wait(MS(10))
+    // What a merge of two copies left: a second interval open beside the desk's run.
+    const run = open(w.s)[0]
+    w.s.segments.unshift({ ...run, id: 'stray' })
+    w.do({ type: 'desk/select', entryId: b.id, ledgerId: b.ledgerId })
+    expect(open(w.s)).toHaveLength(1)
+    w.wait(MS(10))
+    w.do({ type: 'desk/select', entryId: a.id, ledgerId: a.ledgerId })
+    w.wait(MS(5))
+    expect(open(w.s)).toHaveLength(1)
+    expect(entryTomatoes(w.s, b.id, w.now)).toBeCloseTo(10 / 30, 9)
+  })
+
+  it('a save with the stray kept open through many switches is untangled on load: each interval ends where the next began', () => {
+    const { w, a, b, game } = setup()
+    const s = structuredClone(w.s)
+    const sit = 'sit'
+    s.sittings.push({ id: sit, startedAt: T0, endedAt: null, tomatoMs: MS(30), focusMs: 0, tomatoes: 0, ledgerTomatoes: {}, tokens: 0 })
+    // Switches every 10 minutes, a, game, b, a, game, b, with the old close-the-first-open: each interval
+    // closed two switches late, so three were open at once.
+    const order = [a.id, game.id, b.id, a.id, game.id, b.id]
+    s.segments.push(...order.map((id, i) => ({
+      id: `g${i}`, sittingId: sit, kind: (id === game.id ? 'leisure' : 'focus') as 'leisure' | 'focus', ledgerId: id === game.id ? null : a.ledgerId,
+      entryId: id === game.id ? null : id, ...(id === game.id ? { leisureId: id } : {}),
+      start: T0 + MS(10 * i), end: i + 2 < order.length ? T0 + MS(10 * (i + 2)) : null,
+    })))
+    const now = T0 + MS(60)
+    expect(overlap(s, now)).toBeGreaterThan(MS(30))
+    const t = migrate(JSON.parse(JSON.stringify(s)))!
+    expect(overlap(t, now)).toBe(0)
+    expect(open(t)).toHaveLength(1)
+    expect(entryTomatoes(t, a.id, now)).toBeCloseTo(20 / 30, 9)
+    expect(couchTomatoes(t, game.id, now)).toBeCloseTo(20 / 30, 9)
+  })
+
+  it('a copy that still has the long ends cannot bring them back through a merge', () => {
+    const { w, a, b } = setup()
+    w.do({ type: 'desk/select', entryId: a.id, ledgerId: a.ledgerId })
+    w.wait(MS(10))
+    w.do({ type: 'desk/select', entryId: b.id, ledgerId: b.ledgerId })
+    w.wait(MS(10))
+    const fixed = w.s
+    const first = fixed.segments.find((g) => g.entryId === a.id)!
+    const stale = structuredClone(fixed)
+    stale.segments.find((g) => g.id === first.id)!.end = w.now
+    const merged = mergeStates(fixed, stale, T0)
+    expect(merged.segments.find((g) => g.id === first.id)!.end).toBe(first.end)
+    expect(overlap(merged, w.now)).toBe(0)
   })
 })

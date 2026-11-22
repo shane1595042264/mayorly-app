@@ -7,8 +7,13 @@ export const LEDGER_CAP = 9
  * harvested; ledger time with no entry pays as it goes, since there is nothing to harvest.
  */
 export const TOKENS_PER_TOMATO = 1
-/** One coin for each completed block of leisure, the same length as a focus block. Rests are free; a block left early costs nothing. */
-export const LEISURE_TOKENS_PER_BLOCK = 1
+/**
+ * The couch costs what the desk pays: one coin for each whole tomato of time on a couch item, counted
+ * like a task's tomatoes, from its intervals at each sitting's tomato length, so switching in and out
+ * neither saves nor costs anything (nine hours of a game at 30 minutes a tomato is 18 coins). Each
+ * coin goes as its tomato completes; the couch needs one in hand to run. Rests are free.
+ */
+export const COUCH_COINS_PER_TOMATO = 1
 export const CLERK_LOG_CAP = 200
 /** A heartbeat gap longer than this means the machine slept; the desk pauses at the last beat. */
 export const SLEEP_GAP_MS = 2 * 60_000

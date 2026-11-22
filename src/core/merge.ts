@@ -1,6 +1,6 @@
 import type { Id, MayorlyState, Segment, WorkMark } from './model'
 import { CLERK_LOG_CAP } from './rules'
-import { focusFromLog, reconcileTomatoes } from './accounting'
+import { focusFromLog, reconcileTomatoes, settleCouch, untangle } from './accounting'
 
 // Two copies of one account's state, this machine's and the server's, become one without
 // losing work. Sittings, segments and coins are append-only, so their union is the truth.
@@ -71,7 +71,7 @@ function mergeSegments(local: MayorlyState, incoming: MayorlyState, kept: Mayorl
 /** The server's document taken whole, nothing here having changed since the last sync, except the desk and its intervals, which follow the active device. */
 export function replaceState(local: MayorlyState, incoming: MayorlyState, self?: string): MayorlyState {
   const kept = deskWinner(local, incoming, self) === 'local' ? local : incoming
-  return focusFromLog(reconcileTomatoes({ ...incoming, desk: kept.desk, segments: mergeSegments(local, incoming, kept) }))
+  return focusFromLog(reconcileTomatoes(settleCouch(untangle({ ...incoming, desk: kept.desk, segments: mergeSegments(local, incoming, kept) }))))
 }
 
 /** The server's document and this machine's state as one. `syncedAt` is when this machine last matched the server, or null if never. */
@@ -137,5 +137,5 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
     })
     .sort((a, b) => a.at - b.at)
     .slice(-CLERK_LOG_CAP)
-  return focusFromLog(reconcileTomatoes({ ...incoming, ledgers, entries, trash, supersets, leisure, market, houseRules, recipes, sittings, segments, tokens, clerkLog, desk: kept.desk, calendar }))
+  return focusFromLog(reconcileTomatoes(settleCouch(untangle({ ...incoming, ledgers, entries, trash, supersets, leisure, market, houseRules, recipes, sittings, segments, tokens, clerkLog, desk: kept.desk, calendar }))))
 }

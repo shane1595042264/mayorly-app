@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { motion } from 'motion/react'
 import { MagnifyingGlass, Plus } from '@phosphor-icons/react'
-import { balance, findTasks, LEISURE_TOKENS_PER_BLOCK, recentTasks, type FoundTask, type MayorlyState } from '@core/index'
+import { balance, findTasks, COUCH_COINS_PER_TOMATO, recentTasks, type FoundTask, type MayorlyState } from '@core/index'
 import { actionFor, keyLabel, keysFor, recordUse } from '../lib/keymap'
 import { dispatch } from '../store'
 import { plan } from './Capture'
@@ -131,8 +131,8 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
                   <li {...props}>
                     <span className="find-code">COUCH</span>
                     <span className="find-title">{row.item.title}</span>
-                    <span className={`find-meta ${coins < LEISURE_TOKENS_PER_BLOCK ? 'tone-error' : ''}`}>
-                      {onCouch ? 'On the desk' : coins < LEISURE_TOKENS_PER_BLOCK ? 'No coin' : `${LEISURE_TOKENS_PER_BLOCK} coin`}
+                    <span className={`find-meta ${coins < COUCH_COINS_PER_TOMATO ? 'tone-error' : ''}`}>
+                      {onCouch ? 'On the desk' : coins < COUCH_COINS_PER_TOMATO ? 'No coin' : `${COUCH_COINS_PER_TOMATO} coin`}
                     </span>
                   </li>,
                 )

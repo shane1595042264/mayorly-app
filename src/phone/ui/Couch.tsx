@@ -7,8 +7,8 @@ import { act, useMayorly, useNow } from '../store'
 import { captured } from '../feel'
 import { Coin, Sheet } from './parts'
 
-// The couch: what you would like to spend a coin on. A finished couch block costs one coin,
-// leaving early is free, nothing is earned here. The balance is what the desk has paid.
+// The couch: what you would like to spend a coin on. Every tomato of couch time costs one coin,
+// however it is split up; nothing is earned here. The balance is what the desk has paid.
 
 export function Couch({ onSearch }: { onSearch?: () => void }) {
   const s = useMayorly()
@@ -33,7 +33,7 @@ export function Couch({ onSearch }: { onSearch?: () => void }) {
         {onSearch && <motion.button type="button" className="btn icon-btn" aria-label="Find a task and start it" onClick={onSearch} whileTap={{ scale: 0.9 }}><MagnifyingGlass size={18} /></motion.button>}
         <span className="coins num" aria-label={`${coins} coins`}><Coin scale={1} />{coins}</span>
       </header>
-      <p className="help" style={{ padding: '2px 4px 14px' }}>{coins > 0 ? `A finished block here costs one coin of the ${coins} the desk has paid. Leaving early is free.` : 'A finished block here costs one coin, and the desk pays one for every tomato. Leaving early is free.'}</p>
+      <p className="help" style={{ padding: '2px 4px 14px' }}>{coins > 0 ? `Every tomato of time here costs one coin of the ${coins} the desk has paid, however it is split up.` : 'Every tomato of time here costs one coin, and the desk pays one for every tomato.'}</p>
       <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && add()} placeholder="Add something to enjoy" aria-label="New couch item" enterKeyHint="done" />
       <div className="list" style={{ marginTop: 10 }}>
         <AnimatePresence initial={false}>

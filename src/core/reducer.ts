@@ -6,11 +6,11 @@ import type {
   Block, Ctx, Entry, GlyphName, HeldSession, HudEvent, Id, Ledger, LeisureItem, MayorlyState, Mode, Settings, Superset,
 } from './model'
 import { advance, blitzBlock, entrySpentMs, firstBlock, firstOpenInLedger, focusForSlot, initialPlan, leisureBlock, nextInFlow, openFlow, type DeployOpts } from './planner'
-import { CLERK_LOG_CAP, LEDGER_CAP, LEISURE_TOKENS_PER_BLOCK, tokensForTomato } from './rules'
+import { CLERK_LOG_CAP, LEDGER_CAP, COUCH_COINS_PER_TOMATO, tokensForTomato } from './rules'
 import { migrate } from './seed'
 import { deskWinner, mergeStates, replaceState } from './merge'
 import { sanitiseAlarms } from './alarms'
-import { ledgerKey, ledgerTomatoes, unharvestedTomatoes, wholeTomatoes } from './accounting'
+import { couchCharges, couchCoin, ledgerKey, ledgerTomatoes, unharvestedTomatoes, wholeTomatoes } from './accounting'
 import { completionHistory } from './history'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
@@ -903,9 +903,9 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
     return
   }
   if (plan.mode === 'couch') {
-    // Each completed leisure block costs one coin. Nothing is earned on the couch.
-    if (balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
-      ev.push({ type: 'notice', at: now, text: 'No coins: a tomato at the desk buys a block on the couch' })
+    // Each whole tomato of couch time costs a coin, so sitting down needs one. Nothing is earned on the couch.
+    if (balanceOf(s) < COUCH_COINS_PER_TOMATO) {
+      ev.push({ type: 'notice', at: now, text: 'No coins: a tomato at the desk buys a tomato on the couch' })
       return
     }
     // The couch is its own sitting; whatever was running is parked for the quick switch.
@@ -948,9 +948,9 @@ function deploy(s: MayorlyState, ctx: Ctx, ev: HudEvent[], opts: DeployOpts) {
 }
 
 function startBlock(s: MayorlyState, ctx: Ctx, ev: HudEvent[], block: Block, at: number, force: boolean) {
-  if (block.kind === 'leisure' && (!s.desk.sittingId || balanceOf(s) < LEISURE_TOKENS_PER_BLOCK)) {
-    // A leisure block needs a coin in hand to start; it is charged when the block completes.
-    ev.push({ type: 'notice', at, text: 'Out of tokens: back to the desk' })
+  if (block.kind === 'leisure' && (!s.desk.sittingId || balanceOf(s) < COUCH_COINS_PER_TOMATO)) {
+    // A leisure block needs a coin in hand to start; each tomato of it is charged as it completes.
+    ev.push({ type: 'notice', at, text: 'Out of coins: back to the desk' })
     endSitting(s, at, ev, 'complete')
     return
   }
@@ -1007,8 +1007,8 @@ function swapAcross(s: MayorlyState, ctx: Ctx, ev: HudEvent[], to: { entryId: Id
   if (!block || !plan) return
   const item = to.leisureId ? s.leisure.find((x) => x.id === to.leisureId && x.archivedAt === null) : undefined
   if (to.leisureId && !item) return
-  if (item && balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
-    ev.push({ type: 'notice', at: ctx.now, text: 'No coins: a tomato at the desk buys a block on the couch' })
+  if (item && balanceOf(s) < COUCH_COINS_PER_TOMATO) {
+    ev.push({ type: 'notice', at: ctx.now, text: 'No coins: a tomato at the desk buys a tomato on the couch' })
     return
   }
   const now = ctx.now
@@ -1216,8 +1216,8 @@ export function switchSession(s: MayorlyState): HeldSession | null {
 }
 
 function bringBack(s: MayorlyState, ctx: Ctx, ev: HudEvent[], held: HeldSession) {
-  if (held.block.kind === 'leisure' && balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
-    ev.push({ type: 'notice', at: ctx.now, text: 'No coins: a tomato at the desk buys a block on the couch' })
+  if (held.block.kind === 'leisure' && balanceOf(s) < COUCH_COINS_PER_TOMATO) {
+    ev.push({ type: 'notice', at: ctx.now, text: 'No coins: a tomato at the desk buys a tomato on the couch' })
     return
   }
   // This sitting is coming back, not being discarded by park().
@@ -1347,8 +1347,8 @@ export function restSession(s: MayorlyState): HeldSession | null {
 function leaveRest(s: MayorlyState, ctx: Ctx, ev: HudEvent[], run: boolean) {
   const held = restSession(s)
   if (!held) return
-  if (held.block.kind === 'leisure' && balanceOf(s) < LEISURE_TOKENS_PER_BLOCK) {
-    ev.push({ type: 'notice', at: ctx.now, text: 'No coins: a tomato at the desk buys a block on the couch' })
+  if (held.block.kind === 'leisure' && balanceOf(s) < COUCH_COINS_PER_TOMATO) {
+    ev.push({ type: 'notice', at: ctx.now, text: 'No coins: a tomato at the desk buys a tomato on the couch' })
     return
   }
   if (s.desk.status === 'running') closeSegment(s, ctx.now)
@@ -1363,6 +1363,7 @@ function tickDue(s: MayorlyState, now: number): boolean {
   if (end !== null && now >= end) return true
   const sitting = s.sittings.find((x) => x.id === d.sittingId)
   if (!sitting) return false
+  if (d.block.kind === 'leisure') return !!d.block.leisureId && (balanceOf(s) < COUCH_COINS_PER_TOMATO || couchCharges(s, d.block.leisureId, now).length > 0)
   if (d.block.kind !== 'focus') return false
   const entry = s.entries.find(e => e.id === d.block!.entryId && e.doneAt === null)
   if (entry) return unharvestedTomatoes(s, entry.id, now) !== entry.tomatoes
@@ -1386,15 +1387,15 @@ function tick(s: MayorlyState, ctx: Ctx, ev: HudEvent[]) {
     const end = blockEndsAt(s)
     if (end === null || now < end) {
       mint(s, now, ev)
+      // The couch runs on a coin in hand: with none left for the next tomato, it is back to the desk.
+      if (d.block.kind === 'leisure' && balanceOf(s) < COUCH_COINS_PER_TOMATO) {
+        ev.push({ type: 'notice', at: now, text: 'Out of coins: back to the desk' })
+        endSitting(s, now, ev, 'complete')
+      }
       return
     }
     closeSegment(s, end)
     mint(s, end, ev)
-    // A completed block of leisure is the tomato that costs one.
-    if (d.block.kind === 'leisure' && d.sittingId) {
-      s.tokens.push({ id: `${d.sittingId}:leisure:${d.block.round}`, at: end, amount: -LEISURE_TOKENS_PER_BLOCK, reason: 'leisure', sittingId: d.sittingId, leisureId: d.block.leisureId ?? undefined })
-      ev.push({ type: 'spend', at: end, tokens: LEISURE_TOKENS_PER_BLOCK, leisureId: d.block.leisureId ?? null })
-    }
     const next = advanceDesk(s, ctx, end)
     if (!next) {
       endSitting(s, end, ev, 'complete')
@@ -1409,6 +1410,7 @@ const balanceOf = (s: MayorlyState) => s.tokens.reduce((n, t) => n + t.amount, 0
 function mint(s: MayorlyState, at: number, ev: HudEvent[]) {
   const sitting = s.sittings.find(x => x.id === s.desk.sittingId)
   const block = s.desk.block
+  if (block?.kind === 'leisure' && block.leisureId) return chargeCouch(s, block.leisureId, at, ev)
   if (!sitting || block?.kind !== 'focus') return
   const entry = s.entries.find(e => e.id === block.entryId && e.doneAt === null)
   if (entry) {
@@ -1435,9 +1437,23 @@ function mint(s: MayorlyState, at: number, ev: HudEvent[]) {
   }
 }
 
+/**
+ * Each whole tomato of couch time on an item takes its coin as it completes, counted over all of the
+ * item's time, so switching in and out changes nothing. Called wherever tomatoes are minted: on the
+ * tick, and before a switch, a park or a stand down.
+ */
+function chargeCouch(s: MayorlyState, leisureId: Id, at: number, ev: HudEvent[]) {
+  const due = couchCharges(s, leisureId, at)
+  if (!due.length) return
+  for (const c of due) s.tokens.push(couchCoin(leisureId, c))
+  ev.push({ type: 'spend', at, tokens: due.length * COUCH_COINS_PER_TOMATO, leisureId })
+}
+
 function openSegment(s: MayorlyState, ctx: Ctx, at: number) {
   const { block, sittingId } = s.desk
   if (!block || !sittingId) return
+  // One clock: anything still open (a stray a merge brought) ends where this begins.
+  closeSegment(s, at)
   s.segments.push({
     id: ctx.newId(),
     sittingId,
@@ -1463,13 +1479,15 @@ function couchItem(s: MayorlyState, ctx: Ctx, title: string, from?: Entry): Leis
   return item
 }
 
+/** Ends the desk's run. Every open interval ends, not only the first: one left open kept counting through every switch after it. */
 function closeSegment(s: MayorlyState, at: number) {
-  const seg = s.segments.find((x) => x.end === null)
-  if (!seg) return
-  seg.end = Math.max(seg.start, at)
-  if (seg.kind === 'focus') {
-    const sitting = s.sittings.find((x) => x.id === seg.sittingId)
-    if (sitting) sitting.focusMs += seg.end - seg.start
+  for (const seg of s.segments) {
+    if (seg.end !== null) continue
+    seg.end = Math.max(seg.start, at)
+    if (seg.kind === 'focus') {
+      const sitting = s.sittings.find((x) => x.id === seg.sittingId)
+      if (sitting) sitting.focusMs += seg.end - seg.start
+    }
   }
 }
 
