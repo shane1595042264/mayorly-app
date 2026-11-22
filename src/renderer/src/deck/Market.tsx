@@ -42,6 +42,16 @@ const ago = (ms: number) => {
   return d < 30 ? `${d}d ago` : `${Math.floor(d / 30)}mo ago`
 }
 
+/**
+ * What the notice line has said, kept for the session rather than the view, so going to the couch
+ * and back (which remounts the market) neither forgets a removal nor brings back an old purchase.
+ */
+const memory: { notice: Notice | null; saidAt: { current: number }; lastBuy: { current: { id: string; at: number } | null } } = {
+  notice: null,
+  saidAt: { current: 0 },
+  lastBuy: { current: null },
+}
+
 type Notice =
   | { kind: 'removed'; ids: string[]; title: string; at: number }
   | { kind: 'restored'; title: string; at: number }
@@ -58,16 +68,30 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
   const items = marketList(s)
   const log = purchases(s).slice(0, 14)
   const [editing, setEditing] = useState<string | null>(null)
-  const [notice, setNoticeState] = useState<Notice | null>(null)
+  const [notice, setNoticeState] = useState<Notice | null>(memory.notice)
+  useEffect(() => {
+    memory.notice = notice
+  }, [notice])
   // When something other than a purchase was last said (or cleared): purchases older than that are
   // not gathered into a Bought line again.
-  const saidAt = useRef(0)
+  const saidAt = memory.saidAt
   const setNotice = (n: Notice | null | ((n: Notice | null) => Notice | null)) => {
     saidAt.current = Date.now()
     setNoticeState(n)
   }
   const [shake, setShake] = useState<{ id: string; n: number } | null>(null)
-  const lastBuy = useRef<{ id: string; at: number } | null>(null)
+  const lastBuy = memory.lastBuy
+  // The notice line sticks to the top of the scrolled deck; a sentinel just above it says when.
+  const sentinel = useRef<HTMLDivElement>(null)
+  const [stuck, setStuck] = useState(false)
+  useEffect(() => {
+    const el = sentinel.current
+    const root = el?.closest('.deck-body')
+    if (!el || !root) return
+    const io = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting && e.boundingClientRect.top < (e.rootBounds?.top ?? 0) + 30), { root, threshold: 0, rootMargin: '-24px 0px 0px 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
   // How many cards fit in a row, from the grid's width and the cards' least width.
   const grid = useRef<HTMLOListElement>(null)
   const [cols, setCols] = useState(3)
@@ -125,9 +149,9 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
       return false
     }
     lastBuy.current = { id: it.id, at: Date.now() }
-    // A purchase clears the line without counting as something said, so it shows as Bought.
+    // A purchase clears another kind of line without counting as something said: purchases in a
+    // row since then gather into one Bought line, with one Undo for all of them.
     setNoticeState(null)
-    saidAt.current = Date.now() - 1
     sfx.tick()
     noteOrigin(el)
     dispatch({ type: 'market/buy', id: it.id })
@@ -195,7 +219,8 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
     <div className="market">
       <section className="market-main">
         <AddItem />
-        <div className="market-notice-slot" role="status">
+        <div ref={sentinel} className="market-notice-sentinel" aria-hidden />
+        <div className={`market-notice-slot ${stuck ? 'is-stuck' : ''}`} role="status">
           <AnimatePresence initial={false}>
             {bought && !shown ? (
               <motion.div key="bought" className="market-notice is-bought" {...noticeMotion}>
@@ -563,6 +588,7 @@ function PriceInput({ value, set, onDraft }: { value: number; set: (n: number) =
         onFocus={() => { was.current = value }}
         onBlur={settle}
       />
+      {!/^\d+$/.test(draft) && <span className="price-need" role="alert">A price is needed</span>}
       <button type="button" className="icon-btn" aria-label="One coin more" disabled={value >= 999} onClick={() => set(clamp(value + 1))}><Plus size={13} /></button>
     </span>
   )
@@ -586,14 +612,21 @@ function AddItem() {
     setRound((n) => n + 1)
   }
   return (
-    <form className="market-add" onSubmit={(e) => { e.preventDefault(); add() }}>
+    <form
+      className="market-add"
+      onSubmit={(e) => { e.preventDefault(); add() }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' || (e.target as HTMLElement).tagName !== 'INPUT') return
+        e.preventDefault()
+        add()
+      }}
+    >
       <label htmlFor="market-title" className="field-label caps">Put something up for sale</label>
       <div className="market-add-row">
         <input id="market-title" value={title} maxLength={TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder="Empower the next game" spellCheck={false} autoComplete="off" />
         <PriceInput key={round} value={price} set={setPrice} onDraft={setPriceOk} />
         <button type="submit" className="btn" disabled={!title.trim() || !priceOk}><Plus size={14} /> Add</button>
       </div>
-      {!priceOk && <p className="market-add-need" role="alert">A price is needed</p>}
       <input className="market-add-note" value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder="When it is allowed, in your words (optional): after a LeetCode solved in time" spellCheck={false} autoComplete="off" />
     </form>
   )
@@ -613,7 +646,19 @@ function EditItem({ it, done }: { it: MarketItem; done: () => void }) {
     done()
   }
   return (
-    <form className="market-edit" onSubmit={(e) => { e.preventDefault(); save() }} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); done() } }}>
+    <form
+      className="market-edit"
+      onSubmit={(e) => { e.preventDefault(); save() }}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation()
+          done()
+        } else if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+          e.preventDefault()
+          save()
+        }
+      }}
+    >
       {/* Two rows, as the card shows it; Enter saves rather than starting a new line. */}
       <textarea
         autoFocus
@@ -628,9 +673,9 @@ function EditItem({ it, done }: { it: MarketItem; done: () => void }) {
           }
         }}
         aria-label="Title"
+        placeholder="A title is needed"
         spellCheck={false}
       />
-      {!title.trim() && <p className="market-edit-need" role="alert">A title is needed</p>}
       <input value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder="When it is allowed (optional)" aria-label="Note" spellCheck={false} />
       <div className="market-edit-foot">
         <PriceInput value={price} set={setPrice} onDraft={setPriceOk} />

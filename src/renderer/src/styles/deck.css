@@ -842,7 +842,10 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 /* One line that says what just happened, in a slot that is always there: nothing below it moves.
    The lines stack in it, so a new one crossfades over the old. */
 /* Flush with the scroll box's top edge (the deck body has 24px of padding), and kept clear by j and k. */
-.market-notice-slot { position: sticky; top: -24px; z-index: 3; height: 40px; background: #0d0f10; }
+.market-notice-slot { position: sticky; top: -24px; z-index: 3; height: 40px; }
+/* Stuck over the scrolled cards it is solid, and covers the grid's gap below it too. */
+.market-notice-slot.is-stuck { background: #0d0f10; box-shadow: 0 10px 0 #0d0f10; }
+.market-notice-sentinel { height: 0; margin-bottom: -14px; }
 .deck-body:has(.market-notice-slot) { scroll-padding-top: 48px; }
 .market-notice {
   position: absolute; inset: 0;
@@ -973,7 +976,13 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .market-log-title { color: var(--ink); }
 .market-log-ago { font-size: 12px; color: var(--ink-3); text-align: right; }
 .market-edit-need { margin: -2px 0 0; font-size: 12px; color: var(--ink-2); }
-.market-add-need { margin: -2px 0 0; font-size: 12px; color: var(--ink-2); }
+.price-input { position: relative; }
+.price-need {
+  position: absolute; left: 0; top: calc(100% + 4px); z-index: 4;
+  padding: 3px 8px; white-space: nowrap;
+  font-size: 12px; color: var(--ink); background: #15181a; border: 1px solid var(--line-2);
+}
+.market-edit > textarea::placeholder { color: var(--ink-3); font-weight: 400; }
 .market-log li.refunded .market-log-title { color: var(--ink-3); }
 .market-refunded { font-size: 13px; color: var(--ink-3); }
 .market-removed-price { font-size: 13px; color: var(--ink-3); }
