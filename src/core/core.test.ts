@@ -950,6 +950,21 @@ describe('the couch', () => {
     expect(marketList(w.s).map((m) => m.title)).toEqual(['Empower the next ranked game', 'A night off'])
   })
 
+  it('undoes several purchases together: a refund each, one coin flight for the sum', () => {
+    const w = rich()
+    const b0 = balance(w.s)
+    w.do({ type: 'market/add', title: 'Gum', price: 1 })
+    const gum = marketList(w.s)[0]
+    w.do({ type: 'market/buy', id: gum.id })
+    w.do({ type: 'market/buy', id: gum.id })
+    const two = purchases(w.s).filter((p) => !p.refunded).map((p) => p.id)
+    expect(two).toHaveLength(2)
+    w.do({ type: 'market/undo', txIds: two })
+    expect(balance(w.s)).toBe(b0)
+    expect(w.events.filter((e) => e.type === 'refund')).toEqual([expect.objectContaining({ tokens: 2 })])
+    expect(purchases(w.s).every((p) => p.refunded)).toBe(true)
+  })
+
   it('the market comes through an older save and a merge', () => {
     const w = rich()
     const old = structuredClone(w.s) as unknown as Record<string, unknown>

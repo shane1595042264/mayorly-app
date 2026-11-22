@@ -138,7 +138,8 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
           </button>
         </header>
 
-        <div className="deck-body" role="tabpanel" id="deck-panel" aria-labelledby={`tab-${tab}`}>
+        {/* layoutScroll: cards that animate their layout (the market's) stay put while this box scrolls. */}
+        <motion.div layoutScroll className="deck-body" role="tabpanel" id="deck-panel" aria-labelledby={`tab-${tab}`}>
           {tab === 'Flow' && <FlowTab s={s} />}
           {tab === 'Calendar' && <CalendarTab s={s} />}
           {tab === 'Shelf' && <ShelfTab s={s} />}
@@ -146,7 +147,7 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
           {tab === 'Leisure' && <LeisureTab s={s} />}
           {tab === 'Record' && <RecordTab s={s} />}
           {tab === 'Settings' && <SettingsTab s={s} kind={kind} openKeymap={() => setKeymap(true)} openNotes={openNotes} />}
-        </div>
+        </motion.div>
         {keymap && <Keymap s={s} close={() => setKeymap(false)} />}
         {news && <WhatsNew build={news} close={closeNotes} />}
       </motion.section>

@@ -99,7 +99,7 @@ export type Action =
   | { type: 'market/restore'; id: Id }
   | { type: 'market/buy'; id: Id }
   /** Undo a purchase made in the last MARKET_UNDO_MS: a refund record, since the coin log only grows. */
-  | { type: 'market/undo'; txId: Id }
+  | { type: 'market/undo'; txId?: Id; txIds?: Id[] }
   /** The quick switch: park the current session with its clock where it is and pick up the parked one where it was. */
   | { type: 'desk/switch' }
   /** The clerk says a tray entry is entertainment: it becomes a couch item and leaves the flow. */
@@ -597,10 +597,17 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       break
     }
     case 'market/undo': {
-      const tx = s.tokens.find((t) => t.id === action.txId && t.reason === 'purchase')
-      if (!tx || now - tx.at > MARKET_UNDO_MS || s.tokens.some((t) => t.refundOf === tx.id)) break
-      s.tokens.push({ id: ctx.newId(), at: now, amount: -tx.amount, reason: 'refund', sittingId: tx.sittingId, marketId: tx.marketId, refundOf: tx.id })
-      ev.push({ type: 'refund', at: now, tokens: -tx.amount, marketId: tx.marketId ?? null })
+      // One purchase, or several undone together: one refund record each, and one event for the sum.
+      let back = 0
+      let marketId: Id | null = null
+      for (const txId of action.txIds ?? (action.txId ? [action.txId] : [])) {
+        const tx = s.tokens.find((t) => t.id === txId && t.reason === 'purchase')
+        if (!tx || now - tx.at > MARKET_UNDO_MS || s.tokens.some((t) => t.refundOf === tx.id)) continue
+        s.tokens.push({ id: ctx.newId(), at: now, amount: -tx.amount, reason: 'refund', sittingId: tx.sittingId, marketId: tx.marketId, refundOf: tx.id })
+        back += -tx.amount
+        marketId = tx.marketId ?? null
+      }
+      if (back > 0) ev.push({ type: 'refund', at: now, tokens: back, marketId })
       break
     }
     case 'leisure/add': {

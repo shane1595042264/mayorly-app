@@ -45,8 +45,9 @@ const ago = (ms: number) => {
 type Notice =
   | { kind: 'removed'; ids: string[]; title: string; at: number }
   | { kind: 'restored'; title: string; at: number }
-  | { kind: 'short'; id: string; at: number }
-  | { kind: 'refunded'; title: string; amount: number; at: number }
+  /** `landing`: the card said Buy with coins still in the air, and the real balance said no. */
+  | { kind: 'short'; id: string; at: number; landing?: boolean }
+  | { kind: 'refunded'; title: string; amount: number; count: number; at: number }
 
 export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
   const now = useNow(1000)
@@ -60,40 +61,79 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
   const [notice, setNotice] = useState<Notice | null>(null)
   const [shake, setShake] = useState<{ id: string; n: number } | null>(null)
   const lastBuy = useRef<{ id: string; at: number } | null>(null)
-  const latest = log[0]
-  const bought = latest && !latest.refunded && now - latest.at < NOTICE_MS ? latest : null
-  // A short is about the wallet now: once it covers the item, there is nothing to say.
+  // How many cards fit in a row, from the grid's width and the cards' least width.
+  const grid = useRef<HTMLOListElement>(null)
+  const [cols, setCols] = useState(3)
+  useEffect(() => {
+    const el = grid.current
+    if (!el) return
+    const measure = () => setCols(Math.max(1, Math.floor((el.clientWidth + 10) / (260 + 10))))
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  // Cards there at the start come in staggered; a card added later waits a beat, until the rows below have moved.
+  const listMounted = useRef(false)
+  useEffect(() => {
+    listMounted.current = true
+  }, [])
+  // A short is about the count on screen, as the card is: once it covers the item, there is nothing to say.
   const shortItem = notice?.kind === 'short' ? items.find((x) => x.id === notice.id) : undefined
-  const live = notice && now - notice.at < NOTICE_MS && (notice.kind !== 'short' || (shortItem && wallet < shortItem.price)) ? notice : null
+  const shortOf = notice?.kind === 'short' && notice.landing ? wallet : seen
+  const live = notice && now - notice.at < NOTICE_MS && (notice.kind !== 'short' || (shortItem && shortOf < shortItem.price)) ? notice : null
+  // Purchases in a row since anything else was said gather into one line, like removals.
+  const recent = log.filter((p) => !p.refunded && now - p.at < NOTICE_MS && p.at > (live?.at ?? 0))
+  const bought = recent.length
+    ? { list: recent, at: recent[0].at, title: recent.length > 1 ? `${recent.length} items` : recent[0].title, price: recent.reduce((n, p) => n + p.price, 0) }
+    : null
   // The newest thing said wins: a purchase, a removal, a refund or a short.
   const shown = live && (!bought || live.at > bought.at) ? live : null
 
   useEffect(() => {
-    if (notice?.kind === 'short' && (!shortItem || wallet >= shortItem.price)) setNotice(null)
-  }, [notice, shortItem, wallet])
+    if (notice?.kind === 'short' && (!shortItem || shortOf >= shortItem.price)) setNotice(null)
+  }, [notice, shortItem, shortOf])
 
-  const buy = (it: MarketItem, from?: Element | null) => {
+  const short = (it: MarketItem, landing = false) => {
+    sfx.nope()
+    setShake((x) => ({ id: it.id, n: (x?.n ?? 0) + 1 }))
+    setNotice({ kind: 'short', id: it.id, at: Date.now(), landing })
+  }
+  // A press on a card: the card says what the count on screen says (Buy or Short), and a press does
+  // what the card says; the real balance has the last word on the purchase itself.
+  const press = (it: MarketItem, from?: Element | null) => {
     // The same card pressed again this soon is a held or doubled key: not a purchase, and not a
     // shortfall either. Another card is another choice.
     if (lastBuy.current?.id === it.id && Date.now() - lastBuy.current.at < BUY_GAP_MS) return
+    if (seen < it.price) return short(it)
+    buy(it, from)
+  }
+  const buy = (it: MarketItem, from?: Element | null) => {
+    if (lastBuy.current?.id === it.id && Date.now() - lastBuy.current.at < BUY_GAP_MS) return
     const el = from ?? document.querySelector(`[data-row="${CSS.escape(it.id)}"] .buy`)
-    if (wallet < it.price) {
-      sfx.nope()
-      setShake((x) => ({ id: it.id, n: (x?.n ?? 0) + 1 }))
-      setNotice({ kind: 'short', id: it.id, at: Date.now() })
-      return
-    }
+    // The card said Buy from the count still landing; the real balance says no, and the line says why.
+    if (wallet < it.price) return short(it, seen >= it.price)
     lastBuy.current = { id: it.id, at: Date.now() }
     setNotice(null)
     sfx.tick()
     noteOrigin(el)
     dispatch({ type: 'market/buy', id: it.id })
   }
-  const undo = (p: { id: string; title: string; price: number }, from: Element) => {
+  // Undo one purchase or several; refunds in a row gather into one line, like removals.
+  const undo = (list: { id: string; title: string; price: number; marketId: string | null }[], from: Element) => {
+    if (!list.length) return
     sfx.tick()
     noteOrigin(from)
-    dispatch({ type: 'market/undo', txId: p.id })
-    setNotice({ kind: 'refunded', title: p.title, amount: p.price, at: Date.now() })
+    // Undone, the card may be bought again at once: it is a choice, not a repeat.
+    for (const p of list) if (lastBuy.current?.id === p.marketId) lastBuy.current = null
+    dispatch({ type: 'market/undo', txIds: list.map((p) => p.id) })
+    const amount = list.reduce((n, p) => n + p.price, 0)
+    setNotice((n) => {
+      const t = Date.now()
+      const count = (n?.kind === 'refunded' && t - n.at < NOTICE_MS ? n.count : 0) + list.length
+      const sum = (n?.kind === 'refunded' && t - n.at < NOTICE_MS ? n.amount : 0) + amount
+      return { kind: 'refunded', title: count > 1 ? `${count} items` : list[0].title, amount: sum, count, at: t }
+    })
   }
   // Removals in a row gather into one notice whose Undo puts them all back; each stays in the side
   // column's Removed list for ten minutes in any case.
@@ -122,7 +162,7 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
     const it = id ? items.find((x) => x.id === id) : undefined
     if (!it) return false
     if (action === 'list.go') {
-      if (!e.repeat) buy(it)
+      if (!e.repeat) press(it)
     } else if (action === 'list.delete') {
       // A held x removes one card, not the list.
       if (!e.repeat) remove(it)
@@ -144,16 +184,16 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
         <div className="market-notice-slot" role="status">
           <AnimatePresence initial={false}>
             {bought && !shown ? (
-              <motion.div key={`b${bought.id}`} className="market-notice is-bought" {...noticeMotion}>
+              <motion.div key="bought" className="market-notice is-bought" {...noticeMotion}>
                 <span className="caps">Bought</span>
                 <span className="market-notice-title">{bought.title}</span>
                 <span className="market-minus mono num">-{bought.price}</span>
-                <button type="button" className="btn ghost small" onClick={(e) => undo(bought, e.currentTarget)}>
+                <button type="button" className="btn ghost small" onClick={(e) => undo(bought.list, e.currentTarget)}>
                   <ArrowCounterClockwise size={13} /> Undo
                 </button>
               </motion.div>
             ) : shown?.kind === 'removed' ? (
-              <motion.div key={`r${shown.at}`} className="market-notice" {...noticeMotion}>
+              <motion.div key="removed" className="market-notice" {...noticeMotion}>
                 <span className="caps">Removed</span>
                 <span className="market-notice-title">{shown.title}</span>
                 <button type="button" className="btn ghost small" onClick={() => putBack(shown.ids, shown.title)}>
@@ -161,18 +201,18 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
                 </button>
               </motion.div>
             ) : shown?.kind === 'short' && shortItem ? (
-              <motion.div key={`s${shown.at}`} className="market-notice is-short" {...noticeMotion}>
+              <motion.div key="short" className="market-notice is-short" {...noticeMotion}>
                 <span className="caps">Short</span>
                 <span className="market-notice-title">{shortItem.title}</span>
-                <span><b className="mono num">{shortItem.price - wallet}</b> more {shortItem.price - wallet === 1 ? 'coin' : 'coins'} to go</span>
+                <span><b className="mono num">{shortItem.price - shortOf}</b> more {shortItem.price - shortOf === 1 ? 'coin' : 'coins'} {shown.landing ? 'once the coins land' : 'to go'}</span>
               </motion.div>
             ) : shown?.kind === 'restored' ? (
-              <motion.div key={`o${shown.at}`} className="market-notice" {...noticeMotion}>
+              <motion.div key="restored" className="market-notice" {...noticeMotion}>
                 <span className="caps">Back on sale</span>
                 <span className="market-notice-title">{shown.title}</span>
               </motion.div>
             ) : shown?.kind === 'refunded' ? (
-              <motion.div key={`u${shown.at}`} className="market-notice is-refunded" {...noticeMotion}>
+              <motion.div key="refunded" className="market-notice is-refunded" {...noticeMotion}>
                 <span className="caps">Refunded</span>
                 <span className="market-notice-title">{shown.title}</span>
                 <span className="market-plus mono num">+{shown.amount}</span>
@@ -186,11 +226,13 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
         </div>
         {/* Always there, so the first card enters like the rest. */}
         {(
-          <ol className="market-grid">
+          <ol className="market-grid" ref={grid}>
             <AnimatePresence initial={false} mode="popLayout">
             {items.map((it, i) => (
               <Card
-                key={it.id}
+                // A card that moves to another row fades out at its old place and in at its new one,
+                // rather than crossing the row over its neighbours; within a row it slides.
+                key={`${it.id}@${Math.floor(i / cols)}`}
                 it={it}
                 index={i}
                 s={s}
@@ -201,6 +243,8 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
                 editing={editing === it.id}
                 shake={shake?.id === it.id ? shake.n : 0}
                 buy={buy}
+                short={() => short(it)}
+                enterDelay={listMounted.current ? 0.12 : Math.min(i, 8) * 0.035}
                 edit={() => setEditing(it.id)}
                 done={() => setEditing(null)}
                 remove={() => remove(it)}
@@ -210,7 +254,7 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
           </ol>
         )}
         {unused.length > 0 && (
-          <motion.div layout="position" transition={{ type: 'spring', stiffness: 700, damping: 48 }} className={`market-ideas ${items.length ? '' : 'is-first'}`}>
+          <motion.div layout="position" transition={{ type: 'spring', stiffness: 900, damping: 60 }} className={`market-ideas ${items.length ? '' : 'is-first'}`}>
             {items.length === 0 && <p className="empty-title">Nothing for sale yet.</p>}
             <span className="field-label caps">{items.length ? 'More ideas' : 'Start with one of these'}</span>
             <div className="market-suggest">
@@ -237,10 +281,10 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
             {log.map((p) => (
               <li key={p.id} className={p.refunded ? 'refunded' : ''}>
                 <span className="market-log-title ellipsis" title={p.title}>{p.title}</span>
-                {p.refunded ? <span className="market-refunded"><s className="mono num">-{p.price}</s> refunded</span> : <span className="market-minus mono num">-{p.price}</span>}
-                <span className="market-log-ago mono num">{ago(now - p.at)}</span>
+                {p.refunded ? <s className="market-refunded mono num" title="Refunded">-{p.price}</s> : <span className="market-minus mono num">-{p.price}</span>}
+                <span className="market-log-ago">{ago(now - p.at)}</span>
                 {!p.refunded && now - p.at < MARKET_UNDO_MS ? (
-                  <button type="button" className="icon-btn" aria-label={`Undo buying ${p.title}`} title="Undo: the coins come back" onClick={(e) => undo(p, e.currentTarget)}>
+                  <button type="button" className="icon-btn" aria-label={`Undo buying ${p.title}`} title="Undo: the coins come back" onClick={(e) => undo([p], e.currentTarget)}>
                     <ArrowCounterClockwise size={13} />
                   </button>
                 ) : (
@@ -257,8 +301,8 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
               {removed.map((m) => (
                 <li key={m.id}>
                   <span className="market-log-title ellipsis dim" title={m.title}>{m.title}</span>
-                  <span className="market-minus mono num dim">{m.price}</span>
-                  <span className="market-log-ago mono num">{ago(now - (m.archivedAt ?? now))}</span>
+                  <span className="market-removed-price mono num">{m.price}</span>
+                  <span className="market-log-ago">{ago(now - (m.archivedAt ?? now))}</span>
                   <button type="button" className="icon-btn" aria-label={`Put back ${m.title}`} title="Put back on sale" onClick={() => putBack([m.id], m.title)}>
                     <ArrowCounterClockwise size={13} />
                   </button>
@@ -317,15 +361,18 @@ interface CardProps {
   editing: boolean
   shake: number
   buy: (it: MarketItem, from?: Element | null) => void
+  short: () => void
+  enterDelay: number
   edit: () => void
   done: () => void
   remove: () => void
 }
 
-function Card({ ref, it, index, s, wallet, seen, now, selected, editing, shake, buy, edit, done, remove }: CardProps) {
-  const can = wallet >= it.price
+function Card({ ref, it, s, seen, now, selected, editing, shake, buy, short, enterDelay, edit, done, remove }: CardProps) {
+  // Everything the card says follows the count on screen, so nothing on it runs ahead of the coins.
+  const can = seen >= it.price
   const bought = marketBought(s, it.id)
-  const times = Math.floor(wallet / it.price)
+  const times = Math.floor(seen / it.price)
   const controls = useAnimationControls()
   useEffect(() => {
     if (shake) void controls.start({ x: [0, -7, 7, -4, 4, 0], transition: { duration: 0.36 } })
@@ -340,7 +387,7 @@ function Card({ ref, it, index, s, wallet, seen, now, selected, editing, shake, 
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.16 } }}
-      transition={{ delay: Math.min(index, 8) * 0.035, type: 'spring', stiffness: 300, damping: 28, layout: { type: 'spring', stiffness: 380, damping: 34 } }}
+      transition={{ delay: enterDelay, type: 'spring', stiffness: 300, damping: 28, layout: { type: 'tween', duration: 0.18, ease: 'easeOut' } }}
     >
       <motion.div className="market-card-in" animate={controls}>
         {editing ? (
@@ -351,20 +398,21 @@ function Card({ ref, it, index, s, wallet, seen, now, selected, editing, shake, 
               <span className="market-title" title={it.title}>{it.title}</span>
               <span className="market-price mono num"><img src={coin} alt="" />{it.price}</span>
             </div>
-            {it.note && <p className="market-note" title={it.note}>{it.note}</p>}
+            {/* Always one line, empty or not, so every card's meter sits at the same height. */}
+            <p className="market-note" title={it.note}>{it.note ?? ''}</p>
             <div className="market-meter" aria-hidden>
               <motion.span initial={false} animate={{ scaleX: Math.min(1, seen / it.price) }} transition={{ type: 'spring', stiffness: 200, damping: 30 }} />
             </div>
             <p className="market-stat">{bought.count ? `Bought ${bought.count}x, last ${ago(now - (bought.lastAt ?? now))}` : 'Never bought'}</p>
             <div className="market-foot">
               <span className={`market-need ${can ? '' : 'is-short'}`}>
-                {can ? (times > 1 ? `${times}x in the wallet` : 'In the wallet') : <>Need <b className="mono num">{it.price - wallet}</b> more</>}
+                {can ? (times > 1 ? `${times}x in the wallet` : 'In the wallet') : <>Need <b className="mono num">{it.price - seen}</b> more</>}
               </span>
               <span className="market-tools">
                 <button type="button" className="icon-btn" aria-label={`Edit ${it.title}`} title="Edit (r)" onClick={edit}><PencilSimple size={14} /></button>
                 <button type="button" className="icon-btn" aria-label={`Remove ${it.title}`} title="Remove (x)" onClick={remove}><Trash size={14} /></button>
               </span>
-              <HoldToBuy can={can} label={it.title} bought={bought.count} onBuy={(el) => buy(it, el)} />
+              <HoldToBuy can={can} label={it.title} bought={bought.count} onBuy={(el) => buy(it, el)} onShort={short} />
             </div>
           </>
         )}
@@ -374,7 +422,7 @@ function Card({ ref, it, index, s, wallet, seen, now, selected, editing, shake, 
 }
 
 /** Buy by holding: the fill runs across the button and the purchase lands when it is full. Enter or Space buys at once. Short, a press only says so. */
-function HoldToBuy({ can, label, bought, onBuy }: { can: boolean; label: string; bought: number; onBuy: (el: HTMLElement) => void }) {
+function HoldToBuy({ can, label, bought, onBuy, onShort }: { can: boolean; label: string; bought: number; onBuy: (el: HTMLElement) => void; onShort: () => void }) {
   const [p, setP] = useState(0)
   const hold = useRef<{ start: number; raf: number } | null>(null)
   const btn = useRef<HTMLButtonElement>(null)
@@ -427,9 +475,11 @@ function HoldToBuy({ can, label, bought, onBuy }: { can: boolean; label: string;
       aria-disabled={!can}
       title={can ? 'Hold to buy, or press Enter' : 'Not enough coins yet'}
       style={{ ['--p' as string]: p }}
+      // A mouse press never takes the keyboard: Enter always means the card picked with j and k.
+      onMouseDown={(e) => e.preventDefault()}
       onPointerDown={(e) => {
         if (e.button !== 0) return
-        if (!can) return onBuy(e.currentTarget)
+        if (!can) return onShort()
         try {
           e.currentTarget.setPointerCapture(e.pointerId)
         } catch {
@@ -444,7 +494,9 @@ function HoldToBuy({ can, label, bought, onBuy }: { can: boolean; label: string;
         if (e.key !== 'Enter' && e.key !== ' ') return
         e.preventDefault()
         e.stopPropagation()
-        if (!e.repeat) onBuy(e.currentTarget)
+        if (e.repeat) return
+        if (can) onBuy(e.currentTarget)
+        else onShort()
       }}
     >
       <span className="buy-label caps">{text}</span>
@@ -454,9 +506,11 @@ function HoldToBuy({ can, label, bought, onBuy }: { can: boolean; label: string;
 }
 
 /** Whole coins, 1 to 999. The box holds what is typed and settles it on leaving; the steps stop at the ends. */
-function PriceInput({ value, set }: { value: number; set: (n: number) => void }) {
+/** `onDraft` hears whether the box holds a number, so a form can wait while it is empty. */
+function PriceInput({ value, set, onDraft }: { value: number; set: (n: number) => void; onDraft?: (ok: boolean) => void }) {
   const [draft, setDraft] = useState(String(value))
   useEffect(() => setDraft(String(value)), [value])
+  useEffect(() => onDraft?.(/^\d+$/.test(draft)), [draft])
   const clamp = (n: number) => Math.min(999, Math.max(1, Math.round(n) || 1))
   // Left empty or unreadable, the box goes back to what it had; only a typed number is clamped.
   const settle = () => {
@@ -490,22 +544,26 @@ function PriceInput({ value, set }: { value: number; set: (n: number) => void })
 function AddItem() {
   const [title, setTitle] = useState('')
   const [price, setPrice] = useState(10)
+  // An emptied price box holds Add back; each add starts the box afresh at 10.
+  const [priceOk, setPriceOk] = useState(true)
+  const [round, setRound] = useState(0)
   const [note, setNote] = useState('')
   const add = () => {
-    if (!title.trim()) return
+    if (!title.trim() || !priceOk) return
     sfx.place()
     dispatch({ type: 'market/add', title, price, note })
     setTitle('')
     setNote('')
     setPrice(10)
+    setRound((n) => n + 1)
   }
   return (
     <form className="market-add" onSubmit={(e) => { e.preventDefault(); add() }}>
       <label htmlFor="market-title" className="field-label caps">Put something up for sale</label>
       <div className="market-add-row">
         <input id="market-title" value={title} maxLength={TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder="Empower the next game" spellCheck={false} autoComplete="off" />
-        <PriceInput value={price} set={setPrice} />
-        <button type="submit" className="btn" disabled={!title.trim()}><Plus size={14} /> Add</button>
+        <PriceInput key={round} value={price} set={setPrice} onDraft={setPriceOk} />
+        <button type="submit" className="btn" disabled={!title.trim() || !priceOk}><Plus size={14} /> Add</button>
       </div>
       <input className="market-add-note" value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder="When it is allowed, in your words (optional): after a LeetCode solved in time" spellCheck={false} autoComplete="off" />
     </form>
@@ -517,6 +575,8 @@ function EditItem({ it, done }: { it: MarketItem; done: () => void }) {
   const [price, setPrice] = useState(it.price)
   const [note, setNote] = useState(it.note ?? '')
   const save = () => {
+    // An empty title is not saved: the box stays open and says so.
+    if (!title.trim()) return sfx.nope()
     sfx.tick()
     dispatch({ type: 'market/update', id: it.id, patch: { title, price, note } })
     done()
@@ -539,6 +599,7 @@ function EditItem({ it, done }: { it: MarketItem; done: () => void }) {
         aria-label="Title"
         spellCheck={false}
       />
+      {!title.trim() && <p className="market-edit-need" role="alert">A title is needed</p>}
       <input value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder="When it is allowed (optional)" aria-label="Note" spellCheck={false} />
       <div className="market-edit-foot">
         <PriceInput value={price} set={setPrice} />

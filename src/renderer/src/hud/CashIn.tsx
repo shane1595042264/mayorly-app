@@ -30,8 +30,10 @@ const MAX_COINS = 8
 const FLIGHT_MS = 720
 const STAGGER_MS = 90
 
-export function CashIn({ amount, balance, from, out = false, anchor = null, ceiling = 8, startAt = null, onDone }: Props) {
-  const start = startAt ?? (out ? balance + amount : balance - amount)
+export function CashIn({ amount, balance, from, out: spend = false, anchor = null, ceiling = 8, startAt = null, onDone }: Props) {
+  const start = startAt ?? (spend ? balance + amount : balance - amount)
+  // Coins go the way the count goes: a purchase landing on a refund still rising flies in.
+  const out = start === balance ? spend : start > balance
   // Coins for the distance the count has to travel: none when an Undo came before any coin landed.
   const coins = start === balance ? 0 : Math.max(1, Math.min(MAX_COINS, Math.abs(balance - start)))
   // The arc over the flight: high to the corner counter, low to a count in the open deck, and never off the screen.

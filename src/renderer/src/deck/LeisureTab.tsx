@@ -51,7 +51,7 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
         <span className="leisure-switch-hint dim small"><i className="key">{keysFor('list.market', s.settings).map(keyLabel).join(' / ')}</i> switches</span>
       </div>
       <AnimatePresence mode="popLayout" initial={false}>
-        <motion.div key={view} className="leisure-view" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.08, duration: 0.14 } }} exit={{ opacity: 0, transition: { duration: 0.07 } }}>
+        <motion.div key={view} className="leisure-view" initial={{ opacity: 0.4, y: 4 }} animate={{ opacity: 1, y: 0, transition: { duration: 0.16 } }} exit={{ opacity: 0, transition: { duration: 0 } }}>
           {view === 'couch' ? <CouchList s={s} /> : <Market s={s} enabled />}
         </motion.div>
       </AnimatePresence>
