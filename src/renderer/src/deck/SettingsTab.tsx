@@ -461,11 +461,16 @@ const AUTO_SWITCH: { key: keyof AutoSwitchRules; label: string; help: string }[]
     label: 'When you send an AI a prompt, switch to your recent task',
     help: 'What Alt+Q does, so the wait goes to something else; the next prompt or Alt+Q switches again. Claude Code, Gemini CLI and Codex through their hooks; ChatGPT and Gemini in Chrome through the Mayorly extension (load ~/.mayorly/chrome-extension in chrome://extensions, Developer mode, Load unpacked). Not during a rest or when the desk is idle; scheduled tasks and background notices never count.',
   },
+  {
+    key: 'streamDeath',
+    label: 'When the streamer dies in League, switch to your recent task',
+    help: 'For a couch item or task with a context switch rule such as "streamer dies" (or any rule that someone dies, on an item whose name says stream). While it runs here and a League of Legends stream plays in Chrome, on Twitch, YouTube, Kick, Bilibili, Huya or Douyu, Mayorly reads the stream\'s own video and does what Alt+Q does the moment the game goes grey, once per death. It reads the page, never your screen, so your own games never count, and it waits while a League match of yours is running. Needs the Mayorly extension; after an update, press its reload button once in chrome://extensions, then reload the stream page.',
+  },
 ]
 
 function AutoSwitchRulesField({ rules, set }: { rules: AutoSwitchRules; set: (r: AutoSwitchRules) => void }) {
   return (
-    <div className="auto-switch" data-setting="auto switch, rules, claude code, claude, prompt, hook, project">
+    <div className="auto-switch" data-setting="auto switch, rules, claude code, claude, prompt, hook, project, stream, streamer, twitch, youtube, league, dies, death">
       <span className="field-label caps">Auto switch</span>
       {AUTO_SWITCH.map((r) => (
         <div key={r.key}>

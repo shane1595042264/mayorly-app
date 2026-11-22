@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { CaretDown, CaretRight, Plus, X } from '@phosphor-icons/react'
-import { dispatch } from '../store'
+import { CaretDown, CaretRight, Eye, Plus, X } from '@phosphor-icons/react'
+import { watchedCues } from '../../../shared/streamdeath'
+import { current, dispatch } from '../store'
 
 // Context switch rules: cues in your words for when to leave something and do something
 // else ("rookie dies in game", "stuck 20 minutes: read the hint"). No logic behind them;
 // the drawer shows them while you are on it and the quick switch does the leaving. The
-// same on a task and a couch item (`entry/cue-*`).
+// same on a task and a couch item (`entry/cue-*`). One kind is watched: a rule that the streamer
+// dies, on a stream, carries an eye, and Mayorly does the switch when a League streamer goes down
+// (shared/streamdeath.ts).
 
 /** The caret that opens a row's rules; Space does the same on the selected row. */
 export function CueToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
@@ -35,6 +38,8 @@ export function Cues({ id, title, cues, live, example, inRow }: { id: string; ti
     setDraft('')
   }
   const Box = inRow ? 'div' : 'li'
+  // Watched only while the rule is on in Settings (Auto switch); the eye says so.
+  const watched = current()?.settings.autoSwitch.streamDeath === false ? [] : watchedCues({ title, cues })
   return (
     <Box className={`cues-band ${inRow ? 'in-row' : ''} ${live ? 'live' : ''}`}>
       <div className="cues-head">
@@ -44,7 +49,12 @@ export function Cues({ id, title, cues, live, example, inRow }: { id: string; ti
       {cues.length > 0 && (
         <ul className="cues-list">
           {cues.map((c, i) => (
-            <li key={i} className="cue">
+            <li key={i} className={`cue ${watched.includes(c) ? 'watched' : ''}`}>
+              {watched.includes(c) && (
+                <span className="cue-eye" role="img" aria-label="Watched" title="Mayorly watches the stream for this: when a League streamer dies, it switches for you">
+                  <Eye size={12} weight="bold" />
+                </span>
+              )}
               <span>{c}</span>
               <button className="cue-x" aria-label={`Remove cue: ${c}`} title="Remove" onClick={() => dispatch({ type: 'entry/cue-delete', id, index: i })}><X size={11} weight="bold" /></button>
             </li>

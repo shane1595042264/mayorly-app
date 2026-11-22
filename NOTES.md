@@ -2,6 +2,14 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The couch switches when the streamer dies
+
+- A couch rule that a streamer dies now does the switch for you. On "Stream watch", rules like "Kai'sa dies" count, and so does "streamer dies" on any item or task. While it runs and a League of Legends stream plays in Chrome, the moment the streamer's game turns grey Mayorly does what Alt+Q does, once per death.
+- Only the stream counts. Mayorly reads the video inside the Twitch, YouTube, Kick, Bilibili, Huya or Douyu page, on either screen, never your screen, so dying in your own game never switches you. It also waits while a League match of yours is running.
+- Coming back while the streamer is still down does nothing until they are back up and die again. If you press Alt+Q yourself right after it switched, that press is let go, so you stay where it sent you.
+- A rule Mayorly watches has an eye beside it, and the couch list says what it sees: Watching the stream, Learning the stream, No stream seen.
+- Once: open chrome://extensions and press reload on the Mayorly extension, then reload the stream's page. Settings, Auto switch, turns this off.
+
 ## The couch costs what its time shows, and time counts once
 
 - The couch now costs one coin for each tomato of time on it, however you switch in and out. The number beside the timer is what that game or show has cost so far: nine hours at 30 minutes a tomato is 18 coins. Each coin goes, with its sound, the moment its tomato completes, not at the end of a block.

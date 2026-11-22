@@ -79,6 +79,10 @@ const bridge: Bridge = {
   effectDone: () => ipcRenderer.send(IPC.effectDone),
   closeDrawer: () => ipcRenderer.send(IPC.drawerClose),
   onHotkeyFailures: (fn) => sub(IPC.hotkeyFailures, fn),
+  stream: {
+    get: () => ipcRenderer.invoke(IPC.streamGet),
+    onStatus: (fn) => sub(IPC.streamStatus, fn),
+  },
 }
 
 contextBridge.exposeInMainWorld('mayorly', bridge)

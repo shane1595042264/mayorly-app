@@ -8,6 +8,8 @@ Everything you put into Mayorly stays in one file on your computer: your ledgers
 
 Mayorly has no analytics, no advertising, no tracking and no crash reporting. The log stays on your computer unless you send it to us.
 
+Watching a stream: on Twitch, YouTube (YouTube videos embedded on other sites included), Kick, Bilibili live, Huya and Douyu, the Mayorly extension in Chrome tells Mayorly on this computer (127.0.0.1), every few seconds while a video plays, the page's title and the game it names. While a couch item or task with a rule such as "streamer dies" runs, it also reads the playing video twice a second: Chrome shrinks the frame to 320 by 180 in memory, and only 1,728 numbers of colour and light leave it, to Mayorly on this computer. None of it is synced or sent to an AI or to our server. Mayorly's log on your computer notes the site and its game when the rule starts and the colour numbers at each death, never a picture or a title.
+
 ## If you sign in
 
 Signing in is optional. It exists so the same ledgers follow you between computers. When you sign in with Google, Mayorly's server (mayorly-api, hosted on Railway) stores:

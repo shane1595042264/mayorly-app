@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useState } from 'react'
+import type { StreamStatus } from '../../../shared/streamdeath'
+import { bridge } from '../bridge'
 import { AnimatePresence, motion } from 'motion/react'
 import { Couch, Play, Stop, Storefront, Trash } from '@phosphor-icons/react'
 import { balance, blockView, clock, leisureList, marketList, leisureSpentMs, leisureTokensSpent, COUCH_COINS_PER_TOMATO, span, type LeisureItem, type MayorlyState } from '@core/index'
@@ -71,6 +73,7 @@ function CouchList({ s }: { s: MayorlyState }) {
   const [renaming, setRenaming] = useState<string | null>(null)
   const price = COUCH_COINS_PER_TOMATO
   const onItem = onCouch ? items.find((x) => x.id === onCouch.block.leisureId) : null
+  const streamWord = useStreamWord(onItem?.id)
 
   const add = () => {
     if (!draft.trim()) return
@@ -126,6 +129,7 @@ function CouchList({ s }: { s: MayorlyState }) {
             {onItem && onItem.cues.length > 0 && (
               <p className="leisure-cues-live">
                 <span className="caps dim">Switch when</span> {onItem.cues.join('  ·  ')}
+                {streamWord && <span className="stream-word">   {streamWord}</span>}
                 {s.desk.holster && <span className="dim">   {hotkeyLabel(s.settings.hotkeys.switch)} goes back to {s.desk.holster.block.label}</span>}
               </p>
             )}
@@ -210,3 +214,19 @@ function Rename({ item, done }: { item: LeisureItem; done: () => void }) {
   )
 }
 
+/** What the stream rule says about this couch item, while it runs: Watching the stream, No stream seen... */
+function useStreamWord(id: string | undefined): string | null {
+  const [st, setSt] = useState<StreamStatus | null>(null)
+  useEffect(() => {
+    const b = bridge.stream
+    if (!b) return
+    let live = true
+    void b.get().then((x) => live && setSt(x)).catch(() => {})
+    const off = b.onStatus(setSt)
+    return () => {
+      live = false
+      off()
+    }
+  }, [])
+  return st && id && st.taskId === id ? st.word : null
+}

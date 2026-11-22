@@ -60,6 +60,23 @@ export function switcherAction(s: MayorlyState, rows: FoundTask[], start: number
   return row ? switchToAction(s, row) : null
 }
 
+/** The task switcher's list: the tasks worked on last, and the row it starts on, past the one on the desk. */
+export function switcherRows(s: MayorlyState): { rows: FoundTask[]; start: number } {
+  const rows = recentTasks(s, 10)
+  const start = rows[0] && idOf(rows[0]) === onDeskId(s) ? 1 : 0
+  return { rows, start }
+}
+
+/**
+ * What a tap of Alt+Q does, for a rule that switches on its own: the switcher's first row, or the
+ * plain switch when the list has nowhere to go. Null when there is nowhere at all.
+ */
+export function quickSwitch(s: MayorlyState): Action | null {
+  const { rows, start } = switcherRows(s)
+  if (start >= rows.length) return switchBack(s) || switchSession(s) || restSession(s) ? { type: 'desk/switch' } : null
+  return switcherAction(s, rows, start, start)
+}
+
 /**
  * Lower case, with punctuation folded away, so "follow-up" is found by "followup" and "follow up".
  * Digits joined by a slash, a colon or a dot stay one word ("11/20", "7:30", "1.5"): a date is a

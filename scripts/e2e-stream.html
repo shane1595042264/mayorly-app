@@ -1,0 +1,121 @@
+<!doctype html>
+<!--
+  A pretend League of Legends stream for scripts/e2e-stream.ps1, served as https://www.twitch.tv/e2e.
+  A canvas painted ten times a second plays through a <video>, as Twitch's player does: a moving,
+  coloured world, a still minimap bottom right, the ability bar bottom centre, a webcam, a chat
+  column. The timeline runs from t0 (epoch ms, in the URL) and says when the world goes grey.
+    ?plan=full        colour; a break card; a slow fade; an ad that looks like a death; a death at 100 s; colour
+    ?plan=death-only  colour; a death at 25 s; colour
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>e2e - Twitch</title>
+    <style>
+      body { margin: 0; background: #0e0e10; color: #ddd; font: 14px sans-serif; }
+      #v { width: 1280px; height: 720px; display: block; }
+      .ad { position: absolute; top: 8px; left: 8px; background: #000; padding: 4px 8px; }
+    </style>
+  </head>
+  <body>
+    <a data-a-target="stream-game-link" href="#">League of Legends</a>
+    <div id="player" style="position: relative">
+      <video id="v" muted autoplay playsinline></video>
+    </div>
+    <script>
+      const q = new URLSearchParams(location.search)
+      const t0 = Number(q.get('t0')) || Date.now()
+      const plan = q.get('plan') || 'full'
+      const W = 1280
+      const H = 720
+      const canvas = document.createElement('canvas')
+      canvas.width = W
+      canvas.height = H
+      const g = canvas.getContext('2d')
+      const video = document.getElementById('v')
+      // Twitch's ad label is there only while an ad plays.
+      let adLabel = null
+      function showAd(on) {
+        if (on && !adLabel) {
+          adLabel = document.createElement('span')
+          adLabel.className = 'ad'
+          adLabel.setAttribute('data-a-target', 'video-ad-label')
+          adLabel.textContent = 'Ad'
+          document.getElementById('player').appendChild(adLabel)
+        } else if (!on && adLabel) {
+          adLabel.remove()
+          adLabel = null
+        }
+      }
+
+      // What the frame shows s seconds after t0.
+      function scene(s) {
+        if (plan === 'death-only') return s >= 25 && s < 35 ? { world: 0.3, bar: 'dim' } : { world: 1, bar: 'lit' }
+        if (s >= 25 && s < 29) return { card: true }
+        // A fade over 30 s: no step from colour into grey anywhere in it.
+        if (s >= 40 && s < 70) { const k = (s - 40) / 30; return { world: 1 - 0.7 * k, bar: k > 0.7 ? 'dim' : 'lit' } }
+        // An ad, painted as a death would be: only the ad label keeps it from counting.
+        if (s >= 75 && s < 83) return { world: 0.3, bar: 'dim', ad: true }
+        if (s >= 100 && s < 110) return { world: 0.3, bar: 'dim' }
+        return { world: 1, bar: 'lit' }
+      }
+
+      function draw() {
+        const now = Date.now()
+        const s = (now - t0) / 1000
+        const t = now / 1000
+        const sc = scene(s)
+        showAd(!!sc.ad)
+        if (sc.card) {
+          // A break card: one grey picture, nothing coloured, nothing moving.
+          g.fillStyle = 'hsl(0, 0%, 42%)'
+          g.fillRect(0, 0, W, H)
+          g.fillStyle = 'hsl(0, 0%, 70%)'
+          g.font = '64px sans-serif'
+          g.fillText('Be right back', 420, 360)
+          return
+        }
+        // The world: tiles of colour that drift, as a camera moving over the map.
+        for (let y = 0; y < H; y += 32) {
+          for (let x = 0; x < W; x += 32) {
+            const cx = x / 32
+            const cy = y / 32
+            const hue = (cx * 13 + cy * 7 + t * 30) % 360
+            const light = 38 + 10 * Math.sin(cx * 0.5 + t * 2) * Math.cos(cy * 0.4 - t)
+            g.fillStyle = `hsl(${hue}, ${20 * sc.world}%, ${light}%)`
+            g.fillRect(x, y, 32, 32)
+          }
+        }
+        // Chat down the left.
+        g.fillStyle = 'hsl(0, 0%, 25%)'
+        for (let y = 150; y < 500; y += 18) g.fillRect(6, y, 90, 8)
+        // The webcam, in colour whatever happens in the game.
+        for (let y = 324; y < 504; y += 20) {
+          for (let x = 64; x < 384; x += 20) {
+            g.fillStyle = `hsl(${(x + y + t * 80) % 360}, 40%, 50%)`
+            g.fillRect(x, y, 20, 20)
+          }
+        }
+        // The minimap: still, coloured, one icon moving.
+        for (let y = 526; y < H; y += 16) {
+          for (let x = 1094; x < W; x += 16) {
+            g.fillStyle = (x / 16 + y / 16) % 2 < 1 ? 'hsl(130, 30%, 25%)' : 'hsl(200, 30%, 32%)'
+            g.fillRect(x, y, 16, 16)
+          }
+        }
+        g.fillStyle = '#fff'
+        g.fillRect(1110 + ((t * 20) % 120), 600, 8, 8)
+        // The ability bar: bright while alive, dimmed while dead.
+        for (let i = 0; i < 8; i++) {
+          g.fillStyle = sc.bar === 'dim' ? `hsl(${30 + i * 40}, 15%, 25%)` : `hsl(${30 + i * 40}, 35%, 35%)`
+          g.fillRect(448 + i * 48, 630, 44, 90)
+        }
+      }
+
+      draw()
+      setInterval(draw, 100)
+      video.srcObject = canvas.captureStream(10)
+      video.play().catch(() => {})
+    </script>
+  </body>
+</html>

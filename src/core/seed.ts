@@ -41,7 +41,7 @@ export const DEFAULT_SETTINGS: Settings = {
   keymap: {},
   openAtLogin: false,
   gaming: false,
-  autoSwitch: { aiPrompt: true },
+  autoSwitch: { aiPrompt: true, streamDeath: true },
   clerk: { createLedgers: true, consolidate: true, minConfidence: null, allow: { settings: 'ask', recipes: 'ask' } },
   marketHidden: [],
 }
@@ -117,7 +117,7 @@ export function sampleState(now: number, newId: () => string): MayorlyState {
 function autoSwitchOf(s: Partial<Settings> | undefined): Settings['autoSwitch'] {
   const rules = s?.autoSwitch as (Partial<Settings['autoSwitch']> & { aiBreak?: unknown; claude?: unknown }) | undefined
   const old = rules?.aiBreak ?? rules?.claude ?? (s as { claudeSwitch?: unknown } | undefined)?.claudeSwitch
-  return { aiPrompt: typeof rules?.aiPrompt === 'boolean' ? rules.aiPrompt : old !== false }
+  return { aiPrompt: typeof rules?.aiPrompt === 'boolean' ? rules.aiPrompt : old !== false, streamDeath: rules?.streamDeath !== false }
 }
 
 /** Bring older or partial saves up to the current shape. Never drops user data. */

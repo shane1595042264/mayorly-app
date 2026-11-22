@@ -1,5 +1,6 @@
 import type { Action, AlarmKind, HudEvent, MayorlyState } from '../core/index'
 import type { InstructionPlan } from './instruct'
+import type { StreamStatus } from './streamdeath'
 
 // The contract between a Mayorly client (the HUD) and whatever owns the state.
 // In Electron that is the main process over IPC; in a plain browser it is an
@@ -299,6 +300,8 @@ export interface Bridge {
   closeDrawer(): void
   /** Hotkeys that could not be registered (taken by another app, or refused by the OS). */
   onHotkeyFailures(fn: (failures: HotkeyFailures) => void): () => void
+  /** The stream rule's word for the couch list (Watching the stream, No stream seen...). The desktop app only. */
+  stream?: { get(): Promise<StreamStatus>; onStatus(fn: (s: StreamStatus) => void): () => void }
 }
 
 export const IPC = {
@@ -361,6 +364,8 @@ export const IPC = {
   nudge: 'mayorly:nudge',
   snap: 'mayorly:snap',
   placePet: 'mayorly:place-pet',
+  streamStatus: 'mayorly:stream-status',
+  streamGet: 'mayorly:stream-get',
   petHeld: 'mayorly:pet-held',
   effect: 'mayorly:effect',
   effectDone: 'mayorly:effect-done',

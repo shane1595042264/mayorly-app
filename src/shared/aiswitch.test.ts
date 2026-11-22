@@ -5,7 +5,9 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { onDeskId, reduce, sampleState, type Action, type MayorlyState } from '../core/index'
 import { promptStep, type AgentPrompt } from './aiswitch'
-import { eventOf, HOOK } from '../main/agents'
+import { agentRoute, BACKGROUND, eventOf, HOOK, MANIFEST, routeAgentRequest, STREAM_MATCHES } from '../main/agents'
+import EYE from '../main/stream-eye.js?raw'
+import { Script } from 'node:vm'
 
 const now = Date.parse('2026-11-21T15:00:00Z')
 
@@ -62,7 +64,7 @@ describe('an AI prompt', () => {
     const d = desk()
     expect(prompt(d, typed(false))).toEqual({ switched: false, why: 'not typed by you' })
     const off = desk()
-    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: false } } })
+    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: false, streamDeath: true } } })
     expect(prompt(off, typed())).toEqual({ switched: false, why: 'the rule is off' })
     const idle = desk()
     idle.act({ type: 'desk/standDown' })
@@ -111,5 +113,35 @@ describe('the hook', () => {
     expect(hookLine({ session_id: 's', prompt: '/jira-worker' }, 'sdk-ts')?.manual).toBe(false)
     expect(hookLine({ session_id: 's', prompt: 'done', origin: { kind: 'task-notification' } }, 'claude-desktop')?.manual).toBe(false)
     expect(hookLine({ session_id: 's', prompt: '<scheduled-task name="x">' }, 'claude-desktop')?.manual).toBe(false)
+  })
+})
+
+describe('the extension', () => {
+  it('carries the stream eye beside the prompt watcher, and both scripts parse', () => {
+    expect(MANIFEST.version).toBe('1.2.0')
+    expect(MANIFEST.content_scripts[1]).toMatchObject({ js: ['stream-eye.js'], matches: STREAM_MATCHES, all_frames: true })
+    expect(STREAM_MATCHES).toContain('https://www.twitch.tv/*')
+    expect(() => new Script(BACKGROUND)).not.toThrow()
+    expect(() => new Script(EYE)).not.toThrow()
+  })
+
+  it('hears only its two doors, and only with the token', () => {
+    expect(agentRoute('POST', '/stream', 'tok', 'tok')).toBe(true)
+    expect(agentRoute('POST', '/agent', 'tok', 'tok')).toBe(true)
+    expect(agentRoute('POST', '/stream', 'tok', 'nope')).toBe(false)
+    expect(agentRoute('POST', '/stream', 'tok', undefined)).toBe(false)
+    expect(agentRoute('GET', '/stream', 'tok', 'tok')).toBe(false)
+    expect(agentRoute('POST', '/other', 'tok', 'tok')).toBe(false)
+  })
+
+  it('answers the stream eye with what the rule says, and a prompt as before', () => {
+    const prompts: string[] = []
+    const h = { onPrompt: (e: AgentPrompt) => prompts.push(e.app), onStream: (p: unknown) => ({ armed: (p as { site?: string }).site === 'twitch', every: 500 }) }
+    expect(routeAgentRequest('/stream', '{"site":"twitch"}', h)).toEqual({ status: 200, json: { armed: true, every: 500 } })
+    expect(routeAgentRequest('/stream', 'not json', h)).toEqual({ status: 200, json: { armed: false, every: 500 } })
+    expect(routeAgentRequest('/stream', '{}', { onPrompt: h.onPrompt })).toEqual({ status: 200, json: { armed: false, every: 5000 } })
+    expect(routeAgentRequest('/agent', '{"app":"chatgpt-web","event":"prompt"}', h)).toEqual({ status: 204 })
+    expect(routeAgentRequest('/agent', '{"app":"claude","event":"prompt"}', h)).toEqual({ status: 204 })
+    expect(prompts).toEqual(['chatgpt-web'])
   })
 })

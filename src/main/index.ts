@@ -10,6 +10,7 @@ import { makeCapture } from '../shared/capture'
 import { INSTRUCT_SYSTEM, instructContext, parseInstruction, permit, resolveInstruction, stripInstruction, type InstructionPlan } from '../shared/instruct'
 import { dayKey, recipeRunsOn, wallClock } from '../shared/windows'
 import { watchAgents } from './agents'
+import { streamRule } from './streamwatch'
 import { AGENT_NAME, promptStep } from '../shared/aiswitch'
 import { sealedClerkStore } from './ai/store'
 import { signInWithGoogle } from './auth'
@@ -50,7 +51,10 @@ const primary = app.requestSingleInstanceLock()
 if (process.env.MAYORLY_DATA_DIR) app.setPath('userData', process.env.MAYORLY_DATA_DIR)
 
 if (!primary) {
-  void app.whenReady().then(() => {
+  // A mayorly:// link opened while Mayorly runs comes here on Windows: the one running has it
+  // already (second-instance), so this copy just goes, with nothing to click.
+  if (process.argv.some((a) => a.startsWith('mayorly://'))) app.exit(0)
+  else void app.whenReady().then(() => {
     dialog.showMessageBoxSync({
       type: 'warning',
       title: 'Mayorly',
@@ -215,6 +219,13 @@ function boot() {
   const keySync = new KeySync(config.apiUrl, clerk)
   const say = (n: ClerkNotice) => send(IPC.clerk, n)
   const short = (t: string) => (t.length > 36 ? `${t.slice(0, 35)}…` : t)
+  const deskTitle = (id: string | null) => (id ? (engine.state.entries.find((e) => e.id === id)?.title ?? engine.state.leisure.find((l) => l.id === id)?.title ?? '') : '')
+  // When an automatic rule last switched the desk (an AI prompt, a streamer's death), so the stream
+  // rule's log does not take that switch for one made by hand.
+  const auto = { at: 0 }
+  // A League streamer's death is Alt+Q, seen in the stream's own video (streamwatch.ts).
+  const stream = streamRule({ engine, say, send, statusChannel: IPC.streamStatus, title: (id) => short(deskTitle(id)), auto })
+  ipcMain.handle(IPC.streamGet, () => stream.status())
   const { captureLine, sweepTray, consolidate } = makeCapture(engine, clerk, say)
   // The trial that sets the level for starting a ledger goes to the log, line by line.
   clerk.onTuned = (lines) => {
@@ -239,6 +250,13 @@ function boot() {
   // Everything the pages send is something a person did here.
   ipcMain.handle(IPC.dispatch, (_e, action: Action) => {
     if (action.type === 'entry/capture') return captureLine(action.text, !!action.start)
+    // You saw the streamer die too and pressed Alt+Q a beat after the rule switched: one switch.
+    const g = stream.grace(action)
+    if (g.drop) {
+      log.info('[stream]', g.why)
+      say({ phase: 'done', text: 'Switched already: the streamer died' })
+      return
+    }
     return isDeviceOnly(action) ? engine.dispatch(action) : engine.act(action)
   })
   const aiCall = async (fn: () => Promise<unknown> | unknown) => {
@@ -637,16 +655,17 @@ function boot() {
 
   // Auto switch: a prompt you type an AI is Alt+Q, onto your recent task while it thinks. Nothing
   // is remembered; the next prompt or Alt+Q switches again (aiswitch.ts).
-  const deskTitle = (id: string | null) => (id ? (engine.state.entries.find((e) => e.id === id)?.title ?? engine.state.leisure.find((l) => l.id === id)?.title ?? '') : '')
   let promptSwitchAt = 0
   const stopAgents = watchAgents((e) => {
     const step = promptStep(engine.state, e, Date.now() - promptSwitchAt)
-    log.info('[agents]', `${e.app} prompt${e.manual ? '' : ' (not typed)'}: ${step.why}`)
-    if (!step.act) return
-    promptSwitchAt = Date.now()
+    // A prompt a beat after a streamer's death switched the desk would take it back to the stream.
+    const g = step.act ? stream.grace(step.act) : null
+    log.info('[agents]', `${e.app} prompt${e.manual ? '' : ' (not typed)'}: ${g?.drop ? 'a death switched a moment ago' : step.why}`)
+    if (!step.act || g?.drop) return
+    promptSwitchAt = auto.at = Date.now()
     engine.act(step.act)
     say({ phase: 'done', text: `${AGENT_NAME[e.app]} prompt: on ${short(deskTitle(onDeskId(engine.state)))}` })
-  })
+  }, stream.onStream)
 
   // An instruction from Alt+N: the clerk reads it into steps; what the permissions allow is done
   // now (the box offers Undo), the rest waits for Apply in the box.
@@ -734,6 +753,7 @@ function boot() {
   // A save that could not be read: say which backup stood in, where the user will see it.
   if (engine.restoredFrom) overlay.win.webContents.once('did-finish-load', () => setTimeout(() => say({ phase: 'done', text: `The save could not be read. Restored from ${engine.restoredFrom}; the original is parked beside it.` }), 2500))
   engine.start()
+  stream.start()
   // The tray is sorted once at every launch, after the window is up.
   setTimeout(() => void sweepTray(), 4000)
 
@@ -771,6 +791,7 @@ function boot() {
   app.on('activate', () => command('deck'))
   app.on('before-quit', (e) => {
     engine.stop()
+    stream.stop()
     stopAgents()
     if (flushed || sync.current().phase === 'off') return
     // One bounded push so the last seconds of desk time reach the server.

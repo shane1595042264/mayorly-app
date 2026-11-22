@@ -24,7 +24,7 @@ import { onCalendarAsk } from './lib/calendarAsk'
 import { requestDeckTab } from './lib/deckTab'
 import { ARM_OF_ACTION, ARM_OF_COMMAND, isPick, onArm, pointArm, pointPick, takeArmHint, takePickHint } from './plus/arms'
 import { PlusMenu } from './plus/PlusMenu'
-import { balance, onDeskId, recentTasks, scheduledNow, switcherAction } from '@core/index'
+import { balance, scheduledNow, switcherAction, switcherRows } from '@core/index'
 import { current, dispatch, useHudEvents, useMayorly } from './store'
 
 /** How long the swap hotkey must be held before releasing it closes the menu (hold to peek). */
@@ -427,8 +427,7 @@ export function App() {
           }
           const st = current()
           if (!st) return
-          const rows = recentTasks(st, 10)
-          const start = rows[0] && (rows[0].kind === 'entry' ? rows[0].entry.id : rows[0].item.id) === onDeskId(st) ? 1 : 0
+          const { rows, start } = switcherRows(st)
           // Nowhere in the list to go: the plain switch still knows a parked place, or says there is none.
           if (start >= rows.length) {
             void dispatch({ type: 'desk/switch' })

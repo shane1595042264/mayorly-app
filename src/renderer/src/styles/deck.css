@@ -597,6 +597,9 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
   border: 0; background: transparent; color: var(--ink-3); cursor: pointer;
 }
 .cue-x:hover { color: var(--ink); }
+/* A rule Mayorly watches (the streamer dies): an eye in front of it. */
+.cue-eye { display: inline-grid; place-items: center; color: var(--leisure-2); }
+.leisure-cues-live .stream-word { color: var(--ink-3); }
 .cues-add { display: flex; gap: 8px; align-items: center; max-width: 520px; }
 .cues-add input { flex: 1; min-width: 0; height: 32px; }
 .cues-add .btn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }

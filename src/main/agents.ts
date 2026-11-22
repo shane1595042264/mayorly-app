@@ -5,12 +5,16 @@ import { createServer } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { AGENT_APPS, type AgentApp, type AgentPrompt } from '../shared/aiswitch'
+import type { StreamReply } from '../shared/streamdeath'
 import WATCH from './ai-watch.ps1?raw'
+import EYE from './stream-eye.js?raw'
 
 // When you send an AI a prompt. Claude Code, Gemini CLI and Codex run AGENT_HOOK from their own
 // prompt hooks (UserPromptSubmit, BeforeAgent), which appends one line to AGENT_INBOX: the app,
 // the time, and whether a person typed it; never the prompt. ChatGPT and Gemini in Chrome come through the Mayorly extension in
 // EXTENSION_DIR, which posts the same to a listener on 127.0.0.1 with the token in TOKEN_FILE.
+// The same extension carries the stream eye (stream-eye.js): on stream sites it says hello, and
+// while a stream rule runs it posts a grid of the video's colour to /stream (shared/streamdeath.ts).
 // Everything lives in the home folder, not AppData: the Claude desktop app is a packaged Windows
 // app, and the AppData its hooks see is a private copy of their own.
 
@@ -63,24 +67,49 @@ process.stdin.on('end', finish)
 setTimeout(finish, 2000).unref()
 `
 
-const MANIFEST = {
+/** The stream sites the eye reads. */
+export const STREAM_MATCHES = [
+  'https://www.twitch.tv/*',
+  'https://player.twitch.tv/*',
+  'https://www.youtube.com/*',
+  'https://kick.com/*',
+  'https://live.bilibili.com/*',
+  'https://www.huya.com/*',
+  'https://www.douyu.com/*',
+]
+
+export const MANIFEST = {
   manifest_version: 3,
-  name: 'Mayorly AI switch',
-  version: '1.1.0',
-  description: 'Tells Mayorly when you send ChatGPT or Gemini a prompt, so the desk can switch to your recent task meanwhile.',
+  name: 'Mayorly',
+  version: '1.2.0',
+  description: 'Tells Mayorly on this computer when you send ChatGPT or Gemini a prompt, and, while a stream rule runs, what the stream shows, as a grid of colour.',
   background: { service_worker: 'background.js' },
-  content_scripts: [{ matches: ['https://chatgpt.com/*', 'https://gemini.google.com/*'], js: ['content.js'], run_at: 'document_idle' }],
+  content_scripts: [
+    { matches: ['https://chatgpt.com/*', 'https://gemini.google.com/*'], js: ['content.js'], run_at: 'document_idle' },
+    { matches: STREAM_MATCHES, js: ['stream-eye.js'], run_at: 'document_idle', all_frames: true },
+  ],
   host_permissions: [`http://127.0.0.1:${AGENT_PORT}/*`],
 }
 
-const BACKGROUND = `// Mayorly AI switch: hands the page's news to Mayorly on this computer.
+export const BACKGROUND = `// Mayorly: hands the pages' news to Mayorly on this computer.
 importScripts('config.js')
-chrome.runtime.onMessage.addListener((m) => {
-  fetch('http://127.0.0.1:' + self.MAYORLY.port + '/agent', {
+const to = (path, m) =>
+  fetch('http://127.0.0.1:' + self.MAYORLY.port + path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Mayorly-Token': self.MAYORLY.token },
     body: JSON.stringify(m),
-  }).catch(() => {})
+  })
+chrome.runtime.onMessage.addListener((m, sender, reply) => {
+  // The stream eye asks, and waits for whether to read the video.
+  if (m && m.mayorly === 'stream') {
+    const tab = sender.tab ? sender.tab.id + ':' + (sender.frameId || 0) : 'none'
+    const off = { armed: false, every: 5000 }
+    to('/stream', Object.assign({}, m, { tab, active: !!(sender.tab && sender.tab.active) }))
+      .then((r) => (r.ok ? r.json() : off))
+      .then((j) => reply(j || off), () => reply(off))
+    return true
+  }
+  to('/agent', m).catch(() => {})
 })
 `
 
@@ -108,8 +137,12 @@ const writeIfChanged = (file: string, text: string) => {
   if (!existsSync(file) || readFileSync(file, 'utf8') !== text) writeFileSync(file, text)
 }
 
-/** Writes the hook, the token and the extension, starts the watcher, then hands every fresh prompt to `onPrompt`. Returns a stop for quitting. */
-export function watchAgents(onPrompt: (e: AgentPrompt) => void): () => void {
+/**
+ * Writes the hook, the token and the extension, starts the watcher, then hands every fresh prompt
+ * to `onPrompt` and every post of the stream eye to `onStream`, whose answer goes back to the tab.
+ * Returns a stop for quitting.
+ */
+export function watchAgents(onPrompt: (e: AgentPrompt) => void, onStream?: (post: unknown) => StreamReply): () => void {
   let token: string
   try {
     mkdirSync(EXTENSION_DIR, { recursive: true })
@@ -122,6 +155,7 @@ export function watchAgents(onPrompt: (e: AgentPrompt) => void): () => void {
     writeIfChanged(join(EXTENSION_DIR, 'manifest.json'), JSON.stringify(MANIFEST, null, 2))
     writeIfChanged(join(EXTENSION_DIR, 'background.js'), BACKGROUND)
     writeIfChanged(join(EXTENSION_DIR, 'content.js'), CONTENT)
+    writeIfChanged(join(EXTENSION_DIR, 'stream-eye.js'), EYE)
     writeIfChanged(join(EXTENSION_DIR, 'config.js'), `self.MAYORLY = ${JSON.stringify({ port: AGENT_PORT, token })}\n`)
     if (process.platform === 'win32') writeIfChanged(AGENT_WATCH, WATCH.replace(/\r?\n/g, '\r\n'))
     // 0.1.66 to 0.1.68 followed Claude alone, by project folder.
@@ -169,26 +203,43 @@ export function watchAgents(onPrompt: (e: AgentPrompt) => void): () => void {
   })
 
   // The Chrome extension. Only a request with the token counts, so a web page cannot move the desk.
-  createServer((req, res) => {
-    if (req.method !== 'POST' || req.url !== '/agent' || req.headers['x-mayorly-token'] !== token) {
+  const server = createServer((req, res) => {
+    if (!agentRoute(req.method, req.url, token, req.headers['x-mayorly-token'])) {
       res.writeHead(403).end()
       return
     }
     let body = ''
+    const limit = req.url === '/stream' ? 8192 : 2048
     req.setEncoding('utf8')
     req.on('data', (c: string) => {
       body += c
-      if (body.length > 2048) req.destroy()
+      if (body.length > limit) req.destroy()
     })
     req.on('end', () => {
-      const e = eventOf(JSON.stringify({ ...safeJson(body), at: Date.now(), manual: true }))
-      if (e && (e.app === 'chatgpt-web' || e.app === 'gemini-web')) onPrompt(e)
-      res.writeHead(204).end()
+      const r = routeAgentRequest(req.url, body, { onPrompt, onStream })
+      if (r.json === undefined) res.writeHead(r.status).end()
+      else res.writeHead(r.status, { 'Content-Type': 'application/json' }).end(JSON.stringify(r.json))
     })
   })
     .on('error', (err) => console.warn('[agents] no listener for the Chrome extension:', err.message))
     .listen(AGENT_PORT, '127.0.0.1')
-  return stopWatch
+  return () => {
+    stopWatch()
+    server.close()
+  }
+}
+
+/** The extension's two doors, and only with the token: /agent for a prompt, /stream for the stream eye. */
+export function agentRoute(method: string | undefined, url: string | undefined, token: string, given: unknown): boolean {
+  return method === 'POST' && (url === '/agent' || url === '/stream') && typeof given === 'string' && given === token
+}
+
+/** What a request with the token does: a prompt from ChatGPT or Gemini in Chrome, or the stream eye's post and its answer. */
+export function routeAgentRequest(url: string | undefined, body: string, h: { onPrompt: (e: AgentPrompt) => void; onStream?: (post: unknown) => StreamReply }): { status: number; json?: unknown } {
+  if (url === '/stream') return { status: 200, json: h.onStream ? h.onStream(safeJson(body)) : { armed: false, every: 5000 } }
+  const e = eventOf(JSON.stringify({ ...safeJson(body), at: Date.now(), manual: true }))
+  if (e && (e.app === 'chatgpt-web' || e.app === 'gemini-web')) h.onPrompt(e)
+  return { status: 204 }
 }
 
 /**

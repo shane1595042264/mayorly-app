@@ -41,6 +41,40 @@ jobs:
         with:
           name: e2e-drag
           path: e2e-drag.json
+  # A League streamer dying in Chrome switches the desk: scripts/e2e-stream.ps1. Chrome for Testing,
+  # since branded Chrome no longer loads an unpacked extension from the command line.
+  stream:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Chrome for Testing
+        id: cft
+        shell: powershell
+        run: |
+          $out = npx --yes @puppeteer/browsers@2 install chrome@stable --path "$env:RUNNER_TEMP\cft"
+          $line = @($out)[-1]
+          $exe = $line.Substring($line.IndexOf(' ') + 1).Trim()
+          if (-not (Test-Path $exe)) { throw "No Chrome at $exe ($line)" }
+          "exe=$exe" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+      - name: A streamer dies
+        shell: powershell
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-stream.ps1 -Chrome "${{ steps.cft.outputs.exe }}" -Out e2e-stream.json
+          $code = $LASTEXITCODE
+          Get-Content e2e-stream.json
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-stream
+          path: e2e-stream.json
   server:
     runs-on: ubuntu-latest
     defaults:

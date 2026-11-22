@@ -499,10 +499,13 @@ export interface Settings {
 /**
  * The built-in auto switch rules. aiPrompt: a prompt you type an AI (Claude Code, Gemini CLI, Codex,
  * ChatGPT or Gemini in Chrome) is Alt+Q, onto your recent task while it thinks; never during a rest
- * or from an idle desk, never for a scheduled or automatic prompt.
+ * or from an idle desk, never for a scheduled or automatic prompt. streamDeath: on a task whose
+ * context switch rule says the streamer dies, a League streamer's death seen in the stream's own
+ * video is Alt+Q; never your own game, never during a rest (shared/streamdeath.ts).
  */
 export interface AutoSwitchRules {
   aiPrompt: boolean
+  streamDeath: boolean
 }
 
 /** What the clerk does with an instruction of that kind: do it (with Undo), ask first, or never. */
