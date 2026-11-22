@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BrowserWindow, screen, type Display, type Rectangle } from 'electron'
 import { IPC, type CaptionStyle, type Effect, type Layout, type UiMode } from '../shared/bridge'
-import { CAPTION, DRAWER, LOG, TASKBAR, TOMATO, anchorInBox, captionBox, clampAnchor, cornerAnchor, drawerBox, homeAnchor, nearPet, panelBox, petBox, sideOf, type Side } from '../shared/pet'
+import { CAPTION, DRAWER, LOG, TASKBAR, TOMATO, anchorInBox, captionBox, clampAnchor, cornerAnchor, drawerBox, homeAnchor, nearPet, overlaps, panelBox, petBox, sideOf, type Side } from '../shared/pet'
 
 /** Windows: the panels drawn beside the pet in the click-through overlay, where only they and the pet take the pointer. */
 const besidePet = (mode: UiMode) => mode === 'drawer' || mode === 'switchLog'
@@ -342,8 +342,18 @@ export class Overlay {
     if (!this.caption) return
     const wa = this.display().workArea
     const a = this.anchor ?? this.defaultAnchor(wa)
-    // A notice and the schedule's line sit clear of the task's name: under the tomato, or over the whole pet.
-    const { below, ...box } = captionBox(a, wa, this.layout().side, this.scale, this.captionStyle === 'scheduled' || this.captionStyle === 'notice' ? 'below' : 'above', this.text)
+    // A notice and the schedule's line sit clear of the task's name: under the tomato, or over the
+    // whole pet; and clear of an open drawer or switch log window, or not at all while one is open.
+    const side = this.layout().side
+    const lineUp = this.captionStyle === 'scheduled' || this.captionStyle === 'notice'
+    const open = [this.drawer, this.switchLog].find((w) => w && !w.isDestroyed() && w.isVisible())?.getBounds() ?? null
+    const tries = lineUp ? [captionBox(a, wa, side, this.scale, 'below', this.text), captionBox(a, wa, side, this.scale, 'over', this.text)] : [captionBox(a, wa, side, this.scale, 'above', this.text)]
+    const fit = tries.find((c) => !open || !overlaps(c, open))
+    if (!fit) {
+      this.caption.hide()
+      return
+    }
+    const { below, ...box } = fit
     debug('caption', { ...box, below, anchor: a })
     this.caption.setBounds(box)
   }

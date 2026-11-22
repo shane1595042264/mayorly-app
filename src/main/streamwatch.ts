@@ -215,7 +215,8 @@ export function streamRule(o: {
         return { ...r, mute: true }
       }
       tab.mute = false
-      if (tab.mutedFor && (r.armed || onDeskId(engine.state) === tab.mutedFor || !st.streamDeath || !st.streamMute)) {
+      const holds = tab.mutedFor !== null || p.held
+      if (holds && (r.armed || (tab.mutedFor !== null && onDeskId(engine.state) === tab.mutedFor) || !st.streamDeath || !st.streamMute)) {
         tab.mutedFor = null
         log.info('[stream]', `unmuting ${p.site}`)
         return { ...r, mute: false }

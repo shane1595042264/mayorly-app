@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { appendFile, stat, writeFile } from 'node:fs/promises'
+import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { appendFile, rename, stat, writeFile } from 'node:fs/promises'
 import { SWITCH_LOG_MAX, switchRecordOf, type SwitchRecord } from '../shared/switchlog'
 import { log } from './log'
 
@@ -11,11 +11,16 @@ const REWRITE_BYTES = 256 * 1024
 
 export class SwitchLog {
   private items: SwitchRecord[] = []
+  /** Writes one after another, so an append never lands inside a rewrite. */
+  private writing: Promise<void> = Promise.resolve()
 
   constructor(private file: string, private onAdd: (r: SwitchRecord) => void) {
     try {
       if (existsSync(file)) {
-        const lines = readFileSync(file, 'utf8').split('\n').filter(Boolean).slice(-SWITCH_LOG_MAX)
+        const text = readFileSync(file, 'utf8')
+        // A line torn by a crash: end it, so the next record starts on a line of its own.
+        if (text && !text.endsWith('\n')) appendFileSync(file, '\n')
+        const lines = text.split('\n').filter(Boolean).slice(-SWITCH_LOG_MAX)
         for (const line of lines) {
           try {
             const r = switchRecordOf(JSON.parse(line))
@@ -39,14 +44,18 @@ export class SwitchLog {
     this.items.push(r)
     if (this.items.length > SWITCH_LOG_MAX) this.items.splice(0, this.items.length - SWITCH_LOG_MAX)
     this.onAdd(r)
-    void this.write(r)
+    this.writing = this.writing.then(() => this.write(r))
   }
 
   private async write(r: SwitchRecord) {
     try {
       const size = await stat(this.file).then((x) => x.size, () => 0)
-      if (size > REWRITE_BYTES) await writeFile(this.file, this.items.map((x) => JSON.stringify(x)).join('\n') + '\n')
-      else await appendFile(this.file, JSON.stringify(r) + '\n')
+      if (size > REWRITE_BYTES) {
+        // Written beside it and moved into place, so a stop halfway never leaves an empty log.
+        const tmp = `${this.file}.tmp`
+        await writeFile(tmp, this.items.map((x) => JSON.stringify(x)).join('\n') + '\n')
+        await rename(tmp, this.file)
+      } else await appendFile(this.file, JSON.stringify(r) + '\n')
     } catch (err) {
       log.warn('[switch]', `the log could not be written: ${err instanceof Error ? err.message : String(err)}`)
     }

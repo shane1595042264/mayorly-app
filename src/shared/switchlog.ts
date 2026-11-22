@@ -55,6 +55,8 @@ export function deskEnd(s: MayorlyState): SwitchEnd | null {
     const l = ledger(block.ledgerId)
     return { key: `l:${block.ledgerId}`, kind: 'ledger', title: l?.name ?? block.label, ledger: l?.code }
   }
+  // Time on the tray, filed nowhere yet: still a place the desk is on.
+  if (block.kind === 'focus') return { key: 'l:tray', kind: 'ledger', title: block.label || 'Tray' }
   return null
 }
 

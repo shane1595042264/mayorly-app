@@ -50,6 +50,8 @@ export interface StreamPost {
   ad: boolean
   /** What reading a frame costs the page, in ms; null until measured. */
   cost: number | null
+  /** The eye holds a mute of Mayorly's on this tab. */
+  held: boolean
   grid: StreamGrid | null
 }
 
@@ -110,6 +112,7 @@ export function streamPostOf(j: unknown): StreamPost | null {
     active: o.active === true,
     area,
     ad: o.ad === true,
+    held: o.held === true,
     cost,
     grid,
   }

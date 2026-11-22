@@ -142,6 +142,8 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
       var b = muteButton()
       if (b) b.click()
       setTimeout(function () {
+        // Only while the eye still holds this video for a mute; never over a change you made since.
+        if (on && mutedBy !== v) return
         if (silent(v) !== on) v.muted = on
       }, 400)
     }
@@ -157,6 +159,8 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
       } catch (e) {}
     }
     var onVolume = function () {
+      // Sound back on the held video is never the eye's doing: you took it over.
+      if (mutedBy && !silent(mutedBy)) return letGo()
       if (Date.now() - ownAt < 1500) return
       letGo()
     }
@@ -186,7 +190,7 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
     var post = function (m) {
       return new Promise(function (resolve) {
         try {
-          var msg = { mayorly: 'stream', v: V, site: site, title: document.title, category: category(), visible: visible(), ad: ad(), cost: cost }
+          var msg = { mayorly: 'stream', v: V, site: site, title: document.title, category: category(), visible: visible(), ad: ad(), cost: cost, held: !!mutedBy }
           for (var k in m) msg[k] = m[k]
           chrome.runtime.sendMessage(msg, function (r) {
             if (chrome.runtime.lastError) return resolve(null)
@@ -228,10 +232,14 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
     var tick = async function () {
       if (stopped) return
       var found = video()
-      // A tab reloaded while Mayorly had it muted: the mute is still Mayorly's to undo.
-      if (found && !found.bad && !mutedBy && silent(found.v)) {
+      // A tab reloaded while Mayorly had it muted: the mute is still Mayorly's to undo. Back with
+      // sound, the mark is stale, and a later mute of yours stays yours.
+      if (found && !found.bad && !mutedBy) {
         try {
-          if (sessionStorage.getItem(KEY) === '1') hold(found.v)
+          if (sessionStorage.getItem(KEY) === '1') {
+            if (silent(found.v)) hold(found.v)
+            else remember(false)
+          }
         } catch (e) {}
       }
       var now = Date.now()

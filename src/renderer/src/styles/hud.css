@@ -473,6 +473,8 @@ body.caption { background: transparent; }
 /* Over the pet's own plate, so a notice is never under the task's name; a line that wraps grows away from the pet. */
 .pet-caption-box { position: absolute; z-index: calc(var(--z-hud) + 1); display: flex; align-items: center; padding: 0 4px; pointer-events: none; }
 .pet-caption-box.is-below { align-items: flex-start; }
+/* macOS caption window: no margin, so a notice of two lines fits its 40px. */
+body.caption .pet-sign.is-caption { margin: 0; }
 .pet-caption-box.is-above { align-items: flex-end; }
 .pet-caption-box.is-over { z-index: calc(var(--z-hud) + 1); }
 .pet-caption-box.side-right { justify-content: flex-end; }

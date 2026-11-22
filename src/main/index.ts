@@ -683,7 +683,8 @@ function boot() {
     if (g?.drop) kept({ cause: 'ai', via: `${AGENT_NAME[e.app]} prompt let go: a death had just switched you` })
     if (!step.act || g?.drop) return
     promptSwitchAt = auto.at = Date.now()
-    engine.act(step.act, { cause: 'ai', via: `${AGENT_NAME[e.app]} prompt`, detail: e.app.endsWith('-web') ? 'in Chrome' : e.app.endsWith('-app') ? 'in its desktop app' : 'through its hook' })
+    const where = e.app === 'browser' ? 'in a browser side panel' : e.app.endsWith('-web') ? 'in the browser' : e.app.endsWith('-app') ? 'in its desktop app' : 'through its hook'
+    engine.act(step.act, { cause: 'ai', via: `${AGENT_NAME[e.app]} prompt`, detail: where })
     say({ phase: 'done', text: `${AGENT_NAME[e.app]} prompt: on ${short(deskTitle(onDeskId(engine.state)))}` })
   }, stream.onStream)
 
