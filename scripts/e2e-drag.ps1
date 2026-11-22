@@ -156,6 +156,9 @@ try {
   $env:MAYORLY_DEBUG = '1'
   $electron = Join-Path $App 'node_modules\electron\dist\electron.exe'
   if (-not (Test-Path (Join-Path $App 'out\main\index.js'))) { throw 'No build in out/: run npm run build first.' }
+  # The electron package fetches its binary on first use, not on npm ci; a fresh runner has none yet.
+  if (-not (Test-Path $electron)) { & node (Join-Path $App 'node_modules\electron\install.js') | Out-Null }
+  if (-not (Test-Path $electron)) { throw "No Electron at $electron." }
   $proc = Start-Process -FilePath $electron -ArgumentList ('"' + $App + '"') -PassThru
   # Up when its log says so, then time for the page to load and draw the pet.
   $deadline = (Get-Date).AddSeconds(60)
