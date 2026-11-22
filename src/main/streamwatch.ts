@@ -288,7 +288,9 @@ export function streamRule(o: {
     }
     if (tick.event === 'death') void fire(tick, a, p.site, p.tab)
     if (was !== tick.memory.phase) pushStatus()
-    return answer({ armed: true, every })
+    // A death switches at once when the own match check is fresh: the answer to this very frame
+    // then carries the mute, not the armed reply that would cancel it.
+    return answer(arm().on ? { armed: true, every } : OFF)
   }
 
   // Ground truth for tuning: you left a watched stream yourself (with what the detector saw just

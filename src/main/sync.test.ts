@@ -72,7 +72,8 @@ async function twoComputers() {
   return { mac, pc }
 }
 
-describe('two computers, one account', () => {
+// Real timers and a fake server: slow on a busy CI runner, where 5 s was cut close and failed releases 85 and 86.
+describe('two computers, one account', { timeout: 60_000 }, () => {
   beforeEach(() => {
     vi.useFakeTimers({ now: Date.UTC(2026, 10, 9, 10, 0, 0) })
     vi.stubGlobal('fetch', api)

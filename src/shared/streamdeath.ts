@@ -331,6 +331,12 @@ export const LEAGUE = {
   texRatio: 0.4,
   barRatio: 0.85,
   barMin: 8,
+  /**
+   * A dead bar keeps some colour (items, health: 31% to 64% of usual in every real death so far);
+   * a black and white clip or a card over it keeps next to none. Its pattern is no guide: on
+   * Thebausffs' HUD the items sit in the bar's box and keep their colour while the abilities go dark.
+   */
+  barFloor: 0.15,
   // 0.3: a dead bar's greyed icons shift its pattern (0.46 to 0.48 on a real death at 18:01), a card or clip over it breaks it.
   barCorr: 0.3,
   deepRatio: 0.45,
@@ -693,7 +699,7 @@ export function leagueStep(mem: DeathMemory | null, f: LeagueFeatures | null, hi
   const inPlace = barReads(b) && barInPlace(f, b)
   const drained = f.s <= LEAGUE.satRatio * b.s
   const greyWorld = f.w <= Math.min(LEAGUE.greyRatio * b.w, LEAGUE.greyCap) && drained
-  const barDim = barReads(b) ? inPlace && f.a <= LEAGUE.barRatio * b.a : f.w <= LEAGUE.deepRatio * b.w
+  const barDim = barReads(b) ? f.a <= LEAGUE.barRatio * b.a && f.a >= LEAGUE.barFloor * b.a : f.w <= LEAGUE.deepRatio * b.w
   // Drained, with the texture kept (a flat window over the world is not a death).
   const greyDrained = greyWorld && barDim && f.tex >= LEAGUE.texRatio * b.tex
   // The bar gone dark: the HUD itself says dead, whatever lies over the world.

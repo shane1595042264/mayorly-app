@@ -104,7 +104,8 @@ function hookLine(payload: Record<string, unknown>, entrypoint: string) {
   }
 }
 
-describe('the hook', () => {
+// Six real node processes: slow on a busy computer or runner.
+describe('the hook', { timeout: 30_000 }, () => {
   it('counts a prompt typed in the desktop app or the terminal, and not one a script, a schedule or a notice sent', () => {
     expect(hookLine({ session_id: 's', prompt: 'fix the drag' }, 'claude-desktop')?.manual).toBe(true)
     expect(hookLine({ session_id: 's', prompt: 'fix the drag' }, 'cli')?.manual).toBe(true)

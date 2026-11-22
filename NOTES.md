@@ -5,7 +5,7 @@ The top section is what the app shows once per build, the first time that build 
 ## Opening a stream puts your stream task on the desk
 
 - Click into a Twitch, Kick, Bilibili 直播, Huya or Douyu page (or a live YouTube video) while you are on another task, and the desk switches to your stream task: the one named like the page ("watch theBause" for Thebausffs), else the one you watched last. Only the moment the page comes to the front counts, so a stream playing on your other screen never pulls you back, and never right after a death switched you away. Settings, Auto switch, turns it off.
-- A death with the ability bar gone very dark was sometimes refused (the 18:01 one today); it counts now.
+- Deaths were sometimes refused because the ability bar's look changed too much when it went dark; on Thebausffs' HUD the items keep their colour beside the greyed abilities. They count now, and the switch no longer waits on the check for a League match of your own.
 - After an update the extension puts itself into stream tabs that are already open, so reloading the stream page is no longer needed. Reload the Mayorly extension in chrome://extensions this once more, then refresh the stream page one last time.
 
 ## Alt+Shift+H shows what switched the desk, and why
