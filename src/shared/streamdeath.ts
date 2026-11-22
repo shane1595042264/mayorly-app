@@ -792,6 +792,23 @@ function switchTarget(s: MayorlyState): Id | null {
   return held ? (held.block.leisureId ?? held.block.entryId ?? null) : null
 }
 
+/**
+ * The task that watches streams the desk just left for one that does not (a death, an AI prompt,
+ * Alt+Q, a pick, anything): every stream playing is then muted until the desk is back on it.
+ * Null when the desk did not leave one, or went from one stream task to another.
+ */
+export function leftStream(before: MayorlyState, after: MayorlyState): Id | null {
+  const task = (s: MayorlyState) => {
+    const id = onDeskId(s)
+    const t = id ? (s.entries.find((e) => e.id === id) ?? s.leisure.find((l) => l.id === id)) : undefined
+    return t ? { id: id as Id, watched: isWatched(t) } : null
+  }
+  const was = task(before)
+  const now = task(after)
+  if (!was?.watched || was.id === now?.id || now?.watched) return null
+  return was.id
+}
+
 /** The sites by name, for a notice and the log. */
 export const SITE_NAME: Record<StreamSite, string> = { twitch: 'Twitch', youtube: 'YouTube', kick: 'Kick', bilibili: 'Bilibili', huya: 'Huya', douyu: 'Douyu' }
 

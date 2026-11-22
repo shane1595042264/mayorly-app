@@ -16,6 +16,7 @@ import {
   streamPostOf,
   TAB_STALE_MS,
   LEAGUE,
+  leftStream,
   openStep,
   SITE_NAME,
   type DeathMemory,
@@ -236,7 +237,7 @@ export function streamRule(o: {
       }
       tab.mute = false
       const holds = tab.mutedFor !== null || p.held
-      if (holds && (r.armed || (tab.mutedFor !== null && onDeskId(engine.state) === tab.mutedFor) || !st.streamDeath || !st.streamMute)) {
+      if (holds && (r.armed || (tab.mutedFor !== null && onDeskId(engine.state) === tab.mutedFor) || !st.streamMute)) {
         tab.mutedFor = null
         log.info('[stream]', `unmuting ${p.site}`)
         return { ...r, mute: false }
@@ -295,10 +296,27 @@ export function streamRule(o: {
 
   // Ground truth for tuning: you left a watched stream yourself (with what the detector saw just
   // then), or went back to it soon after a death switched you away (a death that was not one).
+  // The desk left a stream task: every stream playing goes quiet, wherever its tab is, so nobody has
+  // to visit the stream (which would bring it to the front and switch back) only to mute it.
+  let lastState = engine.state
+  const muteAll = (taskId: Id) => {
+    const now = Date.now()
+    const live = [...tabs.values()].filter((t) => now - t.seen.at <= TAB_STALE_MS)
+    for (const t of live) {
+      t.mute = true
+      t.mutedFor = taskId
+    }
+    if (live.length) log.info('[stream]', `left ${o.title(taskId)}: muting ${live.length} stream${live.length === 1 ? '' : 's'}`)
+  }
+
   const onAction = (action: Action, changed: boolean) => {
     if (!changed) return
     const now = Date.now()
     const desk = onDeskId(engine.state)
+    const before = lastState
+    lastState = engine.state
+    const gone = leftStream(before, engine.state)
+    if (gone && engine.state.settings.autoSwitch.streamMute) muteAll(gone)
     if (desk !== lastDesk) {
       const left = lastDesk
       lastDesk = desk
@@ -318,6 +336,7 @@ export function streamRule(o: {
       if (started) return
       started = true
       lastDesk = onDeskId(engine.state)
+      lastState = engine.state
       offAction = engine.onAction(onAction)
       offState = engine.on(() => pushStatus())
       // Tabs go quiet without saying so; and a rule armed for a minute with nothing heard at all

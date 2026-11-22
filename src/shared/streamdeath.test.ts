@@ -20,6 +20,7 @@ import {
   streamPostOf,
   watchedCues,
   isWatched,
+  leftStream,
   openStep,
   type DeathMemory,
   type DeathTick,
@@ -511,6 +512,28 @@ describe('a live stream brought to the front', () => {
     broke.act({ type: 'entry/capture', text: 'legal: gamma', start: true })
     const spent = { ...broke.s, tokens: [...broke.s.tokens, { id: 'spend', at: now, amount: -1000, reason: 'market', sittingId: null } as never] }
     expect(openStep(spent, 'here', page, { sinceFireMs: Infinity }).why).toBe('no coin for the couch')
+  })
+})
+
+describe('leaving the stream task', () => {
+  it('is any switch from a task that watches streams to one that does not', () => {
+    const d = desk()
+    const on = d.s
+    d.act({ type: 'desk/switch' })
+    expect(leftStream(on, d.s)).toBe(d.stream)
+    // Back onto it, or between two stream tasks, or a rest on it: not leaving.
+    const off = d.s
+    d.act({ type: 'desk/select', leisureId: d.stream })
+    expect(leftStream(off, d.s)).toBeNull()
+    d.act({ type: 'leisure/add', title: 'watch theBause' })
+    const bause = d.s.leisure.find((l) => l.title === 'watch theBause')!.id
+    d.act({ type: 'entry/cue-add', id: bause, text: 'Irelia dies' })
+    const still = d.s
+    d.act({ type: 'desk/select', leisureId: bause })
+    expect(leftStream(still, d.s)).toBeNull()
+    const rest = d.s
+    d.act({ type: 'desk/skip' })
+    expect(leftStream(rest, d.s)).toBeNull()
   })
 })
 

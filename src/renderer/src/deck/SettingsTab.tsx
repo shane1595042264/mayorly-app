@@ -473,8 +473,8 @@ const AUTO_SWITCH: { key: keyof AutoSwitchRules; label: string; help: string }[]
   },
   {
     key: 'streamMute',
-    label: 'Mute the stream when the streamer dies',
-    help: 'When a death switches you away, the stream is muted too, with the player\'s own mute button on Twitch and YouTube; coming back to its task unmutes it. A stream you muted yourself is left as it is.',
+    label: 'Mute the streams when you leave the stream task',
+    help: 'Whenever the desk leaves a task that watches streams (a death, an AI prompt, Alt+Q, a pick), every stream playing in Chrome is muted, in whatever tab it is, with the player\'s own mute button on Twitch and YouTube; coming back to that task unmutes them. A stream you muted yourself is left as it is.',
   },
 ]
 

@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Leaving the stream mutes it, wherever its tab is
+
+- Whenever the desk leaves your stream task (an AI prompt, Alt+Q, a pick, a death), every stream playing in Chrome is muted, even in a tab behind another one. Coming back to the stream task unmutes them. No more visiting the stream only to mute it, which brought it to the front and switched you right back. Settings, Auto switch, turns muting off.
+
 ## An AI that is still thinking no longer switches you
 
 - Codex running a task on its own switched the desk as if you had sent it a prompt (it moved you off Hello interview at 20:00 today). Codex now counts only through its own hook, which hears just the prompts you type. In the Claude app, Claude Code's hook decides the same way, so a session that picks up again by itself never switches you; plain Claude chat still does when you send it something.
