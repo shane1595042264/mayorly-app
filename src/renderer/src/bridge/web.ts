@@ -6,6 +6,7 @@ import type { Bridge, Command, Layout, UiMode } from '../../../shared/bridge'
 import { clampAnchor, cornerAnchor, homeAnchor, sideOf, type Point } from '../../../shared/pet'
 import { BUILD } from '../../../shared/build'
 import { machineZone, replanAction } from '../../../shared/windows'
+import { SWITCH_LOG_MAX, switchRecord, type SwitchRecord } from '../../../shared/switchlog'
 import { permit, resolveInstruction, type InstructionPlan } from '../../../shared/instruct'
 import { physicalKey } from '../lib/keys'
 import { demoState } from './demo'
@@ -59,10 +60,20 @@ export function createWebBridge(): Bridge {
     }
   }
 
+  // The switch log, in-page: the same record main keeps, for the browser build and its checks.
+  const switches: SwitchRecord[] = []
+  const switchSubs = new Set<(r: SwitchRecord) => void>()
   function dispatch(action: Action) {
-    const r = reduce(state, action, { now: Date.now(), newId, random: Math.random, device: 'web' })
+    const now = Date.now()
+    const r = reduce(state, action, { now, newId, random: Math.random, device: 'web' })
     const changed = r.state !== state
+    const rec = changed ? switchRecord(state, r.state, action, r.events, undefined, now, newId()) : null
     state = r.state
+    if (rec) {
+      switches.unshift(rec)
+      switches.splice(SWITCH_LOG_MAX)
+      switchSubs.forEach((f) => f(rec))
+    }
     if (changed) {
       save()
       stateSubs.forEach((f) => f(state))
@@ -110,7 +121,7 @@ export function createWebBridge(): Bridge {
     const combo = `Alt+${e.shiftKey ? 'Shift+' : ''}${k.length === 1 ? k.toUpperCase() : k}`
     const map: Record<string, Command | 'pause' | 'skipRest' | 'clear' | 'hide' | 'scheduled' | 'gaming'> = {
       [hk.plus]: 'plus', [hk.capture]: 'capture', [hk.find]: 'find', [hk.deck]: 'deck', [hk.drawer]: 'drawer', [hk.pause]: 'pause', [hk.move]: 'move', [hk.switch]: 'switcher', [hk.clear]: 'clear', [hk.hide]: 'hide',
-      [hk.skipRest]: 'skipRest', [hk.schedule]: 'schedule', [hk.scheduled]: 'scheduled', [hk.gaming]: 'gaming',
+      [hk.skipRest]: 'skipRest', [hk.schedule]: 'schedule', [hk.scheduled]: 'scheduled', [hk.gaming]: 'gaming', [hk.switchLog]: 'switchLog',
     }
     const cmd = map[combo]
     if (!cmd) return
@@ -278,6 +289,14 @@ export function createWebBridge(): Bridge {
     onEffect: () => () => {},
     effectDone: () => {},
     closeDrawer: () => {},
+    switchLog: {
+      get: async () => switches.slice(),
+      onAdd: (fn) => {
+        switchSubs.add(fn)
+        return () => switchSubs.delete(fn)
+      },
+      close: () => {},
+    },
     onHotkeyFailures: () => () => {},
   }
 }

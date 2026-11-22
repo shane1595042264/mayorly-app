@@ -54,7 +54,7 @@ export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): 
         click: act.togglePause,
       },
       { label: overlay.win.isVisible() ? 'Hide HUD' : 'Show HUD', accelerator: hk.hide, click: () => { overlay.toggleVisible(); rebuild(engine.state) } },
-      { label: s.desk.holster ? `Switch to ${s.desk.holster.block.label}` : 'Switch session', accelerator: hk.switch, enabled: !!s.desk.holster, click: () => engine.act({ type: 'desk/switch' }) },
+      { label: s.desk.holster ? `Switch to ${s.desk.holster.block.label}` : 'Switch session', accelerator: hk.switch, enabled: !!s.desk.holster, click: () => engine.act({ type: 'desk/switch' }, { cause: 'you', via: 'The tray menu: Switch' }) },
       { label: 'Clear entry', accelerator: hk.clear, enabled: !!s.desk.block?.entryId, click: () => { const id = engine.state.desk.block?.entryId; if (id) engine.act({ type: 'entry/complete', id }) } },
       { type: 'separator' },
       {

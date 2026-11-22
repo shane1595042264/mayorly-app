@@ -18,6 +18,7 @@ export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   schedule: 'Alt+S',
   scheduled: 'Alt+I',
   gaming: 'Alt+Shift+G',
+  switchLog: 'Alt+Shift+H',
 }
 
 /** Nine to five, minutes from midnight. */

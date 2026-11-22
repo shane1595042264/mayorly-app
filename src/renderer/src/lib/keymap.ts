@@ -49,6 +49,7 @@ export const GLOBAL_ACTIONS: [HotkeyAction, string][] = [
   ['schedule', 'The schedule: the deck on the Calendar'],
   ['scheduled', 'Switch to what the schedule says now'],
   ['gaming', 'Gaming mode: every other shortcut off, and on again'],
+  ['switchLog', 'Switch log: what moved the desk, and why'],
 ]
 
 export const KEYS: KeyDef[] = [

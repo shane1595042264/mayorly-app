@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { Action, FoundTask, HudEvent } from '@core/index'
 import type { Command, Layout, UiMode } from '../../shared/bridge'
-import { clampScale, drawerBox, homeAnchor, petBox, sideOf, type Point } from '../../shared/pet'
+import { LOG, clampScale, drawerBox, homeAnchor, panelBox, petBox, sideOf, type Point } from '../../shared/pet'
+import { SwitchLog } from './hud/SwitchLog'
 import { bridge } from './bridge'
 import { Capture } from './capture/Capture'
 import { Find } from './capture/Find'
@@ -222,8 +223,8 @@ export function App() {
       clearTimeout(pending.current)
       pending.current = null
     }
-    // The drawer keeps the pet in view (Windows and the browser: it is drawn beside the pet in this window).
-    const away = m !== 'field' && m !== 'drawer' && m !== 'switcher'
+    // The drawer and the switch log keep the pet in view (Windows and the browser: they are drawn beside the pet in this window).
+    const away = m !== 'field' && m !== 'drawer' && m !== 'switcher' && m !== 'switchLog'
     const windowIsBig = shellMode.current !== 'field'
     if (!layoutRef.current.compact || (m !== 'field' && windowIsBig)) {
       // Windows, or moving between panels: the window does not change size, nothing to wait for.
@@ -585,13 +586,18 @@ export function App() {
   // Windows: the drawer in the box the Mac gives its window, under the pet or over it.
   const drawerRect = anchor ? drawerBox(petBox(anchor, whole, s.settings.hudScale, s.settings.text.pet), whole, petSide) : null
   const drawerAt = drawerRect ? { left: drawerRect.x + 4, top: drawerRect.y + 4, right: 'auto', bottom: 'auto' } : undefined
+  // The switch log: under the pet, over it or beside it, wherever it stays whole on this screen.
+  const logRect = anchor ? panelBox(petBox(anchor, whole, s.settings.hudScale, s.settings.text.pet), whole, petSide, LOG) : null
+  const logAt = logRect ? { left: logRect.x + 4, top: logRect.y + 4, width: logRect.width - 8, height: logRect.height - 8 } : undefined
+  // What a notice keeps clear of: the panel open beside the pet.
+  const panel = shown === 'drawer' ? drawerRect : shown === 'switchLog' ? logRect : null
 
   // A click outside the open interface closes it, like clicking away from a menu.
   const onStageDown = (e: React.PointerEvent) => {
     if (modeRef.current === 'field') return
     // .keymap-wrap: the Keymap and the What changed card are portalled to the body, outside the
     // deck in the page, while React still bubbles their presses through here.
-    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .keymap-wrap, .capture, .switcher, .clerk-ask, .drawer, .pet, .pet-caption-box')
+    const inside = (e.target as Element | null)?.closest?.('.plus, .deck-wrap, .keymap-wrap, .capture, .switcher, .clerk-ask, .drawer, .switch-log, .pet, .pet-caption-box')
     if (!inside) close()
   }
 
@@ -599,7 +605,7 @@ export function App() {
     <main className="stage" onPointerDownCapture={onStageDown}>
       <AnimatePresence>
         {/* The drawer is a small panel by the pet, as on a Mac where it is its own window: nothing dims. */}
-        {shown !== 'field' && shown !== 'drawer' && shown !== 'switcher' && (
+        {shown !== 'field' && shown !== 'drawer' && shown !== 'switcher' && shown !== 'switchLog' && (
           <motion.div
             key="vignette"
             className={`vignette ${shown === 'capture' || shown === 'find' ? 'light' : ''}`}
@@ -629,6 +635,7 @@ export function App() {
         onPlace={onPlace}
         onGrab={onGrab}
         onScale={onScale}
+        panel={panel}
       />
       <Feed />
       <Callout quiet={mode !== 'field'} />
@@ -640,9 +647,10 @@ export function App() {
         {shown === 'find' && <Find key="find" s={s} close={close} />}
         {shown === 'switcher' && switcher && <Switcher key="switcher" s={s} rows={switcher.rows} at={switcher.at} point={pointSwitcher} pick={(i) => finishSwitcher(true, i)} />}
         {shown === 'drawer' && <Drawer key="drawer" s={s} close={close} style={drawerAt} />}
+        {shown === 'switchLog' && <SwitchLog key="switchLog" close={close} hotkey={s.settings.hotkeys.switchLog} style={logAt} where={logRect?.where} />}
       </AnimatePresence>
 
-      {shown !== 'field' && shown !== 'switcher' && <ClerkAsk />}
+      {shown !== 'field' && shown !== 'switcher' && shown !== 'switchLog' && <ClerkAsk />}
       {cashIn && <CashIn key={cashIn.seq} amount={cashIn.amount} balance={cashIn.balance} from={cashIn.from} out={cashIn.out} anchor={cashIn.anchor} ceiling={cashIn.ceiling} startAt={cashIn.startAt} onDone={() => { const mine = cashIn.seq; setCashIn((c) => (c?.seq === mine ? null : c)) }} />}
 
     </main>

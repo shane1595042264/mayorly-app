@@ -1484,6 +1484,7 @@ function couchItem(s: MayorlyState, ctx: Ctx, title: string, from?: Entry): Leis
   const have = s.leisure.find((x) => x.archivedAt === null && x.title.toLowerCase() === key)
   if (have) return have
   const item: LeisureItem = { id: ctx.newId(), title, createdAt: ctx.now, archivedAt: null, cues: from?.cues ?? [], notes: from?.notes, subtasks: from?.subtasks }
+  if (typeof from?.watch === 'boolean') item.watch = from.watch
   s.leisure.push(item)
   return item
 }

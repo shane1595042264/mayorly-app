@@ -51,6 +51,8 @@ interface Tab {
   tick: DeathTick | null
   /** A death switched away from it with muting on: the next answer asks the eye to mute. */
   mute: boolean
+  /** The eye was asked to mute it, for this task: the answer says unmute once the desk is back on that task, or the rule or muting is off. */
+  mutedFor: Id | null
   /** The last minute of what was read, for the trace. */
   trail: { at: number; seen: string; grid: StreamGrid | null; ad: boolean }[]
 }
@@ -171,9 +173,15 @@ export function streamRule(o: {
       if (!step.act) return
       o.auto.at = Date.now()
       fired = { at: o.auto.at, taskId: a.taskId as Id, tab: tabId }
-      engine.dispatch(step.act)
+      engine.dispatch(step.act, { cause: 'stream', via: `Streamer died on ${site} (rule: ${a.cue})`, detail: tick.seen })
+      // Muted only when the switch took you off this stream (not onto another task that watches it).
       const tab = tabs.get(tabId)
-      if (tab && engine.state.settings.autoSwitch.streamMute) tab.mute = true
+      const now = arm()
+      const still = now.on && pickTab(tabList(), now.title ?? '', Date.now())?.tab === tabId
+      if (tab && engine.state.settings.autoSwitch.streamMute && !still) {
+        tab.mute = true
+        tab.mutedFor = a.taskId as Id
+      }
       o.say({ phase: 'done', text: `Streamer died: on ${o.title(onDeskId(engine.state))}` })
       trace(tab, `death: ${tick.seen}`)
     } catch (err) {
@@ -192,17 +200,27 @@ export function streamRule(o: {
     heard = true
     const prev = tabs.get(p.tab)
     const league = leagueOf(p.category, p.title)
-    const tab: Tab = prev ?? { seen: null as unknown as TabSeen, memory: null, grid: null, tick: null, mute: false, trail: [] }
+    const tab: Tab = prev ?? { seen: null as unknown as TabSeen, memory: null, grid: null, tick: null, mute: false, mutedFor: null, trail: [] }
     tab.seen = { tab: p.tab, site: p.site, title: p.title, category: p.category, league, visible: p.visible, active: p.active, area: p.area, tainted: p.kind === 'tainted', at: now }
     tabs.set(p.tab, tab)
     for (const [k, t] of tabs) if (now - t.seen.at > LEAGUE.forgetMs) tabs.delete(k)
 
-    // A death just switched away from this tab: mute it now, if muting is on.
+    // A death just switched away from this tab: mute it now, if muting is on. Once the desk is back
+    // on that task, or the rule or muting is off, say unmute; a tab armed again needs no mute.
     const answer = (r: StreamReply): StreamReply => {
-      if (!tab.mute) return r
+      const st = engine.state.settings.autoSwitch
+      if (tab.mute && !r.armed) {
+        tab.mute = false
+        log.info('[stream]', `muting ${p.site}`)
+        return { ...r, mute: true }
+      }
       tab.mute = false
-      log.info('[stream]', `muting ${p.site}`)
-      return { ...r, mute: true }
+      if (tab.mutedFor && (r.armed || onDeskId(engine.state) === tab.mutedFor || !st.streamDeath || !st.streamMute)) {
+        tab.mutedFor = null
+        log.info('[stream]', `unmuting ${p.site}`)
+        return { ...r, mute: false }
+      }
+      return r
     }
     const a = arm()
     noteArm(a, now)
@@ -229,7 +247,7 @@ export function streamRule(o: {
     const every = p.cost !== null && p.cost > 25 ? 1000 : 500
     if (p.kind === 'hello' && !p.ad) {
       pushStatus()
-      return { armed: true, every }
+      return answer({ armed: true, every })
     }
     const f = p.grid ? leagueFeatures(p.grid, tab.grid, now) : null
     if (p.grid) tab.grid = p.grid
@@ -249,7 +267,7 @@ export function streamRule(o: {
     }
     if (tick.event === 'death') void fire(tick, a, p.site, p.tab)
     if (was !== tick.memory.phase) pushStatus()
-    return { armed: true, every }
+    return answer({ armed: true, every })
   }
 
   // Ground truth for tuning: you left a watched stream yourself (with what the detector saw just

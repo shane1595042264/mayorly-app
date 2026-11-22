@@ -1,6 +1,7 @@
 import type { Action, AlarmKind, HudEvent, MayorlyState } from '../core/index'
 import type { InstructionPlan } from './instruct'
 import type { StreamStatus } from './streamdeath'
+import type { SwitchRecord } from './switchlog'
 
 // The contract between a Mayorly client (the HUD) and whatever owns the state.
 // In Electron that is the main process over IPC; in a plain browser it is an
@@ -8,16 +9,17 @@ import type { StreamStatus } from './streamdeath'
 
 /** field: the passive HUD, clicks fall through to your apps. The rest take focus. */
 /** drawer: the quick drawer beside the pet, for what is on the desk. On a Mac it is the shell's own window (?drawer), never this one. */
-export type UiMode = 'field' | 'plus' | 'deck' | 'capture' | 'find' | 'switcher' | 'drawer'
+/** switchLog: the recent switches of the desk under the pet, the same way (?switchlog on a Mac). */
+export type UiMode = 'field' | 'plus' | 'deck' | 'capture' | 'find' | 'switcher' | 'drawer' | 'switchLog'
 
 /** Hotkey-driven requests from the shell to the HUD. `close` returns to field mode (the window lost focus). */
 /** Option+digit while the Plus menu is open: pick that number in the arm you are on; 0 is the couch. */
 export type PickCommand = `pick-${0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
 /** arm-* and pick-*: Option+arrow or digit while the Plus menu is open, taken by the shell so they land even before the window has the keyboard. */
-export type Command = 'plus' | 'capture' | 'find' | 'switcher' | 'deck' | 'schedule' | 'drawer' | 'close' | 'move' | 'arm-up' | 'arm-down' | 'arm-left' | 'arm-right' | PickCommand
+export type Command = 'plus' | 'capture' | 'find' | 'switcher' | 'deck' | 'schedule' | 'drawer' | 'switchLog' | 'close' | 'move' | 'arm-up' | 'arm-down' | 'arm-left' | 'arm-right' | PickCommand
 
-/** How the pet's caption reads: plain, or the schedule's quiet breathing line. */
-export type CaptionStyle = 'scheduled'
+/** How the pet's caption reads: plain, the schedule's quiet breathing line, or a notice (a switch, a failure), which sits clear of the task's name. */
+export type CaptionStyle = 'scheduled' | 'notice'
 
 /** How the shell lays the HUD out. Compact: the window is only the pet and what it unfolds (macOS). */
 export interface Layout {
@@ -302,6 +304,8 @@ export interface Bridge {
   onHotkeyFailures(fn: (failures: HotkeyFailures) => void): () => void
   /** The stream rule's word for the couch list (Watching the stream, No stream seen...). The desktop app only. */
   stream?: { get(): Promise<StreamStatus>; onStatus(fn: (s: StreamStatus) => void): () => void }
+  /** The switch log: the recent switches of the desk, newest first, and each new one as it happens; close is the Mac window's. */
+  switchLog?: { get(): Promise<SwitchRecord[]>; onAdd(fn: (r: SwitchRecord) => void): () => void; close(): void }
 }
 
 export const IPC = {
@@ -366,6 +370,9 @@ export const IPC = {
   placePet: 'mayorly:place-pet',
   streamStatus: 'mayorly:stream-status',
   streamGet: 'mayorly:stream-get',
+  switchLog: 'mayorly:switch-log',
+  switchLogGet: 'mayorly:switch-log-get',
+  switchLogClose: 'mayorly:switch-log-close',
   petHeld: 'mayorly:pet-held',
   effect: 'mayorly:effect',
   effectDone: 'mayorly:effect-done',

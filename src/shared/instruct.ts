@@ -119,7 +119,7 @@ export function keyOwner(s: MayorlyState, key: string): HotkeyAction | null {
   return hit ? hit[0] : null
 }
 
-const HOTKEY_NAMES: Partial<Record<HotkeyAction, string>> = { hide: 'Hide the HUD', clear: 'Clear the entry', pause: 'Hold and resume', find: 'Find', deck: 'Deck', capture: 'Capture', plus: 'Swap menu', switch: 'Switch tasks', move: 'Move the tomato', skipRest: 'Skip rest', drawer: 'Quick drawer', schedule: 'The schedule', scheduled: 'Go to what is scheduled' }
+const HOTKEY_NAMES: Partial<Record<HotkeyAction, string>> = { hide: 'Hide the HUD', clear: 'Clear the entry', pause: 'Hold and resume', find: 'Find', deck: 'Deck', capture: 'Capture', plus: 'Swap menu', switch: 'Switch tasks', move: 'Move the tomato', skipRest: 'Skip rest', drawer: 'Quick drawer', schedule: 'The schedule', scheduled: 'Go to what is scheduled', switchLog: 'The switch log' }
 
 /**
  * The clerk's answer as steps: each op checked against the state, turned into actions with

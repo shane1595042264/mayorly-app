@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { reduce, SLEEP_GAP_MS, type Action, type HudEvent, type MayorlyState } from '@core/index'
+import { switchRecord, type SwitchRecord, type SwitchWhy } from '../shared/switchlog'
 import type { Store } from './store'
 
 // The main process owns the one true state. Windows (and, later, the local sync
@@ -23,6 +24,7 @@ export class Engine {
   private lastBeat: number | null
   private listeners = new Set<Listener>()
   private actionListeners = new Set<ActionListener>()
+  private switchListeners = new Set<(r: SwitchRecord) => void>()
   private beat: NodeJS.Timeout | null = null
   private lastPersistedBeat = 0
 
@@ -71,20 +73,29 @@ export class Engine {
     return () => this.actionListeners.delete(fn)
   }
 
-  /** Something the app does on its own: a tick, a replan, a sync, the clerk's filing, a pause for sleep. */
-  dispatch(action: Action) {
-    this.run([action], action)
+  /** Every time the task on the desk changes, with what moved it (the switch log). */
+  onSwitch(fn: (r: SwitchRecord) => void): () => void {
+    this.switchListeners.add(fn)
+    return () => this.switchListeners.delete(fn)
+  }
+
+  /**
+   * Something the app does on its own: a tick, a replan, a sync, the clerk's filing, a pause for
+   * sleep. `why`: what moved the desk, when this may move it and the step alone cannot tell.
+   */
+  dispatch(action: Action, why?: SwitchWhy) {
+    this.run([action], action, why)
   }
 
   /**
    * Something a person did on this computer. It becomes the active device first, in the same
    * step, so the desk runs here and the other computers hold it when they hear.
    */
-  act(action: Action) {
-    this.run([{ type: 'desk/claim', name: this.device.name }, action], action)
+  act(action: Action, why?: SwitchWhy) {
+    this.run([{ type: 'desk/claim', name: this.device.name }, action], action, why)
   }
 
-  private run(actions: Action[], action: Action) {
+  private run(actions: Action[], action: Action, why?: SwitchWhy) {
     const ctx = { now: Date.now(), newId: randomUUID, random: Math.random, device: this.device.id }
     const before = this.state
     const events: HudEvent[] = []
@@ -95,6 +106,10 @@ export class Engine {
     }
     const changed = this.state !== before
     if (changed) this.store.save(this.state, this.lastBeat)
+    if (changed && this.switchListeners.size) {
+      const r = switchRecord(before, this.state, action, events, why, ctx.now, ctx.newId())
+      if (r) for (const fn of this.switchListeners) fn(r)
+    }
     if (changed || events.length) for (const fn of this.listeners) fn(this.state, events)
     for (const fn of this.actionListeners) fn(action, changed)
   }

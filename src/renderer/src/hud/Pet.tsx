@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { blockView, clock, dayStats, nextBlock, startOfDay, switchTarget, taskTomatoes, tomatoLabel, type MayorlyState } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
-import { INSET, anchorInBox, captionBox, dragScale, petBox, type Point } from '../../../shared/pet'
+import { INSET, anchorInBox, captionBox, dragScale, overlaps, petBox, type Point, type Rect } from '../../../shared/pet'
 import tomato from '../assets/tomato@1x.png'
 import tomatoGaming from '../assets/tomato_gaming.png'
 import { bridge } from '../bridge'
@@ -49,13 +49,15 @@ interface Props {
   nudge: string | null
   /** This computer's id, null until the shell says; the desk may be running on another one. */
   here: string | null
+  /** Windows: the drawer or switch log open beside the pet, which a notice keeps clear of. */
+  panel?: Rect | null
 }
 
 const MOVE_HINT = 'Arrows move, + and - resize, 1 to 4 corners, Enter when done'
 /** A press that moves less than this is not a drag. */
 const DRAG_PX = 4
 
-export function Pet({ s, away, moving, open, side, dragging, compact, notice, nudge, here, anchor, area, onDrag, onPlace, onGrab, onScale }: Props) {
+export function Pet({ s, away, moving, open, side, dragging, compact, notice, nudge, here, anchor, area, onDrag, onPlace, onGrab, onScale, panel }: Props) {
   // Idle, the pet only counts today's tomatoes; a clock is what needs the quarter second.
   const now = useNow(s.desk.status === 'idle' ? 10_000 : 250)
   const reduce = useReducedMotion()
@@ -104,15 +106,23 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
 
   // macOS: the caption is the shell's window. Elsewhere it is drawn in the same box, in this window.
   useEffect(() => {
-    if (compact) bridge.setCaption(showCaption ? text : null, quiet ? 'scheduled' : undefined)
-  }, [compact, showCaption, text, quiet])
+    if (compact) bridge.setCaption(showCaption ? text : null, moving ? undefined : notice ? 'notice' : quiet ? 'scheduled' : undefined)
+  }, [compact, showCaption, text, quiet, notice, moving])
 
   // Windows: the pet's box and the caption's, from where the tomato is, as the Mac would hang its windows.
   const scale = s.settings.hudScale
   const whole = { x: 0, y: 0, ...area }
   const box = !compact && anchor ? petBox(anchor, whole, scale, s.settings.text.pet) : null
   const tomatoAt = box ? anchorInBox(box, side, scale) : null
-  const cap = tomatoAt ? captionBox(tomatoAt, whole, side, scale, quiet ? 'below' : 'above', s.settings.text.pet) : null
+  // A notice or the schedule's line: under the tomato, else over the whole pet, task lines and all,
+  // and never over an open drawer or switch log (then not at all; the panel has your eyes). A hover
+  // hint hugs the tomato.
+  const lineUp = !moving && (!!notice || quiet)
+  const cap = !tomatoAt
+    ? null
+    : lineUp
+      ? ([captionBox(tomatoAt, whole, side, scale, 'below', s.settings.text.pet), captionBox(tomatoAt, whole, side, scale, 'over', s.settings.text.pet)].find((c) => !panel || !overlaps(c, panel)) ?? null)
+      : captionBox(tomatoAt, whole, side, scale, 'above', s.settings.text.pet)
   const placed = box
     ? right
       ? { right: area.width - (box.x + box.width - INSET.x), bottom: area.height - (box.y + box.height - INSET.y) }
@@ -221,7 +231,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
         {showCaption && !compact && cap && (
           <motion.div
             key="caption"
-            className={`pet-caption-box side-${side} ${moving ? 'is-over' : ''}`}
+            className={`pet-caption-box side-${side} ${moving ? 'is-over' : ''} ${lineUp ? (cap.below ? 'is-below' : 'is-above') : ''}`}
             style={{ left: cap.x, top: cap.y, width: cap.width, height: cap.height }}
             initial={{ opacity: 0, y: cap.below ? -6 : 6 }}
             animate={{ opacity: 1, y: 0 }}

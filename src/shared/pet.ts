@@ -32,6 +32,8 @@ export const TASK_LINES = 2 * 12 * 1.15
 export const INSET = { x: 4, y: 4 }
 /** The quick drawer's box, inset included; the drawer itself is 4px inside it. */
 export const DRAWER = { width: 340, height: 360 }
+/** The switch log's box, inset included, and the least height it shrinks to where the screen is short. */
+export const LOG = { width: 380, height: 340, min: 150 }
 /** The caption's box: generous, because it never takes the pointer; the text hugs the tomato's side. */
 export const CAPTION = { width: 360, height: 40 }
 /** The tomato sprite at scale 1. */
@@ -118,8 +120,13 @@ export function anchorInBox(box: Rect, side: Side, scale: number): Point {
   }
 }
 
-/** The caption: just above the tomato, from its outer edge over the sign's column; below it when the top is in the way. */
-export function captionBox(a: Point, area: Rect, side: Side, scale: number, prefer: 'above' | 'below' = 'above', text = 1): Rect & { below: boolean } {
+/**
+ * The caption: just above the tomato, from its outer edge over the sign's column; below it when
+ * the top is in the way. `below` (the schedule's line and a notice) tries under the tomato first
+ * and goes over the whole pet, task lines included, when there is no room; `over` goes over the
+ * whole pet first, and under the tomato when the top is in the way.
+ */
+export function captionBox(a: Point, area: Rect, side: Side, scale: number, prefer: 'above' | 'below' | 'over' = 'above', text = 1): Rect & { below: boolean } {
   const box = 30
   const gap = 10
   const top = a.y - TOMATO * scale
@@ -127,9 +134,9 @@ export function captionBox(a: Point, area: Rect, side: Side, scale: number, pref
   const belowY = a.y + gap - (CAPTION.height - box) / 2
   // A line that waits under the tomato and finds no room there goes over the whole pet, task lines
   // included, rather than over the tomato where those lines are; a hover caption hugs the tomato.
-  const aboveY = prefer === 'below'
-    ? a.y - petHeight(text) * scale - INSET.y - 2 - (CAPTION.height + box) / 2
-    : top - gap - box - (CAPTION.height - box) / 2
+  const aboveY = prefer === 'above'
+    ? top - gap - box - (CAPTION.height - box) / 2
+    : a.y - petHeight(text) * scale - INSET.y - 2 - (CAPTION.height + box) / 2
   const below = prefer === 'below' ? belowY + CAPTION.height <= area.y + area.height || aboveY < area.y : aboveY < area.y
   const y = below ? belowY : aboveY
   return {
@@ -152,6 +159,40 @@ export function drawerBox(pet: Rect, area: Rect, side: Side): Rect {
     width: DRAWER.width,
     height: DRAWER.height,
   }
+}
+
+export type PanelWhere = 'below' | 'above' | 'beside'
+
+/**
+ * A panel hung off the pet (the switch log), always whole on the pet's screen: under the pet when
+ * there is room, else over it, else beside it toward the screen's middle, else in the roomier of
+ * under and over, shorter (down to `min`; the list inside scrolls). Flush with the pet's outer side.
+ */
+export function panelBox(pet: Rect, area: Rect, side: Side, size: { width: number; height: number; min?: number }): Rect & { where: PanelWhere } {
+  const gap = 4
+  const w = Math.min(size.width, area.width)
+  const h = Math.min(size.height, area.height)
+  const bottom = area.y + area.height
+  const right = area.x + area.width
+  const clampX = (x: number) => Math.round(Math.min(Math.max(x, area.x), right - w))
+  const clampY = (y: number, height: number) => Math.round(Math.min(Math.max(y, area.y), bottom - height))
+  const flushX = side === 'right' ? pet.x + pet.width - w : pet.x
+  const roomBelow = bottom - (pet.y + pet.height + gap)
+  const roomAbove = pet.y - gap - area.y
+  if (roomBelow >= h) return { x: clampX(flushX), y: Math.round(pet.y + pet.height + gap), width: w, height: h, where: 'below' }
+  if (roomAbove >= h) return { x: clampX(flushX), y: Math.round(pet.y - gap - h), width: w, height: h, where: 'above' }
+  const besideX = side === 'right' ? pet.x - gap - w : pet.x + pet.width + gap
+  if (besideX >= area.x && besideX + w <= right) return { x: Math.round(besideX), y: clampY(pet.y + pet.height - h, h), width: w, height: h, where: 'beside' }
+  const min = Math.min(size.min ?? h, h)
+  const down = roomBelow >= roomAbove
+  const room = Math.max(min, Math.floor(Math.max(roomBelow, roomAbove)))
+  const height = Math.min(h, room)
+  return { x: clampX(flushX), y: clampY(down ? pet.y + pet.height + gap : pet.y - gap - height, height), width: w, height, where: down ? 'below' : 'above' }
+}
+
+/** Two boxes overlap. */
+export function overlaps(a: Rect, b: Rect): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
 }
 
 /** A corner of the area for the tomato: 1 top left, 2 top right, 3 bottom left, 4 bottom right. `reserve` as for `homeAnchor`. */

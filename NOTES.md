@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Alt+Shift+H shows what switched the desk, and why
+
+- Press Alt+Shift+H (Option+Shift+H on a Mac) for the switch log under the tomato: every time the desk changed task, newest first, with what did it. You (Alt+Q, a pick, the clear key, the tray), an AI prompt and which app, a streamer's death and the numbers it read, the timer moving a superset on, the couch out of coins, the clerk, or another computer.
+- A switch that was let go shows too, as Kept: your Alt+Q, or an AI prompt, right after a death had switched you.
+- It opens under the tomato when there is room, over it or beside it when there is not, always whole on that screen. Esc, the key again or a click outside closes it. The last hundred are kept across restarts, on this computer only. The key can be changed in Settings, under Hotkeys.
+- The line that says what just happened ("Streamer died: on ...", "Claude prompt: on ...") no longer hides under the task's name: it sits under the tomato, or over the whole pet when the tomato is at the bottom of the screen, and keeps clear of an open drawer or log.
+
 ## The stream mutes when the streamer dies, and any task can watch a stream
 
 - When a death switches you away, the stream is muted too, and coming back to its task unmutes it. Twitch and YouTube are muted with their own mute button; Bilibili and Kick by muting the video. A stream you muted yourself is left alone. Settings, Auto switch, turns this off.

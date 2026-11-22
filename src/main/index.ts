@@ -11,6 +11,8 @@ import { INSTRUCT_SYSTEM, instructContext, parseInstruction, permit, resolveInst
 import { dayKey, recipeRunsOn, wallClock } from '../shared/windows'
 import { watchAgents } from './agents'
 import { streamRule } from './streamwatch'
+import { SwitchLog } from './switchlog'
+import { deskEnd, endLabel, type SwitchWhy } from '../shared/switchlog'
 import { AGENT_NAME, promptStep } from '../shared/aiswitch'
 import { sealedClerkStore } from './ai/store'
 import { signInWithGoogle } from './auth'
@@ -223,6 +225,19 @@ function boot() {
   // When an automatic rule last switched the desk (an AI prompt, a streamer's death), so the stream
   // rule's log does not take that switch for one made by hand.
   const auto = { at: 0 }
+  // The switch log: every change of the task on the desk and what moved it, kept here and shown
+  // under the tomato on Alt+Shift+H (shared/switchlog.ts).
+  const switches = new SwitchLog(join(dataDir, 'switches.jsonl'), (r) => send(IPC.switchLog, r))
+  engine.onSwitch((r) => {
+    switches.add(r)
+    log.info('[switch]', `${endLabel(r.from)} -> ${endLabel(r.to)}: ${r.via}${r.detail ? ` (${r.detail})` : ''}`)
+  })
+  ipcMain.handle(IPC.switchLogGet, () => switches.list())
+  /** A switch that was let go, kept in the log so you can see why nothing moved. */
+  const kept = (why: SwitchWhy) => {
+    const here = deskEnd(engine.state)
+    switches.add({ id: randomUUID(), at: Date.now(), from: here, to: here, status: engine.state.desk.status, ...why, kept: true })
+  }
   // A League streamer's death is Alt+Q, seen in the stream's own video (streamwatch.ts).
   const stream = streamRule({ engine, say, send, statusChannel: IPC.streamStatus, title: (id) => short(deskTitle(id)), auto, traceFile: join(dataDir, 'logs', 'stream-trace.jsonl') })
   ipcMain.handle(IPC.streamGet, () => stream.status())
@@ -254,6 +269,7 @@ function boot() {
     const g = stream.grace(action)
     if (g.drop) {
       log.info('[stream]', g.why)
+      kept({ cause: 'you', via: 'Your switch let go: a death had just switched you' })
       say({ phase: 'done', text: 'Switched already: the streamer died' })
       return
     }
@@ -382,7 +398,7 @@ function boot() {
     send(IPC.sync, sync.current())
   })
   ipcMain.handle(IPC.getLayout, () => overlay.layout())
-  ipcMain.on(IPC.setCaption, (_e, text: string | null, style?: CaptionStyle) => overlay.setCaption(text, style === 'scheduled' ? style : undefined))
+  ipcMain.on(IPC.setCaption, (_e, text: string | null, style?: CaptionStyle) => overlay.setCaption(text, style === 'scheduled' || style === 'notice' ? style : undefined))
   ipcMain.handle(IPC.accountsAvailable, () => accountsConfigured())
   ipcMain.handle(IPC.getAccount, () => session?.user ?? null)
   ipcMain.handle(IPC.signIn, async () => {
@@ -474,7 +490,7 @@ function boot() {
       const state = migrate(inner)
       if (!state) return { ok: false, message: 'That file is not a Mayorly export.' }
       engine.snapshot('before-import')
-      engine.dispatch({ type: 'sync/replace', state })
+      engine.dispatch({ type: 'sync/replace', state }, { cause: 'import', via: 'Imported a save' })
       return { ok: true, message: `Imported ${state.entries.length} entries and ${state.ledgers.length} ledgers. The copy from before is in backups.` }
     } catch (err) {
       return { ok: false, message: err instanceof Error ? err.message : String(err) }
@@ -499,6 +515,7 @@ function boot() {
   })
   ipcMain.on(IPC.effectDone, () => overlay.effectDone())
   ipcMain.on(IPC.drawerClose, () => overlay.closeDrawer())
+  ipcMain.on(IPC.switchLogClose, () => overlay.closeSwitchLog())
   ipcMain.on(IPC.moving, (_e, on: boolean) => overlay.setMoving(!!on))
   ipcMain.on(IPC.nudge, (_e, dx: number, dy: number) => overlay.nudge(Number(dx) || 0, Number(dy) || 0))
   ipcMain.on(IPC.placePet, (_e, x: number, y: number, sx?: number, sy?: number) => overlay.placeAt(Number(x), Number(y), Number(sx), Number(sy)))
@@ -527,7 +544,7 @@ function boot() {
 
   const clearDesk = () => {
     const id = engine.state.desk.block?.entryId
-    if (id) engine.act({ type: 'entry/complete', id })
+    if (id) engine.act({ type: 'entry/complete', id }, { cause: 'you', via: 'Cleared with the clear key; the desk took the next' })
     else say({ phase: 'done', text: 'Nothing on the desk to clear' })
   }
   /**
@@ -549,7 +566,7 @@ function boot() {
       return
     }
     const act = switchToAction(st, { kind: 'entry', entry }) ?? { type: 'desk/select' as const, entryId: entry.id, ledgerId: entry.ledgerId }
-    engine.act(act)
+    engine.act(act, { cause: 'you', via: at ? 'The scheduled key: on the calendar now' : 'The scheduled key: nothing scheduled, one at random' })
   }
   const notify = (ev: HudEvent) => {
     if (!Notification.isSupported()) return
@@ -610,6 +627,8 @@ function boot() {
         move: () => command('move'),
         // macOS: the drawer is the shell's own window beside the pet. Elsewhere the overlay draws it.
         drawer: () => (process.platform === 'darwin' ? overlay.toggleDrawer() : command('drawer')),
+        // The switch log, the same way: a window of its own under the pet on a Mac.
+        switchLog: () => (process.platform === 'darwin' ? overlay.toggleSwitchLog() : command('switchLog')),
         clear: clearDesk,
         schedule: () => command('schedule'),
         scheduled: goScheduled,
@@ -661,9 +680,10 @@ function boot() {
     // A prompt a beat after a streamer's death switched the desk would take it back to the stream.
     const g = step.act ? stream.grace(step.act) : null
     log.info('[agents]', `${e.app} prompt${e.manual ? '' : ' (not typed)'}: ${g?.drop ? 'a death switched a moment ago' : step.why}`)
+    if (g?.drop) kept({ cause: 'ai', via: `${AGENT_NAME[e.app]} prompt let go: a death had just switched you` })
     if (!step.act || g?.drop) return
     promptSwitchAt = auto.at = Date.now()
-    engine.act(step.act)
+    engine.act(step.act, { cause: 'ai', via: `${AGENT_NAME[e.app]} prompt`, detail: e.app.endsWith('-web') ? 'in Chrome' : e.app.endsWith('-app') ? 'in its desktop app' : 'through its hook' })
     say({ phase: 'done', text: `${AGENT_NAME[e.app]} prompt: on ${short(deskTitle(onDeskId(engine.state)))}` })
   }, stream.onStream)
 

@@ -83,6 +83,11 @@ const bridge: Bridge = {
     get: () => ipcRenderer.invoke(IPC.streamGet),
     onStatus: (fn) => sub(IPC.streamStatus, fn),
   },
+  switchLog: {
+    get: () => ipcRenderer.invoke(IPC.switchLogGet),
+    onAdd: (fn) => sub(IPC.switchLog, fn),
+    close: () => ipcRenderer.send(IPC.switchLogClose),
+  },
 }
 
 contextBridge.exposeInMainWorld('mayorly', bridge)

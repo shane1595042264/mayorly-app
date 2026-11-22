@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchorInBox, captionBox, clampAnchor, drawerBox, homeAnchor, nearPet, petBox, sideOf, type Point, type Rect } from './pet'
+import { anchorInBox, captionBox, clampAnchor, drawerBox, homeAnchor, LOG, nearPet, overlaps, panelBox, petBox, sideOf, type Point, type Rect } from './pet'
 
 // The Mac pet window's geometry as overlay.ts computed it before it moved here, kept verbatim
 // so the shared functions are held to it: the Mac must not move by a pixel.
@@ -146,5 +146,51 @@ describe('pet geometry matches the Mac pet window', () => {
     // Over the whole pet, task lines and all: its visible box ends above the pet's top.
     const pet = petBox({ x: 1800, y: 1030 }, wa, 1, 1)
     expect(over.y + (over.height + 30) / 2).toBeLessThanOrEqual(pet.y)
+  })
+
+  it('keeps the switch log whole on the screen the pet is on, and off the pet, wherever the pet is', () => {
+    let n = 0
+    const where = new Set<string>()
+    for (const { wa, scale, text, a } of cases()) {
+      const c = clampAnchor(a, wa, scale)
+      const pet = petBox(c, wa, scale, text)
+      const box = panelBox(pet, wa, sideOf(wa, c), LOG)
+      where.add(box.where)
+      expect(box.x).toBeGreaterThanOrEqual(wa.x)
+      expect(box.y).toBeGreaterThanOrEqual(wa.y)
+      expect(box.x + box.width).toBeLessThanOrEqual(wa.x + wa.width)
+      expect(box.y + box.height).toBeLessThanOrEqual(wa.y + wa.height)
+      expect(box.height).toBeGreaterThanOrEqual(Math.min(LOG.min, wa.height))
+      if (wa.height >= 2 * LOG.min + pet.height) expect(overlaps(box, pet)).toBe(false)
+      n++
+    }
+    expect(n).toBeGreaterThan(3000)
+    expect([...where].sort()).toEqual(['above', 'below'])
+  })
+
+  it('puts the switch log under the pet, over it, then beside it on a short screen, then shorter', () => {
+    const wa = { x: 0, y: 0, width: 1920, height: 1040 }
+    const low = petBox({ x: 1800, y: 1012 }, wa, 1, 1)
+    expect(panelBox(low, wa, 'right', LOG)).toMatchObject({ where: 'above', height: LOG.height })
+    const high = petBox({ x: 1800, y: 120 }, wa, 1, 1)
+    expect(panelBox(high, wa, 'right', LOG)).toMatchObject({ where: 'below', height: LOG.height })
+    const short = { x: 0, y: 0, width: 1920, height: 420 }
+    const mid = petBox({ x: 1800, y: 260 }, short, 1, 1)
+    const beside = panelBox(mid, short, 'right', LOG)
+    expect(beside.where).toBe('beside')
+    expect(beside.x + beside.width).toBeLessThanOrEqual(mid.x)
+    const narrow = { x: 0, y: 0, width: 560, height: 420 }
+    const squeezed = panelBox(petBox({ x: 500, y: 260 }, narrow, 1, 1), narrow, 'right', LOG)
+    expect(squeezed.height).toBeLessThan(LOG.height)
+    expect(squeezed.height).toBeGreaterThanOrEqual(LOG.min)
+    expect(squeezed.y + squeezed.height).toBeLessThanOrEqual(420)
+  })
+
+  it('puts a notice over the whole pet first when asked, under the tomato only when the top is in the way', () => {
+    const wa = { x: 0, y: 0, width: 1920, height: 1040 }
+    const over = captionBox({ x: 1800, y: 600 }, wa, 'right', 1, 'over')
+    expect(over.below).toBe(false)
+    expect(over.y + (over.height + 30) / 2).toBeLessThanOrEqual(petBox({ x: 1800, y: 600 }, wa, 1, 1).y)
+    expect(captionBox({ x: 1800, y: 70 }, wa, 'right', 1, 'over').below).toBe(true)
   })
 })

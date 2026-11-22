@@ -126,7 +126,7 @@ function CouchList({ s }: { s: MayorlyState }) {
               <span className="mono num">{onCouch.remainingMs !== null ? clock(onCouch.remainingMs) : ''}</span>
               <button className="btn ghost" onClick={() => dispatch({ type: 'desk/standDown' })}><Stop size={14} /> Get up</button>
             </div>
-            {onItem && onItem.cues.length > 0 && (
+            {onItem && (onItem.cues.length > 0 || streamWord) && (
               <p className="leisure-cues-live">
                 <span className="caps dim">Switch when</span> {onItem.cues.join('  ·  ')}
                 {streamWord && <span className="stream-word">   {streamWord}</span>}

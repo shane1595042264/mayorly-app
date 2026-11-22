@@ -270,9 +270,9 @@ type SideName = keyof typeof MAP
  * numbers, so they are tuned from the log and ship with an update; the extension never changes.
  */
 export const LEAGUE = {
-  /** A world cell counts when 30% of it is lit; a frame with under 55% of its world counted is dark. */
+  /** A world cell counts when 30% of it is lit; a frame with under 25% of its world counted is dark (a fade to black), not a dim death screen. */
   cellLitMin: 77,
-  validMin: 0.55,
+  validMin: 0.25,
   /**
    * The baseline: up to 40 samples of the streamer alive, learned from 6 s of unbroken colour of
    * 28 or more (any sample under it starts the learning over), above anything a death shows: fights
@@ -294,17 +294,18 @@ export const LEAGUE = {
   mapCellsMin: 5,
   mapLife: 2.5,
   /**
-   * A grey sample: the world's colour under 72% of usual (and under 30 at all), or under 85% when
-   * the bar has gone dark (under half its usual colour, still in place). A death screen greys the
-   * world and darkens it too (Thebausffs' to 43% of its brightness, with the shop open over it), so
-   * colour, which falls with both, is what counts, not colour for brightness...
+   * A grey sample, one of two ways. Drained: the world's colour under 72% of usual (and under 30),
+   * its colour for its brightness under 70% (a darker scene, fog or a night effect keeps that; a
+   * death loses it, velja's to a quarter even over a dark jungle), and the bar dimmed under 85%.
+   * Or the bar gone dark: under half its colour and still the bar, with the world's colour under
+   * 85% or drained (Thebausffs' death screen, dark as well as grey, the shop open over it: the
+   * world 68% of usual, the bar 31%)...
    */
   greyRatio: 0.72,
   greyCap: 30,
+  satRatio: 0.7,
   greyLoose: 0.85,
   barStrong: 0.5,
-  /** A picture under 75% of its usual brightness asks the bar for more: under half its colour (a death), not a dip from cooldowns under a night effect or fog. */
-  darkRatio: 0.75,
   /**
    * ...the world keeping its texture (a flat window or card over it is not a death)... the bar
    * dimmed under 85% and still the bar (its pattern of brightness correlates with its usual one,
@@ -672,17 +673,24 @@ export function leagueStep(mem: DeathMemory | null, f: LeagueFeatures | null, hi
   }
   if (up) m.fall = null
   const inPlace = barReads(b) && barInPlace(f, b)
-  const barDark = inPlace && f.a <= LEAGUE.barStrong * b.a
-  const greyWorld = (f.w <= Math.min(LEAGUE.greyRatio * b.w, LEAGUE.greyCap) || (barDark && f.w <= LEAGUE.greyLoose * b.w)) && f.tex >= LEAGUE.texRatio * b.tex
-  const darker = f.l < LEAGUE.darkRatio * b.l
-  const barDim = barReads(b) ? inPlace && f.a <= (darker ? LEAGUE.barStrong : LEAGUE.barRatio) * b.a : f.w <= LEAGUE.deepRatio * b.w
+  const drained = f.s <= LEAGUE.satRatio * b.s
+  const greyWorld = f.w <= Math.min(LEAGUE.greyRatio * b.w, LEAGUE.greyCap) && drained
+  const barDim = barReads(b) ? inPlace && f.a <= LEAGUE.barRatio * b.a : f.w <= LEAGUE.deepRatio * b.w
+  // Drained, with the texture kept (a flat window over the world is not a death).
+  const greyDrained = greyWorld && barDim && f.tex >= LEAGUE.texRatio * b.tex
+  // The bar gone dark: the HUD itself says dead, whatever lies over the world.
+  const greyDark = inPlace && f.a <= LEAGUE.barStrong * b.a && (f.w <= LEAGUE.greyLoose * b.w || drained)
   const mapHeld = map.held >= LEAGUE.mapHeld && map.shift <= LEAGUE.mapShift
   const lit = f.l >= Math.max(LEAGUE.lightRatio * b.l, LEAGUE.lightMin) && f.l <= LEAGUE.lightMax * b.l
-  if (greyWorld && barDim && mapHeld && lit) {
+  // The step from colour: the most colour in the 2.5 s before `since`, and how far it fell to now.
+  const stepTo = (since: number) => {
+    const before = m.recent.filter((x) => x.at >= since - LEAGUE.edgeMs && x.at < since)
+    const top = before.length ? Math.max(...before.map((x) => x.w)) : 0
+    return m.up && top >= LEAGUE.edgeRatio * b.w && top - f.w >= LEAGUE.stepDrop * b.w
+  }
+  if ((greyDrained || greyDark) && mapHeld && lit) {
     if (!m.run) {
-      const before = m.recent.filter((x) => x.at >= at - LEAGUE.edgeMs && x.at < at)
-      const top = before.length ? Math.max(...before.map((x) => x.w)) : 0
-      const step = m.up && top >= LEAGUE.edgeRatio * b.w && top - f.w >= LEAGUE.stepDrop * b.w
+      const step = stepTo(at)
       const fell = m.fall !== null && at - m.fall <= LEAGUE.fallMs
       if (step && !fell) m.fall = at
       m.run = { since: at, last: at, n: 1, edge: step || fell, miss: false }
@@ -690,6 +698,11 @@ export function leagueStep(mem: DeathMemory | null, f: LeagueFeatures | null, hi
       m.run.n++
       m.run.last = at
       m.run.miss = false
+      // A run that began on a sample caught mid-fade gets its step once the grey has gone deep enough.
+      if (!m.run.edge && stepTo(m.run.since)) {
+        m.run.edge = true
+        m.fall ??= at
+      }
     }
     const r = m.run
     if (r.edge && r.n >= LEAGUE.deathSamples && r.last - r.since >= LEAGUE.deathMs && (m.lastDeathAt === null || at - m.lastDeathAt >= LEAGUE.refractoryMs)) {
@@ -716,7 +729,7 @@ export function leagueStep(mem: DeathMemory | null, f: LeagueFeatures | null, hi
   // The usual picture only from the streamer seen up, not from a fight on screen just after a fall.
   if (m.up && m.fall === null) admit()
   keep(f.w)
-  return done(seen, f.w <= LEAGUE.edgeRatio * b.w && (greyWorld || barDim))
+  return done(seen, f.w <= LEAGUE.edgeRatio * b.w && (greyWorld || barDim || greyDark))
 }
 
 // ---------------------------------------------------------------------------------------------

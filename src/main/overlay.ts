@@ -2,7 +2,10 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BrowserWindow, screen, type Display, type Rectangle } from 'electron'
 import { IPC, type CaptionStyle, type Effect, type Layout, type UiMode } from '../shared/bridge'
-import { CAPTION, DRAWER, TASKBAR, TOMATO, anchorInBox, captionBox, clampAnchor, cornerAnchor, drawerBox, homeAnchor, nearPet, petBox, sideOf, type Side } from '../shared/pet'
+import { CAPTION, DRAWER, LOG, TASKBAR, TOMATO, anchorInBox, captionBox, clampAnchor, cornerAnchor, drawerBox, homeAnchor, nearPet, panelBox, petBox, sideOf, type Side } from '../shared/pet'
+
+/** Windows: the panels drawn beside the pet in the click-through overlay, where only they and the pet take the pointer. */
+const besidePet = (mode: UiMode) => mode === 'drawer' || mode === 'switchLog'
 
 // One transparent, always-on-top, frameless window.
 //
@@ -65,6 +68,9 @@ export class Overlay {
   private scale = 1
   private text = 1
   private drawer: BrowserWindow | null = null
+  /** macOS: the switch log's own window under the pet, like the drawer's. */
+  private switchLog: BrowserWindow | null = null
+  private switchLogShownAt = 0
   private drawerShownAt = 0
   private dragging = false
   private caption: BrowserWindow | null = null
@@ -336,7 +342,8 @@ export class Overlay {
     if (!this.caption) return
     const wa = this.display().workArea
     const a = this.anchor ?? this.defaultAnchor(wa)
-    const { below, ...box } = captionBox(a, wa, this.layout().side, this.scale, this.captionStyle === 'scheduled' ? 'below' : 'above', this.text)
+    // A notice and the schedule's line sit clear of the task's name: under the tomato, or over the whole pet.
+    const { below, ...box } = captionBox(a, wa, this.layout().side, this.scale, this.captionStyle === 'scheduled' || this.captionStyle === 'notice' ? 'below' : 'above', this.text)
     debug('caption', { ...box, below, anchor: a })
     this.caption.setBounds(box)
   }
@@ -376,14 +383,14 @@ export class Overlay {
     } else {
       // A panel opens in the middle of the pet's display, all of it on that display.
       this.ensureFit()
-      // Windows, the quick drawer: the pet and the drawer still take the pointer through the click-through overlay.
-      if (mac || mode !== 'drawer') this.stopHoverPoll()
+      // Windows, the quick drawer and the switch log: the pet and the panel still take the pointer through the click-through overlay.
+      if (mac || !besidePet(mode)) this.stopHoverPoll()
       else this.startHoverPoll()
       if (mac) this.fit()
       if (!this.win.isVisible()) this.win.showInactive()
       // Windows, the quick drawer: like the Mac's small drawer window, only the drawer and the pet take
       // the pointer; a click anywhere else reaches the app beneath, and the blur that follows closes it.
-      if (!mac && mode === 'drawer') this.win.setIgnoreMouseEvents(!this.hit, { forward: true })
+      if (!mac && besidePet(mode)) this.win.setIgnoreMouseEvents(!this.hit, { forward: true })
       else this.win.setIgnoreMouseEvents(false)
       this.win.setFocusable(true)
       this.win.focus()
@@ -397,7 +404,7 @@ export class Overlay {
     debug('hit', hit)
     this.hit = hit
     if (mac) return
-    if ((this.mode === 'field' || this.mode === 'drawer') && !this.win.isDestroyed()) this.win.setIgnoreMouseEvents(!hit, { forward: true })
+    if ((this.mode === 'field' || besidePet(this.mode)) && !this.win.isDestroyed()) this.win.setIgnoreMouseEvents(!hit, { forward: true })
   }
 
   /** The HUD scale setting: the pet window grows with it so nothing is clipped. */
@@ -690,11 +697,79 @@ export class Overlay {
     if (this.drawer && !this.drawer.isDestroyed() && this.drawer.isVisible()) this.drawer.hide()
   }
 
-  /** Every page of ours that renders state: the pet's window, and the drawer while it exists (hidden or not, since it is reused). */
+  /**
+   * macOS: the switch log, a window of its own under the pet (over or beside it where there is no
+   * room, `panelBox`), like the drawer's. It reads only, and closes on blur, Esc or the hotkey again.
+   */
+  toggleSwitchLog() {
+    if (!mac || this.win.isDestroyed()) return
+    if (this.switchLog && !this.switchLog.isDestroyed() && this.switchLog.isVisible()) {
+      this.closeSwitchLog()
+      return
+    }
+    this.closeDrawer()
+    this.setCaption(null)
+    if (!this.switchLog || this.switchLog.isDestroyed()) {
+      this.switchLog = new BrowserWindow({
+        width: LOG.width,
+        height: LOG.height,
+        show: false,
+        frame: false,
+        transparent: true,
+        backgroundColor: '#00000000',
+        hasShadow: false,
+        resizable: false,
+        movable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        skipTaskbar: true,
+        hiddenInMissionControl: true,
+        focusable: true,
+        alwaysOnTop: true,
+        type: 'panel',
+        title: 'Mayorly switch log',
+        webPreferences: {
+          preload: join(import.meta.dirname, '../preload/index.cjs'),
+          sandbox: true,
+          contextIsolation: true,
+          nodeIntegration: false,
+          backgroundThrottling: false,
+          spellcheck: false,
+        },
+      })
+      this.switchLog.setAlwaysOnTop(true, 'screen-saver')
+      this.switchLog.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
+      const page = process.env.ELECTRON_RENDERER_URL ? `${process.env.ELECTRON_RENDERER_URL}?switchlog` : null
+      if (page) void this.switchLog.loadURL(page)
+      else void this.switchLog.loadFile(join(import.meta.dirname, '../renderer/index.html'), { query: { switchlog: '1' } })
+      this.switchLog.on('blur', () => {
+        if (Date.now() - this.switchLogShownAt > 400) this.closeSwitchLog()
+      })
+      this.switchLog.on('closed', () => {
+        this.switchLog = null
+      })
+    }
+    const display = this.display()
+    const wa = display.workArea
+    const { where: _where, ...box } = panelBox(this.fieldBounds(display), wa, this.side(wa, this.anchor ?? this.defaultAnchor(wa)), LOG)
+    this.switchLog.setBounds(box)
+    this.switchLogShownAt = Date.now()
+    this.switchLog.show()
+    this.switchLog.focus()
+    this.switchLog.webContents.focus()
+  }
+
+  closeSwitchLog() {
+    if (this.switchLog && !this.switchLog.isDestroyed() && this.switchLog.isVisible()) this.switchLog.hide()
+  }
+
+  /** Every page of ours that renders state: the pet's window, and the drawer and the switch log while they exist (hidden or not, since they are reused). */
   pages(): Electron.WebContents[] {
     const out: Electron.WebContents[] = []
     if (!this.win.isDestroyed()) out.push(this.win.webContents)
     if (this.drawer && !this.drawer.isDestroyed()) out.push(this.drawer.webContents)
+    if (this.switchLog && !this.switchLog.isDestroyed()) out.push(this.switchLog.webContents)
     return out
   }
 
@@ -797,7 +872,7 @@ export class Overlay {
       const st = `${this.mode} hit=${this.hit} held=${!!this.heldTimer} over=${this.over}`
       if (st !== this.pollState) debug('poll state', (this.pollState = st))
     }
-    if (this.win.isDestroyed() || (this.mode !== 'field' && this.mode !== 'drawer') || !this.win.isVisible()) return false
+    if (this.win.isDestroyed() || (this.mode !== 'field' && !besidePet(this.mode)) || !this.win.isVisible()) return false
     if (this.heldTimer) return true
     const p = screen.getCursorScreenPoint()
     const b = this.win.getBounds()
@@ -834,11 +909,12 @@ export class Overlay {
     this.win.webContents.send(IPC.hit, hit)
   }
 
-  /** The pointer is over the pet's box, or the open drawer's, give or take `margin`. */
+  /** The pointer is over the pet's box, or the open drawer's or switch log's, give or take `margin`. */
   private onPet(p: Anchor, a: Anchor, b: Rectangle, margin: number): boolean {
     if (nearPet(p, a, b, this.scale, this.text, margin)) return true
-    if (this.mode !== 'drawer') return false
-    const d = drawerBox(petBox(a, b, this.scale, this.text), b, sideOf(b, a))
+    if (!besidePet(this.mode)) return false
+    const pet = petBox(a, b, this.scale, this.text)
+    const d = this.mode === 'drawer' ? drawerBox(pet, b, sideOf(b, a)) : panelBox(pet, b, sideOf(b, a), LOG)
     return p.x >= d.x - margin && p.x < d.x + d.width + margin && p.y >= d.y - margin && p.y < d.y + d.height + margin
   }
 }

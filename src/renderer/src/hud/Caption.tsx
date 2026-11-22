@@ -11,7 +11,7 @@ export function CaptionApp() {
   if (!c.text) return null
   return (
     <div className={`caption-page side-${c.side}`}>
-      <p className={`pet-sign is-caption caption-float ${c.style === 'scheduled' ? 'is-scheduled' : ''}`} role="status">{c.text}</p>
+      <p className={`pet-sign is-caption caption-float ${c.style === 'scheduled' ? 'is-scheduled' : c.style === 'notice' ? 'is-notice' : ''}`} role="status">{c.text}</p>
     </div>
   )
 }

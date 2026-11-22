@@ -145,15 +145,43 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
         if (silent(v) !== on) v.muted = on
       }, 400)
     }
-    var mute = function (v) {
-      if (!v || silent(v)) return
+    // A change of sound that is not the eye's own (within a moment of its click) is yours: the
+    // eye lets go, and never unmutes what you set. The mark in sessionStorage outlives a reload of
+    // the tab, since Twitch and YouTube keep the button's mute as the page's own choice.
+    var ownAt = 0
+    var KEY = 'mayorly-muted'
+    var remember = function (on) {
+      try {
+        if (on) sessionStorage.setItem(KEY, '1')
+        else sessionStorage.removeItem(KEY)
+      } catch (e) {}
+    }
+    var onVolume = function () {
+      if (Date.now() - ownAt < 1500) return
+      letGo()
+    }
+    var letGo = function () {
+      if (mutedBy) mutedBy.removeEventListener('volumechange', onVolume)
+      mutedBy = null
+      remember(false)
+    }
+    var hold = function (v) {
       mutedBy = v
+      v.addEventListener('volumechange', onVolume)
+      remember(true)
+    }
+    var mute = function (v) {
+      if (!v || silent(v) || mutedBy) return
+      ownAt = Date.now()
       setMuted(v, true)
+      hold(v)
     }
     var unmute = function () {
       var v = mutedBy
-      mutedBy = null
-      if (v && v.isConnected) setMuted(v, false)
+      if (!v) return
+      letGo()
+      ownAt = Date.now()
+      if (v.isConnected && silent(v)) setMuted(v, false)
     }
     var post = function (m) {
       return new Promise(function (resolve) {
@@ -200,6 +228,12 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
     var tick = async function () {
       if (stopped) return
       var found = video()
+      // A tab reloaded while Mayorly had it muted: the mute is still Mayorly's to undo.
+      if (found && !found.bad && !mutedBy && silent(found.v)) {
+        try {
+          if (sessionStorage.getItem(KEY) === '1') hold(found.v)
+        } catch (e) {}
+      }
       var now = Date.now()
       var r = null
       try {
@@ -215,7 +249,7 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
           tainted = false
           var grid = ad() ? null : sample(found.v)
           r = await post(grid ? { kind: 'frame', area: found.area, grid: grid } : { kind: tainted ? 'tainted' : 'hello', area: found.area })
-        } else if (now - lastHello >= (armed ? 2000 : mutedBy ? 1000 : HELLO)) {
+        } else if (now - lastHello >= (armed ? 2000 : mutedBy ? 2000 : HELLO)) {
           lastHello = now
           r = await post({ kind: 'hello', area: found.area })
         }
@@ -225,9 +259,10 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
       if (r) {
         armed = !!r.armed
         every = Math.max(250, Math.min(5000, Number(r.every) || 500))
-        // Muted by a death that switched you away; read again means you are back on its task.
+        // Muted by a death that switched you away; Mayorly says when to unmute (back on its task, or
+        // the rule or muting turned off), and being read again means the same.
         if (r.mute === true && found) mute(found.v)
-        else if (armed && mutedBy) unmute()
+        else if ((r.mute === false || armed) && mutedBy) unmute()
       }
       if (!stopped) setTimeout(tick, armed ? every : 1000)
     }

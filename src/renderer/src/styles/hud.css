@@ -202,6 +202,44 @@ body.drawer-page .drawer { position: fixed; inset: 4px; width: auto; height: aut
 .drawer-empty { margin: 6px 0 0; font-size: 13px; color: var(--ink-2); }
 .drawer-foot { margin-top: auto; padding-top: 6px; }
 
+/* ------------------------------------------------------------ the switch log
+   Alt+Shift+H: what moved the desk, and why. Under the pet, over it or beside it, wherever it
+   stays whole on the screen; on a Mac its own window the size of the box. Reads only. */
+.switch-log {
+  position: absolute;
+  z-index: var(--z-hud);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px 8px;
+  background: var(--glass);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.45);
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+  outline: none;
+}
+body.switchlog-page { background: transparent; }
+body.switchlog-page .switch-log { position: fixed; inset: 4px; width: auto !important; height: auto !important; }
+.switch-log-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.switch-log-title { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.switch-log-hint { font-size: 11px; color: var(--ink-3); }
+.switch-log-empty { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); line-height: 1.35; }
+.switch-log-list { list-style: none; margin: 0; padding: 0 2px 0 0; display: grid; align-content: start; gap: 6px; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
+.switch-log-row { display: grid; gap: 2px; padding: 6px 8px; border-left: 2px solid var(--line-2); background: var(--glass-3); }
+.switch-log-row.cause-ai { border-left-color: #6fb3f2; }
+.switch-log-row.cause-stream { border-left-color: var(--leisure); }
+.switch-log-row.cause-timer, .switch-log-row.cause-coins { border-left-color: var(--accent); }
+.switch-log-row.cause-sync, .switch-log-row.cause-clerk, .switch-log-row.cause-import { border-left-color: #7fc8a0; }
+.switch-log-row.kept { border-left-style: dashed; opacity: 0.8; }
+.switch-log-meta { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--ink-3); }
+.switch-log-cause { text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); }
+.switch-log-move { margin: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; font-size: 13px; line-height: 1.3; color: var(--ink); }
+.switch-log-move svg { flex: none; color: var(--ink-3); }
+.switch-log-end { min-width: 0; overflow-wrap: anywhere; }
+.switch-log-status { font-size: 11px; color: var(--ink-3); }
+.switch-log-why { margin: 0; font-size: 12px; color: var(--ink-2); line-height: 1.3; }
+.switch-log-detail { margin: 0; font-size: 10.5px; color: var(--ink-3); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ------------------------------------------------------------ objectives */
 
 .objectives {
@@ -432,7 +470,10 @@ body.caption { background: transparent; }
 .caption-page.side-left { justify-content: flex-start; }
 .caption-float { margin: 0; }
 /* Windows: the same box in the overlay, hugging the tomato's side; it never takes the pointer. */
-.pet-caption-box { position: absolute; z-index: var(--z-hud); display: flex; align-items: center; padding: 0 4px; pointer-events: none; }
+/* Over the pet's own plate, so a notice is never under the task's name; a line that wraps grows away from the pet. */
+.pet-caption-box { position: absolute; z-index: calc(var(--z-hud) + 1); display: flex; align-items: center; padding: 0 4px; pointer-events: none; }
+.pet-caption-box.is-below { align-items: flex-start; }
+.pet-caption-box.is-above { align-items: flex-end; }
 .pet-caption-box.is-over { z-index: calc(var(--z-hud) + 1); }
 .pet-caption-box.side-right { justify-content: flex-end; }
 .pet-caption-box.side-left { justify-content: flex-start; }

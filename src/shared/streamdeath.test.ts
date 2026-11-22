@@ -300,6 +300,8 @@ describe('a League streamer dying', { timeout: 30_000 }, () => {
     expect(play([[10_000, alive], [6000, { ...alive, light: 0.6, bar: 'dim' }]]).deaths).toEqual([])
     // Thebausffs' death screen: the world at 45% of its brightness, its colour with it, the bar at a third.
     expect(play([[10_000, alive], [3000, { ...alive, light: 0.45, bar: 'dark' }]]).deaths).toEqual([11_000])
+    // velja's death over a dark jungle: grey and darker, the bar only dimmed.
+    expect(play([[10_000, alive], [3000, { ...dead, light: 0.6 }]]).deaths).toEqual([11_000])
   })
 
   it('takes the minimap on the right over a still logo on the left, and a white page is no death', () => {
@@ -331,7 +333,8 @@ describe('a League streamer dying', { timeout: 30_000 }, () => {
 
   it('fires on the measured onsets: 36.6 > 15.2 > 9.6 and 31.9 > 10.5 against a usual 38, through one stray sample', () => {
     // As measured, padded; and with one sample just over the line a second in, which is forgiven.
-    for (const onset of [[36.6, 15.2, 9.6, 9.6], [31.9, 10.5, 10.5, 10.5], [36.6, 15.2, 9.6, 26, 21, 21], [31.9, 10.5, 21, 25, 21]]) {
+    // ...and one caught mid-fade, a step too small at first that the deeper grey makes good.
+    for (const onset of [[36.6, 15.2, 9.6, 9.6], [31.9, 10.5, 10.5, 10.5], [36.6, 15.2, 9.6, 26, 21, 21], [31.9, 10.5, 21, 25, 21], [31.9, 26, 10.5, 10.5, 10.5]]) {
       let m: DeathMemory | null = null
       let t = 0
       const at = (w: number, a: number): LeagueFeatures => ({
