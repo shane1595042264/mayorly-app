@@ -4,9 +4,14 @@
 # switches the desk. Reads only the app in front, through Windows UI Automation, near the box you
 # type in; never what you type. Quits when Mayorly does.
 #
+# Only a Stop button that appears where the app was in front and idle a moment before counts:
+# bringing back an app that is still thinking shows its Stop button already there, and an answer
+# that thinks in steps can hide and show it between them. Neither is a prompt you typed.
+#
 #   powershell -File ai-watch.ps1 -Parent <Mayorly's pid>
 #   powershell -File ai-watch.ps1 -Once -Report out.txt     what it sees right now, once
-param([int]$Parent = 0, [switch]$Once, [string]$Report = '')
+#   powershell -File ai-watch.ps1 -Test -Report out.txt     the prompt rule on made-up timelines
+param([int]$Parent = 0, [switch]$Once, [switch]$Test, [string]$Report = '')
 $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 Add-Type @'
@@ -66,6 +71,58 @@ function Busy([int]$fpid) {
 }
 
 $busy = @{}
+# When each app was last read, and since when it has sat idle (no Stop button) while read.
+$seen = @{}
+$idle = @{}
+# Read this recently (the loop runs every 800 ms), the app was in front the whole time.
+$steadyMs = 2500
+# Idle this long, in front, before a Stop button is a new prompt rather than the same answer going on.
+$restMs = 2500
+
+# One read of an app in front at time $t: whether its Stop button shows. True when that is a new prompt.
+function Step-Prompt([int]$id, [bool]$now, [long]$t) {
+  $last = $seen[$id]
+  $steady = $null -ne $last -and ($t - $last) -le $steadyMs
+  $was = [bool]$busy[$id]
+  if (-not $steady) {
+    # Just brought to the front: what it shows now is where it is, not news.
+    $was = $now
+    $idle[$id] = if ($now) { $null } else { $t }
+  }
+  $fire = $now -and -not $was -and $null -ne $idle[$id] -and ($t - $idle[$id]) -ge $restMs
+  if ($now) { $idle[$id] = $null } elseif ($was -or $null -eq $idle[$id]) { $idle[$id] = $t }
+  $busy[$id] = $now
+  $seen[$id] = $t
+  return $fire
+}
+
+if ($Test) {
+  # Each case: reads every 800 ms, B busy, . idle, - not in front. Prompts expected at the marks.
+  $cases = @(
+    @{ name = 'typed after reading'; reads = '.....BBBBB'; want = 1 },
+    @{ name = 'thinking in steps'; reads = '.....BBB.BBB'; want = 1 },
+    @{ name = 'brought back mid-answer'; reads = '...---BBBB'; want = 0 },
+    @{ name = 'brought back, then typed'; reads = '--....BBB'; want = 1 },
+    @{ name = 'opened already answering'; reads = 'BBBB....BB'; want = 1 }
+  )
+  $out = @()
+  $k = 0
+  foreach ($c in $cases) {
+    $k++
+    $seen.Clear(); $idle.Clear(); $busy.Clear()
+    $n = 0
+    $t = 1000000
+    foreach ($ch in $c.reads.ToCharArray()) {
+      $t += 800
+      if ($ch -eq '-') { continue }
+      if (Step-Prompt $k ($ch -eq 'B') $t) { $n++ }
+    }
+    $out += ('{0}: {1} prompt(s), want {2} {3}' -f $c.name, $n, $c.want, $(if ($n -eq $c.want) { 'ok' } else { 'WRONG' }))
+  }
+  $out | Set-Content -Encoding utf8 $Report
+  exit 0
+}
+
 while ($true) {
   if ($Parent -and -not (Get-Process -Id $Parent -ErrorAction SilentlyContinue)) { break }
   $h = [Front]::Window()
@@ -79,11 +136,9 @@ while ($true) {
     break
   }
   if ($app -and $null -ne $now) {
-    $was = [bool]$busy[$fpid]
-    $busy[$fpid] = $now
-    if ($now -and -not $was) {
-      $at = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-      Add-Content -Path $inbox -Value ('{"at":' + $at + ',"app":"' + $app + '","event":"prompt","manual":true}') -Encoding ascii
+    $t = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    if (Step-Prompt $fpid $now $t) {
+      Add-Content -Path $inbox -Value ('{"at":' + $t + ',"app":"' + $app + '","event":"prompt","manual":true}') -Encoding ascii
     }
   }
   Start-Sleep -Milliseconds 800

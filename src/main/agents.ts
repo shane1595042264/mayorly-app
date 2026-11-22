@@ -67,6 +67,9 @@ process.stdin.on('end', finish)
 setTimeout(finish, 2000).unref()
 `
 
+/** The AI sites whose Stop button is a prompt. */
+export const AI_MATCHES = ['https://chatgpt.com/*', 'https://gemini.google.com/*']
+
 /** The stream sites the eye reads. */
 export const STREAM_MATCHES = [
   'https://www.twitch.tv/*',
@@ -82,16 +85,16 @@ export const STREAM_MATCHES = [
 export const MANIFEST = {
   manifest_version: 3,
   name: 'Mayorly',
-  version: '1.4.0',
+  version: '1.5.0',
   description: 'Tells Mayorly on this computer when you send ChatGPT or Gemini a prompt, and, while a stream rule runs, what the stream shows, as a grid of colour; mutes the stream when a death switches you away, if you let it.',
   background: { service_worker: 'background.js' },
   // scripting and the stream sites: the eye goes into stream tabs already open when the extension is installed or reloaded.
   permissions: ['scripting'],
   content_scripts: [
-    { matches: ['https://chatgpt.com/*', 'https://gemini.google.com/*'], js: ['content.js'], run_at: 'document_idle' },
+    { matches: AI_MATCHES, js: ['content.js'], run_at: 'document_idle' },
     { matches: STREAM_MATCHES, js: ['stream-eye.js'], run_at: 'document_idle', all_frames: true },
   ],
-  host_permissions: [`http://127.0.0.1:${AGENT_PORT}/*`, ...STREAM_MATCHES],
+  host_permissions: [`http://127.0.0.1:${AGENT_PORT}/*`, ...STREAM_MATCHES, ...AI_MATCHES],
 }
 
 export const BACKGROUND = `// Mayorly: hands the pages' news to Mayorly on this computer.
@@ -102,14 +105,17 @@ const to = (path, m) =>
     headers: { 'Content-Type': 'application/json', 'X-Mayorly-Token': self.MAYORLY.token },
     body: JSON.stringify(m),
   })
-// Installed or reloaded: stream tabs already open get the eye now, not at their next reload.
+// Installed or reloaded: stream and AI tabs already open get their script now, not at their next reload.
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.tabs.query({ url: ${JSON.stringify(STREAM_MATCHES)} }, (tabs) => {
-    for (const t of tabs || []) {
-      if (t.id === undefined) continue
-      chrome.scripting.executeScript({ target: { tabId: t.id, allFrames: true }, files: ['stream-eye.js'] }).catch(() => {})
-    }
-  })
+  const put = (urls, file, allFrames) =>
+    chrome.tabs.query({ url: urls }, (tabs) => {
+      for (const t of tabs || []) {
+        if (t.id === undefined) continue
+        chrome.scripting.executeScript({ target: { tabId: t.id, allFrames }, files: [file] }).catch(() => {})
+      }
+    })
+  put(${JSON.stringify(STREAM_MATCHES)}, 'stream-eye.js', true)
+  put(${JSON.stringify(AI_MATCHES)}, 'content.js', false)
 })
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   // The stream eye asks, and waits for whether to read the video.
@@ -126,16 +132,21 @@ chrome.runtime.onMessage.addListener((m, sender, reply) => {
 `
 
 /** The page is writing an answer while its Stop button shows: that starting is the prompt. */
-const CONTENT = `// Mayorly AI switch: watches for an answer starting to be written (the Stop button), nothing else.
+export const CONTENT = `// Mayorly AI switch: watches for an answer starting to be written (the Stop button), nothing else.
+// Only one that starts after the page sat idle a moment counts: an answer that thinks in steps can
+// hide and show its Stop button between them, which is not a prompt you typed.
 (() => {
   const app = location.host.includes('gemini') ? 'gemini-web' : 'chatgpt-web'
   const busy = () => !!document.querySelector('[data-testid="stop-button"], button[aria-label^="Stop" i], button[aria-label*="stop response" i], button[aria-label*="stop generating" i]')
   let was = busy()
+  let idleSince = was ? null : Date.now()
   setInterval(() => {
     const now = busy()
-    if (now && !was) {
+    if (now && !was && idleSince !== null && Date.now() - idleSince >= 2500) {
       try { chrome.runtime.sendMessage({ app, event: 'prompt' }) } catch {}
     }
+    if (now) idleSince = null
+    else if (was || idleSince === null) idleSince = Date.now()
     was = now
   }, 500)
 })()

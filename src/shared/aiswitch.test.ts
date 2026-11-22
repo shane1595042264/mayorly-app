@@ -2,10 +2,10 @@ import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { onDeskId, reduce, sampleState, type Action, type MayorlyState } from '../core/index'
 import { promptStep, type AgentPrompt } from './aiswitch'
-import { agentRoute, BACKGROUND, eventOf, HOOK, MANIFEST, routeAgentRequest, STREAM_MATCHES } from '../main/agents'
+import { agentRoute, BACKGROUND, CONTENT, eventOf, HOOK, MANIFEST, routeAgentRequest, STREAM_MATCHES } from '../main/agents'
 import EYE from '../main/stream-eye.js?raw'
 import { Script } from 'node:vm'
 
@@ -119,7 +119,7 @@ describe('the hook', { timeout: 30_000 }, () => {
 
 describe('the extension', () => {
   it('carries the stream eye beside the prompt watcher, and both scripts parse', () => {
-    expect(MANIFEST.version).toBe('1.4.0')
+    expect(MANIFEST.version).toBe('1.5.0')
     expect(MANIFEST.content_scripts[1]).toMatchObject({ js: ['stream-eye.js'], matches: STREAM_MATCHES, all_frames: true })
     expect(STREAM_MATCHES).toContain('https://www.twitch.tv/*')
     expect(() => new Script(BACKGROUND)).not.toThrow()
@@ -144,5 +144,52 @@ describe('the extension', () => {
     expect(routeAgentRequest('/agent', '{"app":"chatgpt-web","event":"prompt"}', h)).toEqual({ status: 204 })
     expect(routeAgentRequest('/agent', '{"app":"claude","event":"prompt"}', h)).toEqual({ status: 204 })
     expect(prompts).toEqual(['chatgpt-web'])
+  })
+})
+
+describe('ChatGPT or Gemini in Chrome', () => {
+  it('takes a Stop button as a prompt only after the page sat idle a moment, not between steps of one answer', () => {
+    vi.useFakeTimers()
+    try {
+      let busy = false
+      const sent: unknown[] = []
+      const run = new Function('document', 'location', 'chrome', 'setInterval', CONTENT)
+      run({ querySelector: () => (busy ? {} : null) }, { host: 'chatgpt.com' }, { runtime: { sendMessage: (m: unknown) => sent.push(m) } }, setInterval)
+      const hold = (on: boolean, ms: number) => {
+        busy = on
+        vi.advanceTimersByTime(ms)
+      }
+      hold(false, 5000)
+      hold(true, 3000)
+      expect(sent).toHaveLength(1)
+      // Thinking in steps: the Stop button gone for a second, then back.
+      hold(false, 1000)
+      hold(true, 3000)
+      expect(sent).toHaveLength(1)
+      // Read, then typed the next prompt.
+      hold(false, 6000)
+      hold(true, 2000)
+      expect(sent).toEqual([{ app: 'chatgpt-web', event: 'prompt' }, { app: 'chatgpt-web', event: 'prompt' }])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('takes a page opened while it is still answering as no prompt', () => {
+    vi.useFakeTimers()
+    try {
+      let busy = true
+      const sent: unknown[] = []
+      const run = new Function('document', 'location', 'chrome', 'setInterval', CONTENT)
+      run({ querySelector: () => (busy ? {} : null) }, { host: 'gemini.google.com' }, { runtime: { sendMessage: (m: unknown) => sent.push(m) } }, setInterval)
+      vi.advanceTimersByTime(4000)
+      busy = false
+      vi.advanceTimersByTime(800)
+      busy = true
+      vi.advanceTimersByTime(2000)
+      expect(sent).toHaveLength(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## An AI that is still thinking no longer switches you
+
+- Coming back to ChatGPT, Claude or Gemini while it was still answering looked like a new prompt and switched the desk (ChatGPT moved you off Hello interview at 20:00 today). Now only a Stop button that appears after the app sat idle in front of you for a moment counts, so its thinking in steps, or you glancing at it mid-answer, never switches you. In Chrome too, after the extension's reload.
+
 ## Opening a stream puts your stream task on the desk
 
 - Click into a Twitch, Kick, Bilibili 直播, Huya or Douyu page (or a live YouTube video) while you are on another task, and the desk switches to your stream task: the one named like the page ("watch theBause" for Thebausffs), else the one you watched last. Only the moment the page comes to the front counts, so a stream playing on your other screen never pulls you back, and never right after a death switched you away. Settings, Auto switch, turns it off.
