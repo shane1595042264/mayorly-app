@@ -16,11 +16,14 @@
 #   npm run build
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-stream.ps1 -Chrome <chrome.exe> [-Out result.json]
 param(
-  [string]$App = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
-  [Parameter(Mandatory = $true)][string]$Chrome,
+  [string]$App = '',
+  [string]$Chrome = '',
   [string]$Out = ''
 )
 $ErrorActionPreference = 'Stop'
+# Windows PowerShell leaves $PSScriptRoot empty in a parameter's default, so the folder is found here.
+if (-not $App) { $App = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path }
+if (-not $Chrome -or -not (Test-Path $Chrome)) { throw "No Chrome at '$Chrome': pass -Chrome <chrome.exe>." }
 $t0 = Get-Date
 $result = [ordered]@{ ok = $false; runs = @(); error = $null; log = @() }
 $electron = Join-Path $App 'node_modules\electron\dist\electron.exe'
