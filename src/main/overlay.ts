@@ -56,6 +56,8 @@ export class Overlay {
   private cursor = { x: NaN, y: NaN, inside: false }
   /** Windows: the pointer was over the pet at the last poll, when it arrived, when the page last heard a mouse event, and the last deaf report. */
   private over = false
+  /** The pet's right-click menu is open: it holds the mouse meanwhile. */
+  menuOpen = false
   private overAt = 0
   private heardAt = 0
   private deafAt = 0
@@ -817,12 +819,11 @@ export class Overlay {
     }
     this.over = over
     // The window takes the pointer over the pet and the pointer moves there, yet the page hears
-    // nothing. Say so in the log, with what the shell believes, and stand on top again.
-    if (over && this.hit && moved && now - this.overAt > DEAF_MS && now - this.heardAt > DEAF_MS && now - this.deafAt > 60_000) {
+    // nothing: say so in the log, with what the shell believes. Only a report; a menu of ours that
+    // is open holds the mouse, so it is no case.
+    if (over && this.hit && moved && !this.menuOpen && now - this.overAt > DEAF_MS && now - this.heardAt > DEAF_MS && now - this.deafAt > 60_000) {
       this.deafAt = now
       console.warn('[overlay] deaf: the pointer is on the pet and the page hears nothing', JSON.stringify({ mode: this.mode, cursor: p, bounds: b, anchor: a, display: this.displayId, heardMsAgo: now - this.heardAt }))
-      this.win.setIgnoreMouseEvents(false)
-      this.pin()
     }
     return near
   }

@@ -114,7 +114,8 @@ export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): 
   })
   const popup = (win: BrowserWindow) => {
     const s = engine.state
-    Menu.buildFromTemplate(items(s, statusOf(s))).popup({ window: win })
+    overlay.menuOpen = true
+    Menu.buildFromTemplate(items(s, statusOf(s))).popup({ window: win, callback: () => { overlay.menuOpen = false } })
   }
   return { tray, popup }
 }

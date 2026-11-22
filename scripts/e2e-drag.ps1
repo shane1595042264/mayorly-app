@@ -56,8 +56,9 @@ public static class Hand {
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, System.Text.StringBuilder s, int n);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, System.Text.StringBuilder s, int n);
   [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
-  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string cls, string title);
   [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr l);
   /** The window a press at this point goes to: its process, its title and its extended style. */
   public static string Under(int x, int y) {
     POINT p; p.X = x; p.Y = y;
@@ -67,14 +68,11 @@ public static class Hand {
     GetClassName(r, c, 256); GetWindowText(r, t, 256);
     return String.Format("pid {0} {1} '{2}' ex 0x{3:X}", pid, c, t, GetWindowLong(r, -20));
   }
-  /** A popup menu (class #32768) is showing and belongs to this process. */
-  public static bool MenuOpen(uint pid) {
-    IntPtr h = IntPtr.Zero;
-    while ((h = FindWindowEx(IntPtr.Zero, h, "#32768", null)) != IntPtr.Zero) {
-      uint owner; GetWindowThreadProcessId(h, out owner);
-      if (owner == pid && IsWindowVisible(h)) return true;
-    }
-    return false;
+  /** The visible top-level windows of this process. Electron draws a menu as a window of its own. */
+  public static int Windows(uint pid) {
+    int n = 0;
+    EnumWindows((h, l) => { uint owner; GetWindowThreadProcessId(h, out owner); if (owner == pid && IsWindowVisible(h)) n++; return true; }, IntPtr.Zero);
+    return n;
   }
 }
 '@
@@ -195,12 +193,15 @@ try {
   Wander
   $t = Tomato
   Approach $t
+  $before = [Hand]::Windows([uint32]$proc.Id)
   [Hand]::RightClick($t.x, $t.y)
   Start-Sleep -Milliseconds 700
-  $opened = [Hand]::MenuOpen([uint32]$proc.Id)
+  $during = [Hand]::Windows([uint32]$proc.Id)
   [Hand]::Escape()
-  Start-Sleep -Milliseconds 400
-  $result.menu = [ordered]@{ opened = $opened; closed = -not [Hand]::MenuOpen([uint32]$proc.Id) }
+  Start-Sleep -Milliseconds 500
+  $after = [Hand]::Windows([uint32]$proc.Id)
+  $opened = $during -gt $before
+  $result.menu = [ordered]@{ opened = $opened; closed = $after -eq $before; windows = "$before, $during, $after" }
 
   $result.ok = (@($result.drags | Where-Object { -not $_.landed }).Count -eq 0) -and $opened
 } catch {
