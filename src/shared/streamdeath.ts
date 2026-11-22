@@ -1,4 +1,4 @@
-import { onDeskId, quickSwitch, recentTasks, switchBack, switchSession, switchToAction, type Action, type FoundTask, type Id, type MayorlyState } from '../core/index'
+import { balance, COUCH_COINS_PER_TOMATO, onDeskId, quickSwitch, recentTasks, switchBack, switchSession, switchToAction, type Action, type FoundTask, type Id, type MayorlyState } from '../core/index'
 import { PROMPT_ECHO_MS, type PromptStep } from './aiswitch'
 
 // A League streamer's death is Alt+Q. A couch item (or a task) whose context switch rule says the
@@ -822,6 +822,8 @@ export function openStep(s: MayorlyState, deviceId: string, page: { title: strin
   const recent = recentTasks(s, 50).map(idOf)
   const last = [...tasks].sort((a, b) => rank(recent, idOf(a)) - rank(recent, idOf(b)))[0]
   const pick = named ?? last
+  // The couch runs only with a coin in hand: no switch to announce that the desk would refuse.
+  if (pick.kind === 'leisure' && balance(s) < COUCH_COINS_PER_TOMATO) return { act: null, why: 'no coin for the couch' }
   const act = switchToAction(s, pick)
   return act ? { act, why: 'switched', to: name(pick) } : { act: null, why: 'already there' }
 }

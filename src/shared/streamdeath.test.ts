@@ -507,6 +507,10 @@ describe('a live stream brought to the front', () => {
     const idle = desk()
     idle.act({ type: 'desk/standDown' })
     expect(openStep(idle.s, 'here', page, { sinceFireMs: Infinity }).why).toBe('the desk is idle')
+    const broke = desk()
+    broke.act({ type: 'entry/capture', text: 'legal: gamma', start: true })
+    const spent = { ...broke.s, tokens: [...broke.s.tokens, { id: 'spend', at: now, amount: -1000, reason: 'market', sittingId: null } as never] }
+    expect(openStep(spent, 'here', page, { sinceFireMs: Infinity }).why).toBe('no coin for the couch')
   })
 })
 

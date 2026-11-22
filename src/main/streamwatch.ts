@@ -210,7 +210,8 @@ export function streamRule(o: {
     for (const [k, t] of tabs) if (now - t.seen.at > LEAGUE.forgetMs) tabs.delete(k)
 
     // A live stream page brought to the front just now: onto the task that watches streams.
-    if (p.focusAt !== null && p.focusAt !== tab.focusSeen) {
+    // A page not live yet (YouTube still loading its badge) keeps its moment open for the next post in the 10 s.
+    if (p.focusAt !== null && p.focusAt !== tab.focusSeen && (p.live || now - p.focusAt >= 10_000)) {
       tab.focusSeen = p.focusAt
       if (now - p.focusAt < 10_000) {
         const step = openStep(engine.state, engine.deviceId, { title: p.title, live: p.live }, { sinceFireMs: fired ? now - fired.at : Infinity })

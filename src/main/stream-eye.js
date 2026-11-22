@@ -79,17 +79,31 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
     var mine = function () {
       return document.documentElement.getAttribute('data-mayorly-eye') === me
     }
-    // A live stream page: Twitch, Kick, Huya and Douyu always; Bilibili's live rooms; YouTube when the video is live.
+    // A live stream page: Twitch, Kick, Huya and Douyu always; Bilibili's live rooms; YouTube when its
+    // player shows the live badge (paused or behind the live edge too; a video that is not live hides it).
     var live = function () {
-      if (site === 'youtube') return !!document.querySelector('.html5-video-player.ytp-live, .ytp-live-badge[disabled]')
+      if (site === 'youtube') {
+        var badge = document.querySelector('.ytp-live-badge')
+        return !!badge && badge.getClientRects().length > 0
+      }
       if (site === 'bilibili') return /(^|\.)live\.bilibili\.com$/.test(host)
       return true
     }
-    // When the page last came to the front: its window gained focus with this tab showing.
+    // When the page last came to the front: its window gained focus with this tab showing, focus in
+    // its chat or any frame of it included (hasFocus); or, already in front, it turned into a live
+    // stream (YouTube moving from a video to a live without a reload). The top frame alone says so.
+    var top = window === window.top
     var focusAt = null
     var focusSent = null
+    var hadFocus = false
+    var wasLive = false
     var noteFocus = function () {
-      if (document.visibilityState === 'visible' && document.hasFocus()) focusAt = Date.now()
+      if (!top) return
+      var has = document.visibilityState === 'visible' && document.hasFocus()
+      var isLive = live()
+      if ((has && !hadFocus) || (has && isLive && !wasLive)) focusAt = Date.now()
+      hadFocus = has
+      wasLive = isLive
     }
     window.addEventListener('focus', noteFocus)
     document.addEventListener('visibilitychange', noteFocus)
@@ -260,6 +274,7 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
         stopped = true
         return
       }
+      noteFocus()
       var found = video()
       // A tab reloaded while Mayorly had it muted: the mute is still Mayorly's to undo. Back with
       // sound, the mark is stale, and a later mute of yours stays yours.
