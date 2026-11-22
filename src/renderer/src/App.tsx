@@ -124,7 +124,7 @@ export function App() {
         // the floating counter, which would sit over the deck's edge, stays away.
         const count = document.querySelector('.deck-balance .num')?.getBoundingClientRect()
         // Just left of the number, so the coins never sit on its digits while it counts.
-        const anchor = count ? { x: count.left - 14, y: count.top + count.height / 2 } : null
+        const anchor = count ? { x: count.left - 14, y: count.bottom + 4 } : null
         // The arc stays under the deck's header row, off the tab labels.
         const deck = document.querySelector('.deck-head')?.getBoundingClientRect()
         // Another flight still landing: this one starts from the number on screen, so no count jumps.

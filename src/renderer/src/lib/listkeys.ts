@@ -84,7 +84,8 @@ export function reveal(el: Element | null) {
   if (!box) return
   const r = el.getBoundingClientRect()
   const b = box.getBoundingClientRect()
-  const pad = 8
+  // Room for anything stuck to the top of the box (the market's notice line), as it declares.
+  const pad = 8 + (parseFloat(getComputedStyle(box).scrollPaddingTop) || 0)
   if (r.top < b.top + pad) box.scrollTop -= b.top + pad - r.top
   else if (r.bottom > b.bottom - pad) box.scrollTop += r.bottom - (b.bottom - pad)
 }

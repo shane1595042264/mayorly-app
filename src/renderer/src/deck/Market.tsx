@@ -58,7 +58,14 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
   const items = marketList(s)
   const log = purchases(s).slice(0, 14)
   const [editing, setEditing] = useState<string | null>(null)
-  const [notice, setNotice] = useState<Notice | null>(null)
+  const [notice, setNoticeState] = useState<Notice | null>(null)
+  // When something other than a purchase was last said (or cleared): purchases older than that are
+  // not gathered into a Bought line again.
+  const saidAt = useRef(0)
+  const setNotice = (n: Notice | null | ((n: Notice | null) => Notice | null)) => {
+    saidAt.current = Date.now()
+    setNoticeState(n)
+  }
   const [shake, setShake] = useState<{ id: string; n: number } | null>(null)
   const lastBuy = useRef<{ id: string; at: number } | null>(null)
   // How many cards fit in a row, from the grid's width and the cards' least width.
@@ -83,7 +90,7 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
   const shortOf = notice?.kind === 'short' && notice.landing ? wallet : seen
   const live = notice && now - notice.at < NOTICE_MS && (notice.kind !== 'short' || (shortItem && shortOf < shortItem.price)) ? notice : null
   // Purchases in a row since anything else was said gather into one line, like removals.
-  const recent = log.filter((p) => !p.refunded && now - p.at < NOTICE_MS && p.at > (live?.at ?? 0))
+  const recent = log.filter((p) => !p.refunded && now - p.at < NOTICE_MS && p.at > Math.max(live?.at ?? 0, saidAt.current))
   const bought = recent.length
     ? { list: recent, at: recent[0].at, title: recent.length > 1 ? `${recent.length} items` : recent[0].title, price: recent.reduce((n, p) => n + p.price, 0) }
     : null
@@ -108,16 +115,23 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
     if (seen < it.price) return short(it)
     buy(it, from)
   }
-  const buy = (it: MarketItem, from?: Element | null) => {
-    if (lastBuy.current?.id === it.id && Date.now() - lastBuy.current.at < BUY_GAP_MS) return
+  /** True when the purchase went through; false when it was a repeat or the coins were not there. */
+  const buy = (it: MarketItem, from?: Element | null): boolean => {
+    if (lastBuy.current?.id === it.id && Date.now() - lastBuy.current.at < BUY_GAP_MS) return false
     const el = from ?? document.querySelector(`[data-row="${CSS.escape(it.id)}"] .buy`)
     // The card said Buy from the count still landing; the real balance says no, and the line says why.
-    if (wallet < it.price) return short(it, seen >= it.price)
+    if (wallet < it.price) {
+      short(it, seen >= it.price)
+      return false
+    }
     lastBuy.current = { id: it.id, at: Date.now() }
-    setNotice(null)
+    // A purchase clears the line without counting as something said, so it shows as Bought.
+    setNoticeState(null)
+    saidAt.current = Date.now() - 1
     sfx.tick()
     noteOrigin(el)
     dispatch({ type: 'market/buy', id: it.id })
+    return true
   }
   // Undo one purchase or several; refunds in a row gather into one line, like removals.
   const undo = (list: { id: string; title: string; price: number; marketId: string | null }[], from: Element) => {
@@ -322,8 +336,8 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
  */
 const noticeMotion = {
   initial: { opacity: 0, y: 6 },
-  animate: { opacity: 1, y: 0, transition: { delay: 0.09, duration: 0.16 } },
-  exit: { opacity: 0, y: -6, transition: { duration: 0.08 } },
+  animate: { opacity: 1, y: 0, transition: { delay: 0.06, duration: 0.16 } },
+  exit: { opacity: 0, y: -6, transition: { duration: 0.09 } },
 }
 
 /** The balance, which springs when it changes and sits still when it does not, and counts with coins in the air. */
@@ -360,7 +374,7 @@ interface CardProps {
   selected: boolean
   editing: boolean
   shake: number
-  buy: (it: MarketItem, from?: Element | null) => void
+  buy: (it: MarketItem, from?: Element | null) => boolean
   short: () => void
   enterDelay: number
   edit: () => void
@@ -386,7 +400,8 @@ function Card({ ref, it, s, seen, now, selected, editing, shake, buy, short, ent
       aria-current={selected ? 'true' : undefined}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.16 } }}
+      // A leaving card goes under the ones sliding into its place, and goes quickly.
+      exit={{ opacity: 0, scale: 0.96, zIndex: 0, transition: { duration: 0.12 } }}
       transition={{ delay: enterDelay, type: 'spring', stiffness: 300, damping: 28, layout: { type: 'tween', duration: 0.18, ease: 'easeOut' } }}
     >
       <motion.div className="market-card-in" animate={controls}>
@@ -422,7 +437,7 @@ function Card({ ref, it, s, seen, now, selected, editing, shake, buy, short, ent
 }
 
 /** Buy by holding: the fill runs across the button and the purchase lands when it is full. Enter or Space buys at once. Short, a press only says so. */
-function HoldToBuy({ can, label, bought, onBuy, onShort }: { can: boolean; label: string; bought: number; onBuy: (el: HTMLElement) => void; onShort: () => void }) {
+function HoldToBuy({ can, label, bought, onBuy, onShort }: { can: boolean; label: string; bought: number; onBuy: (el: HTMLElement) => boolean; onShort: () => void }) {
   const [p, setP] = useState(0)
   const hold = useRef<{ start: number; raf: number } | null>(null)
   const btn = useRef<HTMLButtonElement>(null)
@@ -459,8 +474,14 @@ function HoldToBuy({ can, label, bought, onBuy, onShort }: { can: boolean; label
     setP(q)
     if (q >= 1) {
       hold.current = null
-      if (btn.current) onBuy(btn.current)
-      setTimeout(() => setP(0), 220)
+      // Bought only when it was: a hold the real balance refused drains back like an early release.
+      if (btn.current && onBuy(btn.current)) {
+        setTimeout(() => setP(0), 220)
+      } else {
+        setDraining(true)
+        setTimeout(() => setDraining(false), 260)
+        setP(0)
+      }
       return
     }
     h.raf = requestAnimationFrame(tick)
@@ -511,10 +532,14 @@ function PriceInput({ value, set, onDraft }: { value: number; set: (n: number) =
   const [draft, setDraft] = useState(String(value))
   useEffect(() => setDraft(String(value)), [value])
   useEffect(() => onDraft?.(/^\d+$/.test(draft)), [draft])
+  // The price when the box was entered: a box emptied and left goes back to it, not to a digit typed on the way.
+  const was = useRef(value)
   const clamp = (n: number) => Math.min(999, Math.max(1, Math.round(n) || 1))
-  // Left empty or unreadable, the box goes back to what it had; only a typed number is clamped.
   const settle = () => {
-    if (!/^\d+$/.test(draft)) return setDraft(String(value))
+    if (!/^\d+$/.test(draft)) {
+      set(was.current)
+      return setDraft(String(was.current))
+    }
     const n = clamp(Number(draft))
     set(n)
     setDraft(String(n))
@@ -532,8 +557,10 @@ function PriceInput({ value, set, onDraft }: { value: number; set: (n: number) =
         onChange={(e) => {
           const d = e.target.value.replace(/\D/g, '').slice(0, 3)
           setDraft(d)
+          // A number typed is the price at once (Add and Save read it); an empty box commits nothing.
           if (d) set(clamp(Number(d)))
         }}
+        onFocus={() => { was.current = value }}
         onBlur={settle}
       />
       <button type="button" className="icon-btn" aria-label="One coin more" disabled={value >= 999} onClick={() => set(clamp(value + 1))}><Plus size={13} /></button>
@@ -549,7 +576,8 @@ function AddItem() {
   const [round, setRound] = useState(0)
   const [note, setNote] = useState('')
   const add = () => {
-    if (!title.trim() || !priceOk) return
+    if (!title.trim()) return
+    if (!priceOk) return sfx.nope()
     sfx.place()
     dispatch({ type: 'market/add', title, price, note })
     setTitle('')
@@ -565,6 +593,7 @@ function AddItem() {
         <PriceInput key={round} value={price} set={setPrice} onDraft={setPriceOk} />
         <button type="submit" className="btn" disabled={!title.trim() || !priceOk}><Plus size={14} /> Add</button>
       </div>
+      {!priceOk && <p className="market-add-need" role="alert">A price is needed</p>}
       <input className="market-add-note" value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder="When it is allowed, in your words (optional): after a LeetCode solved in time" spellCheck={false} autoComplete="off" />
     </form>
   )
@@ -573,10 +602,12 @@ function AddItem() {
 function EditItem({ it, done }: { it: MarketItem; done: () => void }) {
   const [title, setTitle] = useState(it.title)
   const [price, setPrice] = useState(it.price)
+  // Save waits on an emptied price box, as Add does.
+  const [priceOk, setPriceOk] = useState(true)
   const [note, setNote] = useState(it.note ?? '')
   const save = () => {
-    // An empty title is not saved: the box stays open and says so.
-    if (!title.trim()) return sfx.nope()
+    // An empty title or price is not saved: the box stays open and says so.
+    if (!title.trim() || !priceOk) return sfx.nope()
     sfx.tick()
     dispatch({ type: 'market/update', id: it.id, patch: { title, price, note } })
     done()
@@ -602,10 +633,10 @@ function EditItem({ it, done }: { it: MarketItem; done: () => void }) {
       {!title.trim() && <p className="market-edit-need" role="alert">A title is needed</p>}
       <input value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder="When it is allowed (optional)" aria-label="Note" spellCheck={false} />
       <div className="market-edit-foot">
-        <PriceInput value={price} set={setPrice} />
+        <PriceInput value={price} set={setPrice} onDraft={setPriceOk} />
         <span className="market-edit-actions">
           <button type="button" className="btn ghost small" onClick={done}>Cancel</button>
-          <button type="submit" className="btn small" disabled={!title.trim()}>Save</button>
+          <button type="submit" className="btn small" disabled={!title.trim() || !priceOk}>Save</button>
         </span>
       </div>
     </form>
