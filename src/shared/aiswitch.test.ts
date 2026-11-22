@@ -119,7 +119,7 @@ describe('the hook', { timeout: 30_000 }, () => {
 
 describe('the extension', () => {
   it('carries the stream eye beside the prompt watcher, and both scripts parse', () => {
-    expect(MANIFEST.version).toBe('1.5.0')
+    expect(MANIFEST.version).toBe('1.6.0')
     expect(MANIFEST.content_scripts[1]).toMatchObject({ js: ['stream-eye.js'], matches: STREAM_MATCHES, all_frames: true })
     expect(STREAM_MATCHES).toContain('https://www.twitch.tv/*')
     expect(() => new Script(BACKGROUND)).not.toThrow()

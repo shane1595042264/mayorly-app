@@ -1,6 +1,7 @@
 // Mayorly stream eye. While Mayorly says a stream rule is running ("the streamer dies"), it reads
 // this page's own video twice a second and hands Mayorly, on this computer, a grid of colour and
-// light: 32 x 18 cells, three numbers each. Never your screen, never a picture. Otherwise it only
+// light: 32 x 18 cells, three numbers each; for a GTA stream also the middle of the frame as two
+// masks of white and red light, one bit a pixel, where GTA writes WASTED. Never your screen, never a picture. Otherwise it only
 // says hello every few seconds while a video plays, so Mayorly knows the tab is there. When a death
 // switches you away, Mayorly may ask it to mute the stream, and to unmute it when you come back.
 // It also says when you bring a live stream page to the front (the window gains focus), so
@@ -52,9 +53,50 @@ function mayorlyGrid(data, w, h) {
   return { chroma: chroma, luma: luma, lit: lit }
 }
 
+/**
+ * RGBA pixels of a w x h frame in; the middle of it (x 20% to 80%, y 30% to 70%), where GTA writes
+ * WASTED, as two masks of one bit a pixel, row by row, the first pixel in the top bit: white pixels
+ * (the word, drawn over the red wash, is the only thing on screen that is white and not tinted:
+ * an explosion's highlights under the wash are pink, min channel 200 to 230) and bright red ones
+ * (the word in red on black), and how many of each. Shapes of light, never a picture.
+ */
+function mayorlyWord(data, w, h) {
+  var x0 = Math.round(0.2 * w)
+  var x1 = Math.round(0.8 * w)
+  var y0 = Math.round(0.3 * h)
+  var y1 = Math.round(0.7 * h)
+  var size = Math.ceil(((x1 - x0) * (y1 - y0)) / 8)
+  var white = new Uint8Array(size)
+  var red = new Uint8Array(size)
+  var nw = 0
+  var nr = 0
+  var k = 0
+  for (var y = y0; y < y1; y++) {
+    var row = y * w * 4
+    for (var x = x0; x < x1; x++, k++) {
+      var i = row + x * 4
+      var R = data[i]
+      var G = data[i + 1]
+      var B = data[i + 2]
+      var mx = R > G ? (R > B ? R : B) : G > B ? G : B
+      var mn = R < G ? (R < B ? R : B) : G < B ? G : B
+      if (mn >= 230 && mx - mn <= 30) {
+        white[k >> 3] |= 128 >> (k & 7)
+        nw++
+      } else if (R >= 140 && G <= 120 && B <= 120 && R - (G > B ? G : B) >= 90) {
+        red[k >> 3] |= 128 >> (k & 7)
+        nr++
+      }
+    }
+  }
+  return { white: white, red: red, nw: nw, nr: nr }
+}
+
 if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id) {
   ;(function () {
     var V = 1
+    // What this eye can do: 2 reads GTA's word when Mayorly asks.
+    var EYE = 2
     var W = 320
     var H = 180
     var HELLO = 5000
@@ -110,6 +152,8 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
     noteFocus()
     var armed = false
     var every = 500
+    // Mayorly asked for words: the stream is GTA, whose death is the word WASTED.
+    var words = false
     // The video this eye muted, so it unmutes only what it muted, never one you muted yourself.
     var mutedBy = null
     var stopped = false
@@ -228,7 +272,7 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
     var post = function (m) {
       return new Promise(function (resolve) {
         try {
-          var msg = { mayorly: 'stream', v: V, site: site, title: document.title, category: category(), visible: visible(), ad: ad(), cost: cost, held: !!mutedBy, live: live(), focusAt: focusAt }
+          var msg = { mayorly: 'stream', v: V, eye: EYE, site: site, title: document.title, category: category(), visible: visible(), ad: ad(), cost: cost, held: !!mutedBy, live: live(), focusAt: focusAt }
           focusSent = focusAt
           for (var k in m) msg[k] = m[k]
           chrome.runtime.sendMessage(msg, function (r) {
@@ -261,12 +305,18 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
         return null
       }
       var grid = mayorlyGrid(px, W, H)
+      var word = null
+      if (words) {
+        var m = mayorlyWord(px, W, H)
+        // A mask with a few stray pixels is nothing to read: left out.
+        word = { w: m.nw >= 40 ? b64(m.white) : null, r: m.nr >= 40 ? b64(m.red) : null }
+      }
       costs.push(performance.now() - t0)
       if (costs.length >= 20) {
         cost = Math.round((costs.reduce(function (a, b) { return a + b }, 0) / costs.length) * 10) / 10
         costs = []
       }
-      return { c: b64(grid.chroma), l: b64(grid.luma), t: b64(grid.lit) }
+      return { grid: { c: b64(grid.chroma), l: b64(grid.luma), t: b64(grid.lit) }, word: word }
     }
     var tick = async function () {
       if (stopped) return
@@ -309,8 +359,8 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
           lastTime = found.v.currentTime
           lastHello = now
           tainted = false
-          var grid = ad() ? null : sample(found.v)
-          r = await post(grid ? { kind: 'frame', area: found.area, grid: grid } : { kind: tainted ? 'tainted' : 'hello', area: found.area })
+          var got = ad() ? null : sample(found.v)
+          r = await post(got ? { kind: 'frame', area: found.area, grid: got.grid, word: got.word } : { kind: tainted ? 'tainted' : 'hello', area: found.area })
         } else if (now - lastHello >= (armed ? 2000 : mutedBy ? 2000 : HELLO)) {
           lastHello = now
           r = await post({ kind: 'hello', area: found.area })
@@ -320,6 +370,7 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
       }
       if (r) {
         armed = !!r.armed
+        words = !!r.word
         every = Math.max(250, Math.min(5000, Number(r.every) || 500))
         // Muted by a death that switched you away; Mayorly says when to unmute (back on its task, or
         // the rule or muting turned off), and being read again means the same.

@@ -10,10 +10,12 @@
 # with a break card, a slow fade and an ad painted as a death, none of which may switch, then a death at 100 s, which
 # must, once, and mute the page's video within a few seconds, through its Twitch mute button. A
 # second run starts a process named League of Legends.exe first: then the death must not switch,
-# nor mute, because that is a match of your own.
+# nor mute, because that is a match of your own. A third plays GTA (the page names Grand Theft Auto
+# VI): a black and white beat and FAILED on the red wash must not switch; WASTED at 50 s must, once,
+# and mute.
 #
 # CI runs it on a Windows runner (.github/workflows/ci.yml, job stream), never on anyone's own
-# computer. It takes about four minutes.
+# computer. It takes about six minutes.
 #   npm run build
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-stream.ps1 -Chrome <chrome.exe> [-Out result.json]
 param(
@@ -160,8 +162,16 @@ try {
   $own = Run-Stream 'own' 'death-only' 40
   $own.pass = $own.armed -and @($own.deaths).Count -ge 1 -and (@($own.deaths)[0].text -match 'your own League match is running$') -and $own.onDesk -eq 'Stream watch' -and @($own.mutes).Count -eq 0
   $result.runs += $own
+  # The pretend League match ends here: it is run 2's alone.
+  Stop-Process -Id $fake.Id -Force -ErrorAction SilentlyContinue
+  Wait-Process -Id $fake.Id -Timeout 10 -ErrorAction SilentlyContinue
 
-  $result.ok = $full.pass -and $own.pass
+  # 3. GTA: its word, not its colour. A black and white beat and FAILED never count; WASTED at 50 s does, once.
+  $gta = Run-Stream 'gta' 'gta' 62
+  $gta.pass = $gta.armed -and @($gta.deaths).Count -eq 1 -and @($gta.deaths)[0].text -match 'switched$' -and @($gta.deaths)[0].s -ge 50 -and @($gta.deaths)[0].s -le 53.5 -and $gta.onDesk -eq 'alpha' -and @($gta.mutes).Count -ge 1 -and @($gta.mutes)[0] -ge @($gta.deaths)[0].s -and @($gta.mutes)[0] -le @($gta.deaths)[0].s + 4
+  $result.runs += $gta
+
+  $result.ok = $full.pass -and $own.pass -and $gta.pass
 } catch {
   $result.error = $_.Exception.Message
 } finally {

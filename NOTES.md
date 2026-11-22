@@ -2,11 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
-## GTA streams count too: WASTED is a switch
+## GTA: it reads the word WASTED now, not the colour
 
-- A stream of GTA (the game Twitch or Kick names, or GTA in a YouTube title) is now watched like a League one: when the picture drains to grey for WASTED, Mayorly does what Alt+Q does, once per death, and mutes the stream on the way out. A rule can say "wasted" now as well as "dies".
-- Only the deep grey of a death counts, held for a second and a half; the weapon wheel, the pause map or a night scene do not. If a death is missed, switch away by hand as usual: that moment is kept to tune it from.
-- A stream of a game it does not know, or Just Chatting, is still never read.
+- GTA 6 turns its picture grey and black and white on its own, and the last build took that for deaths and switched you twice in a minute. Now Mayorly reads the word itself: when WASTED is written in the middle of the stream, it does what Alt+Q does, once per death, and mutes the stream on the way out. FAILED (a mission failed) and BUSTED never count.
+- Checked on a compilation of 67 GTA 6 deaths (every one read) and on three hours of xQc's own GTA 6 streams with his webcam and chat on screen, a death over an explosion included.
+- A GTA death switches you even while a League match of yours is running: that check is for League deaths only.
+- Press the reload button on the Mayorly extension in chrome://extensions once, then reload the stream page. Until then the couch list shows Reload the extension beside the running stream task, and GTA is not read.
+- GTA V streams are not read: the word is GTA 6's.
 
 ## Leaving the stream mutes it, wherever its tab is
 

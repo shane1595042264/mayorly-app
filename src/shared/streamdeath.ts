@@ -1,5 +1,6 @@
 import { balance, COUCH_COINS_PER_TOMATO, onDeskId, quickSwitch, recentTasks, switchBack, switchSession, switchToAction, type Action, type FoundTask, type Id, type MayorlyState } from '../core/index'
 import { PROMPT_ECHO_MS, type PromptStep } from './aiswitch'
+import { isWasted, readWord, WORD_BYTES, type WordRead } from './streamword'
 
 // A League streamer's death is Alt+Q. A couch item (or a task) whose context switch rule says the
 // streamer dies is watched while it runs: the Mayorly extension reads the stream's own <video> in
@@ -12,6 +13,8 @@ import { PROMPT_ECHO_MS, type PromptStep } from './aiswitch'
 
 /** The eye's version, in every post; a post from another version is not read. */
 export const STREAM_V = 1
+/** What the eye can do: 2 reads GTA's word when asked (an eye without `eye` in its posts is 1, and cannot). */
+export const STREAM_EYE = 2
 export const FRAME_W = 320
 export const FRAME_H = 180
 export const GRID_W = 32
@@ -31,9 +34,17 @@ export interface StreamGrid {
   lit: Uint8Array
 }
 
+/** The middle of a frame as two one-bit masks (streamword.ts), WORD_BYTES each; null where it had too little ink to send. */
+export interface WordMasks {
+  white: Uint8Array | null
+  red: Uint8Array | null
+}
+
 /** What a stream tab tells Mayorly: who it is, and, while armed, a frame. */
 export interface StreamPost {
   v: number
+  /** What the eye can do (STREAM_EYE); 1 for an eye older than words. */
+  eye: number
   kind: 'hello' | 'frame' | 'tainted'
   /** The tab and frame, as the extension names them. */
   tab: string
@@ -57,6 +68,8 @@ export interface StreamPost {
   /** When the page last came to the front (its window gained focus with it showing); null if never. */
   focusAt: number | null
   grid: StreamGrid | null
+  /** With a frame, when Mayorly asked for words (a GTA stream): the middle of it as masks. */
+  word: WordMasks | null
 }
 
 /**
@@ -67,18 +80,20 @@ export interface StreamReply {
   armed: boolean
   every: number
   mute?: boolean
+  /** Send the middle of each frame as word masks too: the stream is GTA. */
+  word?: boolean
 }
 
 /** How often a tab says hello while not armed. */
 export const HELLO_MS = 5000
 
-const decode = (b64: unknown): Uint8Array | null => {
-  if (typeof b64 !== 'string' || b64.length > 1024) return null
+const decode = (b64: unknown, n = CELLS): Uint8Array | null => {
+  if (typeof b64 !== 'string' || b64.length > 4 * Math.ceil(n / 3)) return null
   try {
     const bin = atob(b64)
-    if (bin.length !== CELLS) return null
-    const out = new Uint8Array(CELLS)
-    for (let i = 0; i < CELLS; i++) out[i] = bin.charCodeAt(i)
+    if (bin.length !== n) return null
+    const out = new Uint8Array(n)
+    for (let i = 0; i < n; i++) out[i] = bin.charCodeAt(i)
     return out
   } catch {
     return null
@@ -103,10 +118,20 @@ export function streamPostOf(j: unknown): StreamPost | null {
     if (!chroma || !luma || !lit) return null
     grid = { chroma, luma, lit }
   }
+  // Word masks ride on a frame; a mask that does not decode to its size is dropped, the frame kept.
+  let word: WordMasks | null = null
+  const wm = o.kind === 'frame' && o.word && typeof o.word === 'object' ? (o.word as Record<string, unknown>) : null
+  if (wm) {
+    const white = decode(wm.w, WORD_BYTES)
+    const red = decode(wm.r, WORD_BYTES)
+    if (white || red) word = { white, red }
+  }
+  const eye = typeof o.eye === 'number' && Number.isInteger(o.eye) && o.eye >= 1 && o.eye <= 1000 ? o.eye : 1
   const cost = typeof o.cost === 'number' && Number.isFinite(o.cost) && o.cost >= 0 ? Math.min(o.cost, 1000) : null
   const area = typeof o.area === 'number' && Number.isFinite(o.area) && o.area > 0 ? o.area : 0
   return {
     v: STREAM_V,
+    eye,
     kind: o.kind,
     tab,
     site: o.site as StreamSite,
@@ -121,6 +146,7 @@ export function streamPostOf(j: unknown): StreamPost | null {
     focusAt: typeof o.focusAt === 'number' && Number.isFinite(o.focusAt) ? o.focusAt : null,
     cost,
     grid,
+    word,
   }
 }
 
@@ -160,9 +186,10 @@ export function isWatched(task: WatchTask): boolean {
 const LEAGUE_NAME = /league of legends|英雄联盟|英雄聯盟|리그 오브 레전드/i
 
 /** Is the page League: true or false when its game or title says, null when neither does. */
-/** The games a death is read for: League by its HUD (leagueStep), GTA by its WASTED screen going grey (greyStep). */
+/** The games a death is read for: League by its HUD (leagueStep), GTA 6 by the word WASTED (wordStep). */
 export type StreamGame = 'league' | 'gta'
-const GTA_NAME = /grand theft auto|\bgta\b/i
+/** GTA 6 only: the word's shapes are GTA 6's, so GTA V (and its role-play servers) is a game it does not know. */
+const GTA_NAME = /grand theft auto (vi|6)\b|\bgta ?(vi|6)\b/i
 
 /**
  * The game a page shows, by the game it names (Twitch, Kick) or its title; 'other' when it names
@@ -226,6 +253,8 @@ export interface TabSeen {
   area: number
   /** Its video will not be read (from another origin): not a tab to pick. */
   tainted: boolean
+  /** What its eye can do (STREAM_EYE); an older eye cannot read GTA's word. */
+  eye?: number
   /** When it was last heard from. */
   at: number
 }
@@ -771,183 +800,148 @@ export function leagueStep(mem: DeathMemory | null, f: LeagueFeatures | null, hi
 }
 
 // ---------------------------------------------------------------------------------------------
-// GTA: the WASTED screen
+// GTA: the word WASTED
 
 /**
- * GTA's death (WASTED, and BUSTED) drains the whole picture to grey in a beat, in slow motion with
- * the word over it, for several seconds. There is no HUD to lean on, and GTA greys a little for
- * lesser things (the weapon wheel, the pause map, a character switch), so the grey has to be deep:
- * the world's colour for its brightness under 35% of usual and its colour under 45%, its texture
- * kept (a flat card is not it), the picture neither black nor white, for a second and a half,
- * stepping down from colour. Learned from the colour around it, as League's is; down until the
- * colour is back, and never sooner than 4 s.
+ * GTA has no HUD to read and grades its colour so freely (grey streets, black and white beats of
+ * its own) that no colour is a death. Its death is a word: WASTED, written in the middle of the
+ * screen for about five seconds, white over a red wash and then red on black. The eye sends the
+ * middle of each frame as two masks (streamword.ts reads them); a death is WASTED read on two frames
+ * (one missed frame between forgiven), with the streamer seen without it first, so a WASTED you come
+ * back into never fires. Down until the word has been gone for 3 s. Never FAILED (a mission failed,
+ * on the same red wash) or BUSTED, whose shapes are told apart.
  */
-export const GREY = {
-  baseMax: 40,
-  baseMin: 12,
-  baseMinMs: 6000,
-  satRatio: 0.35,
-  worldRatio: 0.45,
-  texRatio: 0.4,
-  lightRatio: 0.25,
-  lightMax: 1.6,
-  upSat: 0.7,
+export const WASTED = {
+  /**
+   * Read this many times, each within `seenBy` frame intervals of the one before (plus `seenSlack`
+   * for the trip to the app): at two frames a second one missed frame between is forgiven, two are
+   * not; at one a second (a page where reading costs more), the next frame always counts.
+   */
+  reads: 2,
+  seenBy: 2,
+  seenSlack: 400,
+  /** Samples in a row without the word before one can count: seen up. */
   upSamples: 2,
-  edgeRatio: 0.75,
-  edgeMs: 2500,
-  stepDrop: 0.3,
-  fallMs: 10_000,
-  deathMs: 1500,
-  deathSamples: 3,
-  minDeadMs: 4000,
-  deadMaxMs: 60_000,
-  refractoryMs: 6000,
-  gapMs: 5000,
-  forgetMs: 180_000,
+  /** Down until the word has been gone this long. */
+  clearMs: 3000,
+  /** Never two deaths closer than this. */
+  refractoryMs: 10_000,
+  /**
+   * A tab not read for this many frame intervals (and at least gapMinMs) has to be seen up again: you
+   * left the stream task and came back, and a WASTED that began meanwhile is not yours to switch on.
+   */
+  gapBy: 4,
+  gapMinMs: 2500,
+  /** A word read this well that is not WASTED (FAILED, BUSTED) is a near miss, for the log. */
+  nearScore: 0.8,
 } as const
 
-/** One sample of a GTA stream: as leagueStep, for the WASTED screen. */
-export function greyStep(mem: DeathMemory | null, f: LeagueFeatures | null, hints: { ad: boolean }, at: number): DeathTick {
-  let m: DeathMemory = mem ? { ...mem, base: mem.base.slice(), recent: mem.recent.slice(), run: mem.run && { ...mem.run } } : fresh(at)
+/** What the word detector remembers of one tab. */
+export interface WordMemory {
+  kind: 'word'
+  /** watching: the streamer is up, or not seen down; dead: WASTED on screen, until it has been gone a while. */
+  phase: 'watching' | 'dead'
+  /** Seen without the word since the last gap, ad or death: only then can WASTED count. */
+  up: boolean
+  /** Samples in a row without the word. */
+  clear: number
+  /** The run of WASTED read going on. */
+  run: { since: number; last: number; n: number } | null
+  /** When WASTED was last read. */
+  wordAt: number | null
+  deadAt: number | null
+  lastDeathAt: number | null
+  lastAt: number
+}
+
+/** One frame's word: WASTED or not, and what was read, for the log. */
+export interface WordSight {
+  wasted: boolean
+  /** The best read's score, whatever word it was. */
+  score: number
+  seen: string
+}
+
+export interface WordTick {
+  memory: WordMemory
+  event: DeathEvent | null
+  near: boolean
+  seen: string
+}
+
+/** Both masks of a frame read: WASTED if either says so with confidence. */
+export function wordSight(masks: WordMasks | null): WordSight {
+  const reads = masks ? [masks.white ? readWord(masks.white) : null, masks.red ? readWord(masks.red) : null].filter((r): r is WordRead => r !== null) : []
+  const wasted = reads.some(isWasted)
+  const best = reads.sort((x, y) => y.score - x.score)[0]
+  if (!best) return { wasted: false, score: 0, seen: 'no word' }
+  return { wasted, score: best.score, seen: `word ${best.word} ${r2(best.score)} (next ${r2(best.next)}), ${best.letters} pieces at ${best.box.x},${best.box.y} ${best.box.w}x${best.box.h}` }
+}
+
+const r2 = (x: number) => (Math.round(x * 100) / 100).toFixed(2)
+
+function freshWord(at: number): WordMemory {
+  return { kind: 'word', phase: 'watching', up: false, clear: 0, run: null, wordAt: null, deadAt: null, lastDeathAt: null, lastAt: at }
+}
+
+/** One sample of a GTA stream: what the word says, and what it means. `every`: the frame interval asked of the eye. */
+export function wordStep(mem: WordMemory | null, sight: WordSight, hints: { ad: boolean; every?: number }, at: number): WordTick {
+  const m: WordMemory = mem ? { ...mem, run: mem.run && { ...mem.run } } : freshWord(at)
   let event: DeathEvent | null = null
-  const lose = () => {
-    m.run = null
-    m.fall = null
-    m.recent = []
-    m.liveN = 0
+  const every = hints.every ?? 500
+  const seenMs = WASTED.seenBy * every + WASTED.seenSlack
+  if (mem && at - mem.lastAt > Math.max(WASTED.gapMinMs, WASTED.gapBy * every)) {
     m.up = false
+    m.clear = 0
+    m.run = null
   }
-  if (mem && at - mem.lastAt > GREY.forgetMs) {
-    m = fresh(at)
-    event = 'reset'
-  } else if (mem && at - mem.lastAt > GREY.gapMs) lose()
   m.lastAt = at
-  const keep = (w: number) => {
-    m.recent.push({ at, w })
-    m.recent = m.recent.filter((x) => at - x.at <= 2 * GREY.edgeMs)
-  }
-  const done = (seen: string, near = false): DeathTick => ({ memory: m, event, near, seen })
+  const done = (seen: string, near = false): WordTick => ({ memory: m, event, near, seen: `${seen}; ${m.phase}${m.up ? ' up' : ''}` })
   if (hints.ad) {
-    lose()
+    m.run = null
+    m.clear = 0
+    m.up = false
     return done('an ad')
   }
-  if (!f) {
-    if (m.run) {
-      if (m.run.miss) m.run = null
-      else m.run.miss = true
-    }
-    keep(0)
-    return done('dark')
+  if (sight.wasted) {
+    m.wordAt = at
+    m.clear = 0
+    if (m.phase === 'dead') return done(sight.seen)
+    m.run = m.run && at - m.run.last <= seenMs ? { since: m.run.since, last: at, n: m.run.n + 1 } : { since: at, last: at, n: 1 }
+    if (m.run.n < WASTED.reads) return done(sight.seen)
+    if (!m.up) return done(`${sight.seen}, already on screen`, true)
+    if (m.lastDeathAt !== null && at - m.lastDeathAt < WASTED.refractoryMs) return done(`${sight.seen}, just counted`, true)
+    m.phase = 'dead'
+    m.deadAt = at
+    m.lastDeathAt = at
+    m.up = false
+    m.run = null
+    event = 'death'
+    return done(sight.seen)
   }
-  const admit = () => {
-    m.base.push(f)
-    m.base = m.base.filter((b) => at - b.at <= GREY.forgetMs).slice(-GREY.baseMax)
-  }
-  const med = (xs: number[]) => {
-    const s = [...xs].sort((a, b) => a - b)
-    return s.length ? s[s.length >> 1] : 0
-  }
-  if (m.phase === 'learning') {
-    // Only unbroken colour: a drop to grey while learning starts it over, and so does colour coming
-    // back after a start on a grey screen, so a death is never learned as usual.
-    const usual = m.base.length ? med(m.base.map((b) => b.s)) : null
-    if (usual !== null && f.s < 0.5 * usual) m.base = []
-    else if (usual !== null && f.s > 2 * usual) m.base = [f]
-    else admit()
-    const span = m.base.length ? m.base[m.base.length - 1].at - m.base[0].at : 0
-    if (m.base.length >= GREY.baseMin && span >= GREY.baseMinMs) {
-      m.phase = 'watching'
-      m.up = false
-      m.liveN = 0
-      event = 'learned'
-    }
-    keep(f.w)
-    return done(`learning: world ${r1(f.w)} sat ${r1(f.s)}`)
-  }
-  const b = { w: med(m.base.map((x) => x.w)), s: med(m.base.map((x) => x.s)), l: med(m.base.map((x) => x.l)), tex: med(m.base.map((x) => x.tex)) }
-  const seen = `world ${r1(f.w)}/${r1(b.w)} sat ${r1(f.s)}/${r1(b.s)} tex ${r1(f.tex)}/${r1(b.tex)} light ${r1(f.l)}/${r1(b.l)} ${m.phase}${m.up ? ' up' : ''}`
-  const up = f.s >= GREY.upSat * b.s && f.w >= 0.7 * b.w
+  m.clear++
+  if (m.run && at - m.run.last > seenMs) m.run = null
   if (m.phase === 'dead') {
-    m.liveN = up ? m.liveN + 1 : 0
-    const deadFor = at - (m.deadAt ?? at)
-    if (m.liveN >= GREY.upSamples && deadFor >= GREY.minDeadMs) {
+    if (m.wordAt === null || at - m.wordAt >= WASTED.clearMs) {
       m.phase = 'watching'
-      m.up = true
-      m.liveN = 0
-      m.run = null
-      event = 'respawn'
-    } else if (deadFor >= GREY.deadMaxMs) {
-      m.phase = 'watching'
-      m.up = false
-      m.liveN = 0
-      m.run = null
+      m.up = m.clear >= WASTED.upSamples
       event = 'respawn'
     }
-    keep(f.w)
-    return done(seen)
+    return done(sight.seen)
   }
-  if (!m.up) {
-    m.liveN = up ? m.liveN + 1 : 0
-    if (m.liveN >= GREY.upSamples) {
-      m.up = true
-      m.liveN = 0
-    }
-  }
-  if (up) m.fall = null
-  const grey = f.s <= GREY.satRatio * b.s && f.w <= GREY.worldRatio * b.w && f.tex >= GREY.texRatio * b.tex && f.l >= GREY.lightRatio * b.l && f.l <= GREY.lightMax * b.l
-  const stepTo = (since: number) => {
-    const before = m.recent.filter((x) => x.at >= since - GREY.edgeMs && x.at < since)
-    const top = before.length ? Math.max(...before.map((x) => x.w)) : 0
-    return m.up && top >= GREY.edgeRatio * b.w && top - f.w >= GREY.stepDrop * b.w
-  }
-  if (grey) {
-    if (!m.run) {
-      const step = stepTo(at)
-      const fell = m.fall !== null && at - m.fall <= GREY.fallMs
-      if (step && !fell) m.fall = at
-      m.run = { since: at, last: at, n: 1, edge: step || fell, miss: false }
-    } else {
-      m.run.n++
-      m.run.last = at
-      m.run.miss = false
-      if (!m.run.edge && stepTo(m.run.since)) {
-        m.run.edge = true
-        m.fall ??= at
-      }
-    }
-    const r = m.run
-    if (r.edge && r.n >= GREY.deathSamples && r.last - r.since >= GREY.deathMs && (m.lastDeathAt === null || at - m.lastDeathAt >= GREY.refractoryMs)) {
-      m.phase = 'dead'
-      m.deadAt = at
-      m.lastDeathAt = at
-      m.run = null
-      m.fall = null
-      m.liveN = 0
-      m.up = false
-      event = 'death'
-    }
-    keep(f.w)
-    return done(seen)
-  }
-  if (m.run && !m.run.miss && !up) {
-    m.run.miss = true
-    keep(f.w)
-    return done(seen)
-  }
-  m.run = null
-  if (m.up && m.fall === null) admit()
-  keep(f.w)
-  return done(seen, f.s <= 0.6 * b.s && f.w <= 0.7 * b.w)
+  if (!m.up && m.clear >= WASTED.upSamples) m.up = true
+  return done(sight.seen, sight.score >= WASTED.nearScore)
 }
 
 // ---------------------------------------------------------------------------------------------
 // What a death does
 
 /** A death switches only when the rule may still run, no League match of yours is on, and it did not just switch for another. */
-export function deathStep(s: MayorlyState, deviceId: string, o: { ownMatch: boolean; sinceFireMs: number }): PromptStep {
+export function deathStep(s: MayorlyState, deviceId: string, o: { ownMatch: boolean; sinceFireMs: number; game?: StreamGame }): PromptStep {
   const arm = streamArm(s, deviceId)
   if (!arm.on) return { act: null, why: arm.why }
-  if (o.ownMatch) return { act: null, why: 'your own League match is running' }
+  // A League match of your own could be the death seen (never a stream's WASTED): League only.
+  if (o.ownMatch && (o.game ?? 'league') === 'league') return { act: null, why: 'your own League match is running' }
   if (o.sinceFireMs < PROMPT_ECHO_MS) return { act: null, why: 'switched a moment ago' }
   const act = quickSwitch(s)
   if (!act) return { act: null, why: 'no recent task to switch to' }
@@ -1050,6 +1044,7 @@ export type StreamWord =
   | 'Stream hidden'
   | 'Stream cannot be read'
   | 'Not a game it knows'
+  | 'Reload the extension'
   | 'Off in Settings'
 
 export interface StreamStatus {

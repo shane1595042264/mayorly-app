@@ -9,7 +9,6 @@ import {
   HELLO_MS,
   leagueFeatures,
   gameOf,
-  greyStep,
   leagueStep,
   learningWhy,
   pickTab,
@@ -20,14 +19,20 @@ import {
   leftStream,
   openStep,
   SITE_NAME,
+  STREAM_EYE,
+  wordSight,
+  wordStep,
   type DeathMemory,
   type DeathTick,
   type StreamArm,
+  type StreamGame,
   type StreamGrid,
   type StreamReply,
   type StreamStatus,
   type StreamWord,
   type TabSeen,
+  type WordMemory,
+  type WordTick,
 } from '../shared/streamdeath'
 import type { Engine } from './engine'
 import { log } from './log'
@@ -48,11 +53,14 @@ export interface StreamRule {
   status(): StreamStatus
 }
 
+const isWord = (m: DeathMemory | WordMemory | null): m is WordMemory => !!m && 'kind' in m && m.kind === 'word'
+
 interface Tab {
   seen: TabSeen
-  memory: DeathMemory | null
+  /** League's detector, or GTA's word. */
+  memory: DeathMemory | WordMemory | null
   grid: StreamGrid | null
-  tick: DeathTick | null
+  tick: DeathTick | WordTick | null
   /** A death switched away from it with muting on: the next answer asks the eye to mute. */
   mute: boolean
   /** The eye was asked to mute it, for this task: the answer says unmute once the desk is back on that task, or the rule or muting is off. */
@@ -98,6 +106,8 @@ export function streamRule(o: {
   let lastDesk: Id | null = null
   let lastStatus = ''
   const tainted = new Set<string>()
+  // Tabs whose eye was heard to be older than words, said once each.
+  const oldEye = new Set<string>()
   let seen: { at: number; text: string; phase: string; tab: string } | null = null
   let timer: NodeJS.Timeout | null = null
   let offAction: (() => void) | null = null
@@ -133,7 +143,11 @@ export function streamRule(o: {
       return word(!shown.length ? 'Stream hidden' : shown.some((t) => t.tainted && t.game !== 'other') ? 'Stream cannot be read' : 'Not a game it knows')
     }
     const m = tabs.get(pick.tab)?.memory
-    if (!m || m.phase === 'learning') return word(m && pick.game === 'league' && learningWhy(m) === 'no minimap' ? 'No minimap in view' : 'Learning the stream')
+    if (pick.game === 'gta') {
+      if ((pick.eye ?? 1) < STREAM_EYE) return word('Reload the extension')
+      return word(m?.phase === 'dead' ? 'Streamer is down' : 'Watching the stream')
+    }
+    if (!m || isWord(m) || m.phase === 'learning') return word(m && !isWord(m) && learningWhy(m) === 'no minimap' ? 'No minimap in view' : 'Learning the stream')
     return word(m.phase === 'dead' ? 'Streamer is down' : 'Watching the stream')
   }
 
@@ -169,13 +183,14 @@ export function streamRule(o: {
     })()
   }
 
-  const fire = async (tick: DeathTick, a: StreamArm, site: string, tabId: string) => {
+  const fire = async (tick: { seen: string }, a: StreamArm, site: string, tabId: string, game: StreamGame) => {
     if (firing) return
     firing = true
     try {
       // Kept fresh in the background while a stream is watched, so a death never waits on tasklist.
-      const own = ownLeagueMatchNow() ?? (await ownLeagueMatch())
-      const step = deathStep(engine.state, engine.deviceId, { ownMatch: own, sinceFireMs: fired ? Date.now() - fired.at : Infinity })
+      // Only a League death could be your own match's; a GTA stream's WASTED never is.
+      const own = game === 'league' ? (ownLeagueMatchNow() ?? (await ownLeagueMatch())) : false
+      const step = deathStep(engine.state, engine.deviceId, { ownMatch: own, sinceFireMs: fired ? Date.now() - fired.at : Infinity, game })
       log.info('[stream]', `death on ${site}: ${tick.seen}; ${step.why}`)
       if (!step.act) return
       o.auto.at = Date.now()
@@ -210,7 +225,7 @@ export function streamRule(o: {
     const tab: Tab = prev ?? { seen: null as unknown as TabSeen, memory: null, grid: null, tick: null, mute: false, mutedFor: null, trail: [], focusSeen: null }
     // Another game on the same tab (the streamer switched): its detector learns the picture afresh.
     if (prev && prev.seen.game !== game) prev.memory = null
-    tab.seen = { tab: p.tab, site: p.site, title: p.title, category: p.category, game, visible: p.visible, active: p.active, area: p.area, tainted: p.kind === 'tainted', at: now }
+    tab.seen = { tab: p.tab, site: p.site, title: p.title, category: p.category, game, visible: p.visible, active: p.active, area: p.area, tainted: p.kind === 'tainted', eye: p.eye, at: now }
     tabs.set(p.tab, tab)
     for (const [k, t] of tabs) if (now - t.seen.at > LEAGUE.forgetMs) tabs.delete(k)
 
@@ -268,16 +283,29 @@ export function streamRule(o: {
       lastCost = now
       log.info('[stream]', `cost: ${p.cost} ms a frame in Chrome on ${p.site}`)
     }
-    // Twice a second; once a second if reading a frame costs the page more than 25 ms.
+    // Twice a second; once a second if reading a frame costs the page more than 25 ms. A GTA
+    // stream is read by its word, so the eye sends the middle of each frame too.
     const every = p.cost !== null && p.cost > 25 ? 1000 : 500
+    const words = game === 'gta'
+    const armed: StreamReply = words ? { armed: true, every, word: true } : { armed: true, every }
+    if (words && p.eye < STREAM_EYE && !oldEye.has(p.tab)) {
+      oldEye.add(p.tab)
+      log.info('[stream]', `${p.site}: the Mayorly extension is older than this app and cannot read GTA's WASTED; reload it in chrome://extensions, then reload the stream`)
+    }
     if (p.kind === 'hello' && !p.ad) {
       pushStatus()
-      return answer({ armed: true, every })
+      return answer(armed)
     }
-    const f = p.grid ? leagueFeatures(p.grid, tab.grid, now) : null
+    if (words && p.eye < STREAM_EYE) {
+      pushStatus()
+      return answer(armed)
+    }
+    const f = !words && p.grid ? leagueFeatures(p.grid, tab.grid, now) : null
     if (p.grid) tab.grid = p.grid
     const was = tab.memory?.phase ?? null
-    const tick = (game === 'gta' ? greyStep : leagueStep)(tab.memory, f, { ad: p.ad }, now)
+    const tick = words
+      ? wordStep(isWord(tab.memory) ? tab.memory : null, wordSight(p.word), { ad: p.ad, every }, now)
+      : leagueStep(isWord(tab.memory) ? null : tab.memory, f, { ad: p.ad }, now)
     tab.memory = tick.memory
     tab.tick = tick
     tab.trail.push({ at: now, seen: tick.seen, grid: p.grid, ad: p.ad })
@@ -290,11 +318,11 @@ export function streamRule(o: {
       lastNear = now
       log.info('[stream]', `near: ${tick.seen}`)
     }
-    if (tick.event === 'death') void fire(tick, a, p.site, p.tab)
+    if (tick.event === 'death') void fire(tick, a, p.site, p.tab, words ? 'gta' : 'league')
     if (was !== tick.memory.phase) pushStatus()
     // A death switches at once when the own match check is fresh: the answer to this very frame
     // then carries the mute, not the armed reply that would cancel it.
-    return answer(arm().on ? { armed: true, every } : OFF)
+    return answer(arm().on ? armed : OFF)
   }
 
   // Ground truth for tuning: you left a watched stream yourself (with what the detector saw just

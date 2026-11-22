@@ -6,6 +6,10 @@
   column. The timeline runs from t0 (epoch ms, in the URL) and says when the world goes grey.
     ?plan=full        colour; a break card; a slow fade; an ad that looks like a death; a death at 100 s; colour
     ?plan=death-only  colour; a death at 25 s; colour
+    ?plan=gta         Grand Theft Auto VI: colour; a black and white beat at 20 s; FAILED on a red wash at 30 s;
+                      WASTED at 50 s, white on the red wash for 4 s, then red on black; colour
+  GTA's words are drawn from the reader's own shapes (WORDS below, held to src/shared/streamword.ts by
+  streamword.test.ts), where GTA writes them: the middle 35% of the width, 14% of the height.
 -->
 <html>
   <head>
@@ -18,7 +22,7 @@
     </style>
   </head>
   <body>
-    <a data-a-target="stream-game-link" href="#">League of Legends</a>
+    <a data-a-target="stream-game-link" href="#" id="game">League of Legends</a>
     <div id="player" style="position: relative">
       <video id="v" autoplay playsinline></video>
       <button data-a-target="player-mute-unmute-button" id="mute">Mute (m)</button>
@@ -27,6 +31,34 @@
       const q = new URLSearchParams(location.search)
       const t0 = Number(q.get('t0')) || Date.now()
       const plan = q.get('plan') || 'full'
+      if (plan === 'gta') document.getElementById('game').textContent = 'Grand Theft Auto VI'
+      // GTA's words, 40 x 10 cells each: the same rows as WORD_SHAPES in src/shared/streamword.ts.
+      const WORDS = {
+        wasted: [
+          '......................................##',
+          '......................................##',
+          '##.###.##.#####.#####.######.#####.#####',
+          '##.###.##.#####.############.#####.#####',
+          '######.##....##.##....###....##.##.##.##',
+          '#########.#####.#####..##.##.#####.##.##',
+          '#########.#####.#####..#####.#####.##.##',
+          '.########.##.##....##..#####.##....##.##',
+          '.###.###..#####.#####..#####.#####.#####',
+          '.###.###..#####.#####..#####.#####.#####',
+        ],
+        failed: [
+          '.....................................###',
+          '.....................................###',
+          '######.######..###.##.....######.#######',
+          '######.#######.###.##....#######.#######',
+          '######.....###.##..##....###.###.#######',
+          '######.#######.###.##....#######.#######',
+          '####...#######.###.##....#######.#######',
+          '###....###.###.###.##....###.....#######',
+          '###....#######.###.#####.#######.#######',
+          '###....#######.###.#####.#######.#######',
+        ],
+      }
       const W = 1280
       const H = 720
       const canvas = document.createElement('canvas')
@@ -51,6 +83,14 @@
 
       // What the frame shows s seconds after t0.
       function scene(s) {
+        if (plan === 'gta') {
+          // A black and white beat of GTA's own: the old grey detector fired on these.
+          if (s >= 20 && s < 24) return { world: 0, bar: 'none' }
+          if (s >= 30 && s < 35) return { world: 1, bar: 'none', wash: true, word: 'failed', ink: '#f8f8f8' }
+          if (s >= 50 && s < 54) return { world: 1, bar: 'none', wash: true, word: 'wasted', ink: '#f8f8f8' }
+          if (s >= 54 && s < 55.5) return { world: 0, bar: 'none', black: true, word: 'wasted', ink: '#d6403e' }
+          return { world: 1, bar: 'none' }
+        }
         if (plan === 'death-only') return s >= 25 && s < 35 ? { world: 0.3, bar: 'dim' } : { world: 1, bar: 'lit' }
         if (s >= 25 && s < 29) return { card: true }
         // A fade over 30 s: no step from colour into grey anywhere in it.
@@ -106,6 +146,26 @@
         }
         g.fillStyle = '#fff'
         g.fillRect(1110 + ((t * 20) % 120), 600, 8, 8)
+        if (sc.wash) {
+          // GTA's red wash over everything.
+          g.fillStyle = 'rgba(150, 10, 14, 0.82)'
+          g.fillRect(0, 0, W, H)
+        }
+        if (sc.black) {
+          g.fillStyle = '#030202'
+          g.fillRect(0, 0, W, H)
+        }
+        if (sc.word) {
+          // The word, where GTA writes it: x 32.5% to 67.5%, y 41.5% to 55.5% of the frame.
+          const rows = WORDS[sc.word]
+          const x0 = 0.325 * W
+          const y0 = 0.415 * H
+          const cw = (0.35 * W) / 40
+          const ch = (0.14 * H) / 10
+          g.fillStyle = sc.ink
+          for (let r = 0; r < 10; r++) for (let c = 0; c < 40; c++) if (rows[r][c] === '#') g.fillRect(x0 + c * cw, y0 + r * ch, Math.ceil(cw), Math.ceil(ch))
+        }
+        if (sc.bar === 'none') return
         // The ability bar: bright while alive, dimmed while dead.
         for (let i = 0; i < 8; i++) {
           g.fillStyle = sc.bar === 'dim' ? `hsl(${30 + i * 40}, 15%, 25%)` : `hsl(${30 + i * 40}, 35%, 35%)`
