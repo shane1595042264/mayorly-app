@@ -42,6 +42,24 @@ export interface PromptStep {
   why: string
 }
 
+/**
+ * The apps whose Stop button is read on the screen but whose prompts also come through a hook: the
+ * Claude app runs Claude Code sessions, whose hook says whether you typed the prompt (a background
+ * task finishing or a schedule restarts a session too). Its Stop button waits PAIR_WAIT_MS for the
+ * hook; when the hook spoke within PAIR_MS of it, the hook decides, and the Stop button is the same
+ * prompt. Plain Claude chat has no hook, so its Stop button decides alone.
+ */
+export const HOOK_OF: Partial<Record<AgentApp, AgentApp>> = { 'claude-app': 'claude' }
+export const PAIR_MS = 3000
+export const PAIR_WAIT_MS = 2000
+
+/** The hook's word on the same prompt as this Stop button, if it spoke; null when there is none. */
+export function pairedHook(e: AgentPrompt, heard: AgentPrompt[]): AgentPrompt | null {
+  const hook = HOOK_OF[e.app]
+  if (!hook) return null
+  return heard.find((h) => h.app === hook && Math.abs(h.at - e.at) <= PAIR_MS) ?? null
+}
+
 /** `sinceSwitchMs`: how long ago a prompt last switched the desk, Infinity if never. */
 export function promptStep(s: MayorlyState, e: AgentPrompt, sinceSwitchMs = Infinity): PromptStep {
   if (!s.settings.autoSwitch.aiPrompt) return { act: null, why: 'the rule is off' }

@@ -4,7 +4,8 @@ The top section is what the app shows once per build, the first time that build 
 
 ## An AI that is still thinking no longer switches you
 
-- Coming back to ChatGPT, Claude or Gemini while it was still answering looked like a new prompt and switched the desk (ChatGPT moved you off Hello interview at 20:00 today). Now only a Stop button that appears after the app sat idle in front of you for a moment counts, so its thinking in steps, or you glancing at it mid-answer, never switches you. In Chrome too, after the extension's reload.
+- Codex running a task on its own switched the desk as if you had sent it a prompt (it moved you off Hello interview at 20:00 today). Codex now counts only through its own hook, which hears just the prompts you type. In the Claude app, Claude Code's hook decides the same way, so a session that picks up again by itself never switches you; plain Claude chat still does when you send it something.
+- An AI you come back to while it is still answering, or whose Stop button blinks between thinking steps, no longer counts as a prompt either: the app has to sit idle in front of you for a moment first. In Chrome too, after the extension's reload.
 
 ## Opening a stream puts your stream task on the desk
 

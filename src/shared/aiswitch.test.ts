@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { onDeskId, reduce, sampleState, type Action, type MayorlyState } from '../core/index'
-import { promptStep, type AgentPrompt } from './aiswitch'
+import { pairedHook, promptStep, type AgentPrompt } from './aiswitch'
 import { agentRoute, BACKGROUND, CONTENT, eventOf, HOOK, MANIFEST, routeAgentRequest, STREAM_MATCHES } from '../main/agents'
 import EYE from '../main/stream-eye.js?raw'
 import { Script } from 'node:vm'
@@ -191,5 +191,18 @@ describe('ChatGPT or Gemini in Chrome', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('the Claude app\'s Stop button and Claude Code\'s hook', () => {
+  it('leaves a prompt to the hook when it spoke about the same moment, whatever it said', () => {
+    const stop: AgentPrompt = { at: now, app: 'claude-app', manual: true }
+    expect(pairedHook(stop, [{ at: now + 800, app: 'claude', manual: false }])).toMatchObject({ manual: false })
+    expect(pairedHook(stop, [{ at: now - 1200, app: 'claude', manual: true }])).toMatchObject({ manual: true })
+    // Plain Claude chat: no hook spoke, the Stop button decides.
+    expect(pairedHook(stop, [{ at: now - 9000, app: 'claude', manual: true }])).toBeNull()
+    expect(pairedHook(stop, [{ at: now, app: 'codex', manual: true }])).toBeNull()
+    // Apps with no hook are not paired at all.
+    expect(pairedHook({ at: now, app: 'chatgpt-app', manual: true }, [{ at: now, app: 'claude', manual: false }])).toBeNull()
   })
 })

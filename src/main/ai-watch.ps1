@@ -43,7 +43,9 @@ $inbox = Join-Path $env:USERPROFILE '.mayorly\ai.jsonl'
 function App-Of([string]$proc, [string]$title) {
   switch -regex ($proc) {
     '^claude$' { return 'claude-app' }
-    '^(chatgpt|codex)$' { return 'chatgpt-app' }
+    # Codex is left to its own hook (UserPromptSubmit): an agent run there stops and starts by
+    # itself, after a context compaction or between steps, and its Stop button cannot tell.
+    '^chatgpt$' { return 'chatgpt-app' }
     '^gemini$' { return 'gemini-app' }
     '^(chrome|msedge|brave|arc|vivaldi|opera)$' {
       if ($title -match 'ChatGPT') { return 'chatgpt-web' }

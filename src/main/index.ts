@@ -13,7 +13,7 @@ import { watchAgents } from './agents'
 import { streamRule } from './streamwatch'
 import { SwitchLog } from './switchlog'
 import { deskEnd, endLabel, type SwitchWhy } from '../shared/switchlog'
-import { AGENT_NAME, promptStep } from '../shared/aiswitch'
+import { AGENT_NAME, HOOK_OF, PAIR_WAIT_MS, pairedHook, promptStep, type AgentPrompt } from '../shared/aiswitch'
 import { sealedClerkStore } from './ai/store'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
@@ -675,7 +675,9 @@ function boot() {
   // Auto switch: a prompt you type an AI is Alt+Q, onto your recent task while it thinks. Nothing
   // is remembered; the next prompt or Alt+Q switches again (aiswitch.ts).
   let promptSwitchAt = 0
-  const stopAgents = watchAgents((e) => {
+  // The hooks' prompts of the last half minute, for the Claude app's Stop button to pair with.
+  const heard: AgentPrompt[] = []
+  const onPrompt = (e: AgentPrompt) => {
     const step = promptStep(engine.state, e, Date.now() - promptSwitchAt)
     // A prompt a beat after a streamer's death switched the desk would take it back to the stream.
     const g = step.act ? stream.grace(step.act) : null
@@ -686,6 +688,17 @@ function boot() {
     const where = e.app === 'browser' ? 'in a browser side panel' : e.app.endsWith('-web') ? 'in the browser' : e.app.endsWith('-app') ? 'in its desktop app' : 'through its hook'
     engine.act(step.act, { cause: 'ai', via: `${AGENT_NAME[e.app]} prompt`, detail: where })
     say({ phase: 'done', text: `${AGENT_NAME[e.app]} prompt: on ${short(deskTitle(onDeskId(engine.state)))}` })
+  }
+  const stopAgents = watchAgents((e) => {
+    heard.push(e)
+    while (heard.length && Date.now() - heard[0].at > 30_000) heard.shift()
+    if (!HOOK_OF[e.app]) return onPrompt(e)
+    // The Claude app's Stop button: wait for Claude Code's hook, which knows whether you typed it.
+    setTimeout(() => {
+      const h = pairedHook(e, heard)
+      if (h) log.info('[agents]', `${e.app} prompt: left to its hook (${h.manual ? 'typed' : 'not typed'})`)
+      else onPrompt(e)
+    }, PAIR_WAIT_MS)
   }, stream.onStream)
 
   // An instruction from Alt+N: the clerk reads it into steps; what the permissions allow is done
