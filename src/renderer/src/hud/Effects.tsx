@@ -18,6 +18,7 @@ export function EffectsApp() {
       amount={effect.amount}
       balance={effect.balance}
       from={effect.from}
+      out={effect.out}
       onDone={() => {
         setEffect(null)
         bridge.effectDone()

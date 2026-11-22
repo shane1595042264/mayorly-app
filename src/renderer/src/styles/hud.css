@@ -478,6 +478,9 @@ body.effects { background: transparent; }
 .cashin-coin-icon { width: 32px; height: 32px; image-rendering: pixelated; }
 .cashin-num { font-size: 30px; font-weight: 600; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
 .cashin-plus { font-size: 14px; color: var(--accent); }
+/* The couch's coin, taken: the counter in the couch's colour, counting down. */
+.cashin-counter.is-spend { border-color: var(--leisure-2); }
+.cashin-minus { font-size: 14px; color: var(--leisure); }
 .cashin-coin { position: absolute; left: 0; top: 0; width: 32px; height: 32px; image-rendering: pixelated; filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.5)); }
 
 /* ------------------------------------------------------------ when the HUD itself breaks */

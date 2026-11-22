@@ -122,6 +122,8 @@ export interface Effect {
   balance: number
   /** Where the coins start, in the effect window's CSS pixels: the tomato. */
   from: { x: number; y: number }
+  /** Coins taken, not paid: they fly from the counter to the tomato and the balance counts down. */
+  out?: boolean
 }
 
 export interface AppInfo {

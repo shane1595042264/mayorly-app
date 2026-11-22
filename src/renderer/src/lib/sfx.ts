@@ -109,6 +109,24 @@ export const sfx = {
     tone(a, f, t, 0.07, 0.05, 'triangle')
     tone(a, f * 1.5, t + 0.03, 0.14, 0.035)
   },
+  /** A coin leaving the counter for the couch; each one a little lower than the last. */
+  coinOut(i: number) {
+    const a = ac()
+    if (!a) return
+    const t = a.currentTime
+    const f = 1568 * Math.pow(2, -Math.min(i, 7) / 12)
+    tone(a, f * 1.5, t, 0.07, 0.04, 'triangle')
+    tone(a, f, t + 0.04, 0.16, 0.035)
+  },
+  /** A couch block paid for: the cash-in's run turned downward and softer, spent rather than banked. */
+  spend() {
+    const a = ac()
+    if (!a) return
+    const t = a.currentTime
+    const run = [1568, 1318, 1046, 784]
+    run.forEach((f, i) => tone(a, f, t + i * 0.07, 0.14, 0.035, 'triangle'))
+    tone(a, 523, t + 0.3, 0.45, 0.03)
+  },
   /** The harvest banked: a quick bright run up and a ring, the pocket-full-of-coins sound. */
   cashIn() {
     const a = ac()

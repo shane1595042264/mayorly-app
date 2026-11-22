@@ -890,6 +890,8 @@ describe('the couch', () => {
     w.wait(25 * MIN + 1000)
     expect(w.s.desk.block?.kind).toBe('rest')
     expect(balance(w.s)).toBe(before - 1)
+    // The HUD hears it, to show the coin going.
+    expect(w.events.filter((e) => e.type === 'spend')).toEqual([expect.objectContaining({ type: 'spend', tokens: 1, leisureId: civ.id })])
     w.wait(5 * MIN + 1000)
     expect(w.s.desk.block?.kind).toBe('leisure')
     expect(balance(w.s)).toBe(before - 1)

@@ -40,12 +40,27 @@ app.on('open-url', (e, url) => {
   else queuedUrls.push(url)
 })
 
-// A profile of its own (scripts/e2e-drag.ps1): its own save, pet place, log and single-instance
-// lock, so the end-to-end test runs a second Mayorly beside the real one without touching it.
+// One Mayorly per computer. The lock is taken in the usual profile before anything else, so a
+// second copy is refused however it was started, a test profile included: two would both answer
+// the hotkeys, both switch the desk on every AI prompt, and race each other's saves. The second
+// says so and quits; the one running says it is the one.
+const primary = app.requestSingleInstanceLock()
+
+// A profile of its own (scripts/e2e-drag.ps1, on a CI runner): its own save, pet place and log.
 if (process.env.MAYORLY_DATA_DIR) app.setPath('userData', process.env.MAYORLY_DATA_DIR)
 
-if (!app.requestSingleInstanceLock()) {
-  app.quit()
+if (!primary) {
+  void app.whenReady().then(() => {
+    dialog.showMessageBoxSync({
+      type: 'warning',
+      title: 'Mayorly',
+      message: 'Mayorly is already running',
+      detail: 'Only one Mayorly runs on a computer at a time, so this one will not start. The one already running is the tomato on your screen; right-click it, or the tray icon, for its menu.',
+      buttons: ['OK'],
+      noLink: true,
+    })
+    app.quit()
+  })
 } else {
   app.setAppUserModelId('app.mayorly')
   void app.whenReady().then(boot)
@@ -459,6 +474,8 @@ function boot() {
       if ((ev.type === 'block' || ev.type === 'sitting-end') && !overlay.win.isVisible()) notify(ev)
       // macOS: the coins fly across the screen in the effects window; Windows draws them in the overlay.
       if (ev.type === 'harvest' && ev.tokens > 0 && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0))
+      // A couch block's coin, taken: the same counter, counting down.
+      if (ev.type === 'spend' && ev.tokens > 0 && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0), true)
     }
   })
   ipcMain.on(IPC.effectDone, () => overlay.effectDone())
@@ -620,10 +637,12 @@ function boot() {
   // Auto switch: a prompt you type an AI is Alt+Q, onto your recent task while it thinks. Nothing
   // is remembered; the next prompt or Alt+Q switches again (aiswitch.ts).
   const deskTitle = (id: string | null) => (id ? (engine.state.entries.find((e) => e.id === id)?.title ?? engine.state.leisure.find((l) => l.id === id)?.title ?? '') : '')
-  watchAgents((e) => {
-    const step = promptStep(engine.state, e)
+  let promptSwitchAt = 0
+  const stopAgents = watchAgents((e) => {
+    const step = promptStep(engine.state, e, Date.now() - promptSwitchAt)
     log.info('[agents]', `${e.app} prompt${e.manual ? '' : ' (not typed)'}: ${step.why}`)
     if (!step.act) return
+    promptSwitchAt = Date.now()
     engine.act(step.act)
     say({ phase: 'done', text: `${AGENT_NAME[e.app]} prompt: on ${short(deskTitle(onDeskId(engine.state)))}` })
   })
@@ -741,15 +760,17 @@ function boot() {
   onUrl = handleUrl
   for (const u of queuedUrls.splice(0)) handleUrl(u)
   for (const a of process.argv) if (a.startsWith('mayorly://')) handleUrl(a)
+  // Another copy was started and refused itself; a mayorly:// link it carried is still followed.
   app.on('second-instance', (_e, argv) => {
     const u = argv.find((a) => a.startsWith('mayorly://'))
     if (u) handleUrl(u)
-    else command('deck')
+    else say({ phase: 'done', text: 'Mayorly is already running: this one' })
   })
   // macOS: opening the app again from Finder or Launchpad arrives here, not as a second instance.
   app.on('activate', () => command('deck'))
   app.on('before-quit', (e) => {
     engine.stop()
+    stopAgents()
     if (flushed || sync.current().phase === 'off') return
     // One bounded push so the last seconds of desk time reach the server.
     e.preventDefault()

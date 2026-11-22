@@ -1,9 +1,11 @@
+import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, rmSync, statSync, truncateSync, watchFile, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { AGENT_APPS, type AgentApp, type AgentPrompt } from '../shared/aiswitch'
+import WATCH from './ai-watch.ps1?raw'
 
 // When you send an AI a prompt. Claude Code, Gemini CLI and Codex run AGENT_HOOK from their own
 // prompt hooks (UserPromptSubmit, BeforeAgent), which appends one line to AGENT_INBOX: the app,
@@ -16,6 +18,8 @@ export const AGENT_DIR = join(homedir(), '.mayorly')
 export const AGENT_INBOX = join(AGENT_DIR, 'ai.jsonl')
 export const AGENT_HOOK = join(AGENT_DIR, 'ai-hook.cjs')
 export const EXTENSION_DIR = join(AGENT_DIR, 'chrome-extension')
+/** Windows: the watcher for the desktop apps and browsers, which have no hooks (ai-watch.ps1). */
+export const AGENT_WATCH = join(AGENT_DIR, 'ai-watch.ps1')
 const TOKEN_FILE = join(AGENT_DIR, 'token')
 /** The extension's listener. Fixed, so the extension needs no setup beyond loading it. */
 export const AGENT_PORT = 47731
@@ -104,8 +108,8 @@ const writeIfChanged = (file: string, text: string) => {
   if (!existsSync(file) || readFileSync(file, 'utf8') !== text) writeFileSync(file, text)
 }
 
-/** Writes the hook, the token and the extension, then hands every fresh prompt to `onPrompt`. */
-export function watchAgents(onPrompt: (e: AgentPrompt) => void): void {
+/** Writes the hook, the token and the extension, starts the watcher, then hands every fresh prompt to `onPrompt`. Returns a stop for quitting. */
+export function watchAgents(onPrompt: (e: AgentPrompt) => void): () => void {
   let token: string
   try {
     mkdirSync(EXTENSION_DIR, { recursive: true })
@@ -119,12 +123,14 @@ export function watchAgents(onPrompt: (e: AgentPrompt) => void): void {
     writeIfChanged(join(EXTENSION_DIR, 'background.js'), BACKGROUND)
     writeIfChanged(join(EXTENSION_DIR, 'content.js'), CONTENT)
     writeIfChanged(join(EXTENSION_DIR, 'config.js'), `self.MAYORLY = ${JSON.stringify({ port: AGENT_PORT, token })}\n`)
+    if (process.platform === 'win32') writeIfChanged(AGENT_WATCH, WATCH.replace(/\r?\n/g, '\r\n'))
     // 0.1.66 to 0.1.68 followed Claude alone, by project folder.
     for (const old of ['claude-hook.cjs', 'claude.jsonl']) rmSync(join(AGENT_DIR, old), { force: true })
   } catch (err) {
     console.warn('[agents] no folder in the home directory:', err instanceof Error ? err.message : String(err))
-    return
+    return () => {}
   }
+  const stopWatch = process.platform === 'win32' ? startWatcher() : () => {}
 
   const size = () => {
     try {
@@ -182,6 +188,36 @@ export function watchAgents(onPrompt: (e: AgentPrompt) => void): void {
   })
     .on('error', (err) => console.warn('[agents] no listener for the Chrome extension:', err.message))
     .listen(AGENT_PORT, '127.0.0.1')
+  return stopWatch
+}
+
+/**
+ * Windows: the desktop apps (Claude, ChatGPT and Codex, Gemini) and the browsers have no hooks, so a
+ * small PowerShell process watches the app in front for its Stop button (ai-watch.ps1) and writes a
+ * prompt to the inbox like a hook. One at a time, hidden, gone when Mayorly is; started again a few
+ * times if it falls over.
+ */
+function startWatcher(): () => void {
+  let child: ChildProcess | null = null
+  let stopped = false
+  let restarts = 0
+  const run = () => {
+    if (stopped) return
+    child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', AGENT_WATCH, '-Parent', String(process.pid)], { windowsHide: true, stdio: 'ignore' })
+    child.on('error', (err) => console.warn('[agents] the app watcher did not start:', err.message))
+    child.on('exit', (code) => {
+      child = null
+      if (stopped || restarts >= 5) return
+      restarts++
+      console.warn(`[agents] the app watcher stopped (${code}); starting it again`)
+      setTimeout(run, 30_000)
+    })
+  }
+  run()
+  return () => {
+    stopped = true
+    child?.kill()
+  }
 }
 
 function safeJson(text: string): Record<string, unknown> {

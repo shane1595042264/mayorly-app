@@ -19,7 +19,8 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
   const [text, setText] = useState('')
   const [picked, setPicked] = useState(0)
   const query = text.trim()
-  const create = useMemo(() => plan(text, s), [text, s])
+  // Always a task here: Find starts what it makes, or adds it with Shift+Enter; orders to the clerk go to Capture.
+  const create = useMemo(() => plan(text, s, { tasks: true }), [text, s])
   const rows = useMemo<Row[]>(() => {
     if (query.startsWith('/')) return [{ kind: 'new' }]
     const found = findTasks(s, query)

@@ -106,18 +106,19 @@ export function App() {
   }, [moving])
   // The harvest inside this window: on Windows always; on macOS when a panel is open, since the pet
   // window is then the whole work area. The coins start at whatever cleared the entry, else the tomato.
-  const [cashIn, setCashIn] = useState<{ seq: number; amount: number; balance: number; from: { x: number; y: number } } | null>(null)
+  const [cashIn, setCashIn] = useState<{ seq: number; amount: number; balance: number; from: { x: number; y: number }; out?: boolean } | null>(null)
   const cashSeq = useRef(0)
   useHudEvents(
     useCallback((events: HudEvent[]) => {
       for (const e of events) {
-        if (e.type !== 'harvest' || e.tokens <= 0) continue
+        // A harvest pays coins in; a couch block's coin, taken, goes out the same way backwards.
+        if ((e.type !== 'harvest' && e.type !== 'spend') || e.tokens <= 0) continue
         // The pet alone on a Mac screen: the shell plays it in the effects window.
         if (layoutRef.current.compact && shellMode.current === 'field') continue
         const sprite = document.querySelector('.pet-sprite')?.getBoundingClientRect()
-        const from = takeOrigin() ?? (sprite ? { x: sprite.left + sprite.width / 2, y: sprite.top + sprite.height / 2 } : { x: window.innerWidth - 80, y: window.innerHeight - 60 })
+        const from = (e.type === 'harvest' ? takeOrigin() : null) ?? (sprite ? { x: sprite.left + sprite.width / 2, y: sprite.top + sprite.height / 2 } : { x: window.innerWidth - 80, y: window.innerHeight - 60 })
         const st = current()
-        setCashIn({ seq: ++cashSeq.current, amount: e.tokens, balance: st ? balance(st) : 0, from })
+        setCashIn({ seq: ++cashSeq.current, amount: e.tokens, balance: st ? balance(st) : 0, from, out: e.type === 'spend' })
       }
     }, []),
   )
@@ -633,7 +634,7 @@ export function App() {
       </AnimatePresence>
 
       {shown !== 'field' && shown !== 'switcher' && <ClerkAsk />}
-      {cashIn && <CashIn key={cashIn.seq} amount={cashIn.amount} balance={cashIn.balance} from={cashIn.from} onDone={() => setCashIn(null)} />}
+      {cashIn && <CashIn key={cashIn.seq} amount={cashIn.amount} balance={cashIn.balance} from={cashIn.from} out={cashIn.out} onDone={() => setCashIn(null)} />}
 
     </main>
   )

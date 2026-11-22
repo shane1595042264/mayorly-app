@@ -6,11 +6,15 @@ import { sfx } from '../lib/sound'
 // The harvest, seen: coins fly from the tomato to a counter in the top right, the
 // balance counts up as they land, a last ding, and it all fades. Pointer events never
 // reach it. The coin is the founder's hand-drawn icon.coin at whole-pixel scale.
+// `out` is the couch's coin, taken: the counter shows the balance before, a coin leaves
+// it for the tomato, the count goes down as it lands, and the sound falls instead of rising.
 
 interface Props {
   amount: number
+  /** The balance after. */
   balance: number
   from: { x: number; y: number }
+  out?: boolean
   onDone: () => void
 }
 
@@ -19,9 +23,10 @@ const MAX_COINS = 8
 const FLIGHT_MS = 720
 const STAGGER_MS = 90
 
-export function CashIn({ amount, balance, from, onDone }: Props) {
+export function CashIn({ amount, balance, from, out = false, onDone }: Props) {
   const coins = Math.max(1, Math.min(MAX_COINS, amount))
-  const [shown, setShown] = useState(balance - amount)
+  const start = out ? balance + amount : balance - amount
+  const [shown, setShown] = useState(start)
   const [landed, setLanded] = useState(0)
   const [gone, setGone] = useState(false)
   const target = useRef<HTMLDivElement>(null)
@@ -32,16 +37,18 @@ export function CashIn({ amount, balance, from, onDone }: Props) {
     if (r) setTo({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
   }, [])
 
-  // Each landing adds its share; the last one rounds to the exact balance.
+  // Each landing moves the count by its share; the last one rounds to the exact balance.
   const land = (i: number) => {
-    sfx.coin(i)
+    if (out) sfx.coinOut(i)
+    else sfx.coin(i)
     setLanded((n) => n + 1)
-    setShown(i === coins - 1 ? balance : Math.round(balance - amount + ((i + 1) / coins) * amount))
+    setShown(i === coins - 1 ? balance : Math.round(start + ((balance - start) * (i + 1)) / coins))
   }
 
   useEffect(() => {
     if (landed < coins) return
-    sfx.cashIn()
+    if (out) sfx.spend()
+    else sfx.cashIn()
     const t = setTimeout(() => setGone(true), 1100)
     return () => clearTimeout(t)
   }, [landed, coins])
@@ -53,7 +60,7 @@ export function CashIn({ amount, balance, from, onDone }: Props) {
           <motion.div
             key="counter"
             ref={target}
-            className="cashin-counter"
+            className={`cashin-counter ${out ? 'is-spend' : ''}`}
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0, scale: landed > 0 && landed < coins ? [1, 1.06, 1] : 1 }}
             exit={{ opacity: 0, y: -8, transition: { duration: 0.35 } }}
@@ -61,7 +68,7 @@ export function CashIn({ amount, balance, from, onDone }: Props) {
           >
             <img className="cashin-coin-icon" src={coin} alt="" />
             <span className="cashin-num num">{shown.toLocaleString()}</span>
-            <span className="cashin-plus mono num">+{amount}</span>
+            <span className={`mono num ${out ? 'cashin-minus' : 'cashin-plus'}`}>{out ? `-${amount}` : `+${amount}`}</span>
           </motion.div>
         )}
         {!gone && to && Array.from({ length: coins }, (_, i) => (
@@ -72,8 +79,8 @@ export function CashIn({ amount, balance, from, onDone }: Props) {
             alt=""
             initial={{ x: from.x - 16, y: from.y - 16, opacity: 0, scale: 0.6, rotate: 0 }}
             animate={{
-              x: [from.x - 16, (from.x + to.x) / 2 - 16 + (i % 2 ? 40 : -40), to.x - 16],
-              y: [from.y - 16, Math.min(from.y, to.y) - 140 - i * 12, to.y - 16],
+              x: out ? [to.x - 16, (from.x + to.x) / 2 - 16 + (i % 2 ? 40 : -40), from.x - 16] : [from.x - 16, (from.x + to.x) / 2 - 16 + (i % 2 ? 40 : -40), to.x - 16],
+              y: out ? [to.y - 16, Math.min(from.y, to.y) - 140 - i * 12, from.y - 16] : [from.y - 16, Math.min(from.y, to.y) - 140 - i * 12, to.y - 16],
               opacity: [0, 1, 1, 0],
               scale: [0.6, 1.1, 0.7],
               rotate: [0, 180 + i * 20, 360 + i * 20],

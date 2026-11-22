@@ -1329,6 +1329,7 @@ function tick(s: MayorlyState, ctx: Ctx, ev: HudEvent[]) {
     // A completed block of leisure is the tomato that costs one.
     if (d.block.kind === 'leisure' && d.sittingId) {
       s.tokens.push({ id: `${d.sittingId}:leisure:${d.block.round}`, at: end, amount: -LEISURE_TOKENS_PER_BLOCK, reason: 'leisure', sittingId: d.sittingId, leisureId: d.block.leisureId ?? undefined })
+      ev.push({ type: 'spend', at: end, tokens: LEISURE_TOKENS_PER_BLOCK, leisureId: d.block.leisureId ?? null })
     }
     const next = advanceDesk(s, ctx, end)
     if (!next) {

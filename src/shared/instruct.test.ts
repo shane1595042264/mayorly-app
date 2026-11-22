@@ -21,6 +21,13 @@ describe('an instruction', () => {
     expect(looksLikeInstruction('! file taxes reminder rule')).toBe(true)
     expect(looksLikeInstruction('legal: reply to the landlord ~20')).toBe(false)
     expect(looksLikeInstruction('reply to the landlord')).toBe(false)
+    // A bare verb is a task: these went to the clerk, and Find could neither start nor add them.
+    for (const task of ['make an app for twitch chat overlay', 'switch phone plans', 'change the oil', 'set up the new monitor', 'daily standup notes', 'block out the garage', 'every day is leg day video', 'turn in the essay']) {
+      expect(looksLikeInstruction(task), task).toBe(false)
+    }
+    for (const order of ['set my work hours to 9 to 5', 'change sessions to 45 minutes', 'make a shortcut alt+H for a 16 tomato task', 'every workday create PRO: CWILL {date}', 'automatically create a task every morning', 'take friday off', 'switch my work schedule to 8 to 4']) {
+      expect(looksLikeInstruction(order), order).toBe(true)
+    }
   })
 
   it('sets work hours with an undo that puts the old ones back', () => {

@@ -21,7 +21,8 @@ interface Plan {
   instruct?: string
 }
 
-export function plan(raw: string, s: MayorlyState): Plan {
+/** `tasks`: the line is a task whatever it looks like (Find, which starts or adds, never instructs). */
+export function plan(raw: string, s: MayorlyState, opts?: { tasks?: boolean }): Plan {
   const text = raw.trim()
   if (!text) return { tone: 'idle', text: 'Type an entry. Prefix a ledger like legal:, or couch: for the couch list, and add ~30 for an estimate.' }
 
@@ -76,7 +77,7 @@ export function plan(raw: string, s: MayorlyState): Plan {
   }
 
   // An instruction about how Mayorly works: the clerk reads it and does it, or asks first.
-  if (aiOn() && looksLikeInstruction(text)) {
+  if (!opts?.tasks && aiOn() && looksLikeInstruction(text)) {
     return { tone: 'order', text: `Clerk: ${stripInstruction(text)}`, instruct: text }
   }
 

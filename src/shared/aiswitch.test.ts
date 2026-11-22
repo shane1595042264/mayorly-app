@@ -41,6 +41,14 @@ describe('an AI prompt', () => {
     expect(onDeskId(d.s)).toBe(d.id('beta'))
   })
 
+  it('takes a prompt seen twice in a moment, by a hook and by the Stop button of the app, as one', () => {
+    const d = desk()
+    expect(prompt(d, typed())).toMatchObject({ switched: true })
+    const step = promptStep(d.s, typed(true, 'claude-app'), 1200)
+    expect(step).toEqual({ act: null, why: 'the same prompt, seen twice' })
+    expect(promptStep(d.s, typed(true, 'chatgpt-app'), 6000).act).toEqual({ type: 'desk/switch' })
+  })
+
   it('switches from wherever you went yourself, as Alt+Q would', () => {
     const d = desk()
     d.act({ type: 'entry/capture', text: 'legal: gamma' })

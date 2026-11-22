@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Desktop AI apps switch too, and the couch shows its coin going
+
+- A prompt in the Claude, ChatGPT (and Codex) or Gemini desktop apps now switches your task like Alt+Q, and so does one on chatgpt.com, gemini.google.com or claude.ai in your browser. Mayorly notices the app's Stop button appearing while it answers. Windows only for now.
+- When a block on the couch ends and takes its coin, the coin counter shows up and counts down, with a falling sound.
+- Find (Alt+F): Shift+Enter adds the line without starting it. A line such as "make an app for the stream" is now always a task; only clear orders about Mayorly itself go to the clerk.
+- Only one Mayorly runs on a computer. Opening it again says it is already running instead of starting a second.
+
 ## The tomato always takes the mouse, and right-click it to quit
 
 - Dragging the tomato stopped working after Mayorly had run a while. Mayorly now notices the pointer over the tomato by itself instead of waiting to be told, so it takes the mouse every time, after a game, a busy moment or hours of running.

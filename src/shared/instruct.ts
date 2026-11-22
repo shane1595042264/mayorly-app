@@ -6,8 +6,20 @@ import { dayKey, wallClock } from './windows'
 // Nothing here writes state; main applies what may be done at once and the capture box asks
 // about the rest. A calendar request goes to the calendar's own clerk, which shows its plan.
 
-/** Lines that read as orders about how Mayorly works, not things to do. A line that only looks like one is filed as a task by the clerk. */
-const LOOKS_LIKE = /^(set|change|make|turn|switch|add a (recipe|rule|shortcut|hotkey)|auto(matically)?\b|every|each|daily|whenever|from now on|in the future|when i press|create a (shortcut|hotkey|recipe|rule)|no work|i('m| am)? off|take (today|tomorrow|monday|tuesday|wednesday|thursday|friday|[a-z]+day) off|block|clear my|move my|my work( schedule)?|work (schedule|hours) )/i
+/**
+ * Lines that read as orders about how Mayorly works, not things to do. A bare verb is not enough:
+ * "make an app for the stream overlay" and "switch phone plans" are tasks, so a verb counts only
+ * with something of Mayorly's after it (work, sessions, a recipe, a hotkey). A line that only looks
+ * like one is filed as a task by the clerk.
+ */
+const MAYORLY_THING = String.raw`(work|session|sessions|schedule|hours|calendar|recipe|recipes|rule|rules|shortcut|shortcuts|hotkey|hotkeys|day off|days off)\b`
+const LOOKS_LIKE = new RegExp(
+  String.raw`^((set|change|make|turn|switch|update)\s+((my|the|a|an)\s+)?${MAYORLY_THING}` +
+    String.raw`|add a (recipe|rule|shortcut|hotkey)|auto(matically)?\s+(create|add|make|start|file|schedule)\b` +
+    String.raw`|(every|each)\s+(day|workday|weekday|morning|evening|week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b.*\b(create|add|make|start|remind)\b` +
+    String.raw`|whenever|from now on|in the future|when i press|create a (shortcut|hotkey|recipe|rule)|no work|i('m| am)? off|take (today|tomorrow|[a-z]+day) off|clear my (day|calendar|schedule)|move my (work|schedule|calendar)|my work (schedule|hours|days)\b|work (schedule|hours) )`,
+  'i',
+)
 
 /** True when a captured line should go to the clerk as an instruction first. A leading "!" forces it; "do:" too. */
 export function looksLikeInstruction(text: string): boolean {

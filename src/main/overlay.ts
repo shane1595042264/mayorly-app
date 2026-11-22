@@ -248,11 +248,11 @@ export class Overlay {
    * The pet window is too small for that, so a display-only window the size of the work
    * area appears for the animation and ignores the mouse throughout.
    */
-  cashIn(amount: number, balance: number) {
+  cashIn(amount: number, balance: number, out = false) {
     if (!mac || this.win.isDestroyed()) return
     const wa = this.display().workArea
     const a = this.anchor ?? this.defaultAnchor(wa)
-    const effect: Effect = { kind: 'cashin', amount, balance, from: { x: a.x - wa.x, y: a.y - (TOMATO / 2) * this.scale - wa.y } }
+    const effect: Effect = { kind: 'cashin', amount, balance, from: { x: a.x - wa.x, y: a.y - (TOMATO / 2) * this.scale - wa.y }, out }
     if (!this.effects) {
       this.effects = new BrowserWindow({
         ...wa,

@@ -551,6 +551,8 @@ export type HudEvent =
   | { type: 'tomato'; at: Epoch; n: number; tokens: number; entryId: Id | null }
   /** An entry was cleared and its tomatoes paid out. */
   | { type: 'harvest'; at: Epoch; entryId: Id; title: string; tomatoes: number; tokens: number }
+  /** A block on the couch completed and its coin was taken: the HUD shows the balance going down. */
+  | { type: 'spend'; at: Epoch; tokens: number; leisureId: Id | null }
   | { type: 'block'; at: Epoch; block: Block; started: boolean }
   | { type: 'swap'; at: Epoch; ledgerId: Id | null; entryId: Id | null }
   | { type: 'cleared'; at: Epoch; entryId: Id; title: string }
