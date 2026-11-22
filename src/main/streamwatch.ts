@@ -171,7 +171,8 @@ export function streamRule(o: {
     if (firing) return
     firing = true
     try {
-      const own = await ownLeagueMatch()
+      // Kept fresh in the background while a stream is watched, so a death never waits on tasklist.
+      const own = ownLeagueMatchNow() ?? (await ownLeagueMatch())
       const step = deathStep(engine.state, engine.deviceId, { ownMatch: own, sinceFireMs: fired ? Date.now() - fired.at : Infinity })
       log.info('[stream]', `death on ${site}: ${tick.seen}; ${step.why}`)
       if (!step.act) return
@@ -322,6 +323,7 @@ export function streamRule(o: {
       timer = setInterval(() => {
         const a = arm()
         noteArm(a, Date.now())
+        if (a.on && (!ownCache || Date.now() - ownCache.at > 15_000)) void ownLeagueMatch()
         if (a.on && !heard && !nudged && armedSince !== null && Date.now() - armedSince > 60_000) {
           nudged = true
           log.info('[stream]', 'armed a minute and no stream heard from')
@@ -346,13 +348,30 @@ export function streamRule(o: {
 
 let ownCache: { at: number; value: boolean } | null = null
 let ownTimed = false
+let ownGoing: Promise<boolean> | null = null
+/** How long an answer of the own match check holds; refreshed every 15 s or so while a stream is watched. */
+const OWN_FRESH_MS = 20_000
+
+/** The last answer of the own match check, while it is fresh; null when there is none. */
+export function ownLeagueMatchNow(): boolean | null {
+  return ownCache && Date.now() - ownCache.at < OWN_FRESH_MS ? ownCache.value : null
+}
 
 /**
  * A League match of your own is running: the game's process is up (Windows), or its Live Client
- * Data API answers on 127.0.0.1:2999, which it serves only during a match. Cached for 10 s.
+ * Data API answers on 127.0.0.1:2999, which it serves only during a match. Cached for 5 s.
  */
 export async function ownLeagueMatch(): Promise<boolean> {
-  if (ownCache && Date.now() - ownCache.at < 10_000) return ownCache.value
+  if (ownCache && Date.now() - ownCache.at < 5_000) return ownCache.value
+  // One check at a time: tasklist can take seconds on a busy computer.
+  if (ownGoing) return ownGoing
+  ownGoing = checkOwnMatch().finally(() => {
+    ownGoing = null
+  })
+  return ownGoing
+}
+
+async function checkOwnMatch(): Promise<boolean> {
   const t0 = Date.now()
   const port = new Promise<boolean>((resolve) => {
     const sock = connect(2999, '127.0.0.1')
