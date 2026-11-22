@@ -25,10 +25,14 @@ const debug = process.env.MAYORLY_DEBUG ? (...a: unknown[]) => console.error('[o
 // src/shared/pet.ts, shared with the page, which draws the same boxes in the Windows overlay.
 /** Windows: how long after the system moved the overlay it is put back on its display. */
 const REFIT_SETTLE_MS = 250
-/** How often the cursor is sampled for hover: on macOS always, on Windows beside the forwarded moves. */
+/** How often the cursor is sampled near the pet: on macOS for hover, on Windows to take the pointer. */
 const HOVER_POLL_MS = 40
-/** Windows: how near the pet the pointer must be before its moves are fed to the page. */
+/** Windows: how far off the pet the pointer must go before the window lets go of it. */
 const PET_NEAR_PX = 24
+/** Windows: the poll rate while the pointer is far from the pet, so it is taken the moment it arrives. */
+const TAKE_IDLE_MS = 100
+/** Windows: the page hearing nothing this long while the pointer moves on the pet is worth a line in the log. */
+const DEAF_MS = 800
 /** How often a held tomato checks which display the pointer is on. */
 const HELD_POLL_MS = 16
 /** The poll rate while the pointer is far from the pet: enough to notice it coming. */
@@ -50,6 +54,11 @@ export class Overlay {
   private displayId: number
   private hoverTimer: NodeJS.Timeout | null = null
   private cursor = { x: NaN, y: NaN, inside: false }
+  /** Windows: the pointer was over the pet at the last poll, when it arrived, when the page last heard a mouse event, and the last deaf report. */
+  private over = false
+  private overAt = 0
+  private heardAt = 0
+  private deafAt = 0
   private anchor: Anchor | null = null
   private scale = 1
   private text = 1
@@ -121,6 +130,21 @@ export class Overlay {
     // showInactive, never show: show() would activate the app or make the panel key.
     this.win.once('ready-to-show', () => this.win.showInactive())
     this.win.webContents.on('did-finish-load', () => this.sendLayout())
+    // What the page hears: the pet's deaf check compares it with where the cursor is.
+    this.win.webContents.on('input-event', (_e, ev) => {
+      if (ev.type.startsWith('mouse')) this.heardAt = Date.now()
+    })
+    if (process.env.MAYORLY_DEBUG) {
+      let lastMove = 0
+      this.win.webContents.on('input-event', (_e, ev) => {
+        if (!ev.type.startsWith('mouse')) return
+        if (ev.type === 'mouseMove') {
+          if (Date.now() - lastMove < 400) return
+          lastMove = Date.now()
+        }
+        debug('input', ev.type)
+      })
+    }
     if (mac) {
       this.win.on('will-move', () => this.onMoving())
       this.win.on('move', () => this.onMoving())
@@ -368,6 +392,7 @@ export class Overlay {
 
   /** Windows field mode: the pointer is over a HUD control, so stop ignoring the mouse. */
   setHit(hit: boolean) {
+    debug('hit', hit)
     this.hit = hit
     if (mac) return
     if ((this.mode === 'field' || this.mode === 'drawer') && !this.win.isDestroyed()) this.win.setIgnoreMouseEvents(!hit, { forward: true })
@@ -421,6 +446,7 @@ export class Overlay {
    * this window, so its release arrives even if the mouse capture slipped at the border.
    */
   setHeld(held: boolean) {
+    debug('held', held)
     if (mac) return
     if (this.heldTimer) clearInterval(this.heldTimer)
     this.heldTimer = held ? setInterval(() => this.followPointer(), HELD_POLL_MS) : null
@@ -708,12 +734,14 @@ export class Overlay {
   // macOS: AppKit only delivers mouse-moved events to the key window, and in field mode the
   // panel never is one, so the cursor is sampled and the page gets the same mousemove.
   //
-  // Windows: the click-through overlay hears the pointer through Electron's forwarded moves,
-  // which ride a low-level mouse hook. Windows gives that hook nothing while a program running
-  // as administrator is in front (League of Legends, with its anti-cheat), and drops it for good
-  // when a busy machine answers it late, so the pet stopped taking clicks and drags. The cursor's
-  // position can always be read, so it is sampled here too, near the pet, and the page gets the
-  // move it missed; the page's own hit test then lets the pet take the pointer.
+  // Windows: the overlay is click-through, and the pet takes clicks only while the window stops
+  // being click-through over it. The page's hit test does that as soon as it hears the pointer,
+  // through Electron's forwarded moves; but those ride a low-level mouse hook that Windows starves
+  // while a program running as administrator is in front (a game with anti-cheat) and drops for
+  // good when the app once answers it late, and a long-running Mayorly still stopped taking the
+  // tomato after hours. So the shell decides too, from the cursor and the pet's own box: arriving
+  // over the pet takes the pointer, leaving lets it go. scripts/e2e-drag.ps1 drags the tomato with
+  // real mouse input to hold this to account.
 
   private startHoverPoll() {
     if (this.hoverTimer) return
@@ -724,7 +752,7 @@ export class Overlay {
     this.hoverTimer = setTimeout(() => {
       this.hoverTimer = null
       const near = this.pollCursor()
-      this.scheduleHoverPoll(near ? HOVER_POLL_MS : HOVER_IDLE_MS)
+      this.scheduleHoverPoll(near ? HOVER_POLL_MS : mac ? HOVER_IDLE_MS : TAKE_IDLE_MS)
     }, ms)
   }
 
@@ -733,6 +761,7 @@ export class Overlay {
     clearTimeout(this.hoverTimer)
     this.hoverTimer = null
     this.cursor = { x: NaN, y: NaN, inside: false }
+    this.over = false
   }
 
   /** Feeds the page the pointer; true when the pointer is near enough to keep polling fast. */
@@ -755,29 +784,60 @@ export class Overlay {
   }
 
   /**
-   * Windows: the pointer near the pet (or anywhere over the open drawer) goes to the page as a move,
-   * only while the overlay still lets the pointer through. Once the page has said the pointer is on
-   * the pet (`hit`), or the tomato is held, the window takes real mouse events, buttons and all; a
-   * made-up move then would say no button is down and end a drag the moment it starts. True while near.
+   * Windows: the pointer arriving over the pet (or the open drawer) makes the window take it, and
+   * leaving lets it go, whatever the page last said; the page's own hit test still answers first
+   * whenever it hears the pointer. While the tomato is carried the window keeps it. No made-up
+   * mouse moves: one says no button is down and ends a drag the moment it starts. True while near.
    */
+  private pollState = ''
   private pollCursorWin(): boolean {
-    if (this.win.isDestroyed() || (this.mode !== 'field' && this.mode !== 'drawer') || !this.win.isVisible() || this.dragging) return false
-    if (this.hit || this.heldTimer) {
-      this.cursor = { x: NaN, y: NaN, inside: true }
-      return true
+    if (process.env.MAYORLY_DEBUG) {
+      const st = `${this.mode} hit=${this.hit} held=${!!this.heldTimer} over=${this.over}`
+      if (st !== this.pollState) debug('poll state', (this.pollState = st))
     }
+    if (this.win.isDestroyed() || (this.mode !== 'field' && this.mode !== 'drawer') || !this.win.isVisible()) return false
+    if (this.heldTimer) return true
     const p = screen.getCursorScreenPoint()
     const b = this.win.getBounds()
-    const x = p.x - b.x
-    const y = p.y - b.y
-    const inside = x >= 0 && y >= 0 && x < b.width && y < b.height
     const a = this.anchor ?? this.defaultAnchor(b)
-    const near = inside && (this.mode === 'drawer' || nearPet(p, a, b, this.scale, this.text, PET_NEAR_PX))
-    if (p.x === this.cursor.x && p.y === this.cursor.y) return near
-    // `inside` here means near: one more move after leaving lets the page let go of the pointer.
-    const was = this.cursor.inside
-    this.cursor = { x: p.x, y: p.y, inside: near }
-    if (near || was) this.win.webContents.sendInputEvent({ type: 'mouseMove', x, y })
+    const over = this.onPet(p, a, b, 0)
+    const near = over || this.onPet(p, a, b, PET_NEAR_PX)
+    const moved = p.x !== this.cursor.x || p.y !== this.cursor.y
+    this.cursor = { x: p.x, y: p.y, inside: over }
+    const now = Date.now()
+    if (over && !this.over) {
+      // Arriving: take the pointer, and stand on top again in case a window got above this one.
+      this.overAt = now
+      this.pin()
+      if (!this.hit) this.takeHit(true)
+    } else if (!near && this.hit) {
+      // Gone: click-through again, and the page hears the pointer leave.
+      this.takeHit(false)
+      this.win.webContents.sendInputEvent({ type: 'mouseLeave', x: 0, y: 0 })
+    }
+    this.over = over
+    // The window takes the pointer over the pet and the pointer moves there, yet the page hears
+    // nothing. Say so in the log, with what the shell believes, and stand on top again.
+    if (over && this.hit && moved && now - this.overAt > DEAF_MS && now - this.heardAt > DEAF_MS && now - this.deafAt > 60_000) {
+      this.deafAt = now
+      console.warn('[overlay] deaf: the pointer is on the pet and the page hears nothing', JSON.stringify({ mode: this.mode, cursor: p, bounds: b, anchor: a, display: this.displayId, heardMsAgo: now - this.heardAt }))
+      this.win.setIgnoreMouseEvents(false)
+      this.pin()
+    }
     return near
+  }
+
+  /** The shell's own call on the pointer; the page is told, so its hit test carries on from there rather than from what it last said. */
+  private takeHit(hit: boolean) {
+    this.setHit(hit)
+    this.win.webContents.send(IPC.hit, hit)
+  }
+
+  /** The pointer is over the pet's box, or the open drawer's, give or take `margin`. */
+  private onPet(p: Anchor, a: Anchor, b: Rectangle, margin: number): boolean {
+    if (nearPet(p, a, b, this.scale, this.text, margin)) return true
+    if (this.mode !== 'drawer') return false
+    const d = drawerBox(petBox(a, b, this.scale, this.text), b, sideOf(b, a))
+    return p.x >= d.x - margin && p.x < d.x + d.width + margin && p.y >= d.y - margin && p.y < d.y + d.height + margin
   }
 }

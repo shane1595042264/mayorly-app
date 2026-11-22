@@ -241,6 +241,11 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
         transition={away ? { duration: 0.14, ease: 'easeOut' } : { type: 'spring', stiffness: 220, damping: 26 }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
+        onContextMenu={(e) => {
+          // The tray's menu, Quit included, right on the pet.
+          e.preventDefault()
+          bridge.petMenu()
+        }}
         data-hit
       >
         <div className="pet" role="status" aria-label="Desk status">

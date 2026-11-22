@@ -1,7 +1,11 @@
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { onDeskId, reduce, sampleState, type Action, type MayorlyState } from '../core/index'
 import { promptStep, type AgentPrompt } from './aiswitch'
-import { eventOf } from '../main/agents'
+import { eventOf, HOOK } from '../main/agents'
 
 const now = Date.parse('2026-11-21T15:00:00Z')
 
@@ -70,5 +74,34 @@ describe('a line from an AI hook', () => {
     expect(eventOf('{"at":1,"app":"claude","event":"done","manual":true}')).toBeNull()
     expect(eventOf('{"at":1,"app":"copilot","event":"prompt"}')).toBeNull()
     expect(eventOf('not json')).toBeNull()
+  })
+})
+
+/** The hook as Claude Code runs it: its payload on stdin, Claude Code's environment, a home of its own. */
+function hookLine(payload: Record<string, unknown>, entrypoint: string) {
+  const home = mkdtempSync(join(tmpdir(), 'mayorly-hook-'))
+  try {
+    const script = join(home, 'ai-hook.cjs')
+    writeFileSync(script, HOOK)
+    spawnSync(process.execPath, [script, 'claude', 'prompt'], {
+      input: JSON.stringify(payload),
+      env: { ...process.env, USERPROFILE: home, HOME: home, CLAUDE_CODE_ENTRYPOINT: entrypoint },
+      encoding: 'utf8',
+    })
+    return eventOf(readFileSync(join(home, '.mayorly', 'ai.jsonl'), 'utf8').trim())
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+describe('the hook', () => {
+  it('counts a prompt typed in the desktop app or the terminal, and not one a script, a schedule or a notice sent', () => {
+    expect(hookLine({ session_id: 's', prompt: 'fix the drag' }, 'claude-desktop')?.manual).toBe(true)
+    expect(hookLine({ session_id: 's', prompt: 'fix the drag' }, 'cli')?.manual).toBe(true)
+    // claude -p from a scheduler: the hourly AUTHOK check and /jira-worker switched the desk on the hour.
+    expect(hookLine({ session_id: 's', prompt: 'Reply with exactly: AUTHOK' }, 'sdk-cli')?.manual).toBe(false)
+    expect(hookLine({ session_id: 's', prompt: '/jira-worker' }, 'sdk-ts')?.manual).toBe(false)
+    expect(hookLine({ session_id: 's', prompt: 'done', origin: { kind: 'task-notification' } }, 'claude-desktop')?.manual).toBe(false)
+    expect(hookLine({ session_id: 's', prompt: '<scheduled-task name="x">' }, 'claude-desktop')?.manual).toBe(false)
   })
 })

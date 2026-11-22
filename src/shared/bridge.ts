@@ -200,6 +200,10 @@ export interface Bridge {
   setMode(mode: UiMode): void
   /** Field mode only: the pointer is over an interactive HUD element. */
   setHit(hit: boolean): void
+  /** Windows: the shell took the pointer over the pet, or let it go, on its own; the page's hit test carries on from there. */
+  onHit(fn: (hit: boolean) => void): () => void
+  /** A right click on the pet: the tray's menu at the pointer (Swap, Deck, Hold, Quit and the rest). */
+  petMenu(): void
   /** macOS: the hover caption is its own click-through window beside the pet; null hides it. `scheduled`: the schedule's quiet line, under the tomato when there is room. */
   setCaption(text: string | null, style?: CaptionStyle): void
   /** The caption window's own page: the text to show, which side of the pet it sits on, and how. */
@@ -306,6 +310,8 @@ export const IPC = {
   command: 'mayorly:command',
   setMode: 'mayorly:set-mode',
   setHit: 'mayorly:set-hit',
+  hit: 'mayorly:hit',
+  petMenu: 'mayorly:pet-menu',
   layout: 'mayorly:layout',
   getLayout: 'mayorly:get-layout',
   setCaption: 'mayorly:set-caption',

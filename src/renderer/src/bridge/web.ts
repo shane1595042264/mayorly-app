@@ -174,6 +174,9 @@ export function createWebBridge(): Bridge {
     onCommand: (fn) => sub(cmdSubs, fn),
     setMode: (_mode: UiMode) => {},
     setHit: () => {},
+    onHit: () => () => {},
+    // A browser tab has no tray; its own context menu is fine.
+    petMenu: () => {},
     setCaption: () => {},
     onCaption: () => () => {},
     getLayout: async () => layout(),

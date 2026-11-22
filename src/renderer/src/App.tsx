@@ -521,9 +521,15 @@ export function App() {
     }
     window.addEventListener('mousemove', move)
     window.addEventListener('mouseout', leave)
+    // Windows: the shell took the pointer over the pet, or let it go, without the page; the next
+    // move off the pet then still lets go of it.
+    const off = bridge.onHit((hit) => {
+      last = hit
+    })
     return () => {
       window.removeEventListener('mousemove', move)
       window.removeEventListener('mouseout', leave)
+      off()
     }
   }, [])
 

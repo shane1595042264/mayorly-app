@@ -1,4 +1,4 @@
-import { Menu, Tray, nativeImage, shell, app, type NativeImage } from 'electron'
+import { Menu, Tray, nativeImage, shell, app, type BrowserWindow, type MenuItemConstructorOptions, type NativeImage } from 'electron'
 import { blockView, clock, type MayorlyState } from '@core/index'
 import tray1x from '../../build/tomato@1x.png?asset'
 import tray2x from '../../build/tray.png?asset'
@@ -26,23 +26,22 @@ function trayImage(): NativeImage {
   return img
 }
 
-export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): Tray {
+/** The tray icon, and `popup`: the same menu at the pointer, for a right click on the tomato. */
+export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): { tray: Tray; popup: (win: BrowserWindow) => void } {
   const tray = new Tray(trayImage())
   tray.setToolTip('Mayorly')
   // On macOS a click opens the menu itself (and would fire this as well); Deck is in the menu.
   if (process.platform !== 'darwin') tray.on('click', () => act.command('deck'))
 
   const rebuild = (s: MayorlyState) => {
-    const v = blockView(s, Date.now())
-    const status =
-      !v ? 'Desk idle'
-        : v.status === 'paused' ? `Holding  ${v.block.label}`
-          : v.block.kind === 'leisure' ? `Couch  ${v.block.label}  ${v.remainingMs !== null ? clock(v.remainingMs) : ''}`
-          : v.block.kind === 'rest' ? `${v.block.label}  ${v.remainingMs !== null ? clock(v.remainingMs) : ''}`
-            : `${v.ledger?.code ?? 'FREE'}  ${v.entry?.title ?? v.block.label}`
+    const status = statusOf(s)
     tray.setToolTip(`Mayorly  ${status}`)
+    tray.setContextMenu(Menu.buildFromTemplate(items(s, status)))
+  }
+
+  const items = (s: MayorlyState, status: string): MenuItemConstructorOptions[] => {
     const hk = s.settings.hotkeys
-    const menu = Menu.buildFromTemplate([
+    return [
       { label: status, enabled: false },
       { type: 'separator' },
       { label: 'Swap', accelerator: hk.plus, click: () => act.command('plus') },
@@ -77,8 +76,15 @@ export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): 
       { type: 'separator' },
       ...(act.updates.ready() ? [{ label: `Restart to update to ${act.updates.ready()}`, click: () => act.updates.install() }] : []),
       { label: 'Quit Mayorly', click: () => app.quit() },
-    ])
-    tray.setContextMenu(menu)
+    ]
+  }
+  const statusOf = (s: MayorlyState) => {
+    const v = blockView(s, Date.now())
+    return !v ? 'Desk idle'
+      : v.status === 'paused' ? `Holding  ${v.block.label}`
+        : v.block.kind === 'leisure' ? `Couch  ${v.block.label}  ${v.remainingMs !== null ? clock(v.remainingMs) : ''}`
+          : v.block.kind === 'rest' ? `${v.block.label}  ${v.remainingMs !== null ? clock(v.remainingMs) : ''}`
+            : `${v.ledger?.code ?? 'FREE'}  ${v.entry?.title ?? v.block.label}`
   }
 
   rebuild(engine.state)
@@ -106,5 +112,9 @@ export function createTray(engine: Engine, overlay: Overlay, act: TrayActions): 
       rebuild(s)
     }
   })
-  return tray
+  const popup = (win: BrowserWindow) => {
+    const s = engine.state
+    Menu.buildFromTemplate(items(s, statusOf(s))).popup({ window: win })
+  }
+  return { tray, popup }
 }

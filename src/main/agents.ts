@@ -25,7 +25,7 @@ export const AGENT_PORT = 47731
  * except `{}` for Gemini, which reads a hook's stdout as JSON. A `done` from a hook 0.1.69 set up
  * on an answer is written too, and ignored.
  */
-const HOOK = `// Mayorly: one line when you send an AI a prompt, so the desk can switch to your recent task
+export const HOOK = `// Mayorly: one line when you send an AI a prompt, so the desk can switch to your recent task
 // meanwhile. Keeps the app and whether you typed it; never the prompt.
 const fs = require('fs')
 const os = require('os')
@@ -41,7 +41,11 @@ const finish = () => {
     // Typed by you, or sent by the tool itself (a scheduled task, a background notice): where the
     // payload says where the prompt came from, that decides; else the way such prompts begin.
     const kind = (j.origin && j.origin.kind) || j.turnOrigin || j.turn_origin || ''
-    const manual = event !== 'prompt' ? true : kind ? kind === 'human' : !/^\\s*<(scheduled-task|task-notification|system-reminder)/.test(String(j.prompt || ''))
+    // Claude Code run headless by a script or a scheduler (claude -p, the Agent SDK) says so in
+    // CLAUDE_CODE_ENTRYPOINT (sdk-cli, sdk-ts, sdk-py): nobody typed that prompt. The desktop app
+    // is claude-desktop, the terminal cli.
+    const headless = /^sdk/i.test(process.env.CLAUDE_CODE_ENTRYPOINT || '')
+    const manual = event !== 'prompt' ? true : headless ? false : kind ? kind === 'human' : !/^\\s*<(scheduled-task|task-notification|system-reminder)/.test(String(j.prompt || ''))
     const dir = path.join(os.homedir(), '.mayorly')
     fs.mkdirSync(dir, { recursive: true })
     fs.appendFileSync(path.join(dir, 'ai.jsonl'), JSON.stringify({ at: Date.now(), app, event, manual }) + '\\n')

@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The tomato always takes the mouse, and right-click it to quit
+
+- Dragging the tomato stopped working after Mayorly had run a while. Mayorly now notices the pointer over the tomato by itself instead of waiting to be told, so it takes the mouse every time, after a game, a busy moment or hours of running.
+- Right-click the tomato for the same menu as the tray icon: Swap, Deck, Hold, Hide HUD and Quit Mayorly.
+- Prompts that a script or a schedule sends Claude Code (claude -p) no longer switch your task. Only prompts you type do.
+
 ## An AI prompt is just Alt+Q, and Find can add without starting
 
 - When you type Claude Code, Gemini CLI, Codex, ChatGPT or Gemini a prompt, the desk switches to your recent task, exactly as Alt+Q would. It doesn't switch back when the answer comes: your next prompt, or Alt+Q, switches again. Nothing to remember, so restarting Mayorly loses nothing.

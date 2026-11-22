@@ -17,6 +17,30 @@ jobs:
       - run: npm test
       - run: npm run typecheck
       - run: npm run build
+  # The tomato dragged with real mouse input on a Windows desktop: scripts/e2e-drag.ps1.
+  drag:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Drag the tomato
+        shell: powershell
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-drag.ps1 -Out e2e-drag.json
+          $code = $LASTEXITCODE
+          Get-Content e2e-drag.json
+          exit $code
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-drag
+          path: e2e-drag.json
   server:
     runs-on: ubuntu-latest
     defaults:

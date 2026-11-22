@@ -40,6 +40,10 @@ app.on('open-url', (e, url) => {
   else queuedUrls.push(url)
 })
 
+// A profile of its own (scripts/e2e-drag.ps1): its own save, pet place, log and single-instance
+// lock, so the end-to-end test runs a second Mayorly beside the real one without touching it.
+if (process.env.MAYORLY_DATA_DIR) app.setPath('userData', process.env.MAYORLY_DATA_DIR)
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -701,7 +705,9 @@ function boot() {
   onFieldMode = () => void offerUpdate()
   updates.onReady(() => void offerUpdate())
   engine.on(() => void offerUpdate())
-  createTray(engine, overlay, { command, togglePause, dataDir, updates })
+  const tray = createTray(engine, overlay, { command, togglePause, dataDir, updates })
+  // A right click on the tomato: the tray's menu, Quit included, where the pointer is.
+  ipcMain.on(IPC.petMenu, () => tray.popup(overlay.win))
   overlay.load()
   // The first launch opens the deck, which starts on the shelf and says what the keys are.
   if (engine.fresh) overlay.win.webContents.once('did-finish-load', () => setTimeout(() => command('deck'), 1200))
