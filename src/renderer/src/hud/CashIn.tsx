@@ -15,6 +15,8 @@ interface Props {
   balance: number
   from: { x: number; y: number }
   out?: boolean
+  /** A count already on screen (the open deck's): the coins fly to or from it and no counter of its own shows. */
+  anchor?: { x: number; y: number } | null
   onDone: () => void
 }
 
@@ -23,8 +25,10 @@ const MAX_COINS = 8
 const FLIGHT_MS = 720
 const STAGGER_MS = 90
 
-export function CashIn({ amount, balance, from, out = false, onDone }: Props) {
+export function CashIn({ amount, balance, from, out = false, anchor = null, onDone }: Props) {
   const coins = Math.max(1, Math.min(MAX_COINS, amount))
+  // The arc over the flight: high to the corner counter, low to a count in the open deck, and never off the screen.
+  const lift = anchor ? 36 : 140
   const start = out ? balance + amount : balance - amount
   const [shown, setShown] = useState(start)
   const [landed, setLanded] = useState(0)
@@ -33,6 +37,7 @@ export function CashIn({ amount, balance, from, out = false, onDone }: Props) {
   const [to, setTo] = useState<{ x: number; y: number } | null>(null)
 
   useEffect(() => {
+    if (anchor) return setTo(anchor)
     const r = target.current?.getBoundingClientRect()
     if (r) setTo({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
   }, [])
@@ -56,7 +61,7 @@ export function CashIn({ amount, balance, from, out = false, onDone }: Props) {
   return (
     <div className="cashin" aria-live="polite">
       <AnimatePresence onExitComplete={onDone}>
-        {!gone && (
+        {!gone && !anchor && (
           <motion.div
             key="counter"
             ref={target}
@@ -80,7 +85,7 @@ export function CashIn({ amount, balance, from, out = false, onDone }: Props) {
             initial={{ x: from.x - 16, y: from.y - 16, opacity: 0, scale: 0.6, rotate: 0 }}
             animate={{
               x: out ? [to.x - 16, (from.x + to.x) / 2 - 16 + (i % 2 ? 40 : -40), from.x - 16] : [from.x - 16, (from.x + to.x) / 2 - 16 + (i % 2 ? 40 : -40), to.x - 16],
-              y: out ? [to.y - 16, Math.min(from.y, to.y) - 140 - i * 12, from.y - 16] : [from.y - 16, Math.min(from.y, to.y) - 140 - i * 12, to.y - 16],
+              y: out ? [to.y - 16, Math.max(8, Math.min(from.y, to.y) - lift - i * 12), from.y - 16] : [from.y - 16, Math.max(8, Math.min(from.y, to.y) - lift - i * 12), to.y - 16],
               opacity: [0, 1, 1, 0],
               scale: [0.6, 1.1, 0.7],
               rotate: [0, 180 + i * 20, 360 + i * 20],

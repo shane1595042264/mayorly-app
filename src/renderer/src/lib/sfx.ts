@@ -109,6 +109,14 @@ export const sfx = {
     tone(a, f, t, 0.07, 0.05, 'triangle')
     tone(a, f * 1.5, t + 0.03, 0.14, 0.035)
   },
+  /** Not enough coins: a short low double knock, a no that does not scold. */
+  nope() {
+    const a = ac()
+    if (!a) return
+    const t = a.currentTime
+    tone(a, 196, t, 0.07, 0.06, 'triangle')
+    tone(a, 165, t + 0.09, 0.1, 0.05, 'triangle')
+  },
   /** A coin leaving the counter for the couch; each one a little lower than the last. */
   coinOut(i: number) {
     const a = ac()

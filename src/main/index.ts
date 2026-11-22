@@ -476,6 +476,7 @@ function boot() {
       if (ev.type === 'harvest' && ev.tokens > 0 && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0))
       // A couch block's coin, taken: the same counter, counting down.
       if (ev.type === 'spend' && ev.tokens > 0 && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0), true)
+      if (ev.type === 'refund' && ev.tokens > 0 && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0))
     }
   })
   ipcMain.on(IPC.effectDone, () => overlay.effectDone())

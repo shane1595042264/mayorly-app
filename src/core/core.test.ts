@@ -7,7 +7,7 @@ import {
   type Action, type HudEvent, type MayorlyState,
   balance, blockView, clock, dayStats, deriveCode, entryTomatoes, sampleState, formatSuperset, objectives, switchTarget,
   findTasks, taskTomatoes, tomatoLabel, onDeskId, recentTasks, switchToAction, switcherAction, mergeStates, parseSuperset, prefixClerk, reduce, tokensForSitting, tokensForTomato,
-  scheduledNow, randomTask,
+  scheduledNow, randomTask, marketList, marketBought, purchases, MARKET_UNDO_MS,
 } from './index'
 
 const MIN = 60_000
@@ -901,6 +901,65 @@ describe('the couch', () => {
     // A block left early costs nothing.
     expect(balance(w.s)).toBe(before - 1)
     expect(w.s.desk.status).toBe('idle')
+  })
+
+  it('the market sells an action at your price, at once, never on credit, and a purchase can be undone for a while', () => {
+    const w = rich()
+    const before = balance(w.s)
+    expect(before).toBe(3)
+    w.do({ type: 'market/add', title: '  Empower the next game  ', price: 2, note: 'after a LeetCode solved in time' })
+    w.do({ type: 'market/add', title: 'A night off', price: 10 })
+    w.do({ type: 'market/add', title: 'free lunch', price: 0 })
+    w.do({ type: 'market/add', title: '   ', price: 4 })
+    expect(marketList(w.s).map((m) => [m.title, m.price])).toEqual([['Empower the next game', 2], ['A night off', 10]])
+    const game = marketList(w.s)[0]
+    const night = marketList(w.s)[1]
+    // Bought at once: the coins go, the HUD hears it.
+    w.do({ type: 'market/buy', id: game.id })
+    expect(balance(w.s)).toBe(before - 2)
+    expect(w.events.filter((e) => e.type === 'spend').at(-1)).toMatchObject({ type: 'spend', tokens: 2, marketId: game.id })
+    expect(marketBought(w.s, game.id)).toMatchObject({ count: 1 })
+    // Never on credit.
+    w.do({ type: 'market/buy', id: night.id })
+    w.do({ type: 'market/buy', id: game.id })
+    expect(balance(w.s)).toBe(before - 2)
+    // Undone once, within the time; the coin log only grows.
+    const tx = purchases(w.s)[0]
+    w.do({ type: 'market/undo', txId: tx.id })
+    w.do({ type: 'market/undo', txId: tx.id })
+    expect(balance(w.s)).toBe(before)
+    expect(w.events.filter((e) => e.type === 'refund')).toEqual([expect.objectContaining({ tokens: 2, marketId: game.id })])
+    expect(purchases(w.s)[0]).toMatchObject({ title: 'Empower the next game', refunded: true })
+    expect(marketBought(w.s, game.id).count).toBe(0)
+    w.do({ type: 'market/buy', id: game.id })
+    w.wait(MARKET_UNDO_MS + 1000)
+    w.do({ type: 'market/undo', txId: purchases(w.s)[0].id })
+    expect(balance(w.s)).toBe(before - 2)
+    // A price is whole coins, 1 to 999; a removed item keeps its purchases' titles.
+    w.do({ type: 'market/update', id: night.id, patch: { price: 4.4, note: '' } })
+    expect(w.s.market.find((m) => m.id === night.id)).toMatchObject({ price: 4 })
+    w.do({ type: 'market/update', id: night.id, patch: { price: 5000 } })
+    expect(w.s.market.find((m) => m.id === night.id)?.price).toBe(999)
+    // A purchase keeps the title it was bought under; a removed item keeps its purchases and comes back.
+    w.do({ type: 'market/update', id: game.id, patch: { title: 'Empower the next ranked game' } })
+    expect(purchases(w.s)[0].title).toBe('Empower the next game')
+    w.do({ type: 'market/delete', id: game.id })
+    expect(marketList(w.s).map((m) => m.title)).toEqual(['A night off'])
+    expect(purchases(w.s)[0].title).toBe('Empower the next game')
+    w.do({ type: 'market/restore', id: game.id })
+    expect(marketList(w.s).map((m) => m.title)).toEqual(['Empower the next ranked game', 'A night off'])
+  })
+
+  it('the market comes through an older save and a merge', () => {
+    const w = rich()
+    const old = structuredClone(w.s) as unknown as Record<string, unknown>
+    delete old.market
+    w.do({ type: 'sync/replace', state: old as never })
+    expect(w.s.market).toEqual([])
+    const here = structuredClone(w.s)
+    w.do({ type: 'market/add', title: 'A night off', price: 10 })
+    const mine = w.s
+    expect(mergeStates(mine, here, here.tokens.at(-1)?.at ?? 0).market.map((m) => m.title)).toEqual(['A night off'])
   })
 
   it('the couch ends on its own when the tokens run out', () => {

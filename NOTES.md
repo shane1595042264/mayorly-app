@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The market
+
+- Leisure now has two sides: the Couch, time bought by the block as before, and the Market. Press m, or click the switch at the top, to go between them.
+- In the Market you put things up for sale at a price in coins you choose, one coin for each tomato finished at the desk: "Empower the next game: 10", a movie night, takeout. There is no timer; you buy it and the coins go.
+- Each card shows how close your coins are to its price. Hold Buy for a moment, or press Enter on the selected card. The coins fly off with a falling sound, and Undo stays for ten minutes in case it was a slip.
+- The couch list shows its time and the coins it cost apart now: "9h 3m", then "5 coins paid". A block you leave early is still free, which is why a long session can cost few coins.
+
 ## Desktop AI apps switch too, and the couch shows its coin going
 
 - A prompt in the Claude, ChatGPT (and Codex) or Gemini desktop apps now switches your task like Alt+Q, and so does one on chatgpt.com, gemini.google.com or claude.ai in your browser. Mayorly notices the app's Stop button appearing while it answers. Windows only for now.

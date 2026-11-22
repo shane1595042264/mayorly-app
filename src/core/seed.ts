@@ -58,6 +58,7 @@ export function emptyState(): MayorlyState {
     houseRules: [],
     recipes: [],
     leisure: [],
+    market: [],
     trash: [],
     desk: { status: 'idle', sittingId: null, plan: null, block: null, runStartedAt: null, bankMs: 0, holster: null, previous: null, device: null, heldAt: null },
     settings: { ...DEFAULT_SETTINGS, hotkeys: { ...DEFAULT_HOTKEYS }, calendar: { ...DEFAULT_SETTINGS.calendar, hours: DEFAULT_SETTINGS.calendar.hours.map((d) => d.map((w) => ({ ...w }))), work: { hours: [[], [], [], [], [], [], []], ledgerIds: [], usHolidays: true } } },
@@ -134,5 +135,6 @@ export function migrate(raw: unknown): MayorlyState | null {
     settings: { ...base.settings, ...x.settings, autoSwitch: autoSwitchOf(x.settings), alarms: sanitiseAlarms(x.settings?.alarms), hotkeys: { ...DEFAULT_HOTKEYS, ...x.settings?.hotkeys }, calendar: { ...base.settings.calendar, ...x.settings?.calendar }, clerk: { ...base.settings.clerk, ...x.settings?.clerk, allow: { ...base.settings.clerk.allow, ...x.settings?.clerk?.allow } } },
     calendar: { ...emptyCalendar(), ...x.calendar },
     recipes: Array.isArray(x.recipes) ? x.recipes : [],
+    market: (Array.isArray(x.market) ? x.market : []).filter((m) => m && typeof m.id === 'string' && Number.isFinite(m.price)),
   } as MayorlyState)))
 }

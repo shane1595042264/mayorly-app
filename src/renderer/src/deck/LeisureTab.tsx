@@ -1,16 +1,62 @@
-import { Fragment, useState } from 'react'
-import { Couch, Play, Stop, Trash } from '@phosphor-icons/react'
-import { balance, blockView, clock, leisureList, leisureSpentMs, leisureTokensSpent, LEISURE_TOKENS_PER_BLOCK, span, type LeisureItem, type MayorlyState } from '@core/index'
+import { Fragment, useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
+import { Couch, Play, Stop, Storefront, Trash } from '@phosphor-icons/react'
+import { balance, blockView, clock, leisureList, marketList, leisureSpentMs, leisureTokensSpent, LEISURE_TOKENS_PER_BLOCK, span, type LeisureItem, type MayorlyState } from '@core/index'
 import { hotkeyLabel } from '../lib/keys'
+import { actionFor, keyLabel, keymapOpen, keysFor, recordUse } from '../lib/keymap'
 import { useListKeys } from '../lib/listkeys'
-import { dispatch, useNow } from '../store'
+import { current, dispatch, useNow } from '../store'
 import { CueCount, CueToggle, Cues } from './Cues'
+import { Market } from './Market'
 
 // Entertainment lives here, outside the ledgers: games, shows, streams. The couch runs
 // on the same focus and rest cadence as a pomodoro; each completed leisure block costs one coin,
 // taken as it starts, rests are free, and nothing is earned.
 
+/**
+ * Leisure has two counters: the couch, which sells time by the block on the desk's timer, and the
+ * market, which sells a thing at a price you set (Market.tsx). m switches between them.
+ */
 export function LeisureTab({ s }: { s: MayorlyState }) {
+  const [view, setView] = useState<'couch' | 'market'>('couch')
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.altKey || e.ctrlKey || e.metaKey || keymapOpen()) return
+      if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]')) return
+      const st = current()
+      if (!st || actionFor(e, 'list', st.settings) !== 'list.market') return
+      e.preventDefault()
+      recordUse('list.market')
+      setView((v) => (v === 'couch' ? 'market' : 'couch'))
+    }
+    window.addEventListener('keydown', key)
+    return () => window.removeEventListener('keydown', key)
+  }, [])
+  const couchN = leisureList(s).length
+  const marketN = marketList(s).length
+  return (
+    <div className="leisure-wrap">
+      <div className="leisure-switch" role="tablist" aria-label="Leisure">
+        {(['couch', 'market'] as const).map((v) => (
+          <button key={v} type="button" role="tab" aria-selected={view === v} className={`leisure-switch-btn caps ${view === v ? 'on' : ''}`} onClick={() => setView(v)}>
+            {v === 'couch' ? <Couch size={15} /> : <Storefront size={15} />}
+            {v === 'couch' ? 'Couch' : 'Market'}
+            <span className="leisure-switch-n mono num">{v === 'couch' ? couchN : marketN}</span>
+            {view === v && <motion.span layoutId="leisure-switch-bar" className="leisure-switch-bar" transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
+          </button>
+        ))}
+        <span className="leisure-switch-hint dim small"><i className="key">{keysFor('list.market', s.settings).map(keyLabel).join(' / ')}</i> switches</span>
+      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div key={view} className="leisure-view" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.08 } }} transition={{ duration: 0.14 }}>
+          {view === 'couch' ? <CouchList s={s} /> : <Market s={s} enabled />}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function CouchList({ s }: { s: MayorlyState }) {
   const now = useNow(1000)
   const items = leisureList(s)
   const have = balance(s)
@@ -107,9 +153,9 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
                       <CueCount cues={it.cues} />
                     </span>
                   )}
-                  <span className="row-time mono num">
-                    {spent >= 60_000 ? span(spent) : ''}
-                    {tokens > 0 ? `${tokens} ${tokens === 1 ? 'coin' : 'coins'}` : ''}
+                  <span className="row-time mono num" title="Time on the couch, and the coins its finished blocks cost (a block left early is free)">
+                    {spent >= 60_000 && <span>{span(spent)}</span>}
+                    {tokens > 0 && <span className="row-paid">{tokens} {tokens === 1 ? 'coin' : 'coins'} paid</span>}
                   </span>
                   <span className="row-actions">
                     <button

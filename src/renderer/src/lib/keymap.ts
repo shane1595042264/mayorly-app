@@ -96,6 +96,7 @@ export const KEYS: KeyDef[] = [
   { id: 'list.moveDown', scope: 'list', label: 'Move the row down', keys: ['J'], note: 'The flow' },
   { id: 'list.moveUp', scope: 'list', label: 'Move the row up', keys: ['K'], note: 'The flow' },
   { id: 'list.new', scope: 'list', label: 'New entry', keys: ['n'], note: 'Puts the cursor in the box' },
+  { id: 'list.market', scope: 'list', label: 'The couch or the market', keys: ['m'], note: 'The Leisure tab' },
   { id: 'list.cues', scope: 'list', label: 'Context switch rules', keys: ['Space'], note: 'Open or close the row\'s cues: the flow, a ledger, the couch list' },
   { id: 'list.blitz', scope: 'list', label: 'Blitz the flow', keys: ['b'] },
   { id: 'list.sort', scope: 'list', label: 'Auto-classify the tray', keys: ['s'] },

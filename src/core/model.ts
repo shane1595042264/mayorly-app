@@ -400,12 +400,35 @@ export interface TokenTx {
   at: Epoch
   /** Positive when earned, negative when spent. */
   amount: number
-  reason: 'tomato' | 'harvest' | 'leisure' | 'refund'
+  reason: 'tomato' | 'harvest' | 'leisure' | 'purchase' | 'refund'
   /** Tomatoes this record stands for: one for a tomato, the crop for a harvest. Absent on older records and on spends. */
   tomatoes?: number
   sittingId: Id
   leisureId?: Id
   entryId?: Id
+  /** A purchase in the market, and a refund of one: the item bought, and its title then. */
+  marketId?: Id
+  marketTitle?: string
+  /** A refund: the purchase it undoes. */
+  refundOf?: Id
+}
+
+/**
+ * The market: actions bought with coins at a price you set, with no timer (empower the next game,
+ * a night off). The couch sells time by the block; the market sells a thing, at once. A purchase
+ * is a `purchase` record in `tokens`; undoing one adds a `refund`, since the coin log only grows.
+ */
+export interface MarketItem {
+  id: Id
+  title: string
+  /** Whole coins, one per tomato. */
+  price: number
+  /** What it takes or what it allows, in your words: "after a LeetCode solved in time". */
+  note?: string
+  /** The suggestion it was added from, if any, so that suggestion is not offered again. */
+  idea?: string
+  createdAt: Epoch
+  archivedAt: Epoch | null
 }
 
 /**
@@ -513,6 +536,8 @@ export interface MayorlyState {
   clerkLog: ClerkLine[]
   houseRules: HouseRule[]
   leisure: LeisureItem[]
+  /** The market: actions for sale, priced in coins. */
+  market: MarketItem[]
   /** Deleted entries, restorable for thirty days. */
   trash: TrashedEntry[]
   desk: Desk
@@ -552,7 +577,9 @@ export type HudEvent =
   /** An entry was cleared and its tomatoes paid out. */
   | { type: 'harvest'; at: Epoch; entryId: Id; title: string; tomatoes: number; tokens: number }
   /** A block on the couch completed and its coin was taken: the HUD shows the balance going down. */
-  | { type: 'spend'; at: Epoch; tokens: number; leisureId: Id | null }
+  | { type: 'spend'; at: Epoch; tokens: number; leisureId: Id | null; marketId?: Id }
+  /** A purchase undone: its coins came back. */
+  | { type: 'refund'; at: Epoch; tokens: number; marketId: Id | null }
   | { type: 'block'; at: Epoch; block: Block; started: boolean }
   | { type: 'swap'; at: Epoch; ledgerId: Id | null; entryId: Id | null }
   | { type: 'cleared'; at: Epoch; entryId: Id; title: string }

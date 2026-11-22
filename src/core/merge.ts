@@ -104,6 +104,7 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
   const trash = trashAll.filter((t) => !live.has(t.id))
   const ledgers = mergeDeletable(local.ledgers, incoming.ledgers, since, (l) => l.createdAt, theirs)
   const leisure = mergeDeletable(local.leisure, incoming.leisure, since, (l) => l.createdAt, theirs)
+  const market = mergeDeletable(local.market ?? [], incoming.market ?? [], since, (m) => m.createdAt, theirs)
   const houseRules = mergeDeletable(local.houseRules, incoming.houseRules, since, (r) => r.createdAt, theirs)
   const recipes = mergeDeletable(local.recipes ?? [], incoming.recipes ?? [], since, (r) => r.createdAt, theirs)
   // Supersets carry no date: one only this machine has is kept.
@@ -136,5 +137,5 @@ export function mergeStates(local: MayorlyState, incoming: MayorlyState, syncedA
     })
     .sort((a, b) => a.at - b.at)
     .slice(-CLERK_LOG_CAP)
-  return focusFromLog(reconcileTomatoes({ ...incoming, ledgers, entries, trash, supersets, leisure, houseRules, recipes, sittings, segments, tokens, clerkLog, desk: kept.desk, calendar }))
+  return focusFromLog(reconcileTomatoes({ ...incoming, ledgers, entries, trash, supersets, leisure, market, houseRules, recipes, sittings, segments, tokens, clerkLog, desk: kept.desk, calendar }))
 }

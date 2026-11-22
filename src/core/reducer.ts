@@ -91,6 +91,15 @@ export type Action =
   | { type: 'leisure/add'; title: string }
   | { type: 'leisure/update'; id: Id; patch: { title?: string } }
   | { type: 'leisure/delete'; id: Id }
+  /** The market: an action for sale at a price in coins; buying it takes them at once. */
+  | { type: 'market/add'; title: string; price: number; note?: string; idea?: string }
+  | { type: 'market/update'; id: Id; patch: { title?: string; price?: number; note?: string } }
+  | { type: 'market/delete'; id: Id }
+  /** A removed item back on sale, as it was. */
+  | { type: 'market/restore'; id: Id }
+  | { type: 'market/buy'; id: Id }
+  /** Undo a purchase made in the last MARKET_UNDO_MS: a refund record, since the coin log only grows. */
+  | { type: 'market/undo'; txId: Id }
   /** The quick switch: park the current session with its clock where it is and pick up the parked one where it was. */
   | { type: 'desk/switch' }
   /** The clerk says a tray entry is entertainment: it becomes a couch item and leaves the flow. */
@@ -546,6 +555,54 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
     case 'desk/deploy':
       deploy(s, ctx, ev, { mode: action.mode, supersetId: action.supersetId, entryId: action.entryId, ledgerId: action.ledgerId, leisureId: action.leisureId })
       break
+    case 'market/add': {
+      const title = action.title.trim().slice(0, 120)
+      const price = clampPrice(action.price)
+      if (!title || price === null) break
+      const note = action.note?.trim().slice(0, 200)
+      const idea = action.idea?.trim().slice(0, 120)
+      s.market.push({ id: ctx.newId(), title, price, ...(note ? { note } : {}), ...(idea ? { idea } : {}), createdAt: now, archivedAt: null })
+      break
+    }
+    case 'market/update': {
+      const it = s.market.find((x) => x.id === action.id && x.archivedAt === null)
+      if (!it) break
+      const title = action.patch.title?.trim().slice(0, 120)
+      if (title) it.title = title
+      const price = action.patch.price === undefined ? null : clampPrice(action.patch.price)
+      if (price !== null) it.price = price
+      if (action.patch.note !== undefined) {
+        const note = action.patch.note.trim().slice(0, 200)
+        if (note) it.note = note
+        else delete it.note
+      }
+      break
+    }
+    case 'market/delete': {
+      const it = s.market.find((x) => x.id === action.id)
+      if (it) it.archivedAt = now
+      break
+    }
+    case 'market/restore': {
+      const it = s.market.find((x) => x.id === action.id)
+      if (it) it.archivedAt = null
+      break
+    }
+    case 'market/buy': {
+      const it = s.market.find((x) => x.id === action.id && x.archivedAt === null)
+      // Never on credit: a purchase needs the coins.
+      if (!it || balanceOf(s) < it.price) break
+      s.tokens.push({ id: ctx.newId(), at: now, amount: -it.price, reason: 'purchase', sittingId: s.desk.sittingId ?? '', marketId: it.id, marketTitle: it.title })
+      ev.push({ type: 'spend', at: now, tokens: it.price, leisureId: null, marketId: it.id })
+      break
+    }
+    case 'market/undo': {
+      const tx = s.tokens.find((t) => t.id === action.txId && t.reason === 'purchase')
+      if (!tx || now - tx.at > MARKET_UNDO_MS || s.tokens.some((t) => t.refundOf === tx.id)) break
+      s.tokens.push({ id: ctx.newId(), at: now, amount: -tx.amount, reason: 'refund', sittingId: tx.sittingId, marketId: tx.marketId, refundOf: tx.id })
+      ev.push({ type: 'refund', at: now, tokens: -tx.amount, marketId: tx.marketId ?? null })
+      break
+    }
     case 'leisure/add': {
       const title = action.title.trim().slice(0, 120)
       if (!title) break
@@ -1460,6 +1517,16 @@ function ledgerLabel(s: MayorlyState, id: Id | null): string {
 
 function validLedger(s: MayorlyState, id: Id | null | undefined): Id | null {
   return id && s.ledgers.some((l) => l.id === id) ? id : null
+}
+
+/** A purchase can be undone this long after it was made. */
+export const MARKET_UNDO_MS = 10 * 60_000
+
+/** A market price: whole coins, 1 to 999; null for anything else. */
+function clampPrice(n: number | null | undefined): number | null {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return null
+  const p = Math.round(n)
+  return p >= 1 ? Math.min(999, p) : null
 }
 
 function clampEstimate(n: number | null | undefined): number | null {

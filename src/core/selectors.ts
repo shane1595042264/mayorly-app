@@ -398,6 +398,27 @@ export function taskTomatoes(s: MayorlyState, now: number): number | null {
 }
 
 /** Entertainment on the list, newest first. */
+/** The market's items for sale, cheapest first. */
+export function marketList(s: MayorlyState) {
+  return (s.market ?? []).filter((x) => x.archivedAt === null).sort((a, b) => a.price - b.price || a.title.localeCompare(b.title))
+}
+
+/** Purchases, newest first, each with whether it was refunded and the title it had when bought. */
+export function purchases(s: MayorlyState) {
+  const refunded = new Set(s.tokens.filter((t) => t.reason === 'refund' && t.refundOf).map((t) => t.refundOf))
+  const title = (id: string | undefined) => (s.market ?? []).find((m) => m.id === id)?.title ?? 'Something from the market'
+  return s.tokens
+    .filter((t) => t.reason === 'purchase')
+    .sort((a, b) => b.at - a.at)
+    .map((t) => ({ id: t.id, at: t.at, price: -t.amount, marketId: t.marketId ?? null, title: t.marketTitle ?? title(t.marketId), refunded: refunded.has(t.id) }))
+}
+
+/** How many times an item was bought (refunds taken off) and when last. */
+export function marketBought(s: MayorlyState, id: string): { count: number; lastAt: number | null } {
+  const mine = purchases(s).filter((p) => p.marketId === id && !p.refunded)
+  return { count: mine.length, lastAt: mine[0]?.at ?? null }
+}
+
 export function leisureList(s: MayorlyState) {
   return s.leisure.filter((x) => x.archivedAt === null).sort((a, b) => b.createdAt - a.createdAt)
 }
