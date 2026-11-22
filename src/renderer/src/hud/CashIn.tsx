@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import coin from '../assets/coin@1x.png'
+import { setShownCoins } from '../lib/coinView'
 import { sfx } from '../lib/sound'
 
 // The harvest, seen: coins fly from the tomato to a counter in the top right, the
@@ -17,6 +18,10 @@ interface Props {
   out?: boolean
   /** A count already on screen (the open deck's): the coins fly to or from it and no counter of its own shows. */
   anchor?: { x: number; y: number } | null
+  /** The highest the arc may go, in CSS pixels: the open deck's top edge. */
+  ceiling?: number
+  /** Where the count starts: the number on screen when another flight was still landing. */
+  startAt?: number | null
   onDone: () => void
 }
 
@@ -25,12 +30,19 @@ const MAX_COINS = 8
 const FLIGHT_MS = 720
 const STAGGER_MS = 90
 
-export function CashIn({ amount, balance, from, out = false, anchor = null, onDone }: Props) {
-  const coins = Math.max(1, Math.min(MAX_COINS, amount))
+export function CashIn({ amount, balance, from, out = false, anchor = null, ceiling = 8, startAt = null, onDone }: Props) {
+  const start = startAt ?? (out ? balance + amount : balance - amount)
+  // Coins for the distance the count has to travel: none when an Undo came before any coin landed.
+  const coins = start === balance ? 0 : Math.max(1, Math.min(MAX_COINS, Math.abs(balance - start)))
   // The arc over the flight: high to the corner counter, low to a count in the open deck, and never off the screen.
   const lift = anchor ? 36 : 140
-  const start = out ? balance + amount : balance - amount
   const [shown, setShown] = useState(start)
+  // With the deck open its own counts (the header, the wallet) say what the coins say until they land.
+  useEffect(() => {
+    if (!anchor) return
+    setShownCoins(shown)
+  }, [anchor, shown])
+  useEffect(() => () => setShownCoins(null), [])
   const [landed, setLanded] = useState(0)
   const [gone, setGone] = useState(false)
   const target = useRef<HTMLDivElement>(null)
@@ -52,6 +64,12 @@ export function CashIn({ amount, balance, from, out = false, anchor = null, onDo
 
   useEffect(() => {
     if (landed < coins) return
+    if (anchor) setShownCoins(null)
+    if (coins === 0) {
+      // Nothing to fly: an Undo that came before any coin landed. The count is already right.
+      onDone()
+      return
+    }
     if (out) sfx.spend()
     else sfx.cashIn()
     const t = setTimeout(() => setGone(true), 1100)
@@ -85,9 +103,10 @@ export function CashIn({ amount, balance, from, out = false, anchor = null, onDo
             initial={{ x: from.x - 16, y: from.y - 16, opacity: 0, scale: 0.6, rotate: 0 }}
             animate={{
               x: out ? [to.x - 16, (from.x + to.x) / 2 - 16 + (i % 2 ? 40 : -40), from.x - 16] : [from.x - 16, (from.x + to.x) / 2 - 16 + (i % 2 ? 40 : -40), to.x - 16],
-              y: out ? [to.y - 16, Math.max(8, Math.min(from.y, to.y) - lift - i * 12), from.y - 16] : [from.y - 16, Math.max(8, Math.min(from.y, to.y) - lift - i * 12), to.y - 16],
+              y: out ? [to.y - 16, Math.max(ceiling, Math.min(from.y, to.y) - lift - i * 12), from.y - 16] : [from.y - 16, Math.max(ceiling, Math.min(from.y, to.y) - lift - i * 12), to.y - 16],
               opacity: [0, 1, 1, 0],
-              scale: [0.6, 1.1, 0.7],
+              // Into a count in the deck the coins shrink as they arrive, so its digits stay readable.
+              scale: anchor && !out ? [0.6, 1.1, 0.4] : anchor ? [0.4, 1.1, 0.7] : [0.6, 1.1, 0.7],
               rotate: [0, 180 + i * 20, 360 + i * 20],
             }}
             transition={{ duration: FLIGHT_MS / 1000, delay: (i * STAGGER_MS) / 1000, ease: 'easeInOut', times: [0, 0.5, 1] }}

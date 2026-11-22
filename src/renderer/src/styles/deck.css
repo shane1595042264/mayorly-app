@@ -796,7 +796,7 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
    Two counters under one tab. Coins and prices are amber, the only data colour; the market's own
    chrome is the couch's purple, the colour of what is bought rather than earned. */
 
-.leisure-wrap { display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 18px; min-height: 100%; }
+.leisure-wrap { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 18px; min-height: 100%; }
 .leisure-switch { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); }
 .leisure-switch-btn {
   position: relative;
@@ -813,6 +813,8 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .leisure-switch-bar { position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; background: var(--leisure); }
 .leisure-switch-hint { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 .row-time .row-paid { color: var(--ink-3); }
+.leisure-banked { font-size: 15px; }
+.leisure-banked b { font-weight: 600; color: var(--ink); }
 
 .market { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 30px; min-height: 0; }
 .market-main { display: grid; align-content: start; gap: 14px; min-width: 0; }
@@ -861,8 +863,8 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .market-minus { color: var(--leisure); font-size: 13px; }
 .market .btn.small { height: 28px; padding: 0 10px; font-size: 11px; gap: 6px; }
 
-.market-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; align-items: stretch; }
-.market-card { display: flex; }
+.market-grid { position: relative; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; align-items: stretch; }
+.market-card { position: relative; z-index: 1; display: flex; }
 .market-card > .market-card-in { flex: 1; min-width: 0; }
 .market-card { min-width: 0; }
 .market-card-in {
@@ -870,12 +872,13 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
   min-height: 178px;
   padding: 14px 14px 12px;
   border: 1px solid var(--line);
-  background: var(--glass-3);
+  /* Solid, one step up from the void, so a card sliding past another never shows text through it. */
+  background: #15181a;
   clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
   transition: border-color 0.15s, background 0.15s;
 }
-.market-card:hover .market-card-in { border-color: var(--leisure-2); background: rgb(180 140 242 / 0.05); }
-.market-card.is-selected .market-card-in { border-color: var(--accent); background: rgb(240 174 60 / 0.06); }
+.market-card:hover .market-card-in { border-color: var(--leisure-2); background: #1a1a21; }
+.market-card.is-selected .market-card-in { border-color: var(--accent); background: #1d1a14; }
 .market-card.is-editing .market-card-in { border-color: var(--leisure-2); }
 .market-card-head { display: flex; align-items: flex-start; gap: 12px; }
 .market-title {
@@ -901,13 +904,23 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .market-tools { display: inline-flex; opacity: 0; transition: opacity 0.15s; }
 .market-card:hover .market-tools, .market-card.is-selected .market-tools, .market-tools:focus-within { opacity: 1; }
 
-.market-edit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; flex: 1; align-content: start; }
-.market-edit > input { width: 100%; min-width: 0; height: 32px; }
-/* The stepper on its own row, Cancel and Save on the next, clear of the corner the card cuts. */
-.market-edit-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: auto; padding-right: 10px; }
-.market-edit-foot .price-input { height: 32px; margin-right: auto; }
-.market-edit-foot .price-input input { height: 26px; }
-.market-edit-foot .grow { display: none; }
+.market-edit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; flex: 1; align-content: start; }
+.market-edit > input { width: 100%; min-width: 0; height: 30px; }
+.market-edit > textarea {
+  width: 100%; min-width: 0; resize: none; padding: 4px 8px;
+  font: inherit; font-size: 14px; font-weight: 600; line-height: 1.2;
+  color: var(--ink); background: rgb(237 240 241 / 0.04); border: 1px solid var(--line-2);
+}
+.market-edit > textarea:focus { outline: none; border-color: var(--accent-2); }
+/* A long title scrolls with the caret, with no bar inside the dark card. */
+.market-edit > textarea { overflow-y: auto; scrollbar-width: none; }
+.market-edit > textarea::-webkit-scrollbar { display: none; }
+.market-grid:empty { display: none; }
+/* The stepper on its own row, Cancel and Save together on the next, clear of the corner the card cuts. */
+.market-edit-foot { display: grid; gap: 6px; margin-top: auto; justify-items: start; }
+.market-edit-foot .price-input { height: 30px; }
+.market-edit-foot .price-input input { height: 24px; }
+.market-edit-actions { display: flex; gap: 8px; justify-self: end; padding-right: 10px; }
 
 .buy {
   position: relative; overflow: hidden;
@@ -923,9 +936,10 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .buy > .buy-label { display: grid; place-items: center; height: 100%; padding: 0 14px; }
 /* The fill carries its own dark label, clipped with it, so the word reads across both halves. */
 .buy-fill { position: absolute; inset: 0; background: var(--accent); clip-path: inset(0 calc((1 - var(--p, 0)) * 100%) 0 0); }
+.buy.is-draining .buy-fill { transition: clip-path 0.25s ease-out; }
 .buy-fill .buy-label { display: grid; place-items: center; height: 100%; padding: 0 14px; color: var(--void); }
 
-.market-ideas { display: grid; gap: 8px; padding-top: 6px; }
+.market-ideas { position: relative; z-index: 0; display: grid; gap: 8px; padding-top: 6px; }
 .market-ideas.is-first { gap: 10px; padding-top: 8px; }
 .market-ideas .empty-title { margin: 0; }
 .market-suggest { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -954,4 +968,6 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .market-log-title { color: var(--ink); }
 .market-log-ago { font-size: 11px; color: var(--ink-3); text-align: right; }
 .market-log li.refunded .market-log-title { color: var(--ink-3); text-decoration: line-through; }
-.market-log li.refunded .market-minus { color: var(--ink-3); }
+.market-refunded { font-size: 12px; color: var(--ink-3); }
+.market-refunded s { margin-right: 4px; }
+.market-removed-title { margin-top: 16px; }

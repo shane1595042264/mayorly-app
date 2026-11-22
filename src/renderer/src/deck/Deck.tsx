@@ -4,6 +4,7 @@ import { X } from '@phosphor-icons/react'
 import { balance, type MayorlyState } from '@core/index'
 import type { BuildInfo } from '../../../shared/bridge'
 import { bridge } from '../bridge'
+import { useShownCoins } from '../lib/coinView'
 import { hasCalendarAsk, onCalendarAsk } from '../lib/calendarAsk'
 import { onDeckTab, takeDeckTab } from '../lib/deckTab'
 import { useLean } from '../lib/parallax'
@@ -26,6 +27,8 @@ type Tab = (typeof TABS)[number]
 let remembered: Tab = 'Flow'
 
 export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; kind: 'electron' | 'web' }) {
+  // The header's coin count: while coins fly to or from it, it counts as they land.
+  const shownCoins = useShownCoins(balance(s))
   // A shelf with no ledgers is where a new install starts.
   const [tab, setTabState] = useState<Tab>(() => {
     const asked = takeDeckTab()
@@ -127,7 +130,7 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
             <span className="key">E</span>
           </nav>
           <span className="deck-balance">
-            <span className="mono num">{balance(s).toLocaleString()}</span>
+            <span className="mono num">{shownCoins.toLocaleString()}</span>
             <span className="caps dim">Coins</span>
           </span>
           <button className="deck-close" onClick={close} aria-label="Close deck">

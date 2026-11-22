@@ -14,6 +14,7 @@ import { actionFor, recordUse } from './lib/keymap'
 import { takeOrigin } from './lib/origin'
 import { Callout } from './hud/Callout'
 import { CashIn } from './hud/CashIn'
+import { shownCoins } from './lib/coinView'
 import { Feed } from './hud/Feed'
 import { Objectives } from './hud/Objectives'
 import { Pet } from './hud/Pet'
@@ -106,7 +107,7 @@ export function App() {
   }, [moving])
   // The harvest inside this window: on Windows always; on macOS when a panel is open, since the pet
   // window is then the whole work area. The coins start at whatever cleared the entry, else the tomato.
-  const [cashIn, setCashIn] = useState<{ seq: number; amount: number; balance: number; from: { x: number; y: number }; out?: boolean; anchor: { x: number; y: number } | null } | null>(null)
+  const [cashIn, setCashIn] = useState<{ seq: number; amount: number; balance: number; from: { x: number; y: number }; out?: boolean; anchor: { x: number; y: number } | null; ceiling: number; startAt: number | null } | null>(null)
   const cashSeq = useRef(0)
   useHudEvents(
     useCallback((events: HudEvent[]) => {
@@ -122,8 +123,11 @@ export function App() {
         // With the deck open, its own coin count is the counter: the coins fly to or from it and
         // the floating counter, which would sit over the deck's edge, stays away.
         const count = document.querySelector('.deck-balance .num')?.getBoundingClientRect()
-        const anchor = count ? { x: count.left + count.width / 2, y: count.top + count.height / 2 } : null
-        setCashIn({ seq: ++cashSeq.current, amount: e.tokens, balance: st ? balance(st) : 0, from, out: e.type === 'spend', anchor })
+        // Just left of the number, so the coins never sit on its digits while it counts.
+        const anchor = count ? { x: count.left - 14, y: count.top + count.height / 2 } : null
+        const deck = document.querySelector('.deck')?.getBoundingClientRect()
+        // Another flight still landing: this one starts from the number on screen, so no count jumps.
+        setCashIn({ seq: ++cashSeq.current, amount: e.tokens, balance: st ? balance(st) : 0, from, out: e.type === 'spend', anchor, ceiling: deck ? deck.top + 12 : 8, startAt: anchor ? shownCoins() : null })
       }
     }, []),
   )
@@ -639,7 +643,7 @@ export function App() {
       </AnimatePresence>
 
       {shown !== 'field' && shown !== 'switcher' && <ClerkAsk />}
-      {cashIn && <CashIn key={cashIn.seq} amount={cashIn.amount} balance={cashIn.balance} from={cashIn.from} out={cashIn.out} anchor={cashIn.anchor} onDone={() => { const mine = cashIn.seq; setCashIn((c) => (c?.seq === mine ? null : c)) }} />}
+      {cashIn && <CashIn key={cashIn.seq} amount={cashIn.amount} balance={cashIn.balance} from={cashIn.from} out={cashIn.out} anchor={cashIn.anchor} ceiling={cashIn.ceiling} startAt={cashIn.startAt} onDone={() => { const mine = cashIn.seq; setCashIn((c) => (c?.seq === mine ? null : c)) }} />}
 
     </main>
   )

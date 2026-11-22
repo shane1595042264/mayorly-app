@@ -109,6 +109,24 @@ export const sfx = {
     tone(a, f, t, 0.07, 0.05, 'triangle')
     tone(a, f * 1.5, t + 0.03, 0.14, 0.035)
   },
+  /** Something set down: a soft two-step up, for an item put up for sale. */
+  place() {
+    const a = ac()
+    if (!a) return
+    const t = a.currentTime
+    click(a, t, 0.2, 2600)
+    tone(a, 784, t, 0.07, 0.035, 'triangle')
+    tone(a, 1046, t + 0.06, 0.12, 0.03, 'triangle')
+  },
+  /** Something taken away: one low soft drop. */
+  drop() {
+    const a = ac()
+    if (!a) return
+    const t = a.currentTime
+    click(a, t, 0.18, 1400)
+    tone(a, 294, t, 0.12, 0.04, 'triangle')
+    tone(a, 220, t + 0.05, 0.16, 0.03, 'triangle')
+  },
   /** Not enough coins: a short low double knock, a no that does not scold. */
   nope() {
     const a = ac()

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import { AnimatePresence, motion, useAnimationControls } from 'motion/react'
 import { ArrowCounterClockwise, Minus, PencilSimple, Plus, Trash } from '@phosphor-icons/react'
 import { balance, marketBought, marketList, purchases, MARKET_UNDO_MS, type MarketItem, type MayorlyState } from '@core/index'
 import coin from '../assets/coin@1x.png'
+import { useShownCoins } from '../lib/coinView'
 import { useListKeys } from '../lib/listkeys'
 import { noteOrigin } from '../lib/origin'
 import { sfx } from '../lib/sound'
@@ -17,7 +18,7 @@ import { dispatch, useNow } from '../store'
 
 /** How long the Buy button must be held. */
 const HOLD_MS = 650
-/** A second purchase this soon after one is a held or doubled key, not a choice. */
+/** A second purchase of the same item this soon is a held or doubled key, not a choice. */
 const BUY_GAP_MS = 900
 /** The notice line keeps what just happened this long. */
 const NOTICE_MS = 8000
@@ -42,19 +43,23 @@ const ago = (ms: number) => {
 }
 
 type Notice =
-  | { kind: 'removed'; id: string; title: string; at: number }
+  | { kind: 'removed'; ids: string[]; title: string; at: number }
+  | { kind: 'restored'; title: string; at: number }
   | { kind: 'short'; id: string; at: number }
   | { kind: 'refunded'; title: string; amount: number; at: number }
 
 export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
   const now = useNow(1000)
+  // The real balance decides what can be bought; the one shown counts with the coins in the air,
+  // like the header and the wallet, so no card runs ahead of them.
   const wallet = balance(s)
+  const seen = useShownCoins(wallet)
   const items = marketList(s)
   const log = purchases(s).slice(0, 14)
   const [editing, setEditing] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [shake, setShake] = useState<{ id: string; n: number } | null>(null)
-  const lastBuy = useRef(0)
+  const lastBuy = useRef<{ id: string; at: number } | null>(null)
   const latest = log[0]
   const bought = latest && !latest.refunded && now - latest.at < NOTICE_MS ? latest : null
   // A short is about the wallet now: once it covers the item, there is nothing to say.
@@ -63,9 +68,14 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
   // The newest thing said wins: a purchase, a removal, a refund or a short.
   const shown = live && (!bought || live.at > bought.at) ? live : null
 
+  useEffect(() => {
+    if (notice?.kind === 'short' && (!shortItem || wallet >= shortItem.price)) setNotice(null)
+  }, [notice, shortItem, wallet])
+
   const buy = (it: MarketItem, from?: Element | null) => {
-    // A second press this soon is a held or doubled key: not a purchase, and not a shortfall either.
-    if (Date.now() - lastBuy.current < BUY_GAP_MS) return
+    // The same card pressed again this soon is a held or doubled key: not a purchase, and not a
+    // shortfall either. Another card is another choice.
+    if (lastBuy.current?.id === it.id && Date.now() - lastBuy.current.at < BUY_GAP_MS) return
     const el = from ?? document.querySelector(`[data-row="${CSS.escape(it.id)}"] .buy`)
     if (wallet < it.price) {
       sfx.nope()
@@ -73,20 +83,35 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
       setNotice({ kind: 'short', id: it.id, at: Date.now() })
       return
     }
-    lastBuy.current = Date.now()
+    lastBuy.current = { id: it.id, at: Date.now() }
     setNotice(null)
+    sfx.tick()
     noteOrigin(el)
     dispatch({ type: 'market/buy', id: it.id })
   }
   const undo = (p: { id: string; title: string; price: number }, from: Element) => {
+    sfx.tick()
     noteOrigin(from)
     dispatch({ type: 'market/undo', txId: p.id })
     setNotice({ kind: 'refunded', title: p.title, amount: p.price, at: Date.now() })
   }
+  // Removals in a row gather into one notice whose Undo puts them all back; each stays in the side
+  // column's Removed list for ten minutes in any case.
   const remove = (it: MarketItem) => {
+    sfx.drop()
     dispatch({ type: 'market/delete', id: it.id })
-    setNotice({ kind: 'removed', id: it.id, title: it.title, at: Date.now() })
+    setNotice((n) => {
+      const t = Date.now()
+      const ids = n?.kind === 'removed' && t - n.at < NOTICE_MS ? [...n.ids, it.id] : [it.id]
+      return { kind: 'removed', ids, title: ids.length > 1 ? `${ids.length} items` : it.title, at: t }
+    })
   }
+  const putBack = (ids: string[], title: string) => {
+    sfx.place()
+    for (const id of ids) dispatch({ type: 'market/restore', id })
+    setNotice({ kind: 'restored', title, at: Date.now() })
+  }
+  const removed = (s.market ?? []).filter((m) => m.archivedAt !== null && now - m.archivedAt < MARKET_UNDO_MS).sort((a, b) => (b.archivedAt ?? 0) - (a.archivedAt ?? 0))
 
   // The keyboard: j and k pick a card, Enter buys it (Undo stays), r edits, x removes, n adds.
   const { sel } = useListKeys(items.map((it) => it.id), ({ action, id, e }) => {
@@ -98,12 +123,17 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
     if (!it) return false
     if (action === 'list.go') {
       if (!e.repeat) buy(it)
-    } else if (action === 'list.delete') remove(it)
+    } else if (action === 'list.delete') {
+      // A held x removes one card, not the list.
+      if (!e.repeat) remove(it)
+    }
     else if (action === 'list.rename') setEditing(it.id)
     else return false
     return true
   }, enabled && editing === null)
 
+  // The quiet line under the form: how much is on sale and how much was bought this week.
+  const week = purchases(s).filter((p) => !p.refunded && now - p.at < 7 * 24 * 3600_000).length
   // A suggestion already on sale is not offered again, by where the item came from, so a renamed one stays put.
   const unused = SUGGESTIONS.filter((x) => !items.some((it) => it.idea === x.title || it.title.toLowerCase() === x.title.toLowerCase()))
 
@@ -126,7 +156,7 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
               <motion.div key={`r${shown.at}`} className="market-notice" {...noticeMotion}>
                 <span className="caps">Removed</span>
                 <span className="market-notice-title">{shown.title}</span>
-                <button type="button" className="btn ghost small" onClick={() => { dispatch({ type: 'market/restore', id: shown.id }); setNotice(null) }}>
+                <button type="button" className="btn ghost small" onClick={() => putBack(shown.ids, shown.title)}>
                   <ArrowCounterClockwise size={13} /> Undo
                 </button>
               </motion.div>
@@ -136,6 +166,11 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
                 <span className="market-notice-title">{shortItem.title}</span>
                 <span><b className="mono num">{shortItem.price - wallet}</b> more {shortItem.price - wallet === 1 ? 'coin' : 'coins'} to go</span>
               </motion.div>
+            ) : shown?.kind === 'restored' ? (
+              <motion.div key={`o${shown.at}`} className="market-notice" {...noticeMotion}>
+                <span className="caps">Back on sale</span>
+                <span className="market-notice-title">{shown.title}</span>
+              </motion.div>
             ) : shown?.kind === 'refunded' ? (
               <motion.div key={`u${shown.at}`} className="market-notice is-refunded" {...noticeMotion}>
                 <span className="caps">Refunded</span>
@@ -144,14 +179,15 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
               </motion.div>
             ) : (
               <motion.p key="hint" className="market-notice is-hint" {...noticeMotion}>
-                {items.length ? 'Hold Buy, or pick a card with j and k and press Enter. Undo stays for ten minutes.' : 'Price the things you want in coins, one for each tomato finished at the desk.'}
+                {items.length ? `${items.length} for sale${week ? `, ${week} bought this week` : ''}` : 'Price the things you want in coins, one for each tomato finished at the desk.'}
               </motion.p>
             )}
           </AnimatePresence>
         </div>
-        {items.length > 0 && (
+        {/* Always there, so the first card enters like the rest. */}
+        {(
           <ol className="market-grid">
-            <AnimatePresence initial={false}>
+            <AnimatePresence initial={false} mode="popLayout">
             {items.map((it, i) => (
               <Card
                 key={it.id}
@@ -159,6 +195,7 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
                 index={i}
                 s={s}
                 wallet={wallet}
+                seen={seen}
                 now={now}
                 selected={sel === it.id}
                 editing={editing === it.id}
@@ -173,19 +210,19 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
           </ol>
         )}
         {unused.length > 0 && (
-          <div className={`market-ideas ${items.length ? '' : 'is-first'}`}>
+          <motion.div layout="position" transition={{ type: 'spring', stiffness: 700, damping: 48 }} className={`market-ideas ${items.length ? '' : 'is-first'}`}>
             {items.length === 0 && <p className="empty-title">Nothing for sale yet.</p>}
             <span className="field-label caps">{items.length ? 'More ideas' : 'Start with one of these'}</span>
             <div className="market-suggest">
               {unused.map((x) => (
-                <button key={x.title} type="button" className="market-chip" onClick={() => dispatch({ type: 'market/add', ...x, idea: x.title })}>
+                <button key={x.title} type="button" className="market-chip" onClick={() => { sfx.place(); dispatch({ type: 'market/add', ...x, idea: x.title }) }}>
                   <Plus size={12} />
                   <span>{x.title}</span>
                   <span className="market-chip-price mono num"><img src={coin} alt="" />{x.price}</span>
                 </button>
               ))}
             </div>
-          </div>
+          </motion.div>
         )}
       </section>
 
@@ -200,7 +237,7 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
             {log.map((p) => (
               <li key={p.id} className={p.refunded ? 'refunded' : ''}>
                 <span className="market-log-title ellipsis" title={p.title}>{p.title}</span>
-                <span className="market-minus mono num">{p.refunded ? 'refunded' : `-${p.price}`}</span>
+                {p.refunded ? <span className="market-refunded"><s className="mono num">-{p.price}</s> refunded</span> : <span className="market-minus mono num">-{p.price}</span>}
                 <span className="market-log-ago mono num">{ago(now - p.at)}</span>
                 {!p.refunded && now - p.at < MARKET_UNDO_MS ? (
                   <button type="button" className="icon-btn" aria-label={`Undo buying ${p.title}`} title="Undo: the coins come back" onClick={(e) => undo(p, e.currentTarget)}>
@@ -213,21 +250,41 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
             ))}
           </ol>
         )}
+        {removed.length > 0 && (
+          <>
+            <h3 className="side-title caps market-removed-title">Removed</h3>
+            <ol className="market-log">
+              {removed.map((m) => (
+                <li key={m.id}>
+                  <span className="market-log-title ellipsis dim" title={m.title}>{m.title}</span>
+                  <span className="market-minus mono num dim">{m.price}</span>
+                  <span className="market-log-ago mono num">{ago(now - (m.archivedAt ?? now))}</span>
+                  <button type="button" className="icon-btn" aria-label={`Put back ${m.title}`} title="Put back on sale" onClick={() => putBack([m.id], m.title)}>
+                    <ArrowCounterClockwise size={13} />
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
       </aside>
     </div>
   )
 }
 
-/** The notice lines are stacked in their slot, so a new one crossfades over the old with no empty frame. */
+/**
+ * The notice lines are stacked in their slot: the old one leaves upward and is mostly gone before
+ * the new one rises in from below, so their words never sit on each other.
+ */
 const noticeMotion = {
-  initial: { opacity: 0, y: -3 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, transition: { duration: 0.16 } },
-  transition: { duration: 0.18 },
+  initial: { opacity: 0, y: 6 },
+  animate: { opacity: 1, y: 0, transition: { delay: 0.09, duration: 0.16 } },
+  exit: { opacity: 0, y: -6, transition: { duration: 0.08 } },
 }
 
-/** The balance, which springs when it changes and sits still when it does not. */
-function Wallet({ n }: { n: number }) {
+/** The balance, which springs when it changes and sits still when it does not, and counts with coins in the air. */
+function Wallet({ n: actual }: { n: number }) {
+  const n = useShownCoins(actual)
   const first = useRef(true)
   useEffect(() => {
     first.current = false
@@ -246,10 +303,15 @@ function Wallet({ n }: { n: number }) {
 }
 
 interface CardProps {
+  /** For the list's presence: a card leaving is taken out of the layout at once, so the rest slide into place. */
+  ref?: Ref<HTMLLIElement>
   it: MarketItem
   index: number
   s: MayorlyState
+  /** The real balance: it decides what a press does and what the card says. */
   wallet: number
+  /** The count on screen, which the meter follows while coins are in the air. */
+  seen: number
   now: number
   selected: boolean
   editing: boolean
@@ -260,7 +322,7 @@ interface CardProps {
   remove: () => void
 }
 
-function Card({ it, index, s, wallet, now, selected, editing, shake, buy, edit, done, remove }: CardProps) {
+function Card({ ref, it, index, s, wallet, seen, now, selected, editing, shake, buy, edit, done, remove }: CardProps) {
   const can = wallet >= it.price
   const bought = marketBought(s, it.id)
   const times = Math.floor(wallet / it.price)
@@ -270,6 +332,7 @@ function Card({ it, index, s, wallet, now, selected, editing, shake, buy, edit, 
   }, [shake, controls])
   return (
     <motion.li
+      ref={ref}
       layout="position"
       className={`market-card ${can ? '' : 'is-short'} ${selected ? 'is-selected' : ''} ${editing ? 'is-editing' : ''}`}
       data-row={it.id}
@@ -290,7 +353,7 @@ function Card({ it, index, s, wallet, now, selected, editing, shake, buy, edit, 
             </div>
             {it.note && <p className="market-note" title={it.note}>{it.note}</p>}
             <div className="market-meter" aria-hidden>
-              <motion.span initial={false} animate={{ scaleX: Math.min(1, wallet / it.price) }} transition={{ type: 'spring', stiffness: 200, damping: 30 }} />
+              <motion.span initial={false} animate={{ scaleX: Math.min(1, seen / it.price) }} transition={{ type: 'spring', stiffness: 200, damping: 30 }} />
             </div>
             <p className="market-stat">{bought.count ? `Bought ${bought.count}x, last ${ago(now - (bought.lastAt ?? now))}` : 'Never bought'}</p>
             <div className="market-foot">
@@ -315,21 +378,29 @@ function HoldToBuy({ can, label, bought, onBuy }: { can: boolean; label: string;
   const [p, setP] = useState(0)
   const hold = useRef<{ start: number; raf: number } | null>(null)
   const btn = useRef<HTMLButtonElement>(null)
-  // A purchase however it was made (a hold, Enter on the card): the button fills and says Bought for a moment.
+  // A purchase however it was made (a hold, Enter on the card): the button fills and says Bought for
+  // a moment. The timer outlives a change of count, so an Undo straight after never leaves it full.
   const seen = useRef(bought)
+  const flash = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [draining, setDraining] = useState(false)
   useEffect(() => {
-    if (bought <= seen.current) {
-      seen.current = bought
-      return
-    }
+    const more = bought > seen.current
     seen.current = bought
+    if (!more) return
     setP(1)
-    const t = setTimeout(() => setP(0), 320)
-    return () => clearTimeout(t)
+    if (flash.current) clearTimeout(flash.current)
+    flash.current = setTimeout(() => setP(0), 320)
   }, [bought])
+  useEffect(() => () => { if (flash.current) clearTimeout(flash.current) }, [])
+  // Let go early: the fill drains back with Hold still on it, so the button says what it wanted.
   const stop = () => {
     if (hold.current) cancelAnimationFrame(hold.current.raf)
+    const early = hold.current !== null
     hold.current = null
+    if (early) {
+      setDraining(true)
+      setTimeout(() => setDraining(false), 260)
+    }
     setP(0)
   }
   useEffect(() => stop, [])
@@ -346,12 +417,12 @@ function HoldToBuy({ can, label, bought, onBuy }: { can: boolean; label: string;
     }
     h.raf = requestAnimationFrame(tick)
   }
-  const text = p >= 1 ? 'Bought' : p > 0 ? 'Hold' : can ? 'Buy' : 'Short'
+  const text = p >= 1 ? 'Bought' : p > 0 || draining ? 'Hold' : can ? 'Buy' : 'Short'
   return (
     <button
       ref={btn}
       type="button"
-      className={`buy ${p > 0 ? 'is-holding' : ''} ${can ? '' : 'is-short'}`}
+      className={`buy ${p > 0 ? 'is-holding' : ''} ${draining ? 'is-draining' : ''} ${can ? '' : 'is-short'}`}
       aria-label={`Buy ${label}`}
       aria-disabled={!can}
       title={can ? 'Hold to buy, or press Enter' : 'Not enough coins yet'}
@@ -387,7 +458,9 @@ function PriceInput({ value, set }: { value: number; set: (n: number) => void })
   const [draft, setDraft] = useState(String(value))
   useEffect(() => setDraft(String(value)), [value])
   const clamp = (n: number) => Math.min(999, Math.max(1, Math.round(n) || 1))
+  // Left empty or unreadable, the box goes back to what it had; only a typed number is clamped.
   const settle = () => {
+    if (!/^\d+$/.test(draft)) return setDraft(String(value))
     const n = clamp(Number(draft))
     set(n)
     setDraft(String(n))
@@ -420,6 +493,7 @@ function AddItem() {
   const [note, setNote] = useState('')
   const add = () => {
     if (!title.trim()) return
+    sfx.place()
     dispatch({ type: 'market/add', title, price, note })
     setTitle('')
     setNote('')
@@ -443,18 +517,35 @@ function EditItem({ it, done }: { it: MarketItem; done: () => void }) {
   const [price, setPrice] = useState(it.price)
   const [note, setNote] = useState(it.note ?? '')
   const save = () => {
+    sfx.tick()
     dispatch({ type: 'market/update', id: it.id, patch: { title, price, note } })
     done()
   }
   return (
     <form className="market-edit" onSubmit={(e) => { e.preventDefault(); save() }} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); done() } }}>
-      <input autoFocus value={title} maxLength={TITLE_MAX} onChange={(e) => setTitle(e.target.value)} aria-label="Title" spellCheck={false} />
+      {/* Two rows, as the card shows it; Enter saves rather than starting a new line. */}
+      <textarea
+        autoFocus
+        rows={2}
+        value={title}
+        maxLength={TITLE_MAX}
+        onChange={(e) => setTitle(e.target.value.replace(/\n/g, ' '))}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            save()
+          }
+        }}
+        aria-label="Title"
+        spellCheck={false}
+      />
       <input value={note} maxLength={NOTE_MAX} onChange={(e) => setNote(e.target.value)} placeholder="When it is allowed (optional)" aria-label="Note" spellCheck={false} />
       <div className="market-edit-foot">
         <PriceInput value={price} set={setPrice} />
-        <span className="grow" />
-        <button type="button" className="btn ghost small" onClick={done}>Cancel</button>
-        <button type="submit" className="btn small" disabled={!title.trim()}>Save</button>
+        <span className="market-edit-actions">
+          <button type="button" className="btn ghost small" onClick={done}>Cancel</button>
+          <button type="submit" className="btn small" disabled={!title.trim()}>Save</button>
+        </span>
       </div>
     </form>
   )

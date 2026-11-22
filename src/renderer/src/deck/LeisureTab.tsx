@@ -5,7 +5,9 @@ import { balance, blockView, clock, leisureList, marketList, leisureSpentMs, lei
 import { hotkeyLabel } from '../lib/keys'
 import { actionFor, keyLabel, keymapOpen, keysFor, recordUse } from '../lib/keymap'
 import { useListKeys } from '../lib/listkeys'
+import { sfx } from '../lib/sound'
 import { current, dispatch, useNow } from '../store'
+import { useShownCoins } from '../lib/coinView'
 import { CueCount, CueToggle, Cues } from './Cues'
 import { Market } from './Market'
 
@@ -27,6 +29,7 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
       if (!st || actionFor(e, 'list', st.settings) !== 'list.market') return
       e.preventDefault()
       recordUse('list.market')
+      sfx.tick()
       setView((v) => (v === 'couch' ? 'market' : 'couch'))
     }
     window.addEventListener('keydown', key)
@@ -38,7 +41,7 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
     <div className="leisure-wrap">
       <div className="leisure-switch" role="tablist" aria-label="Leisure">
         {(['couch', 'market'] as const).map((v) => (
-          <button key={v} type="button" role="tab" aria-selected={view === v} className={`leisure-switch-btn caps ${view === v ? 'on' : ''}`} onClick={() => setView(v)}>
+          <button key={v} type="button" role="tab" aria-selected={view === v} className={`leisure-switch-btn caps ${view === v ? 'on' : ''}`} onClick={() => { if (v !== view) sfx.tick(); setView(v) }}>
             {v === 'couch' ? <Couch size={15} /> : <Storefront size={15} />}
             {v === 'couch' ? 'Couch' : 'Market'}
             <span className="leisure-switch-n mono num">{v === 'couch' ? couchN : marketN}</span>
@@ -47,8 +50,8 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
         ))}
         <span className="leisure-switch-hint dim small"><i className="key">{keysFor('list.market', s.settings).map(keyLabel).join(' / ')}</i> switches</span>
       </div>
-      <AnimatePresence mode="wait" initial={false}>
-        <motion.div key={view} className="leisure-view" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, transition: { duration: 0.08 } }} transition={{ duration: 0.14 }}>
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.div key={view} className="leisure-view" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.08, duration: 0.14 } }} exit={{ opacity: 0, transition: { duration: 0.07 } }}>
           {view === 'couch' ? <CouchList s={s} /> : <Market s={s} enabled />}
         </motion.div>
       </AnimatePresence>
@@ -59,7 +62,8 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
 function CouchList({ s }: { s: MayorlyState }) {
   const now = useNow(1000)
   const items = leisureList(s)
-  const have = balance(s)
+  // What the coins in the air say, like the header, so the couch line never runs ahead of them.
+  const have = useShownCoins(balance(s))
   const v = blockView(s, now)
   const onCouch = v?.block.kind === 'leisure' ? v : null
   const [draft, setDraft] = useState('')
@@ -107,7 +111,7 @@ function CouchList({ s }: { s: MayorlyState }) {
         </form>
 
         <div className="leisure-buy">
-          <span className={`mono num ${have < price ? 'field-error' : 'dim'}`}>{have} {have === 1 ? 'coin' : 'coins'} banked: {have} {have === 1 ? 'block' : 'blocks'} on the couch</span>
+          <span className={`leisure-banked ${have < price ? 'field-error' : 'dim'}`}><b className="mono num">{have}</b> {have === 1 ? 'coin' : 'coins'}, so <b className="mono num">{have}</b> {have === 1 ? 'block' : 'blocks'} on the couch</span>
         </div>
 
         {onCouch && (
