@@ -1,4 +1,4 @@
-import { onDeskId, quickSwitch, switchBack, switchSession, type Action, type Id, type MayorlyState } from '../core/index'
+import { onDeskId, quickSwitch, recentTasks, switchBack, switchSession, switchToAction, type Action, type FoundTask, type Id, type MayorlyState } from '../core/index'
 import { PROMPT_ECHO_MS, type PromptStep } from './aiswitch'
 
 // A League streamer's death is Alt+Q. A couch item (or a task) whose context switch rule says the
@@ -52,6 +52,10 @@ export interface StreamPost {
   cost: number | null
   /** The eye holds a mute of Mayorly's on this tab. */
   held: boolean
+  /** A live stream page: Twitch, Kick, Huya, Douyu, a Bilibili live room, a YouTube video that is live. */
+  live: boolean
+  /** When the page last came to the front (its window gained focus with it showing); null if never. */
+  focusAt: number | null
   grid: StreamGrid | null
 }
 
@@ -113,6 +117,8 @@ export function streamPostOf(j: unknown): StreamPost | null {
     area,
     ad: o.ad === true,
     held: o.held === true,
+    live: o.live === true,
+    focusAt: typeof o.focusAt === 'number' && Number.isFinite(o.focusAt) ? o.focusAt : null,
     cost,
     grid,
   }
@@ -212,8 +218,16 @@ export interface TabSeen {
 
 /** A tab not heard from in this long is gone. */
 export const TAB_STALE_MS = 12_000
-const STOP = new Set(['stream', 'streams', 'live', 'twitch', 'youtube', 'watch', 'watching', 'the', 'and', 'with'])
+const STOP = new Set(['stream', 'streams', 'streamer', 'streamers', 'streaming', 'live', 'twitch', 'youtube', 'kick', 'bilibili', 'watch', 'watching', 'the', 'and', 'with'])
 const words = (t: string) => new Set(t.toLowerCase().split(/[^\p{L}\p{N}']+/u).filter((w) => w.length >= 3 && !STOP.has(w)))
+/** Two names share a word: the same word, or one long start (theBause and Thebausffs share "thebaus"). */
+const sameWord = (a: string, b: string) => {
+  if (a === b) return true
+  let n = 0
+  while (n < a.length && n < b.length && a[n] === b[n]) n++
+  return n >= 6
+}
+const shareWord = (a: Set<string>, b: Set<string>) => [...a].some((x) => [...b].some((y) => sameWord(x, y)))
 
 /**
  * The one tab to read: heard from lately, showing, not another game. One whose title shares a
@@ -222,7 +236,7 @@ const words = (t: string) => new Set(t.toLowerCase().split(/[^\p{L}\p{N}']+/u).f
  */
 export function pickTab(tabs: TabSeen[], taskTitle: string, now: number): TabSeen | null {
   const want = words(taskTitle)
-  const score = (t: TabSeen) => ([...words(t.title)].some((w) => want.has(w)) ? 4 : 0) + (t.active ? 2 : 0)
+  const score = (t: TabSeen) => (shareWord(words(t.title), want) ? 4 : 0) + (t.active ? 2 : 0)
   const fit = tabs.filter((t) => now - t.at <= TAB_STALE_MS && t.visible && !t.tainted && t.league !== false)
   fit.sort((a, b) => score(b) - score(a) || b.area - a.area || b.at - a.at)
   return fit[0] ?? null
@@ -317,7 +331,8 @@ export const LEAGUE = {
   texRatio: 0.4,
   barRatio: 0.85,
   barMin: 8,
-  barCorr: 0.5,
+  // 0.3: a dead bar's greyed icons shift its pattern (0.46 to 0.48 on a real death at 18:01), a card or clip over it breaks it.
+  barCorr: 0.3,
   deepRatio: 0.45,
   /** ...the minimap still there: 60% of its cells keep 60% of their colour, and most of it in place... */
   mapCell: 8,
@@ -769,6 +784,51 @@ function switchTarget(s: MayorlyState): Id | null {
   if (back) return back.leisureId ?? back.entryId ?? null
   const held = switchSession(s)
   return held ? (held.block.leisureId ?? held.block.entryId ?? null) : null
+}
+
+/** The sites by name, for a notice and the log. */
+export const SITE_NAME: Record<StreamSite, string> = { twitch: 'Twitch', youtube: 'YouTube', kick: 'Kick', bilibili: 'Bilibili', huya: 'Huya', douyu: 'Douyu' }
+
+/** A death that switched this recently keeps a stream page brought to the front from switching back. */
+export const OPEN_AFTER_DEATH_MS = 10_000
+
+/**
+ * A live stream page brought to the front (Twitch, Kick, Bilibili 直播, Huya, Douyu, a live YouTube
+ * video) while the desk is on a task that watches no stream: onto the task that does. The one whose
+ * name shares a word with the page's title first ("watch theBause" for Thebausffs), then the one
+ * worked on last, then the first on the couch list. Not from a rest, an idle desk or another
+ * computer's desk, and not a moment after a death switched away from the stream.
+ */
+export function openStep(s: MayorlyState, deviceId: string, page: { title: string; live: boolean }, o: { sinceFireMs: number }): PromptStep & { to?: string } {
+  if (!s.settings.autoSwitch.streamOpen) return { act: null, why: 'the rule is off' }
+  if (!page.live) return { act: null, why: 'not a live stream' }
+  const d = s.desk
+  if (d.status === 'idle' || !d.block) return { act: null, why: 'the desk is idle' }
+  if (d.block.kind === 'rest') return { act: null, why: 'resting' }
+  if (d.heldAt != null || (d.device && d.device.id !== deviceId)) return { act: null, why: 'running on another computer' }
+  const id = onDeskId(s)
+  const here = id ? (s.entries.find((e) => e.id === id) ?? s.leisure.find((l) => l.id === id)) : undefined
+  if (here && isWatched(here)) return { act: null, why: 'already on a stream task' }
+  if (o.sinceFireMs < OPEN_AFTER_DEATH_MS) return { act: null, why: 'a death switched away a moment ago' }
+  const tasks: FoundTask[] = [
+    ...s.leisure.filter((l) => l.archivedAt === null && isWatched(l)).map((item) => ({ kind: 'leisure' as const, item })),
+    ...s.entries.filter((e) => e.doneAt === null && isWatched(e)).map((entry) => ({ kind: 'entry' as const, entry })),
+  ]
+  if (!tasks.length) return { act: null, why: 'no task watches a stream' }
+  const name = (f: FoundTask) => (f.kind === 'entry' ? f.entry.title : f.item.title)
+  const idOf = (f: FoundTask) => (f.kind === 'entry' ? f.entry.id : f.item.id)
+  const want = words(page.title)
+  const named = tasks.find((f) => shareWord(words(name(f)), want))
+  const recent = recentTasks(s, 50).map(idOf)
+  const last = [...tasks].sort((a, b) => rank(recent, idOf(a)) - rank(recent, idOf(b)))[0]
+  const pick = named ?? last
+  const act = switchToAction(s, pick)
+  return act ? { act, why: 'switched', to: name(pick) } : { act: null, why: 'already there' }
+}
+
+const rank = (order: Id[], id: Id) => {
+  const i = order.indexOf(id)
+  return i < 0 ? Number.MAX_SAFE_INTEGER : i
 }
 
 /** What the couch list says beside a watched rule. */

@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Opening a stream puts your stream task on the desk
+
+- Click into a Twitch, Kick, Bilibili 直播, Huya or Douyu page (or a live YouTube video) while you are on another task, and the desk switches to your stream task: the one named like the page ("watch theBause" for Thebausffs), else the one you watched last. Only the moment the page comes to the front counts, so a stream playing on your other screen never pulls you back, and never right after a death switched you away. Settings, Auto switch, turns it off.
+- A death with the ability bar gone very dark was sometimes refused (the 18:01 one today); it counts now.
+- After an update the extension puts itself into stream tabs that are already open, so reloading the stream page is no longer needed. Reload the Mayorly extension in chrome://extensions this once more, then refresh the stream page one last time.
+
 ## Alt+Shift+H shows what switched the desk, and why
 
 - Press Alt+Shift+H (Option+Shift+H on a Mac) for the switch log under the tomato: every time the desk changed task, newest first, with what did it. You (Alt+Q, a pick, the clear key, the tray), an AI prompt and which app, a streamer's death and the numbers it read, the timer moving a superset on, the couch out of coins, the clerk, or another computer.

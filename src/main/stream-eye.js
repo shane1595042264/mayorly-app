@@ -3,6 +3,9 @@
 // light: 32 x 18 cells, three numbers each. Never your screen, never a picture. Otherwise it only
 // says hello every few seconds while a video plays, so Mayorly knows the tab is there. When a death
 // switches you away, Mayorly may ask it to mute the stream, and to unmute it when you come back.
+// It also says when you bring a live stream page to the front (the window gains focus), so
+// Mayorly can put its stream task on the desk. The newest copy in a page wins: the extension
+// puts one into open stream tabs when it is installed or reloaded, and an older one steps aside.
 
 /** RGBA pixels of a w x h frame in; per cell of a 32 x 18 grid: colourfulness, brightness, lit share. */
 function mayorlyGrid(data, w, h) {
@@ -70,6 +73,27 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
                 ? 'douyu'
                 : null
     if (!site) return
+    // The newest copy of the eye in this page: the one whose mark is on the page.
+    var me = Math.random().toString(36).slice(2)
+    document.documentElement.setAttribute('data-mayorly-eye', me)
+    var mine = function () {
+      return document.documentElement.getAttribute('data-mayorly-eye') === me
+    }
+    // A live stream page: Twitch, Kick, Huya and Douyu always; Bilibili's live rooms; YouTube when the video is live.
+    var live = function () {
+      if (site === 'youtube') return !!document.querySelector('.html5-video-player.ytp-live, .ytp-live-badge[disabled]')
+      if (site === 'bilibili') return /(^|\.)live\.bilibili\.com$/.test(host)
+      return true
+    }
+    // When the page last came to the front: its window gained focus with this tab showing.
+    var focusAt = null
+    var focusSent = null
+    var noteFocus = function () {
+      if (document.visibilityState === 'visible' && document.hasFocus()) focusAt = Date.now()
+    }
+    window.addEventListener('focus', noteFocus)
+    document.addEventListener('visibilitychange', noteFocus)
+    noteFocus()
     var armed = false
     var every = 500
     // The video this eye muted, so it unmutes only what it muted, never one you muted yourself.
@@ -190,7 +214,8 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
     var post = function (m) {
       return new Promise(function (resolve) {
         try {
-          var msg = { mayorly: 'stream', v: V, site: site, title: document.title, category: category(), visible: visible(), ad: ad(), cost: cost, held: !!mutedBy }
+          var msg = { mayorly: 'stream', v: V, site: site, title: document.title, category: category(), visible: visible(), ad: ad(), cost: cost, held: !!mutedBy, live: live(), focusAt: focusAt }
+          focusSent = focusAt
           for (var k in m) msg[k] = m[k]
           chrome.runtime.sendMessage(msg, function (r) {
             if (chrome.runtime.lastError) return resolve(null)
@@ -231,6 +256,10 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
     }
     var tick = async function () {
       if (stopped) return
+      if (!mine()) {
+        stopped = true
+        return
+      }
       var found = video()
       // A tab reloaded while Mayorly had it muted: the mute is still Mayorly's to undo. Back with
       // sound, the mark is stale, and a later mute of yours stays yours.
@@ -245,8 +274,18 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
       var now = Date.now()
       var r = null
       try {
-        if (!found) armed = false
-        else if (found.bad) {
+        if (!found) {
+          armed = false
+          // Brought to the front with no video playing yet (the home page, a channel loading): said at once.
+          if (focusAt !== focusSent) {
+            lastHello = now
+            r = await post({ kind: 'hello', area: 0 })
+          }
+        } else if (focusAt !== focusSent) {
+          // Brought to the front: said at once, not at the next hello.
+          lastHello = now
+          r = await post({ kind: 'hello', area: found.area })
+        } else if (found.bad) {
           if (now - lastHello >= HELLO) {
             lastHello = now
             r = await post({ kind: 'tainted', area: found.area })

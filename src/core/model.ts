@@ -506,12 +506,14 @@ export interface Settings {
  * or from an idle desk, never for a scheduled or automatic prompt. streamDeath: on a task whose
  * context switch rule says the streamer dies, a League streamer's death seen in the stream's own
  * video is Alt+Q; never your own game, never during a rest (shared/streamdeath.ts). streamMute: that
- * switch also mutes the stream, and coming back to its task unmutes it.
+ * switch also mutes the stream, and coming back to its task unmutes it. streamOpen: a live stream page
+ * brought to the front while the desk is on another task switches to the task that watches streams.
  */
 export interface AutoSwitchRules {
   aiPrompt: boolean
   streamDeath: boolean
   streamMute: boolean
+  streamOpen: boolean
 }
 
 /** What the clerk does with an instruction of that kind: do it (with Undo), ask first, or never. */

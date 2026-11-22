@@ -82,14 +82,16 @@ export const STREAM_MATCHES = [
 export const MANIFEST = {
   manifest_version: 3,
   name: 'Mayorly',
-  version: '1.3.0',
+  version: '1.4.0',
   description: 'Tells Mayorly on this computer when you send ChatGPT or Gemini a prompt, and, while a stream rule runs, what the stream shows, as a grid of colour; mutes the stream when a death switches you away, if you let it.',
   background: { service_worker: 'background.js' },
+  // scripting and the stream sites: the eye goes into stream tabs already open when the extension is installed or reloaded.
+  permissions: ['scripting'],
   content_scripts: [
     { matches: ['https://chatgpt.com/*', 'https://gemini.google.com/*'], js: ['content.js'], run_at: 'document_idle' },
     { matches: STREAM_MATCHES, js: ['stream-eye.js'], run_at: 'document_idle', all_frames: true },
   ],
-  host_permissions: [`http://127.0.0.1:${AGENT_PORT}/*`],
+  host_permissions: [`http://127.0.0.1:${AGENT_PORT}/*`, ...STREAM_MATCHES],
 }
 
 export const BACKGROUND = `// Mayorly: hands the pages' news to Mayorly on this computer.
@@ -100,6 +102,15 @@ const to = (path, m) =>
     headers: { 'Content-Type': 'application/json', 'X-Mayorly-Token': self.MAYORLY.token },
     body: JSON.stringify(m),
   })
+// Installed or reloaded: stream tabs already open get the eye now, not at their next reload.
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.tabs.query({ url: ${JSON.stringify(STREAM_MATCHES)} }, (tabs) => {
+    for (const t of tabs || []) {
+      if (t.id === undefined) continue
+      chrome.scripting.executeScript({ target: { tabId: t.id, allFrames: true }, files: ['stream-eye.js'] }).catch(() => {})
+    }
+  })
+})
 chrome.runtime.onMessage.addListener((m, sender, reply) => {
   // The stream eye asks, and waits for whether to read the video.
   if (m && m.mayorly === 'stream') {

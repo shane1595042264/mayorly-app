@@ -16,6 +16,8 @@ import {
   streamPostOf,
   TAB_STALE_MS,
   LEAGUE,
+  openStep,
+  SITE_NAME,
   type DeathMemory,
   type DeathTick,
   type StreamArm,
@@ -55,6 +57,8 @@ interface Tab {
   mutedFor: Id | null
   /** The last minute of what was read, for the trace. */
   trail: { at: number; seen: string; grid: StreamGrid | null; ad: boolean }[]
+  /** When the page last came to the front, as last heard: a later one is a new time. */
+  focusSeen: number | null
 }
 
 const OFF: StreamReply = { armed: false, every: HELLO_MS }
@@ -200,10 +204,24 @@ export function streamRule(o: {
     heard = true
     const prev = tabs.get(p.tab)
     const league = leagueOf(p.category, p.title)
-    const tab: Tab = prev ?? { seen: null as unknown as TabSeen, memory: null, grid: null, tick: null, mute: false, mutedFor: null, trail: [] }
+    const tab: Tab = prev ?? { seen: null as unknown as TabSeen, memory: null, grid: null, tick: null, mute: false, mutedFor: null, trail: [], focusSeen: null }
     tab.seen = { tab: p.tab, site: p.site, title: p.title, category: p.category, league, visible: p.visible, active: p.active, area: p.area, tainted: p.kind === 'tainted', at: now }
     tabs.set(p.tab, tab)
     for (const [k, t] of tabs) if (now - t.seen.at > LEAGUE.forgetMs) tabs.delete(k)
+
+    // A live stream page brought to the front just now: onto the task that watches streams.
+    if (p.focusAt !== null && p.focusAt !== tab.focusSeen) {
+      tab.focusSeen = p.focusAt
+      if (now - p.focusAt < 10_000) {
+        const step = openStep(engine.state, engine.deviceId, { title: p.title, live: p.live }, { sinceFireMs: fired ? now - fired.at : Infinity })
+        if (step.act || step.why !== 'not a live stream') log.info('[stream]', `brought to the front on ${p.site}: ${step.why}${step.to ? `, on ${step.to}` : ''}`)
+        if (step.act) {
+          o.auto.at = now
+          engine.act(step.act, { cause: 'stream', via: `Brought ${SITE_NAME[p.site]} to the front`, detail: step.to ? `the task that watches streams: ${step.to}` : undefined })
+          o.say({ phase: 'done', text: `${SITE_NAME[p.site]}: on ${o.title(onDeskId(engine.state))}` })
+        }
+      }
+    }
 
     // A death just switched away from this tab: mute it now, if muting is on. Once the desk is back
     // on that task, or the rule or muting is off, say unmute; a tab armed again needs no mute.

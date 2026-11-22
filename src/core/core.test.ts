@@ -1912,27 +1912,27 @@ describe('resizing the tomato', () => {
 describe('auto switch rules', () => {
   it('are this computer\'s, on by default, and carry over what 0.1.66 to 0.1.68 kept', () => {
     const w = world()
-    expect(w.s.settings.autoSwitch).toEqual({ aiPrompt: true, streamDeath: true, streamMute: true })
-    expect(isDeviceOnly({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: false, streamDeath: true, streamMute: true } } })).toBe(true)
+    expect(w.s.settings.autoSwitch).toEqual({ aiPrompt: true, streamDeath: true, streamMute: true, streamOpen: true })
+    expect(isDeviceOnly({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: false, streamDeath: true, streamMute: true, streamOpen: true } } })).toBe(true)
     const save = (settings: Record<string, unknown>) => {
       const old = JSON.parse(JSON.stringify(w.s)) as { settings: Record<string, unknown> }
       delete old.settings.autoSwitch
       Object.assign(old.settings, settings)
       return migrate(old)!.settings.autoSwitch
     }
-    expect(save({ claudeSwitch: false })).toEqual({ aiPrompt: false, streamDeath: true, streamMute: true })
-    expect(save({ autoSwitch: { claude: false } })).toEqual({ aiPrompt: false, streamDeath: true, streamMute: true })
-    expect(save({ autoSwitch: { claude: true } })).toEqual({ aiPrompt: true, streamDeath: true, streamMute: true })
-    expect(save({ autoSwitch: { aiBreak: false, aiReturn: true } })).toEqual({ aiPrompt: false, streamDeath: true, streamMute: true })
-    expect(save({ autoSwitch: { aiBreak: true, aiReturn: false } })).toEqual({ aiPrompt: true, streamDeath: true, streamMute: true })
+    expect(save({ claudeSwitch: false })).toEqual({ aiPrompt: false, streamDeath: true, streamMute: true, streamOpen: true })
+    expect(save({ autoSwitch: { claude: false } })).toEqual({ aiPrompt: false, streamDeath: true, streamMute: true, streamOpen: true })
+    expect(save({ autoSwitch: { claude: true } })).toEqual({ aiPrompt: true, streamDeath: true, streamMute: true, streamOpen: true })
+    expect(save({ autoSwitch: { aiBreak: false, aiReturn: true } })).toEqual({ aiPrompt: false, streamDeath: true, streamMute: true, streamOpen: true })
+    expect(save({ autoSwitch: { aiBreak: true, aiReturn: false } })).toEqual({ aiPrompt: true, streamDeath: true, streamMute: true, streamOpen: true })
     // A leftover key never outvotes a choice made since, and goes.
     w.do({ type: 'settings/update', patch: { claudeSwitch: true, autoSwitch: { aiPrompt: false } } as never })
-    expect(w.s.settings.autoSwitch).toEqual({ aiPrompt: false, streamDeath: true, streamMute: true })
+    expect(w.s.settings.autoSwitch).toEqual({ aiPrompt: false, streamDeath: true, streamMute: true, streamOpen: true })
     // The stream rule is its own switch, off only when turned off.
-    expect(save({ autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true } })).toEqual({ aiPrompt: true, streamDeath: false, streamMute: true })
-    expect(isDeviceOnly({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true } } })).toBe(true)
-    w.do({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true } } })
-    expect(w.s.settings.autoSwitch).toEqual({ aiPrompt: true, streamDeath: false, streamMute: true })
+    expect(save({ autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true, streamOpen: true } })).toEqual({ aiPrompt: true, streamDeath: false, streamMute: true, streamOpen: true })
+    expect(isDeviceOnly({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true, streamOpen: true } } })).toBe(true)
+    w.do({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true, streamOpen: true } } })
+    expect(w.s.settings.autoSwitch).toEqual({ aiPrompt: true, streamDeath: false, streamMute: true, streamOpen: true })
     expect('claudeSwitch' in w.s.settings).toBe(false)
   })
 })

@@ -20,6 +20,7 @@ import {
   streamPostOf,
   watchedCues,
   isWatched,
+  openStep,
   type DeathMemory,
   type DeathTick,
   type LeagueFeatures,
@@ -396,7 +397,7 @@ describe('a watched rule', () => {
     bg.act({ type: 'desk/select', leisureId: bg.bg3 })
     expect(streamArm(bg.s, 'here')).toEqual({ on: false, why: 'no stream rule on this task', taskId: bg.bg3 })
     const off = desk()
-    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true } } })
+    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true, streamOpen: true } } })
     expect(streamArm(off.s, 'here')).toMatchObject({ on: false, why: 'the rule is off', taskId: off.stream })
     off.act({ type: 'desk/select', leisureId: off.bg3 })
     expect(streamArm(off.s, 'here')).toEqual({ on: false, why: 'the rule is off' })
@@ -465,6 +466,47 @@ describe('a watched rule', () => {
     // Back on the stream already: nothing to let go.
     d.act({ type: 'desk/select', leisureId: d.stream })
     expect(graceStep({ type: 'desk/switch' }, d.s, fired, now + 1500).drop).toBe(false)
+  })
+})
+
+describe('a live stream brought to the front', () => {
+  const page = { title: 'Thebausffs - Twitch', live: true }
+  it('switches from another task to the one that watches streams', () => {
+    const d = desk()
+    d.act({ type: 'entry/capture', text: 'legal: gamma', start: true })
+    const step = openStep(d.s, 'here', page, { sinceFireMs: Infinity })
+    expect(step).toMatchObject({ why: 'switched', to: 'Stream watch' })
+    d.act(step.act!)
+    expect(onDeskId(d.s)).toBe(d.stream)
+    // On it already: nothing more.
+    expect(openStep(d.s, 'here', page, { sinceFireMs: Infinity })).toEqual({ act: null, why: 'already on a stream task' })
+  })
+
+  it('picks the task named like the page, else the one watched last', () => {
+    const d = desk()
+    d.act({ type: 'leisure/add', title: 'watch theBause' })
+    const bause = d.s.leisure.find((l) => l.title === 'watch theBause')!.id
+    d.act({ type: 'entry/cue-add', id: bause, text: 'Irelia dies' })
+    d.act({ type: 'desk/select', leisureId: d.bg3 })
+    expect(openStep(d.s, 'here', { title: 'Thebausffs - Twitch', live: true }, { sinceFireMs: Infinity }).to).toBe('watch theBause')
+    expect(openStep(d.s, 'here', { title: 'Caedrel - Twitch', live: true }, { sinceFireMs: Infinity }).to).toBe('Stream watch')
+  })
+
+  it('does nothing on a page that is not live, with the rule off, in a rest, with no stream task, or right after a death', () => {
+    const d = desk()
+    d.act({ type: 'desk/select', leisureId: d.bg3 })
+    expect(openStep(d.s, 'here', { ...page, live: false }, { sinceFireMs: Infinity }).why).toBe('not a live stream')
+    expect(openStep(d.s, 'here', page, { sinceFireMs: 4000 }).why).toBe('a death switched away a moment ago')
+    const off = desk()
+    off.act({ type: 'desk/select', leisureId: off.bg3 })
+    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: true, streamMute: true, streamOpen: false } } })
+    expect(openStep(off.s, 'here', page, { sinceFireMs: Infinity }).why).toBe('the rule is off')
+    const none = desk({ title: 'TV night', cue: 'someone dies' })
+    none.act({ type: 'desk/select', leisureId: none.bg3 })
+    expect(openStep(none.s, 'here', page, { sinceFireMs: Infinity }).why).toBe('no task watches a stream')
+    const idle = desk()
+    idle.act({ type: 'desk/standDown' })
+    expect(openStep(idle.s, 'here', page, { sinceFireMs: Infinity }).why).toBe('the desk is idle')
   })
 })
 
