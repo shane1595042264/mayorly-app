@@ -907,7 +907,8 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .market-foot { display: flex; align-items: center; gap: 6px; height: 32px; }
 .market-need { flex: 1; min-width: 0; font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .market-need b { color: var(--ink); font-weight: 600; }
-.market-tools { display: inline-flex; opacity: 0; transition: opacity 0.15s; }
+/* Edit and remove are always there, quiet until the card is under the pointer or selected. */
+.market-tools { display: inline-flex; opacity: 0.6; transition: opacity 0.15s; }
 .market-card:hover .market-tools, .market-card.is-selected .market-tools, .market-tools:focus-within { opacity: 1; }
 
 .market-edit { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; flex: 1; align-content: start; }
@@ -951,16 +952,34 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .market-ideas.is-first { gap: 10px; padding-top: 8px; }
 .market-ideas .empty-title { margin: 0; }
 .market-suggest { display: flex; flex-wrap: wrap; gap: 8px; }
+/* An idea: the chip adds it, the x at its end puts it away. One frame around both. */
+.market-chip-wrap {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--line-2); background: var(--glass-3);
+  transition: border-color 0.15s, background 0.15s;
+}
+.market-chip-wrap:hover { border-color: var(--leisure-2); }
 .market-chip {
   display: inline-flex; align-items: center; gap: 8px;
-  height: 34px; padding: 0 12px;
-  border: 1px solid var(--line-2); background: var(--glass-3);
+  height: 34px; padding: 0 10px 0 12px;
   color: var(--ink); font-size: 14px;
-  transition: border-color 0.15s, background 0.15s, translate 0.1s;
+  transition: background 0.15s, translate 0.1s;
 }
 .market-chip svg { color: var(--ink-3); }
-.market-chip:hover { border-color: var(--leisure-2); background: rgb(180 140 242 / 0.06); }
+.market-chip:hover { background: rgb(180 140 242 / 0.06); }
 .market-chip:active { translate: 0 1px; }
+.market-chip-x {
+  display: grid; place-items: center; width: 28px;
+  color: var(--ink-3); border-left: 1px solid var(--line-2);
+  transition: color 0.15s, background 0.15s;
+}
+.market-chip-x:hover { color: var(--ink); background: rgb(255 255 255 / 0.05); }
+.market-ideas-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 34px; padding: 0 8px;
+  font-size: 13px; color: var(--ink-3);
+}
+.market-ideas-back:hover { color: var(--ink); }
 .market-chip-price { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-size: 13px; }
 .market-chip-price img { width: 16px; height: 16px; image-rendering: pixelated; }
 

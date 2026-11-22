@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type Ref } from 'react'
 import { AnimatePresence, motion, useAnimationControls } from 'motion/react'
-import { ArrowCounterClockwise, Minus, PencilSimple, Plus, Trash } from '@phosphor-icons/react'
+import { ArrowCounterClockwise, Minus, PencilSimple, Plus, Trash, X } from '@phosphor-icons/react'
 import { balance, marketBought, marketList, purchases, MARKET_UNDO_MS, type MarketItem, type MayorlyState } from '@core/index'
 import coin from '../assets/coin@1x.png'
 import { useShownCoins } from '../lib/coinView'
@@ -212,8 +212,15 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
 
   // The quiet line under the form: how much is on sale and how much was bought this week.
   const week = purchases(s).filter((p) => !p.refunded && now - p.at < 7 * 24 * 3600_000).length
-  // A suggestion already on sale is not offered again, by where the item came from, so a renamed one stays put.
-  const unused = SUGGESTIONS.filter((x) => !items.some((it) => it.idea === x.title || it.title.toLowerCase() === x.title.toLowerCase()))
+  // A suggestion already on sale is not offered again, by where the item came from, so a renamed one stays put;
+  // nor one put away with its x, until Bring back.
+  const hidden = s.settings.marketHidden ?? []
+  const unused = SUGGESTIONS.filter((x) => !hidden.includes(x.title) && !items.some((it) => it.idea === x.title || it.title.toLowerCase() === x.title.toLowerCase()))
+  const putAway = SUGGESTIONS.filter((x) => hidden.includes(x.title)).length
+  const hideIdea = (title: string) => {
+    sfx.drop()
+    dispatch({ type: 'settings/update', patch: { marketHidden: [...hidden, title] } })
+  }
 
   return (
     <div className="market">
@@ -292,18 +299,37 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
             </AnimatePresence>
           </ol>
         )}
-        {unused.length > 0 && (
+        {(unused.length > 0 || putAway > 0 || items.length === 0) && (
           <motion.div layout="position" transition={{ type: 'spring', stiffness: 900, damping: 60 }} className={`market-ideas ${items.length ? '' : 'is-first'}`}>
             {items.length === 0 && <p className="empty-title">Nothing for sale yet.</p>}
-            <span className="field-label caps">{items.length ? 'More ideas' : 'Start with one of these'}</span>
+            {unused.length > 0 && <span className="field-label caps">{items.length ? 'More ideas' : 'Start with one of these'}</span>}
             <div className="market-suggest">
-              {unused.map((x) => (
-                <button key={x.title} type="button" className="market-chip" onClick={() => { sfx.place(); dispatch({ type: 'market/add', ...x, idea: x.title }) }}>
-                  <Plus size={12} />
-                  <span>{x.title}</span>
-                  <span className="market-chip-price mono num"><img src={coin} alt="" />{x.price}</span>
-                </button>
-              ))}
+              <AnimatePresence initial={false} mode="popLayout">
+                {unused.map((x) => (
+                  // An idea is added as it is with its +, then edited on its card like anything else; x puts it away.
+                  <motion.span
+                    key={x.title}
+                    layout="position"
+                    className="market-chip-wrap"
+                    exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.12 } }}
+                    transition={{ type: 'spring', stiffness: 700, damping: 50 }}
+                  >
+                    <button type="button" className="market-chip" title="Put it up for sale" onClick={() => { sfx.place(); dispatch({ type: 'market/add', ...x, idea: x.title }) }}>
+                      <Plus size={12} />
+                      <span>{x.title}</span>
+                      <span className="market-chip-price mono num"><img src={coin} alt="" />{x.price}</span>
+                    </button>
+                    <button type="button" className="market-chip-x" aria-label={`Put away the idea ${x.title}`} title="Not for me" onClick={() => hideIdea(x.title)}>
+                      <X size={12} />
+                    </button>
+                  </motion.span>
+                ))}
+              </AnimatePresence>
+              {putAway > 0 && (
+                <motion.button layout="position" type="button" className="market-ideas-back" onClick={() => { sfx.tick(); dispatch({ type: 'settings/update', patch: { marketHidden: hidden.filter((t) => !SUGGESTIONS.some((x) => x.title === t)) } }) }}>
+                  <ArrowCounterClockwise size={12} /> Bring back {putAway} {putAway === 1 ? 'idea' : 'ideas'}
+                </motion.button>
+              )}
             </div>
           </motion.div>
         )}
@@ -311,7 +337,7 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
 
       <aside className="market-side">
         <Wallet n={wallet} />
-        <p className="field-help wallet-help">One coin for every tomato finished at the desk. The couch spends one a block; the market, what you priced.</p>
+        <p className="field-help wallet-help">One coin for every tomato finished at the desk. The couch spends one for each tomato of its time; the market, what you priced.</p>
         <h3 className="side-title caps">Bought</h3>
         {log.length === 0 ? (
           <p className="dim small">Nothing bought yet.</p>

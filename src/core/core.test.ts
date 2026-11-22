@@ -2402,3 +2402,16 @@ describe('the desk has one clock: its intervals never overlap', () => {
     expect(overlap(merged, w.now)).toBe(0)
   })
 })
+
+describe('market ideas put away', () => {
+  it('are kept by title in the settings, which sync, and cleaned of anything that is not one', () => {
+    const w = world()
+    w.do({ type: 'settings/update', patch: { marketHidden: ['A movie night', 'A movie night', 7 as never, 'Takeout dinner'] } })
+    expect(w.s.settings.marketHidden).toEqual(['A movie night', 'Takeout dinner'])
+    w.do({ type: 'settings/update', patch: { marketHidden: [] } })
+    expect(w.s.settings.marketHidden).toEqual([])
+    const old = structuredClone(w.s) as unknown as { settings: Record<string, unknown> }
+    delete old.settings.marketHidden
+    expect(migrate(JSON.parse(JSON.stringify(old)))!.settings.marketHidden).toEqual([])
+  })
+})

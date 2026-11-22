@@ -8,6 +8,7 @@ The top section is what the app shows once per build, the first time that build 
 - Couch time from before this version was settled once: whatever it had not yet paid for was taken from your coins.
 - Since November 19, a slip in how the desk closed its intervals counted time two or three times over, on tasks and on the couch. That is fixed, and the counts are back to the time you actually spent. Coins already paid stay paid.
 - With no coin left for the next tomato, the couch sends you back to the desk.
+- In the Market, every card now shows its pencil (edit) and bin (remove) without hovering. Each suggested idea has an x to put it away for good, with Bring back if you change your mind.
 
 ## The market
 

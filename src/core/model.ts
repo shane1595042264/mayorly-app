@@ -492,6 +492,8 @@ export interface Settings {
   autoSwitch: AutoSwitchRules
   /** What the AI clerk may do to the shelf on its own. Syncs. */
   clerk: ClerkSettings
+  /** The market's suggested items put away, by title, so they are not offered again. Syncs. */
+  marketHidden: string[]
 }
 
 /**

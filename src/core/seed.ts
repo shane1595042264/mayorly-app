@@ -43,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   gaming: false,
   autoSwitch: { aiPrompt: true },
   clerk: { createLedgers: true, consolidate: true, minConfidence: null, allow: { settings: 'ask', recipes: 'ask' } },
+  marketHidden: [],
 }
 
 export function emptyState(): MayorlyState {
