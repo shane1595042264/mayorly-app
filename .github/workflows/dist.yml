@@ -9,7 +9,8 @@ name: dist
 on:
   push:
     branches: [main]
-    paths-ignore: ['server/**', 'docs/**', 'CLAUDE.md', 'README.md']
+    # What never ships in the app: the server, the docs, and the CI-only end-to-end checks.
+    paths-ignore: ['server/**', 'docs/**', 'CLAUDE.md', 'README.md', 'scripts/e2e-*', '.github/workflows/ci.yml']
   workflow_dispatch:
 permissions:
   contents: write
