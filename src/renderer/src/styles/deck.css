@@ -597,6 +597,16 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
   border: 0; background: transparent; color: var(--ink-3); cursor: pointer;
 }
 .cue-x:hover { color: var(--ink); }
+/* Whether Mayorly watches a stream for this task's rules: a quiet switch beside the label. */
+.cues-title { display: flex; align-items: center; gap: 12px; }
+.cue-watch {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px;
+  border: 1px solid var(--line-2); background: transparent; color: var(--ink-3);
+  font-size: 12px; cursor: pointer; transition: color 0.15s, border-color 0.15s;
+}
+.cue-watch:hover { color: var(--ink); }
+.cue-watch.on { color: var(--ink); border-color: var(--leisure-2); }
+.cue-watch.on svg { color: var(--leisure-2); }
 /* A rule Mayorly watches (the streamer dies): an eye in front of it. */
 .cue-eye { display: inline-grid; place-items: center; color: var(--leisure-2); }
 .leisure-cues-live .stream-word { color: var(--ink-3); }

@@ -8,8 +8,9 @@
 # page (scripts/e2e-stream.html, as https://www.twitch.tv/e2e) and opens it in Chrome for Testing
 # with the extension the app wrote to ~/.mayorly/chrome-extension. The page shows a League stream
 # with a break card, a slow fade and an ad painted as a death, none of which may switch, then a death at 100 s, which
-# must, once. A second run starts a process named League of Legends.exe first: then the death
-# must not switch, because that is a match of your own.
+# must, once, and mute the page's video within a few seconds, through its Twitch mute button. A
+# second run starts a process named League of Legends.exe first: then the death must not switch,
+# nor mute, because that is a match of your own.
 #
 # CI runs it on a Windows runner (.github/workflows/ci.yml, job stream), never on anyone's own
 # computer. It takes about four minutes.
@@ -109,6 +110,11 @@ function Run-Stream([string]$name, [string]$plan, [int]$until) {
   $startUtc = $start.ToUniversalTime()
   $said = @($lines | Where-Object { $_.text -match '\[stream\]' } | ForEach-Object { '{0:N1}s {1}' -f ($_.at - $startUtc).TotalSeconds, $_.text })
   $deaths = @($lines | Where-Object { $_.text -match '\[stream\] death on' } | ForEach-Object { [pscustomobject]@{ s = ($_.at - $startUtc).TotalSeconds; text = $_.text } })
+  # When the page's video was muted, from the page's own reports.
+  $mutes = @()
+  if (Test-Path $report) {
+    $mutes = @(Get-Content $report | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.plan -eq $plan -and $_.muted } | ForEach-Object { ($_.at - (Epoch $start)) / 1000.0 })
+  }
   $saved = (Get-Content (Join-Path $data 'mayorly.json') -Raw | ConvertFrom-Json).state.desk
   $on = if ($saved.block.kind -eq 'leisure') { $saved.block.leisureId } else { $saved.block.entryId }
   Stop-Mine 'chrome.exe' (Split-Path $Chrome)
@@ -118,6 +124,7 @@ function Run-Stream([string]$name, [string]$plan, [int]$until) {
     armed = [bool]($said -match '\] on: ')
     learned = [bool]($said -match '\] learned ')
     deaths = $deaths
+    mutes = $mutes
     onDesk = if ($on -eq $alpha) { 'alpha' } elseif ($on -eq $stream) { 'Stream watch' } else { "$on" }
     said = $said
   }
@@ -133,7 +140,8 @@ try {
   $pass = [Guid]::NewGuid().ToString('N')
   $pfx = Join-Path $tmp 'twitch.pfx'
   Export-PfxCertificate -Cert $cert -FilePath $pfx -Password (ConvertTo-SecureString -String $pass -Force -AsPlainText) | Out-Null
-  $server = Start-Process -FilePath 'node' -ArgumentList @((Join-Path $App 'scripts\e2e-stream-serve.cjs'), $pfx, $pass, '443') -PassThru -WindowStyle Hidden
+  $report = Join-Path $tmp 'report.jsonl'
+  $server = Start-Process -FilePath 'node' -ArgumentList @((Join-Path $App 'scripts\e2e-stream-serve.cjs'), $pfx, $pass, '443', $report) -PassThru -WindowStyle Hidden
   $deadline = (Get-Date).AddSeconds(20)
   while (-not (Test-NetConnection -ComputerName 127.0.0.1 -Port 443 -InformationLevel Quiet -WarningAction SilentlyContinue)) {
     if ((Get-Date) -gt $deadline -or $server.HasExited) { throw 'The pretend Twitch page was not served on 443.' }
@@ -142,7 +150,7 @@ try {
 
   # 1. The streamer dies once, at 100 s, after a break card, a slow fade and an ad that must not count.
   $full = Run-Stream 'full' 'full' 115
-  $full.pass = $full.armed -and $full.learned -and @($full.deaths).Count -eq 1 -and @($full.deaths)[0].text -match 'switched$' -and @($full.deaths)[0].s -ge 100 -and @($full.deaths)[0].s -le 103.5 -and $full.onDesk -eq 'alpha'
+  $full.pass = $full.armed -and $full.learned -and @($full.deaths).Count -eq 1 -and @($full.deaths)[0].text -match 'switched$' -and @($full.deaths)[0].s -ge 100 -and @($full.deaths)[0].s -le 103.5 -and $full.onDesk -eq 'alpha' -and @($full.mutes).Count -ge 1 -and @($full.mutes)[0] -ge @($full.deaths)[0].s -and @($full.mutes)[0] -le @($full.deaths)[0].s + 4
   $result.runs += $full
 
   # 2. The same death while a League match of your own runs: no switch.
@@ -150,7 +158,7 @@ try {
   Copy-Item (Join-Path $env:SystemRoot 'System32\PING.EXE') $fakeExe
   $fake = Start-Process -FilePath $fakeExe -ArgumentList @('-n', '400', '127.0.0.1') -PassThru -WindowStyle Hidden
   $own = Run-Stream 'own' 'death-only' 40
-  $own.pass = $own.armed -and @($own.deaths).Count -ge 1 -and (@($own.deaths)[0].text -match 'your own League match is running$') -and $own.onDesk -eq 'Stream watch'
+  $own.pass = $own.armed -and @($own.deaths).Count -ge 1 -and (@($own.deaths)[0].text -match 'your own League match is running$') -and $own.onDesk -eq 'Stream watch' -and @($own.mutes).Count -eq 0
   $result.runs += $own
 
   $result.ok = $full.pass -and $own.pass

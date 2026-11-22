@@ -19,6 +19,7 @@ import {
   streamArm,
   streamPostOf,
   watchedCues,
+  isWatched,
   type DeathMemory,
   type DeathTick,
   type LeagueFeatures,
@@ -40,8 +41,8 @@ interface Scene {
   world?: number
   /** The world's brightness, 1 as usual; 0.05 is a fade to black. */
   light?: number
-  /** The ability bar: lit, dimmed (dead) or covered by an overlay of no colour. */
-  bar?: 'lit' | 'dim' | 'covered'
+  /** The ability bar: lit, dimmed (dead, or cooldowns), dark (dead on a darker death screen) or covered by an overlay of no colour. */
+  bar?: 'lit' | 'dim' | 'dark' | 'covered'
   /** Where the minimap is, or none; grey turns its colour off. */
   map?: 'right' | 'left' | 'none'
   mapGrey?: boolean
@@ -113,7 +114,8 @@ function paint(scene: Scene, t: number): Uint8ClampedArray {
         put(x, y, 100 + 50 * Math.sin(y * 0.4 + t / 300) * Math.sin(x * 0.02), 0, 0)
       } else if (inBar) {
         if (bar === 'covered') put(x, y, 50, 0, 0)
-        else put(x, y, (bar === 'dim' ? 45 : 70) * light, bar === 'dim' ? 13 : 24, x * 0.15)
+        // The HUD is drawn over the world: a darker world (night, fog) leaves it as it is.
+        else put(x, y, bar === 'dark' ? 30 : bar === 'dim' ? 45 : 70, bar === 'dark' ? 7 : bar === 'dim' ? 13 : 24, x * 0.15)
       } else if (inBoard) put(x, y, 70, 24, x * 0.1 + y * 0.2)
       else if (inCam) put(x, y, 120 + 30 * Math.sin(x * 0.2 + t / 200), 30, y * 0.1 + t / 400)
       else if (inChat) put(x, y, 60 + (x % 3) * 20, 8, x)
@@ -271,7 +273,7 @@ describe('a League streamer dying', { timeout: 30_000 }, () => {
   })
 
   it('keeps a death whose fight stays on screen a moment after the fall', () => {
-    const fight: Scene = { ...dead, world: 0.68 }
+    const fight: Scene = { ...dead, world: 0.8 }
     const r = play([[10_000, alive], [1000, dead], [1500, fight], [4000, dead]])
     expect(r.deaths).toEqual([13_500])
   })
@@ -294,8 +296,10 @@ describe('a League streamer dying', { timeout: 30_000 }, () => {
     expect(ad.deaths).toEqual([])
   })
 
-  it('is not a darker scene (fog, a night effect), which keeps its colour for its brightness', () => {
+  it('is not a darker scene (fog, a night effect) with the bar dimmed by cooldowns, but is a dark death with the bar gone dark', () => {
     expect(play([[10_000, alive], [6000, { ...alive, light: 0.6, bar: 'dim' }]]).deaths).toEqual([])
+    // Thebausffs' death screen: the world at 45% of its brightness, its colour with it, the bar at a third.
+    expect(play([[10_000, alive], [3000, { ...alive, light: 0.45, bar: 'dark' }]]).deaths).toEqual([11_000])
   })
 
   it('takes the minimap on the right over a still logo on the left, and a white page is no death', () => {
@@ -389,15 +393,32 @@ describe('a watched rule', () => {
     bg.act({ type: 'desk/select', leisureId: bg.bg3 })
     expect(streamArm(bg.s, 'here')).toEqual({ on: false, why: 'no stream rule on this task', taskId: bg.bg3 })
     const off = desk()
-    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false } } })
+    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true } } })
     expect(streamArm(off.s, 'here')).toMatchObject({ on: false, why: 'the rule is off', taskId: off.stream })
     off.act({ type: 'desk/select', leisureId: off.bg3 })
     expect(streamArm(off.s, 'here')).toEqual({ on: false, why: 'the rule is off' })
     const paused = desk()
     paused.act({ type: 'desk/pause' })
     expect(streamArm(paused.s, 'here').why).toBe('the desk is not running')
-    const plain = desk({ title: 'watch TV', cue: 'someone dies' })
+    const plain = desk({ title: 'TV night', cue: 'someone dies' })
     expect(streamArm(plain.s, 'here').why).toBe('no stream rule on this task')
+  })
+
+  it('takes the eye on a task over its words: on for any task, off for one its words would watch', () => {
+    const d = desk({ title: 'Thebausffs', cue: 'Irelia dies' })
+    expect(streamArm(d.s, 'here').why).toBe('no stream rule on this task')
+    d.act({ type: 'entry/watch', id: d.stream, watch: true })
+    expect(streamArm(d.s, 'here')).toMatchObject({ on: true, cue: 'Irelia dies' })
+    d.act({ type: 'entry/watch', id: d.stream, watch: null })
+    expect(d.s.leisure.find((l) => l.id === d.stream)!.watch).toBeUndefined()
+    const off = desk()
+    off.act({ type: 'entry/watch', id: off.stream, watch: false })
+    expect(streamArm(off.s, 'here').why).toBe('no stream rule on this task')
+    // On with no rule that someone dies: the streamer's death is the rule.
+    const bare = desk({ title: 'Caedrel', cue: 'one game' })
+    bare.act({ type: 'entry/watch', id: bare.stream, watch: true })
+    expect(streamArm(bare.s, 'here')).toMatchObject({ on: true, cue: 'the streamer dies' })
+    expect(isWatched({ title: 'watch theBause', cues: ['Irelia dies'] })).toBe(true)
   })
 
   it('does what a tap of Alt+Q does on a death: back to the task worked on last', () => {

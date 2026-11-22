@@ -37,6 +37,8 @@ export type Action =
   | { type: 'entry/cue-add'; id: Id; text: string }
   | { type: 'entry/cue-edit'; id: Id; index: number; text: string }
   | { type: 'entry/cue-delete'; id: Id; index: number }
+  /** Watch a stream for this task's rules, or not; null goes back to its rules' words. */
+  | { type: 'entry/watch'; id: Id; watch: boolean | null }
   /** The clerk filed an existing entry (a tray sweep): ledger, an estimate if it had none, and its log line. */
   | { type: 'entry/file'; id: Id; ledgerId: Id | null; estimateMin: number | null; log: string; model?: string; confidence?: 'sure' | 'unsure'; sessionMin?: number | null }
   /** You looked at an unsure filing and left it: the question mark goes, no rule is learned. */
@@ -273,6 +275,13 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       if (!it) break
       it.cues = (it.cues ?? []).filter((_, i) => i !== action.index)
       if (!it.cues.length && 'ledgerId' in it) delete it.cues
+      break
+    }
+    case 'entry/watch': {
+      const it = taskOf(s, action.id)
+      if (!it) break
+      if (typeof action.watch === 'boolean') it.watch = action.watch
+      else delete it.watch
       break
     }
     case 'entry/file': {
@@ -1610,7 +1619,7 @@ export function sanitiseSettings(x: Settings): Settings {
     alarms: sanitiseAlarms(x.alarms),
     clerk: sanitiseClerk(x.clerk),
     gaming: x.gaming === true,
-    autoSwitch: { aiPrompt: x.autoSwitch?.aiPrompt !== false, streamDeath: x.autoSwitch?.streamDeath !== false },
+    autoSwitch: { aiPrompt: x.autoSwitch?.aiPrompt !== false, streamDeath: x.autoSwitch?.streamDeath !== false, streamMute: x.autoSwitch?.streamMute !== false },
     marketHidden: Array.isArray(x.marketHidden) ? [...new Set(x.marketHidden.filter((t): t is string => typeof t === 'string'))].slice(0, 50) : [],
   }
 }

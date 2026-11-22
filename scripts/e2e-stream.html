@@ -20,7 +20,8 @@
   <body>
     <a data-a-target="stream-game-link" href="#">League of Legends</a>
     <div id="player" style="position: relative">
-      <video id="v" muted autoplay playsinline></video>
+      <video id="v" autoplay playsinline></video>
+      <button data-a-target="player-mute-unmute-button" id="mute">Mute (m)</button>
     </div>
     <script>
       const q = new URLSearchParams(location.search)
@@ -116,6 +117,18 @@
       setInterval(draw, 100)
       video.srcObject = canvas.captureStream(10)
       video.play().catch(() => {})
+      // Twitch's mute button, as far as the eye knows it; and each change of mute, to the server.
+      const button = document.getElementById('mute')
+      button.onclick = () => {
+        video.muted = !video.muted
+        button.textContent = video.muted ? 'Unmute (m)' : 'Mute (m)'
+      }
+      let muted = video.muted
+      setInterval(() => {
+        if (video.muted === muted) return
+        muted = video.muted
+        fetch('/report', { method: 'POST', body: JSON.stringify({ at: Date.now(), plan, muted }) }).catch(() => {})
+      }, 200)
     </script>
   </body>
 </html>

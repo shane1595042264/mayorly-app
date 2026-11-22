@@ -1,7 +1,8 @@
 // Mayorly stream eye. While Mayorly says a stream rule is running ("the streamer dies"), it reads
 // this page's own video twice a second and hands Mayorly, on this computer, a grid of colour and
 // light: 32 x 18 cells, three numbers each. Never your screen, never a picture. Otherwise it only
-// says hello every few seconds while a video plays, so Mayorly knows the tab is there.
+// says hello every few seconds while a video plays, so Mayorly knows the tab is there. When a death
+// switches you away, Mayorly may ask it to mute the stream, and to unmute it when you come back.
 
 /** RGBA pixels of a w x h frame in; per cell of a 32 x 18 grid: colourfulness, brightness, lit share. */
 function mayorlyGrid(data, w, h) {
@@ -71,6 +72,8 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
     if (!site) return
     var armed = false
     var every = 500
+    // The video this eye muted, so it unmutes only what it muted, never one you muted yourself.
+    var mutedBy = null
     var stopped = false
     // Videos the page will not let be read (from another origin), skipped; another on the page can still be.
     var bad = new WeakSet()
@@ -124,6 +127,33 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
       }
       if (best) return { v: best, area: Math.round(area), bad: false }
       return unread ? { v: unread, area: 0, bad: true } : null
+    }
+    // The player's own mute button, so its icon and remembered volume stay right; else the video itself.
+    var muteButton = function () {
+      if (site === 'twitch') return document.querySelector('button[data-a-target="player-mute-unmute-button"]')
+      if (site === 'youtube') return document.querySelector('.ytp-mute-button')
+      return null
+    }
+    var silent = function (v) {
+      return v.muted || v.volume === 0
+    }
+    var setMuted = function (v, on) {
+      if (silent(v) === on) return
+      var b = muteButton()
+      if (b) b.click()
+      setTimeout(function () {
+        if (silent(v) !== on) v.muted = on
+      }, 400)
+    }
+    var mute = function (v) {
+      if (!v || silent(v)) return
+      mutedBy = v
+      setMuted(v, true)
+    }
+    var unmute = function () {
+      var v = mutedBy
+      mutedBy = null
+      if (v && v.isConnected) setMuted(v, false)
     }
     var post = function (m) {
       return new Promise(function (resolve) {
@@ -185,7 +215,7 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
           tainted = false
           var grid = ad() ? null : sample(found.v)
           r = await post(grid ? { kind: 'frame', area: found.area, grid: grid } : { kind: tainted ? 'tainted' : 'hello', area: found.area })
-        } else if (now - lastHello >= (armed ? 2000 : HELLO)) {
+        } else if (now - lastHello >= (armed ? 2000 : mutedBy ? 1000 : HELLO)) {
           lastHello = now
           r = await post({ kind: 'hello', area: found.area })
         }
@@ -195,6 +225,9 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
       if (r) {
         armed = !!r.armed
         every = Math.max(250, Math.min(5000, Number(r.every) || 500))
+        // Muted by a death that switched you away; read again means you are back on its task.
+        if (r.mute === true && found) mute(found.v)
+        else if (armed && mutedBy) unmute()
       }
       if (!stopped) setTimeout(tick, armed ? every : 1000)
     }

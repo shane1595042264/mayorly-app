@@ -224,7 +224,7 @@ function boot() {
   // rule's log does not take that switch for one made by hand.
   const auto = { at: 0 }
   // A League streamer's death is Alt+Q, seen in the stream's own video (streamwatch.ts).
-  const stream = streamRule({ engine, say, send, statusChannel: IPC.streamStatus, title: (id) => short(deskTitle(id)), auto })
+  const stream = streamRule({ engine, say, send, statusChannel: IPC.streamStatus, title: (id) => short(deskTitle(id)), auto, traceFile: join(dataDir, 'logs', 'stream-trace.jsonl') })
   ipcMain.handle(IPC.streamGet, () => stream.status())
   const { captureLine, sweepTray, consolidate } = makeCapture(engine, clerk, say)
   // The trial that sets the level for starting a ledger goes to the log, line by line.

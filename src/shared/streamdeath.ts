@@ -53,10 +53,14 @@ export interface StreamPost {
   grid: StreamGrid | null
 }
 
-/** Mayorly's answer: send frames every `every` ms, or only a hello now and then. */
+/**
+ * Mayorly's answer: send frames every `every` ms, or only a hello now and then. `mute`: a death
+ * switched you away, so mute the video; the eye unmutes what it muted when it is armed again.
+ */
 export interface StreamReply {
   armed: boolean
   every: number
+  mute?: boolean
 }
 
 /** How often a tab says hello while not armed. */
@@ -115,16 +119,33 @@ export function streamPostOf(j: unknown): StreamPost | null {
 // Which rules are watched
 
 const DEATH = /\b(die|dies|died|dying|dead|death|killed)\b|死|阵亡|陣亡|挂了|寄了/i
-const STREAM = /\bstream(s|er|ers|ing)?\b|\btwitch\b|主播|直播|bilibili|b站|虎牙|斗鱼|鬥魚|huya|douyu/i
+const STREAM = /\bstream(s|er|ers|ing)?\b|\bwatch(es|ing)?\b|\btwitch\b|主播|直播|bilibili|b站|虎牙|斗鱼|鬥魚|huya|douyu/i
+
+/** A task as far as the stream rule cares: its name, its context switch rules, and the eye's switch. */
+export interface WatchTask {
+  title: string
+  cues?: string[]
+  watch?: boolean
+}
 
 /**
- * The context switch rules Mayorly watches on a task: the ones that say someone dies, on a task
- * about a stream (its name or the rule itself says stream, streamer, Twitch, 主播 or 直播). "Kai'sa
- * dies" on "Stream watch" is one; "one main friendly character dies" on a game you play is not.
+ * The context switch rules Mayorly watches on a task. By their words: the ones that say someone
+ * dies, on a task about a stream or about watching (its name or the rule says stream, streamer,
+ * watch, Twitch, 主播 or 直播). "Kai'sa dies" on "Stream watch" or "watch theBause" is one; "one main
+ * friendly character dies" on a game you play is not. The eye on a task's rules overrides the
+ * words: on, every rule that someone dies; off, none.
  */
-export function watchedCues(task: { title: string; cues?: string[] }): string[] {
+export function watchedCues(task: WatchTask): string[] {
+  const cues = task.cues ?? []
+  if (task.watch === false) return []
+  if (task.watch === true) return cues.filter((c) => DEATH.test(c))
   const stream = STREAM.test(task.title)
-  return (task.cues ?? []).filter((c) => DEATH.test(c) && (stream || STREAM.test(c)))
+  return cues.filter((c) => DEATH.test(c) && (stream || STREAM.test(c)))
+}
+
+/** Whether Mayorly watches a stream for this task: the eye's switch, else whether any rule is watched by its words. */
+export function isWatched(task: WatchTask): boolean {
+  return task.watch ?? watchedCues(task).length > 0
 }
 
 const LEAGUE_NAME = /league of legends|英雄联盟|英雄聯盟|리그 오브 레전드/i
@@ -166,8 +187,8 @@ function ruleOf(s: MayorlyState): { taskId?: Id; title?: string; cue?: string } 
   const id = onDeskId(s)
   const task = id ? (s.entries.find((e) => e.id === id) ?? s.leisure.find((l) => l.id === id)) : undefined
   if (!id || !task) return {}
-  const cue = watchedCues(task)[0]
-  return cue ? { taskId: id, title: task.title, cue } : { taskId: id }
+  if (!isWatched(task)) return { taskId: id }
+  return { taskId: id, title: task.title, cue: watchedCues(task)[0] ?? 'the streamer dies' }
 }
 
 /** A stream tab as last heard from. */
@@ -272,10 +293,18 @@ export const LEAGUE = {
   mapStillCell: 6,
   mapCellsMin: 5,
   mapLife: 2.5,
-  /** A grey sample: the world under 65% of its usual colour (and under 28 at all), and under 70% of its usual colour for its brightness, so a darker scene is not grey... */
-  greyRatio: 0.65,
-  greyCap: 28,
-  satRatio: 0.7,
+  /**
+   * A grey sample: the world's colour under 72% of usual (and under 30 at all), or under 85% when
+   * the bar has gone dark (under half its usual colour, still in place). A death screen greys the
+   * world and darkens it too (Thebausffs' to 43% of its brightness, with the shop open over it), so
+   * colour, which falls with both, is what counts, not colour for brightness...
+   */
+  greyRatio: 0.72,
+  greyCap: 30,
+  greyLoose: 0.85,
+  barStrong: 0.5,
+  /** A picture under 75% of its usual brightness asks the bar for more: under half its colour (a death), not a dip from cooldowns under a night effect or fog. */
+  darkRatio: 0.75,
   /**
    * ...the world keeping its texture (a flat window or card over it is not a death)... the bar
    * dimmed under 85% and still the bar (its pattern of brightness correlates with its usual one,
@@ -291,9 +320,9 @@ export const LEAGUE = {
   mapKeep: 0.6,
   mapHeld: 0.6,
   mapShift: 20,
-  /** ...and the picture lit as usual: a fade to black or a white page is not a death. */
-  lightRatio: 0.55,
-  lightMin: 30,
+  /** ...and the picture lit, if darker: a fade to black (a dark frame) or a white page is not a death. */
+  lightRatio: 0.3,
+  lightMin: 15,
   lightMax: 1.5,
   /**
    * The step: colour of 75% of usual in the 2.5 s before the grey began, with the streamer seen up.
@@ -302,6 +331,8 @@ export const LEAGUE = {
    */
   edgeRatio: 0.75,
   edgeMs: 2500,
+  /** ...and a fall of a fifth of the usual colour or more from there: a fade is slower than that. */
+  stepDrop: 0.2,
   fallMs: 10_000,
   /** Grey for a second, two samples at least; one stray sample inside it is forgiven. */
   deathMs: 1000,
@@ -344,7 +375,7 @@ export interface LeagueFeatures {
   w: number
   /** The world's colour for its brightness, in percent: a darker scene keeps it, a grey one loses it. */
   s: number
-  /** The world's brightness, and its texture: how far its lit cells' brightness strays from their median. */
+  /** The world's brightness, and its texture: how far its lit cells' brightness strays from their median, in percent of it, so darkening keeps it. */
   l: number
   tex: number
   /** The ability bar's colour, and its brightness cell by cell. */
@@ -393,7 +424,7 @@ export function leagueFeatures(g: StreamGrid, prev: StreamGrid | null, at: numbe
     w: median(lit.map((i) => g.chroma[i])),
     s: median(lit.map((i) => (100 * g.chroma[i]) / Math.max(g.luma[i], 16))),
     l: mean(WORLD.map((i) => g.luma[i])),
-    tex: median(lumas.map((v) => Math.abs(v - mid))),
+    tex: (100 * median(lumas.map((v) => Math.abs(v - mid)))) / Math.max(mid, 16),
     a: mean(BAR.map((i) => g.chroma[i])),
     bar: BAR.map((i) => g.luma[i]),
     worldMove: prev ? median(WORLD.map((i) => Math.abs(g.luma[i] - prev.luma[i]))) : null,
@@ -592,12 +623,12 @@ export function leagueStep(mem: DeathMemory | null, f: LeagueFeatures | null, hi
     }
     keep(f.w)
     const b = baselineOf(m)
-    return done(b ? `world ${r1(b.w)} sat ${r1(b.s)} bar ${r1(b.a)} map ${r1(b.m)} ${side}, ${m.mapCells.length} cells, light ${r1(b.l)}` : `learning: world ${r1(f.w)}`)
+    return done(b ? `world ${r1(b.w)} sat ${r1(b.s)} tex ${r1(b.tex)} bar ${r1(b.a)} map ${r1(b.m)} ${side}, ${m.mapCells.length} cells, light ${r1(b.l)}` : `learning: world ${r1(f.w)} bar ${r1(f.a)} light ${r1(f.l)}`)
   }
 
   const b = baselineOf(m) as Baseline
   const map = mapNow(f[m.side as SideName], b, m.mapCells)
-  const seen = `world ${r1(f.w)}/${r1(b.w)} sat ${r1(f.s)}/${r1(b.s)} bar ${r1(f.a)}/${r1(b.a)} map ${r1(map.held)} shift ${r1(map.shift)} light ${r1(f.l)}/${r1(b.l)}`
+  const seen = `world ${r1(f.w)}/${r1(b.w)} sat ${r1(f.s)}/${r1(b.s)} tex ${r1(f.tex)}/${r1(b.tex)} bar ${r1(f.a)}/${r1(b.a)} map ${r1(map.held)} shift ${r1(map.shift)} light ${r1(f.l)}/${r1(b.l)} ${m.phase}${m.up ? ' up' : ''}`
 
   // Another scene (the client, a break, another game): learn the picture again.
   if (map.shift > LEAGUE.sceneShift || map.held < LEAGUE.sceneHeld) {
@@ -640,14 +671,18 @@ export function leagueStep(mem: DeathMemory | null, f: LeagueFeatures | null, hi
     }
   }
   if (up) m.fall = null
-  const greyWorld = f.w <= Math.min(LEAGUE.greyRatio * b.w, LEAGUE.greyCap) && f.s <= LEAGUE.satRatio * b.s && f.tex >= LEAGUE.texRatio * b.tex
-  const barDim = barReads(b) ? f.a <= LEAGUE.barRatio * b.a && barInPlace(f, b) : f.w <= LEAGUE.deepRatio * b.w
+  const inPlace = barReads(b) && barInPlace(f, b)
+  const barDark = inPlace && f.a <= LEAGUE.barStrong * b.a
+  const greyWorld = (f.w <= Math.min(LEAGUE.greyRatio * b.w, LEAGUE.greyCap) || (barDark && f.w <= LEAGUE.greyLoose * b.w)) && f.tex >= LEAGUE.texRatio * b.tex
+  const darker = f.l < LEAGUE.darkRatio * b.l
+  const barDim = barReads(b) ? inPlace && f.a <= (darker ? LEAGUE.barStrong : LEAGUE.barRatio) * b.a : f.w <= LEAGUE.deepRatio * b.w
   const mapHeld = map.held >= LEAGUE.mapHeld && map.shift <= LEAGUE.mapShift
   const lit = f.l >= Math.max(LEAGUE.lightRatio * b.l, LEAGUE.lightMin) && f.l <= LEAGUE.lightMax * b.l
   if (greyWorld && barDim && mapHeld && lit) {
     if (!m.run) {
       const before = m.recent.filter((x) => x.at >= at - LEAGUE.edgeMs && x.at < at)
-      const step = m.up && before.length > 0 && Math.max(...before.map((x) => x.w)) >= LEAGUE.edgeRatio * b.w
+      const top = before.length ? Math.max(...before.map((x) => x.w)) : 0
+      const step = m.up && top >= LEAGUE.edgeRatio * b.w && top - f.w >= LEAGUE.stepDrop * b.w
       const fell = m.fall !== null && at - m.fall <= LEAGUE.fallMs
       if (step && !fell) m.fall = at
       m.run = { since: at, last: at, n: 1, edge: step || fell, miss: false }

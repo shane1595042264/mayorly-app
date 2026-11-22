@@ -74,6 +74,7 @@ export const STREAM_MATCHES = [
   'https://www.youtube.com/*',
   'https://kick.com/*',
   'https://live.bilibili.com/*',
+  'https://www.bilibili.com/*',
   'https://www.huya.com/*',
   'https://www.douyu.com/*',
 ]
@@ -81,8 +82,8 @@ export const STREAM_MATCHES = [
 export const MANIFEST = {
   manifest_version: 3,
   name: 'Mayorly',
-  version: '1.2.0',
-  description: 'Tells Mayorly on this computer when you send ChatGPT or Gemini a prompt, and, while a stream rule runs, what the stream shows, as a grid of colour.',
+  version: '1.3.0',
+  description: 'Tells Mayorly on this computer when you send ChatGPT or Gemini a prompt, and, while a stream rule runs, what the stream shows, as a grid of colour; mutes the stream when a death switches you away, if you let it.',
   background: { service_worker: 'background.js' },
   content_scripts: [
     { matches: ['https://chatgpt.com/*', 'https://gemini.google.com/*'], js: ['content.js'], run_at: 'document_idle' },

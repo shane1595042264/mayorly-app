@@ -54,6 +54,8 @@ export interface Entry {
   subtasks?: Subtask[]
   /** Context switch rules, as on a couch item: cues, in your words, for when to leave this for something else. */
   cues?: string[]
+  /** Whether Mayorly watches a stream for this task's rules (the streamer dies): on, off, or, when absent, by the rules' words. */
+  watch?: boolean
   /** Clearing/reopening never erases earlier completions or their notes and checklist. */
   history?: EntryHistoryEvent[]
   /** Put back from the trash at this time; a merge lets it beat an older deletion. */
@@ -445,6 +447,8 @@ export interface LeisureItem {
   subtasks?: Subtask[]
   /** Context switch rules: cues, in your words, for when to leave this and go do something else. No logic, just the reminder. */
   cues: string[]
+  /** Whether Mayorly watches a stream for these rules (the streamer dies): on, off, or, when absent, by the rules' words. */
+  watch?: boolean
 }
 
 /** A session parked by the quick switch: its plan, its block with the time already spent on it, and its sitting. */
@@ -501,11 +505,13 @@ export interface Settings {
  * ChatGPT or Gemini in Chrome) is Alt+Q, onto your recent task while it thinks; never during a rest
  * or from an idle desk, never for a scheduled or automatic prompt. streamDeath: on a task whose
  * context switch rule says the streamer dies, a League streamer's death seen in the stream's own
- * video is Alt+Q; never your own game, never during a rest (shared/streamdeath.ts).
+ * video is Alt+Q; never your own game, never during a rest (shared/streamdeath.ts). streamMute: that
+ * switch also mutes the stream, and coming back to its task unmutes it.
  */
 export interface AutoSwitchRules {
   aiPrompt: boolean
   streamDeath: boolean
+  streamMute: boolean
 }
 
 /** What the clerk does with an instruction of that kind: do it (with Undo), ask first, or never. */

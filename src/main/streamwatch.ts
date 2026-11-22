@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { appendFile, rename, stat } from 'node:fs/promises'
 import { connect } from 'node:net'
 import { onDeskId, type Action, type Id } from '@core/index'
 import type { ClerkNotice } from '../shared/bridge'
@@ -48,9 +49,16 @@ interface Tab {
   memory: DeathMemory | null
   grid: StreamGrid | null
   tick: DeathTick | null
+  /** A death switched away from it with muting on: the next answer asks the eye to mute. */
+  mute: boolean
+  /** The last minute of what was read, for the trace. */
+  trail: { at: number; seen: string; grid: StreamGrid | null; ad: boolean }[]
 }
 
 const OFF: StreamReply = { armed: false, every: HELLO_MS }
+/** How much of the trail a trace keeps, and how big the trace file may grow before it starts over. */
+const TRAIL_MS = 60_000
+const TRACE_MAX = 20 * 1024 * 1024
 
 export function streamRule(o: {
   engine: Engine
@@ -61,11 +69,17 @@ export function streamRule(o: {
   title: (id: Id | null) => string
   /** When an automatic rule (this one or the AI prompt rule) last switched the desk, so a switch then is not taken for yours. */
   auto: { at: number }
+  /**
+   * The file a trace goes to: the last minute of numbers read from the stream (never a picture),
+   * written when a death switches and when you leave a watched stream yourself, so the rule can be
+   * tuned on real deaths. Null keeps none.
+   */
+  traceFile: string | null
 }): StreamRule {
   const { engine } = o
   const tabs = new Map<string, Tab>()
   let started = false
-  let fired: { at: number; taskId: Id } | null = null
+  let fired: { at: number; taskId: Id; tab: string } | null = null
   let firing = false
   let lastArm = ''
   let armedSince: number | null = null
@@ -76,7 +90,7 @@ export function streamRule(o: {
   let lastDesk: Id | null = null
   let lastStatus = ''
   const tainted = new Set<string>()
-  let seen: { at: number; text: string; phase: string } | null = null
+  let seen: { at: number; text: string; phase: string; tab: string } | null = null
   let timer: NodeJS.Timeout | null = null
   let offAction: (() => void) | null = null
   let offState: (() => void) | null = null
@@ -124,7 +138,30 @@ export function streamRule(o: {
     o.send(o.statusChannel, s)
   }
 
-  const fire = async (tick: DeathTick, a: StreamArm, site: string) => {
+  // The last minute read from a tab, to the trace file, with why: a death that switched, or you leaving the stream yourself.
+  const trace = (tab: Tab | undefined, why: string) => {
+    if (!o.traceFile || !tab || !tab.trail.length) return
+    const b64 = (x: Uint8Array) => Buffer.from(x).toString('base64')
+    const line = JSON.stringify({
+      at: new Date().toISOString(),
+      why,
+      site: tab.seen.site,
+      category: tab.seen.category,
+      samples: tab.trail.map((t) => ({ at: t.at, ad: t.ad, seen: t.seen, grid: t.grid && { c: b64(t.grid.chroma), l: b64(t.grid.luma), t: b64(t.grid.lit) } })),
+    })
+    const file = o.traceFile
+    void (async () => {
+      try {
+        const size = await stat(file).then((x) => x.size, () => 0)
+        if (size > TRACE_MAX) await rename(file, `${file}.old`)
+        await appendFile(file, line + '\n')
+      } catch (err) {
+        log.warn('[stream]', `no trace: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    })()
+  }
+
+  const fire = async (tick: DeathTick, a: StreamArm, site: string, tabId: string) => {
     if (firing) return
     firing = true
     try {
@@ -133,9 +170,12 @@ export function streamRule(o: {
       log.info('[stream]', `death on ${site}: ${tick.seen}; ${step.why}`)
       if (!step.act) return
       o.auto.at = Date.now()
-      fired = { at: o.auto.at, taskId: a.taskId as Id }
+      fired = { at: o.auto.at, taskId: a.taskId as Id, tab: tabId }
       engine.dispatch(step.act)
+      const tab = tabs.get(tabId)
+      if (tab && engine.state.settings.autoSwitch.streamMute) tab.mute = true
       o.say({ phase: 'done', text: `Streamer died: on ${o.title(onDeskId(engine.state))}` })
+      trace(tab, `death: ${tick.seen}`)
     } catch (err) {
       log.warn('[stream]', `death not acted on: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
@@ -152,33 +192,41 @@ export function streamRule(o: {
     heard = true
     const prev = tabs.get(p.tab)
     const league = leagueOf(p.category, p.title)
-    const tab: Tab = prev ?? { seen: null as unknown as TabSeen, memory: null, grid: null, tick: null }
+    const tab: Tab = prev ?? { seen: null as unknown as TabSeen, memory: null, grid: null, tick: null, mute: false, trail: [] }
     tab.seen = { tab: p.tab, site: p.site, title: p.title, category: p.category, league, visible: p.visible, active: p.active, area: p.area, tainted: p.kind === 'tainted', at: now }
     tabs.set(p.tab, tab)
     for (const [k, t] of tabs) if (now - t.seen.at > LEAGUE.forgetMs) tabs.delete(k)
 
+    // A death just switched away from this tab: mute it now, if muting is on.
+    const answer = (r: StreamReply): StreamReply => {
+      if (!tab.mute) return r
+      tab.mute = false
+      log.info('[stream]', `muting ${p.site}`)
+      return { ...r, mute: true }
+    }
     const a = arm()
     noteArm(a, now)
     if (!a.on) {
       pushStatus()
-      return OFF
+      return answer(OFF)
     }
     if (p.kind === 'tainted') {
       if (!tainted.has(p.site)) log.info('[stream]', `${p.site}: the page will not let its video be read`)
       tainted.add(p.site)
       pushStatus()
-      return OFF
+      return answer(OFF)
     }
     const pick = pickTab(tabList(), a.title ?? '', now)
     if (!pick || pick.tab !== p.tab) {
       pushStatus()
-      return OFF
+      return answer(OFF)
     }
     if (p.cost !== null && (lastCost === 0 || now - lastCost > 10 * 60_000)) {
       lastCost = now
       log.info('[stream]', `cost: ${p.cost} ms a frame in Chrome on ${p.site}`)
     }
-    const every = p.cost !== null && p.cost > 8 ? 1000 : 500
+    // Twice a second; once a second if reading a frame costs the page more than 25 ms.
+    const every = p.cost !== null && p.cost > 25 ? 1000 : 500
     if (p.kind === 'hello' && !p.ad) {
       pushStatus()
       return { armed: true, every }
@@ -189,7 +237,9 @@ export function streamRule(o: {
     const tick = leagueStep(tab.memory, f, { ad: p.ad }, now)
     tab.memory = tick.memory
     tab.tick = tick
-    seen = { at: now, text: tick.seen, phase: tick.memory.phase }
+    tab.trail.push({ at: now, seen: tick.seen, grid: p.grid, ad: p.ad })
+    while (tab.trail.length && now - tab.trail[0].at > TRAIL_MS) tab.trail.shift()
+    seen = { at: now, text: tick.seen, phase: tick.memory.phase, tab: p.tab }
     if (tick.event === 'learned') log.info('[stream]', `learned ${p.site}${p.category ? ` (${p.category})` : ''}: ${tick.seen}`)
     else if (tick.event === 'reset') log.info('[stream]', `another scene on ${p.site}: learning again`)
     else if (tick.event === 'respawn') log.info('[stream]', `back up: ${tick.seen}`)
@@ -197,7 +247,7 @@ export function streamRule(o: {
       lastNear = now
       log.info('[stream]', `near: ${tick.seen}`)
     }
-    if (tick.event === 'death') void fire(tick, a, p.site)
+    if (tick.event === 'death') void fire(tick, a, p.site, p.tab)
     if (was !== tick.memory.phase) pushStatus()
     return { armed: true, every }
   }
@@ -212,7 +262,10 @@ export function streamRule(o: {
       const left = lastDesk
       lastDesk = desk
       const byHand = !firing && now - o.auto.at > 1500 && (action.type === 'desk/switch' || action.type === 'desk/select' || action.type === 'desk/deploy')
-      if (byHand && left && lastArm === `on:${left}` && seen && now - seen.at < 3000) log.info('[stream]', `by hand: ${seen.phase}, ${seen.text}`)
+      if (byHand && left && lastArm === `on:${left}` && seen && now - seen.at < 3000) {
+        log.info('[stream]', `by hand: ${seen.text}`)
+        trace(tabs.get(seen.tab), `by hand: ${seen.text}`)
+      }
       if (byHand && fired && desk === fired.taskId && now - fired.at < 8000) log.info('[stream]', `undone: back on the stream ${((now - fired.at) / 1000).toFixed(1)} s after a death switched`)
     }
     pushStatus()

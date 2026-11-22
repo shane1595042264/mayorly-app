@@ -464,7 +464,12 @@ const AUTO_SWITCH: { key: keyof AutoSwitchRules; label: string; help: string }[]
   {
     key: 'streamDeath',
     label: 'When the streamer dies in League, switch to your recent task',
-    help: 'For a couch item or task with a context switch rule such as "streamer dies" (or any rule that someone dies, on an item whose name says stream). While it runs here and a League of Legends stream plays in Chrome, on Twitch, YouTube, Kick, Bilibili, Huya or Douyu, Mayorly reads the stream\'s own video and does what Alt+Q does the moment the game goes grey, once per death. It reads the page, never your screen, so your own games never count, and it waits while a League match of yours is running. Needs the Mayorly extension; after an update, press its reload button once in chrome://extensions, then reload the stream page.',
+    help: 'For a couch item or task with a context switch rule such as "streamer dies" (or any rule that someone dies, on an item whose name says stream or watch), or one whose rules you set to Watching the stream with the eye button. While it runs here and a League of Legends stream plays in Chrome, on Twitch, YouTube, Kick, Bilibili, Huya or Douyu, Mayorly reads the stream\'s own video and does what Alt+Q does the moment the game goes grey, once per death. It reads the page, never your screen, so your own games never count, and it waits while a League match of yours is running. Needs the Mayorly extension; after an update, press its reload button once in chrome://extensions, then reload the stream page.',
+  },
+  {
+    key: 'streamMute',
+    label: 'Mute the stream when the streamer dies',
+    help: 'When a death switches you away, the stream is muted too, with the player\'s own mute button on Twitch and YouTube; coming back to its task unmutes it. A stream you muted yourself is left as it is.',
   },
 ]
 

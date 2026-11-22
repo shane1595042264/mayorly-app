@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { CaretDown, CaretRight, Eye, Plus, X } from '@phosphor-icons/react'
-import { watchedCues } from '../../../shared/streamdeath'
+import { CaretDown, CaretRight, Eye, EyeSlash, Plus, X } from '@phosphor-icons/react'
+import { isWatched, watchedCues } from '../../../shared/streamdeath'
 import { current, dispatch } from '../store'
 
 // Context switch rules: cues in your words for when to leave something and do something
@@ -8,7 +8,8 @@ import { current, dispatch } from '../store'
 // the drawer shows them while you are on it and the quick switch does the leaving. The
 // same on a task and a couch item (`entry/cue-*`). One kind is watched: a rule that the streamer
 // dies, on a stream, carries an eye, and Mayorly does the switch when a League streamer goes down
-// (shared/streamdeath.ts).
+// (shared/streamdeath.ts). The band's eye button turns watching on or off for the task whatever its
+// words say (`entry/watch`).
 
 /** The caret that opens a row's rules; Space does the same on the selected row. */
 export function CueToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
@@ -38,12 +39,34 @@ export function Cues({ id, title, cues, live, example, inRow }: { id: string; ti
     setDraft('')
   }
   const Box = inRow ? 'div' : 'li'
+  const st = current()
+  const watch = (st?.entries.find((e) => e.id === id) ?? st?.leisure.find((l) => l.id === id))?.watch
   // Watched only while the rule is on in Settings (Auto switch); the eye says so.
-  const watched = current()?.settings.autoSwitch.streamDeath === false ? [] : watchedCues({ title, cues })
+  const ruleOn = st?.settings.autoSwitch.streamDeath !== false
+  const watching = isWatched({ title, cues, watch })
+  const watched = ruleOn && watching ? watchedCues({ title, cues, watch }) : []
   return (
     <Box className={`cues-band ${inRow ? 'in-row' : ''} ${live ? 'live' : ''}`}>
       <div className="cues-head">
-        <span className="field-label caps">Context switch rules</span>
+        <span className="cues-title">
+          <span className="field-label caps">Context switch rules</span>
+          <button
+            type="button"
+            className={`cue-watch ${watching && ruleOn ? 'on' : ''}`}
+            aria-pressed={watching}
+            title={
+              !ruleOn
+                ? 'Watching streams is off in Settings, Auto switch'
+                : watching
+                  ? 'Mayorly watches a League stream while this runs, and switches when the streamer dies. Click to stop.'
+                  : 'Watch a League stream while this runs: when the streamer dies, Mayorly switches for you.'
+            }
+            onClick={() => dispatch({ type: 'entry/watch', id, watch: !watching })}
+          >
+            {watching ? <Eye size={13} weight="bold" /> : <EyeSlash size={13} />}
+            {watching ? 'Watching the stream' : 'Watch the stream'}
+          </button>
+        </span>
         <span className="field-help">When to leave {title} for something else. A cue, not a rule.</span>
       </div>
       {cues.length > 0 && (

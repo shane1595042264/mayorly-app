@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The stream mutes when the streamer dies, and any task can watch a stream
+
+- When a death switches you away, the stream is muted too, and coming back to its task unmutes it. Twitch and YouTube are muted with their own mute button; Bilibili and Kick by muting the video. A stream you muted yourself is left alone. Settings, Auto switch, turns this off.
+- Any task can watch a stream now: open its context switch rules and press Watch the stream, so "watch theBause" works with any rule or none. A task whose name says stream or watch, with a rule that someone dies, is watched without pressing anything.
+- Deaths are seen on darker death screens too, and with the shop open: Thebausffs' screen goes dark as well as grey, which the first version missed. Bilibili videos (not only live rooms) are read as well.
+- Reload the Mayorly extension once more in chrome://extensions, then the stream page.
+
 ## The couch switches when the streamer dies
 
 - A couch rule that a streamer dies now does the switch for you. On "Stream watch", rules like "Kai'sa dies" count, and so does "streamer dies" on any item or task. While it runs and a League of Legends stream plays in Chrome, the moment the streamer's game turns grey Mayorly does what Alt+Q does, once per death.
