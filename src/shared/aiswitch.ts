@@ -60,11 +60,16 @@ export function pairedHook(e: AgentPrompt, heard: AgentPrompt[]): AgentPrompt | 
   return heard.find((h) => h.app === hook && Math.abs(h.at - e.at) <= PAIR_MS) ?? null
 }
 
-/** `sinceSwitchMs`: how long ago a prompt last switched the desk, Infinity if never. */
-export function promptStep(s: MayorlyState, e: AgentPrompt, sinceSwitchMs = Infinity): PromptStep {
+/**
+ * `sinceSwitchMs`: how long ago a prompt last switched the desk, Infinity if never. `leagueHeld`: the
+ * desk is on the League task while a match of yours runs (shared/leagueplay.ts), so a prompt typed
+ * while you are dead in game, or in its loading screen, leaves the game where it is.
+ */
+export function promptStep(s: MayorlyState, e: AgentPrompt, sinceSwitchMs = Infinity, leagueHeld = false): PromptStep {
   if (!s.settings.autoSwitch.aiPrompt) return { act: null, why: 'the rule is off' }
   if (!e.manual) return { act: null, why: 'not typed by you' }
   if (sinceSwitchMs < PROMPT_ECHO_MS) return { act: null, why: 'the same prompt, seen twice' }
+  if (leagueHeld) return { act: null, why: 'your League match is running' }
   if (s.desk.status === 'idle' || !s.desk.block) return { act: null, why: 'the desk is idle' }
   if (s.desk.block.kind === 'rest') return { act: null, why: 'resting' }
   if (!switchBack(s) && !switchSession(s)) return { act: null, why: 'no recent task to switch to' }

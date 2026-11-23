@@ -509,7 +509,9 @@ export interface Settings {
  * switch also mutes the stream, and coming back to its task unmutes it. streamOpen: a live stream page
  * brought to the front while the desk is on another task switches to the task that watches streams.
  * streamAd: an ad break starting on the stream that task watches is Alt+Q too (and mutes it with
- * streamMute), once per break.
+ * streamMute), once per break. leaguePlay: a League match of your own starting on this computer puts
+ * the task named League on the desk, and while it runs an AI prompt or a stream brought to the front
+ * leaves it there (shared/leagueplay.ts).
  */
 export interface AutoSwitchRules {
   aiPrompt: boolean
@@ -517,6 +519,7 @@ export interface AutoSwitchRules {
   streamMute: boolean
   streamOpen: boolean
   streamAd: boolean
+  leaguePlay: boolean
 }
 
 /** What the clerk does with an instruction of that kind: do it (with Undo), ask first, or never. */

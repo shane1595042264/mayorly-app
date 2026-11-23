@@ -1620,7 +1620,7 @@ export function sanitiseSettings(x: Settings): Settings {
     alarms: sanitiseAlarms(x.alarms),
     clerk: sanitiseClerk(x.clerk),
     gaming: x.gaming === true,
-    autoSwitch: { aiPrompt: x.autoSwitch?.aiPrompt !== false, streamDeath: x.autoSwitch?.streamDeath !== false, streamMute: x.autoSwitch?.streamMute !== false, streamOpen: x.autoSwitch?.streamOpen !== false, streamAd: x.autoSwitch?.streamAd !== false },
+    autoSwitch: { aiPrompt: x.autoSwitch?.aiPrompt !== false, streamDeath: x.autoSwitch?.streamDeath !== false, streamMute: x.autoSwitch?.streamMute !== false, streamOpen: x.autoSwitch?.streamOpen !== false, streamAd: x.autoSwitch?.streamAd !== false, leaguePlay: x.autoSwitch?.leaguePlay !== false },
     marketHidden: Array.isArray(x.marketHidden) ? [...new Set(x.marketHidden.filter((t): t is string => typeof t === 'string'))].slice(0, 50) : [],
   }
 }

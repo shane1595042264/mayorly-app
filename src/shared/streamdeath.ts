@@ -160,7 +160,8 @@ export function streamPostOf(j: unknown): StreamPost | null {
 // Which rules are watched
 
 const DEATH = /\b(die|dies|died|dying|dead|death|killed|wasted)\b|死|阵亡|陣亡|挂了|寄了/i
-const STREAM = /\bstream(s|er|ers|ing)?\b|\bwatch(es|ing)?\b|\btwitch\b|主播|直播|bilibili|b站|虎牙|斗鱼|鬥魚|huya|douyu/i
+/** A name or rule about a stream or about watching. */
+export const STREAM = /\bstream(s|er|ers|ing)?\b|\bwatch(es|ing)?\b|\btwitch\b|主播|直播|bilibili|b站|虎牙|斗鱼|鬥魚|huya|douyu/i
 
 /** A task as far as the stream rule cares: its name, its context switch rules, and the eye's switch. */
 export interface WatchTask {
@@ -1117,9 +1118,11 @@ export const OPEN_AFTER_DEATH_MS = 10_000
  * video) while the desk is on a task that watches no stream: onto the task that does. The one whose
  * name shares a word with the page's title first ("watch theBause" for Thebausffs), then the one
  * worked on last, then the first on the couch list. Not from a rest, an idle desk or another
- * computer's desk, and not a moment after a death switched away from the stream.
+ * computer's desk, not a moment after a death switched away from the stream, and not off the League
+ * task while a match of yours runs (`leagueHeld`, shared/leagueplay.ts: a look at a stream while you
+ * are dead in game is not leaving the game).
  */
-export function openStep(s: MayorlyState, deviceId: string, page: { title: string; live: boolean }, o: { sinceFireMs: number }): PromptStep & { to?: string } {
+export function openStep(s: MayorlyState, deviceId: string, page: { title: string; live: boolean }, o: { sinceFireMs: number; leagueHeld?: boolean }): PromptStep & { to?: string } {
   if (!s.settings.autoSwitch.streamOpen) return { act: null, why: 'the rule is off' }
   if (!page.live) return { act: null, why: 'not a live stream' }
   const d = s.desk
@@ -1129,6 +1132,7 @@ export function openStep(s: MayorlyState, deviceId: string, page: { title: strin
   const id = onDeskId(s)
   const here = id ? (s.entries.find((e) => e.id === id) ?? s.leisure.find((l) => l.id === id)) : undefined
   if (here && isWatched(here)) return { act: null, why: 'already on a stream task' }
+  if (o.leagueHeld) return { act: null, why: 'your League match is running' }
   if (o.sinceFireMs < OPEN_AFTER_DEATH_MS) return { act: null, why: 'a death switched away a moment ago' }
   const tasks: FoundTask[] = [
     ...s.leisure.filter((l) => l.archivedAt === null && isWatched(l)).map((item) => ({ kind: 'leisure' as const, item })),

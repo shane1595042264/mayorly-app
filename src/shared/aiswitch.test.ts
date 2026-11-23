@@ -64,7 +64,7 @@ describe('an AI prompt', () => {
     const d = desk()
     expect(prompt(d, typed(false))).toEqual({ switched: false, why: 'not typed by you' })
     const off = desk()
-    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: false, streamDeath: true, streamMute: true, streamOpen: true, streamAd: true } } })
+    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: false, streamDeath: true, streamMute: true, streamOpen: true, streamAd: true, leaguePlay: true } } })
     expect(prompt(off, typed())).toEqual({ switched: false, why: 'the rule is off' })
     const idle = desk()
     idle.act({ type: 'desk/standDown' })

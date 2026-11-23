@@ -1,6 +1,4 @@
-import { execFile } from 'node:child_process'
 import { appendFile, rename, stat } from 'node:fs/promises'
-import { connect } from 'node:net'
 import { onDeskId, type Action, type Id } from '@core/index'
 import type { ClerkNotice } from '../shared/bridge'
 import {
@@ -40,6 +38,7 @@ import {
   type WordTick,
 } from '../shared/streamdeath'
 import type { Engine } from './engine'
+import { ownLeagueMatch, ownLeagueMatchNow } from './leaguewatch'
 import { log } from './log'
 
 // The shell of the stream rule (shared/streamdeath.ts): it hears the stream eye's posts through the
@@ -98,6 +97,8 @@ export function streamRule(o: {
    * tuned on real deaths. Null keeps none.
    */
   traceFile: string | null
+  /** The desk is on the League task while a match of yours runs (leagueHolds): a stream brought to the front leaves it there. */
+  leagueHeld: () => boolean
 }): StreamRule {
   const { engine } = o
   const tabs = new Map<string, Tab>()
@@ -203,7 +204,7 @@ export function streamRule(o: {
     if (firing) return
     firing = true
     try {
-      // Kept fresh in the background while a stream is watched, so a death never waits on tasklist.
+      // Kept fresh by the League rule's poll (leaguewatch.ts), so a death never waits on the check.
       // Only a League death could be your own match's; a GTA stream's WASTED never is.
       const own = game === 'league' ? (ownLeagueMatchNow() ?? (await ownLeagueMatch())) : false
       const step = deathStep(engine.state, engine.deviceId, { ownMatch: own, sinceFireMs: fired ? Date.now() - fired.at : Infinity, game })
@@ -253,7 +254,7 @@ export function streamRule(o: {
     if (p.focusAt !== null && p.focusAt !== tab.focusSeen && (p.live || now - p.focusAt >= 10_000)) {
       tab.focusSeen = p.focusAt
       if (now - p.focusAt < 10_000) {
-        const step = openStep(engine.state, engine.deviceId, { title: p.title, live: p.live }, { sinceFireMs: fired ? now - fired.at : Infinity })
+        const step = openStep(engine.state, engine.deviceId, { title: p.title, live: p.live }, { sinceFireMs: fired ? now - fired.at : Infinity, leagueHeld: o.leagueHeld() })
         if (step.act || step.why !== 'not a live stream') log.info('[stream]', `brought to the front on ${p.site}: ${step.why}${step.to ? `, on ${step.to}` : ''}`)
         if (step.act) {
           o.auto.at = now
@@ -452,7 +453,6 @@ export function streamRule(o: {
       timer = setInterval(() => {
         const a = arm()
         noteArm(a, Date.now())
-        if (a.on && (!ownCache || Date.now() - ownCache.at > 15_000)) void ownLeagueMatch()
         if (a.on && !heard && !nudged && armedSince !== null && Date.now() - armedSince > 60_000) {
           nudged = true
           log.info('[stream]', 'armed a minute and no stream heard from')
@@ -473,56 +473,4 @@ export function streamRule(o: {
     },
     status,
   }
-}
-
-let ownCache: { at: number; value: boolean } | null = null
-let ownTimed = false
-let ownGoing: Promise<boolean> | null = null
-/** How long an answer of the own match check holds; refreshed every 15 s or so while a stream is watched. */
-const OWN_FRESH_MS = 20_000
-
-/** The last answer of the own match check, while it is fresh; null when there is none. */
-export function ownLeagueMatchNow(): boolean | null {
-  return ownCache && Date.now() - ownCache.at < OWN_FRESH_MS ? ownCache.value : null
-}
-
-/**
- * A League match of your own is running: the game's process is up (Windows), or its Live Client
- * Data API answers on 127.0.0.1:2999, which it serves only during a match. Cached for 5 s.
- */
-export async function ownLeagueMatch(): Promise<boolean> {
-  if (ownCache && Date.now() - ownCache.at < 5_000) return ownCache.value
-  // One check at a time: tasklist can take seconds on a busy computer.
-  if (ownGoing) return ownGoing
-  ownGoing = checkOwnMatch().finally(() => {
-    ownGoing = null
-  })
-  return ownGoing
-}
-
-async function checkOwnMatch(): Promise<boolean> {
-  const t0 = Date.now()
-  const port = new Promise<boolean>((resolve) => {
-    const sock = connect(2999, '127.0.0.1')
-    const done = (v: boolean) => {
-      sock.destroy()
-      resolve(v)
-    }
-    sock.once('connect', () => done(true))
-    sock.once('error', () => done(false))
-    sock.setTimeout(400, () => done(false))
-  })
-  const proc =
-    process.platform === 'win32'
-      ? new Promise<boolean>((resolve) =>
-          execFile('tasklist', ['/FI', 'IMAGENAME eq League of Legends.exe', '/FO', 'CSV', '/NH'], { windowsHide: true, timeout: 3000 }, (err, out) => resolve(!err && /league of legends\.exe/i.test(String(out)))),
-        )
-      : Promise.resolve(false)
-  const [a, b] = await Promise.all([port, proc])
-  if (!ownTimed) {
-    ownTimed = true
-    log.info('[stream]', `own match check: ${Date.now() - t0} ms`)
-  }
-  ownCache = { at: Date.now(), value: a || b }
-  return a || b
 }

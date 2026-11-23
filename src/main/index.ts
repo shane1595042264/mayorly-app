@@ -10,10 +10,12 @@ import { makeCapture } from '../shared/capture'
 import { INSTRUCT_SYSTEM, instructContext, parseInstruction, permit, resolveInstruction, stripInstruction, type InstructionPlan } from '../shared/instruct'
 import { dayKey, recipeRunsOn, wallClock } from '../shared/windows'
 import { watchAgents } from './agents'
+import { leagueRule } from './leaguewatch'
 import { streamRule } from './streamwatch'
 import { SwitchLog } from './switchlog'
 import { deskEnd, endLabel, type SwitchWhy } from '../shared/switchlog'
 import { AGENT_NAME, HOOK_OF, PAIR_WAIT_MS, pairedHook, promptStep, type AgentPrompt } from '../shared/aiswitch'
+import { leagueHolds } from '../shared/leagueplay'
 import { sealedClerkStore } from './ai/store'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
@@ -238,8 +240,12 @@ function boot() {
     const here = deskEnd(engine.state)
     switches.add({ id: randomUUID(), at: Date.now(), from: here, to: here, status: engine.state.desk.status, ...why, kept: true })
   }
+  // A League match of yours starting here puts the League task on the desk, and while it runs the
+  // rules that switch on their own leave it there (leaguewatch.ts, shared/leagueplay.ts).
+  const league = leagueRule({ engine, say, title: (id) => short(deskTitle(id)), auto, file: join(dataDir, 'league.json') })
+  const leagueHeld = () => leagueHolds(engine.state, league.playing())
   // A League streamer's death is Alt+Q, seen in the stream's own video (streamwatch.ts).
-  const stream = streamRule({ engine, say, send, statusChannel: IPC.streamStatus, title: (id) => short(deskTitle(id)), auto, traceFile: join(dataDir, 'logs', 'stream-trace.jsonl') })
+  const stream = streamRule({ engine, say, send, statusChannel: IPC.streamStatus, title: (id) => short(deskTitle(id)), auto, traceFile: join(dataDir, 'logs', 'stream-trace.jsonl'), leagueHeld })
   ipcMain.handle(IPC.streamGet, () => stream.status())
   const { captureLine, sweepTray, consolidate } = makeCapture(engine, clerk, say)
   // The trial that sets the level for starting a ledger goes to the log, line by line.
@@ -678,12 +684,13 @@ function boot() {
   // The hooks' prompts of the last half minute, for the Claude app's Stop button to pair with.
   const heard: AgentPrompt[] = []
   const onPrompt = (e: AgentPrompt) => {
-    const step = promptStep(engine.state, e, Date.now() - promptSwitchAt)
+    const step = promptStep(engine.state, e, Date.now() - promptSwitchAt, leagueHeld())
     // A prompt a beat after a streamer's death switched the desk would take it back to the stream.
     const g = step.act ? stream.grace(step.act) : null
     const what = g?.by === 'ad' ? 'an ad break' : 'a death'
     log.info('[agents]', `${e.app} prompt${e.manual ? '' : ' (not typed)'}: ${g?.drop ? `${what} switched a moment ago` : step.why}`)
     if (g?.drop) kept({ cause: 'ai', via: `${AGENT_NAME[e.app]} prompt let go: ${what} had just switched you` })
+    if (step.why === 'your League match is running') kept({ cause: 'ai', via: `${AGENT_NAME[e.app]} prompt let go: your League match is running` })
     if (!step.act || g?.drop) return
     promptSwitchAt = auto.at = Date.now()
     const where = e.app === 'browser' ? 'in a browser side panel' : e.app.endsWith('-web') ? 'in the browser' : e.app.endsWith('-app') ? 'in its desktop app' : 'through its hook'
@@ -789,6 +796,10 @@ function boot() {
   if (engine.restoredFrom) overlay.win.webContents.once('did-finish-load', () => setTimeout(() => say({ phase: 'done', text: `The save could not be read. Restored from ${engine.restoredFrom}; the original is parked beside it.` }), 2500))
   engine.start()
   stream.start()
+  // Its first answer can act at once (Mayorly opened mid-match), so it waits for the page, whose
+  // notice would otherwise go before anything listens; the later timer is in case the load came first.
+  overlay.win.webContents.once('did-finish-load', () => setTimeout(() => league.start(), 2500))
+  setTimeout(() => league.start(), 20_000)
   // The tray is sorted once at every launch, after the window is up.
   setTimeout(() => void sweepTray(), 4000)
 
@@ -827,6 +838,7 @@ function boot() {
   app.on('before-quit', (e) => {
     engine.stop()
     stream.stop()
+    league.stop()
     stopAgents()
     if (flushed || sync.current().phase === 'off') return
     // One bounded push so the last seconds of desk time reach the server.

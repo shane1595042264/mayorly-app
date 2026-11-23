@@ -227,7 +227,7 @@ body.switchlog-page .switch-log { position: fixed; inset: 4px; width: auto !impo
 .switch-log-list { list-style: none; margin: 0; padding: 0 2px 0 0; display: grid; align-content: start; gap: 6px; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
 .switch-log-row { display: grid; gap: 2px; padding: 6px 8px; border-left: 2px solid var(--line-2); background: var(--glass-3); }
 .switch-log-row.cause-ai { border-left-color: #6fb3f2; }
-.switch-log-row.cause-stream { border-left-color: var(--leisure); }
+.switch-log-row.cause-stream, .switch-log-row.cause-game { border-left-color: var(--leisure); }
 .switch-log-row.cause-timer, .switch-log-row.cause-coins { border-left-color: var(--accent); }
 .switch-log-row.cause-sync, .switch-log-row.cause-clerk, .switch-log-row.cause-import { border-left-color: #7fc8a0; }
 .switch-log-row.kept { border-left-style: dashed; opacity: 0.8; }

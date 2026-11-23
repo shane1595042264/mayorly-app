@@ -1,12 +1,12 @@
 import { restSession, type Action, type DeskStatus, type HudEvent, type MayorlyState } from '../core/index'
 
 // The switch log: every time the task on the desk changes, what it went from and to, and what did
-// it (you, an AI prompt, a streamer's death, the timer, the couch running out of coins, the clerk,
+// it (you, an AI prompt, a streamer's death, a League match of yours, the timer, the couch running out of coins, the clerk,
 // another computer). The shell compares the desk before and after each step (engine.ts) and keeps
 // the last hundred records (main/switchlog.ts); Alt+Shift+H shows them under the tomato. Pure.
 
 /** Who or what moved the desk. */
-export type SwitchCause = 'you' | 'ai' | 'stream' | 'timer' | 'coins' | 'clerk' | 'sync' | 'import'
+export type SwitchCause = 'you' | 'ai' | 'stream' | 'game' | 'timer' | 'coins' | 'clerk' | 'sync' | 'import'
 
 /** Why, as the call site knows it: the cause, a few words, and the numbers or names behind it. */
 export interface SwitchWhy {
@@ -142,6 +142,7 @@ export const CAUSE_LABEL: Record<SwitchCause, string> = {
   you: 'You',
   ai: 'AI',
   stream: 'Stream',
+  game: 'Game',
   timer: 'Timer',
   coins: 'Coins',
   clerk: 'Clerk',

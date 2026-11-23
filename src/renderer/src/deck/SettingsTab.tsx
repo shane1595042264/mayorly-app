@@ -481,11 +481,16 @@ const AUTO_SWITCH: { key: keyof AutoSwitchRules; label: string; help: string }[]
     label: 'Mute the streams when you leave the stream task',
     help: 'Whenever the desk leaves a task that watches streams (a death, an AI prompt, Alt+Q, a pick), every stream playing in Chrome is muted, in whatever tab it is, with the player\'s own mute button on Twitch and YouTube; coming back to that task unmutes them. A stream you muted yourself is left as it is.',
   },
+  {
+    key: 'leaguePlay',
+    label: 'When you play League, switch to your League task',
+    help: 'The moment a League of Legends match of yours starts on this computer (the game itself, not the client), the couch item or task whose name says League, LoL or 英雄联盟 goes on the desk; the one you played last if there are several, never one that watches streams. From a rest too, and one already on the desk but paused runs again. Not when the desk is idle, and not without a coin for the couch. While the match runs, an AI prompt or a stream brought to the front leaves the desk on it; Alt+Q or a pick still moves it. Mayorly knows a match from the game itself, which answers on this computer only while one is loaded.',
+  },
 ]
 
 function AutoSwitchRulesField({ rules, set }: { rules: AutoSwitchRules; set: (r: AutoSwitchRules) => void }) {
   return (
-    <div className="auto-switch" data-setting="auto switch, rules, claude code, claude, prompt, hook, project, stream, streamer, twitch, youtube, league, dies, death">
+    <div className="auto-switch" data-setting="auto switch, rules, claude code, claude, prompt, hook, project, stream, streamer, twitch, youtube, league, dies, death, ad, game, match, play, lol">
       <span className="field-label caps">Auto switch</span>
       {AUTO_SWITCH.map((r) => (
         <div key={r.key}>

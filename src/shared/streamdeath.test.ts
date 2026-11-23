@@ -489,7 +489,7 @@ describe('a watched rule', () => {
     bg.act({ type: 'desk/select', leisureId: bg.bg3 })
     expect(streamArm(bg.s, 'here')).toEqual({ on: false, why: 'no stream rule on this task', taskId: bg.bg3 })
     const off = desk()
-    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true, streamOpen: true, streamAd: true } } })
+    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true, streamOpen: true, streamAd: true, leaguePlay: true } } })
     expect(streamArm(off.s, 'here')).toMatchObject({ on: false, why: 'the rule is off', taskId: off.stream })
     off.act({ type: 'desk/select', leisureId: off.bg3 })
     expect(streamArm(off.s, 'here')).toEqual({ on: false, why: 'the rule is off' })
@@ -591,7 +591,7 @@ describe('a live stream brought to the front', () => {
     expect(openStep(d.s, 'here', page, { sinceFireMs: 4000 }).why).toBe('a death switched away a moment ago')
     const off = desk()
     off.act({ type: 'desk/select', leisureId: off.bg3 })
-    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: true, streamMute: true, streamOpen: false, streamAd: true } } })
+    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: true, streamMute: true, streamOpen: false, streamAd: true, leaguePlay: true } } })
     expect(openStep(off.s, 'here', page, { sinceFireMs: Infinity }).why).toBe('the rule is off')
     const none = desk({ title: 'TV night', cue: 'someone dies' })
     none.act({ type: 'desk/select', leisureId: none.bg3 })
@@ -791,5 +791,7 @@ it.runIf(!!process.env.E2E_STREAM_SEED)('writes the e2e seed', () => {
   const d = desk({ at })
   // The runs whose page plays an ad that must not count (as a death) keep the ad rule off.
   if (process.env.E2E_STREAM_AD === 'off') d.act({ type: 'settings/update', patch: { autoSwitch: { ...d.s.settings.autoSwitch, streamAd: false } } })
+  // The League rule's run: a couch item named League for a match of yours to put on the desk.
+  if (process.env.E2E_STREAM_LEAGUE === 'on') d.act({ type: 'leisure/add', title: 'League of Legends' })
   writeFileSync(process.env.E2E_STREAM_SEED as string, JSON.stringify({ lastBeat: at, state: d.s }))
 })

@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Playing League puts your League task on the desk
+
+- The moment a League of Legends match of yours starts on this computer, Mayorly puts your League couch item ("couch: league of legends 2026") on the desk, from whatever you were on, a rest included. If it was already there but paused, it runs again. The pet says so, and the switch log calls it Game.
+- While the match runs, an AI prompt (typed while you are dead, say) or a stream you bring to the front leaves you on League. Alt+Q or a pick still moves you yourself.
+- Mayorly knows a match from the game itself, which answers on this computer only while one is loaded: not the client, not the lobby. The old check through the Windows process list took over 25 seconds on this PC and never finished, so the stream rule never knew you were playing; now it does.
+- Not when the desk is idle, and not without a coin for the couch. Settings, Auto switch, turns it off.
+
 ## An ad on the stream switches you away and mutes it
 
 - When the stream your stream task watches starts an ad break (Twitch's "xQc is taking an ad break" banner, or a YouTube ad), Mayorly does what Alt+Q does and mutes the stream, so you can get something done instead of listening to it. Any stream: Just Chatting or any game, even in a tab behind others. When the break is over the pet says so, and coming back to the stream task unmutes it.
