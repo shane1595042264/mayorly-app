@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { ClerkQuestion } from '../../../shared/bridge'
-import clerkSprite from '../assets/tomato@1x.png'
+import { art } from '../lib/art'
 import { bridge } from '../bridge'
 import { dispatch } from '../store'
 
@@ -53,7 +53,7 @@ export function ClerkAsk() {
           aria-label="The clerk asks"
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <img className="clerk-ask-sprite" src={clerkSprite} alt="" />
+          <img className="clerk-ask-sprite" src={art('icon.tomato')} alt="" />
           <div className="clerk-ask-body">
             <p className="clerk-ask-q">{q.question}</p>
             <input

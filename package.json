@@ -23,6 +23,7 @@
     "dist:mas": "electron-vite build && electron-builder --mac mas --publish never",
     "ship:mac": "sh scripts/ship-mac.sh",
     "phone": "vite --config vite.phone.config.ts",
+    "art": "node scripts/art.mjs",
     "phone:build": "vite build --config vite.phone.config.ts",
     "ship:ios": "sh scripts/ship-ios.sh",
     "shot": "electron scripts/shot.cjs"

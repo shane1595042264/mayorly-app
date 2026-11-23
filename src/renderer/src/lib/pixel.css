@@ -1,0 +1,21 @@
+/* The founder's sprites (lib/Pixel.tsx): nearest-neighbour at whole-number scales, nothing smoothed. */
+.px {
+  image-rendering: pixelated;
+  user-select: none;
+  -webkit-user-drag: none;
+  flex: none;
+}
+.px-anim {
+  display: inline-block;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+}
+.art-icon { vertical-align: middle; }
+/* A strip played a whole frame at a time: steps(n) over the strip's full height. */
+@keyframes px-strip {
+  from { background-position: 0 0; }
+  to { background-position: 0 var(--px-strip); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .px-anim { animation: none !important; }
+}

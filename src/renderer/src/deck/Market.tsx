@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type Ref } from 'react'
 import { AnimatePresence, motion, useAnimationControls } from 'motion/react'
 import { ArrowCounterClockwise, Minus, PencilSimple, Plus, Trash, X } from '@phosphor-icons/react'
 import { balance, marketBought, marketList, purchases, MARKET_UNDO_MS, type MarketItem, type MayorlyState } from '@core/index'
-import coin from '../assets/coin@1x.png'
+import { art } from '../lib/art'
 import { useShownCoins } from '../lib/coinView'
 import { useListKeys } from '../lib/listkeys'
 import { noteOrigin } from '../lib/origin'
@@ -317,7 +317,7 @@ export function Market({ s, enabled }: { s: MayorlyState; enabled: boolean }) {
                     <button type="button" className="market-chip" title="Put it up for sale" onClick={() => { sfx.place(); dispatch({ type: 'market/add', ...x, idea: x.title }) }}>
                       <Plus size={12} />
                       <span>{x.title}</span>
-                      <span className="market-chip-price mono num"><img src={coin} alt="" />{x.price}</span>
+                      <span className="market-chip-price mono num"><img src={art('icon.coin')} alt="" />{x.price}</span>
                     </button>
                     <button type="button" className="market-chip-x" aria-label={`Put away the idea ${x.title}`} title="Not for me" onClick={() => hideIdea(x.title)}>
                       <X size={12} />
@@ -400,7 +400,7 @@ function Wallet({ n: actual }: { n: number }) {
   }, [])
   return (
     <div className="wallet">
-      <img className="wallet-coin" src={coin} alt="" />
+      <img className="wallet-coin" src={art('icon.coin')} alt="" />
       <div className="wallet-text">
         <motion.span key={n} className="wallet-n mono num" initial={first.current ? false : { y: -6, opacity: 0.4 }} animate={{ y: 0, opacity: 1 }} transition={{ type: 'spring', stiffness: 400, damping: 24 }}>
           {n.toLocaleString()}
@@ -462,7 +462,7 @@ function Card({ ref, it, s, seen, now, selected, editing, shake, buy, short, ent
           <>
             <div className="market-card-head">
               <span className="market-title" title={it.title}>{it.title}</span>
-              <span className="market-price mono num"><img src={coin} alt="" />{it.price}</span>
+              <span className="market-price mono num"><img src={art('icon.coin')} alt="" />{it.price}</span>
             </div>
             {/* Always one line, empty or not, so every card's meter sits at the same height. */}
             <p className="market-note" title={it.note}>{it.note ?? ''}</p>
@@ -598,7 +598,7 @@ function PriceInput({ value, set, onDraft }: { value: number; set: (n: number) =
   return (
     <span className="price-input">
       <button type="button" className="icon-btn" aria-label="One coin less" disabled={value <= 1} onClick={() => set(clamp(value - 1))}><Minus size={13} /></button>
-      <img src={coin} alt="" />
+      <img src={art('icon.coin')} alt="" />
       <input
         className="mono num"
         inputMode="numeric"

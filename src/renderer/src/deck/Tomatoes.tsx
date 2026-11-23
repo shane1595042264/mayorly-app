@@ -1,5 +1,5 @@
 import { tomatoLabel } from '@core/index'
-import tomato from '../assets/tomato@1x.png'
+import { art } from '../lib/art'
 
 /**
  * Tomatoes grown on an entry, the founder's sprite as the unit: "2", or "2.2" while the next
@@ -11,7 +11,7 @@ export function Tomatoes({ n, showZero = false }: { n: number; showZero?: boolea
   return (
     <span className="row-tomatoes num" title="Tomatoes from this entry's recorded focus time">
       {label}
-      <img className="mini-tomato" src={tomato} alt="tomatoes" draggable={false} />
+      <img className="mini-tomato" src={art('icon.tomato')} alt="tomatoes" draggable={false} />
     </span>
   )
 }

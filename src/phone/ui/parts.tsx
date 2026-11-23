@@ -3,18 +3,17 @@ import { createPortal } from 'react-dom'
 import { motion, useDragControls, type PanInfo } from 'motion/react'
 import { Minus, Plus } from '@phosphor-icons/react'
 import type { Ledger } from '@core/index'
-import tomatoPng from '../../renderer/src/assets/tomato@1x.png'
-import coinPng from '../../renderer/src/assets/coin@1x.png'
+import { art } from '../../renderer/src/lib/art'
 import { THEME_COLORS } from '../../renderer/src/lib/themes'
 import { tap } from '../feel'
 import { dismissToast } from '../toast'
 
 /** The founder's 16px drawings, only ever at whole multiples. */
 export function Tomato({ scale = 1 }: { scale?: number }) {
-  return <img className="px" src={tomatoPng} width={16 * scale} height={16 * scale} alt="" />
+  return <img className="px" src={art('icon.tomato')} width={16 * scale} height={16 * scale} alt="" />
 }
 export function Coin({ scale = 1 }: { scale?: number }) {
-  return <img className="px" src={coinPng} width={16 * scale} height={16 * scale} alt="" />
+  return <img className="px" src={art('icon.coin')} width={16 * scale} height={16 * scale} alt="" />
 }
 
 export function LedgerDot({ ledger }: { ledger: Ledger | null | undefined }) {

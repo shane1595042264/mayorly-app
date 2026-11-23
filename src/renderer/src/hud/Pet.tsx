@@ -3,8 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { blockView, clock, dayStats, nextBlock, startOfDay, switchTarget, taskTomatoes, tomatoLabel, type MayorlyState } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
 import { INSET, anchorInBox, captionBox, dragScale, overlaps, petBox, type Point, type Rect } from '../../../shared/pet'
-import tomato from '../assets/tomato@1x.png'
-import tomatoGaming from '../assets/tomato_gaming.png'
+import { art } from '../lib/art'
 import { bridge } from '../bridge'
 import { hotkeyLabel } from '../lib/keys'
 import { ledgerVars } from '../lib/themes'
@@ -293,10 +292,10 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
                   : { duration: 0.2 }
             }
           >
-            <img className={`pet-sprite ${gaming ? 'is-gaming' : ''}`} src={tomato} alt="" draggable={false} />
+            <img className={`pet-sprite ${gaming ? 'is-gaming' : ''}`} src={art('icon.tomato')} alt="" draggable={false} />
             {/* Gaming mode: the founder's own gaming tomato, centred on the usual one at the same 3x, so a
                 larger canvas (fire all around) still lines up as long as the tomato stays in its middle. */}
-            {gaming && <img className="pet-sprite-gaming" src={tomatoGaming} alt="" draggable={false} />}
+            {gaming && <img className="pet-sprite-gaming" src={art('pet.tomato.gaming')} alt="" draggable={false} />}
             {moving && <span className="pet-resize" title="Drag to resize" aria-hidden {...handle} />}
           </motion.div>
         </div>

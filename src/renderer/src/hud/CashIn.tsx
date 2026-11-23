@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import coin from '../assets/coin@1x.png'
+import { art } from '../lib/art'
 import { setShownCoins } from '../lib/coinView'
 import { sfx } from '../lib/sound'
 
@@ -91,7 +91,7 @@ export function CashIn({ amount, balance, from, out: spend = false, anchor = nul
             exit={{ opacity: 0, y: -8, transition: { duration: 0.35 } }}
             transition={{ type: 'spring', stiffness: 260, damping: 22 }}
           >
-            <img className="cashin-coin-icon" src={coin} alt="" />
+            <img className="cashin-coin-icon" src={art('icon.coin')} alt="" />
             <span className="cashin-num num">{shown.toLocaleString()}</span>
             <span className={`mono num ${out ? 'cashin-minus' : 'cashin-plus'}`}>{out ? `-${amount}` : `+${amount}`}</span>
           </motion.div>
@@ -100,7 +100,7 @@ export function CashIn({ amount, balance, from, out: spend = false, anchor = nul
           <motion.img
             key={`c${i}`}
             className="cashin-coin"
-            src={coin}
+            src={art('icon.coin')}
             alt=""
             initial={{ x: from.x - 16, y: from.y - 16, opacity: 0, scale: 0.6, rotate: 0 }}
             animate={{
