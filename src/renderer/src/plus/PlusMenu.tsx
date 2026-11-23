@@ -94,6 +94,9 @@ export function PlusMenu({ s, close, open, stage }: Props) {
 
   const live = v !== null && v.block.kind === 'focus'
   const couchNow = v !== null && v.block.kind === 'leisure'
+  // The couch item on the desk, as an id: `v` itself is a new object every render (the clock), and
+  // depending on it rebuilt the arms every render, which looped through the cursor effect below.
+  const couchOn = couchNow ? (v.block.leisureId ?? null) : null
   // Every pick is a preview. The parent sends only the final choice when this menu closes.
   const [pick, setPick] = useState<Pick>(() => {
     const first = openFlow(s)[0]
@@ -155,7 +158,7 @@ export function PlusMenu({ s, close, open, stage }: Props) {
           n: i + 1,
           meta: coins < COUCH_COINS_PER_TOMATO ? 'no coin' : undefined,
           current: pick.leisureId === it.id,
-          disabled: coins < COUCH_COINS_PER_TOMATO && !(couchNow && v!.block.leisureId === it.id),
+          disabled: coins < COUCH_COINS_PER_TOMATO && couchOn !== it.id,
           apply: () => choose({ ...pick, couch: true, leisureId: it.id }),
         }))
       : inLedger.slice(0, 7).map((e, i) => ({
@@ -213,7 +216,7 @@ export function PlusMenu({ s, close, open, stage }: Props) {
               { key: 'deck', label: 'Deck', icon: <SquaresFour size={18} weight="light" />, apply: () => open('deck') },
             ],
     }
-  }, [s, ledgerId, entryId, live, couchNow, onCouch, v, pick, picked, stage, close, open])
+  }, [s, ledgerId, entryId, live, couchOn, onCouch, pick, picked, stage, close, open])
 
   // An arrow pressed with the swap key, before this mounted, already chose the arm.
   const [arm, setArm] = useState<Arm>(() => takeArmHint() ?? (live || s.ledgers.length ? 'ledger' : 'mode'))
@@ -228,7 +231,9 @@ export function PlusMenu({ s, close, open, stage }: Props) {
   }, [])
   const [cursor, setCursor] = useState<Record<Arm, number>>(() => ({ ledger: 0, entry: 0, mode: 0, orders: 0 }))
 
-  // Keep each arm's cursor on its current option when the menu opens or the current changes.
+  // Keep each arm's cursor on its current option when the menu opens or the current changes. The
+  // same state back when nothing moved, so React stops there: a fresh object every time made each
+  // rebuild of the arms another render, and another rebuild.
   useEffect(() => {
     setCursor((c) => {
       const next = { ...c }
@@ -237,7 +242,7 @@ export function PlusMenu({ s, close, open, stage }: Props) {
         if (i >= 0) next[a] = i
         else next[a] = Math.min(c[a], Math.max(0, arms[a].length - 1))
       }
-      return next
+      return (Object.keys(next) as Arm[]).some((a) => next[a] !== c[a]) ? next : c
     })
   }, [arms])
 
