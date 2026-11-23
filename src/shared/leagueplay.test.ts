@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { onDeskId, reduce, sampleState, type Action, type MayorlyState } from '../core/index'
 import { promptStep } from './aiswitch'
-import { isLeagueTask, LEAGUE_END_MS, LEAGUE_POLL_MS, LEAGUE_SAME_MS, leagueHolds, leagueTasks, matchStep, NO_MATCH_YET, playStep, type MatchMemory } from './leagueplay'
+import { goOnStep, isLeagueTask, LEAGUE_END_MS, LEAGUE_POLL_MS, LEAGUE_SAME_MS, leagueHolds, leagueRunning, leagueTasks, matchStep, NO_MATCH_YET, playAll, playStep, type MatchMemory } from './leagueplay'
 import { openStep } from './streamdeath'
 
 const now = Date.parse('2026-11-23T05:40:00Z')
@@ -28,11 +28,21 @@ function desk(o: { broke?: boolean; league?: string | null } = {}) {
   return { get s() { return s }, act, id, league, stream, later }
 }
 
-/** A match starting, applied as the shell does. */
+/** One step of a match start, applied. */
 function play(d: ReturnType<typeof desk>) {
   const step = playStep(d.s)
   if (step.act) d.act(step.act)
   return step
+}
+
+/** A match starting, every step applied as the shell does; the whys of the steps that acted. */
+function playThrough(d: ReturnType<typeof desk>) {
+  return playAll(d.s, (a) => {
+    d.act(a)
+    return d.s
+  })
+    .filter((x) => x.act)
+    .map((x) => x.why)
 }
 
 describe('a League match of yours', () => {
@@ -124,6 +134,55 @@ describe('a League match of yours', () => {
     // The superset waits behind it for Alt+Q.
     d.act({ type: 'desk/switch' })
     expect(d.s.desk.plan?.mode).toBe('superset')
+  })
+
+  it('takes League out of a superset slot a pick swapped it into, so the superset waits behind the match for Alt+Q', () => {
+    for (const resting of [false, true]) {
+      const d = desk()
+      d.act({ type: 'desk/deploy', mode: 'superset', supersetId: d.s.supersets[0].id })
+      d.act({ type: 'desk/select', leisureId: d.league })
+      expect(d.s.desk.plan?.mode).toBe('superset')
+      expect(onDeskId(d.s)).toBe(d.league)
+      if (resting) {
+        d.later(26 * 60_000)
+        d.act({ type: 'desk/tick' })
+        expect(d.s.desk.block?.kind).toBe('rest')
+      }
+      const whys = playThrough(d)
+      expect(whys).toEqual(resting ? ['back from its rest', 'its slot back to the superset', 'switched'] : ['its slot back to the superset', 'switched'])
+      expect(d.s.desk.plan?.mode).toBe('couch')
+      expect(onDeskId(d.s)).toBe(d.league)
+      expect(d.s.desk.status).toBe('running')
+      d.later(40 * 60_000)
+      d.act({ type: 'desk/tick' })
+      expect(onDeskId(d.s)).toBe(d.league)
+      // After the match, Alt+Q is the superset again, on its own slot.
+      d.act({ type: 'desk/switch' })
+      expect(d.s.desk.plan?.mode).toBe('superset')
+      expect(onDeskId(d.s)).not.toBe(d.league)
+    }
+  })
+
+  it('keeps whether the League task runs, for a restart mid-match, and puts back only the launch pause', () => {
+    const d = desk()
+    expect(leagueRunning(d.s)).toBe(false)
+    play(d)
+    expect(leagueRunning(d.s)).toBe(true)
+    // The launch paused it: it was running when the last run wrote, so it runs again.
+    d.act({ type: 'desk/pause' })
+    expect(leagueRunning(d.s)).toBe(false)
+    expect(goOnStep(d.s, true)).toMatchObject({ why: 'running again', act: { type: 'desk/resume' } })
+    // You had paused it, or moved off League, before the restart: left as it was.
+    expect(goOnStep(d.s, false)).toEqual({ act: null, why: 'left as it was' })
+    d.act({ type: 'desk/resume' })
+    d.act({ type: 'desk/switch' })
+    d.act({ type: 'desk/pause' })
+    expect(goOnStep(d.s, true)).toEqual({ act: null, why: 'left as it was' })
+    const off = desk()
+    play(off)
+    off.act({ type: 'desk/pause' })
+    off.act({ type: 'settings/update', patch: { autoSwitch: { ...off.s.settings.autoSwitch, leaguePlay: false } } })
+    expect(goOnStep(off.s, true)).toEqual({ act: null, why: 'the rule is off' })
   })
 
   it('deploys a League task in the flow apart from another task\'s rest', () => {
@@ -229,6 +288,16 @@ describe('the port, as the shell hears it', () => {
     expect(first(at - LEAGUE_SAME_MS)).toMatchObject({ started: true })
     expect(first(null)).toMatchObject({ started: true })
     expect(first(at + 60_000)).toMatchObject({ started: true })
+    expect(first(at - 40_000).goesOn).toBe(true)
+    expect(first(null).goesOn).toBe(false)
+    // A connect that timed out while Mayorly was starting decides nothing: the next open answer goes on, no start.
+    const shutFirst = matchStep(NO_MATCH_YET, false, at, at - 40_000)
+    expect(shutFirst).toMatchObject({ started: false, ended: false, memory: { playing: null } })
+    expect(matchStep(shutFirst.memory, true, at + LEAGUE_POLL_MS, at - 40_000)).toMatchObject({ started: false, goesOn: true })
+    // Shut until the time is up: no match, and a later one is a start.
+    const gone = matchStep(NO_MATCH_YET, false, at + LEAGUE_SAME_MS, at)
+    expect(gone.memory.playing).toBe(false)
+    expect(matchStep(gone.memory, true, at + LEAGUE_SAME_MS + LEAGUE_POLL_MS, at).started).toBe(true)
     // Only the first answer after a launch is asked: later starts are starts.
     const over = run([true, ...shut(LEAGUE_END_MS + LEAGUE_POLL_MS)], NO_MATCH_YET).memory
     expect(matchStep(over, true, at, at - 1000).started).toBe(true)
