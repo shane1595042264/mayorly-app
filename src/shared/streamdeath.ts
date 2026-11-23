@@ -45,6 +45,8 @@ export interface StreamPost {
   v: number
   /** What the eye can do (STREAM_EYE); 1 for an eye older than words. */
   eye: number
+  /** Which load of the page the eye is, so a reload is told from more of the same page. */
+  eyeId: string | null
   kind: 'hello' | 'frame' | 'tainted'
   /** The tab and frame, as the extension names them. */
   tab: string
@@ -59,6 +61,8 @@ export interface StreamPost {
   area: number
   /** An ad is playing. */
   ad: boolean
+  /** What showed it: 'label' (Twitch's banner), 'countdown', 'player' (YouTube's), 'words' (the banner's words in the player); null with no ad. */
+  adBy: string | null
   /** What reading a frame costs the page, in ms; null until measured. */
   cost: number | null
   /** The eye holds a mute of Mayorly's on this tab. */
@@ -132,6 +136,7 @@ export function streamPostOf(j: unknown): StreamPost | null {
   return {
     v: STREAM_V,
     eye,
+    eyeId: text(o.eyeId, 40) || null,
     kind: o.kind,
     tab,
     site: o.site as StreamSite,
@@ -141,6 +146,7 @@ export function streamPostOf(j: unknown): StreamPost | null {
     active: o.active === true,
     area,
     ad: o.ad === true,
+    adBy: o.ad === true && typeof o.adBy === 'string' ? text(o.adBy, 20) || null : null,
     held: o.held === true,
     live: o.live === true,
     focusAt: typeof o.focusAt === 'number' && Number.isFinite(o.focusAt) ? o.focusAt : null,
@@ -219,7 +225,16 @@ export interface StreamArm {
 
 /** The task on the desk, if it is one whose rule is watched and the rule may run here and now. */
 export function streamArm(s: MayorlyState, deviceId: string): StreamArm {
-  if (!s.settings.autoSwitch.streamDeath) {
+  return watchArm(s, deviceId, s.settings.autoSwitch.streamDeath)
+}
+
+/** The ad rule's arm: the same task on the desk, running here, with streamAd on instead. */
+export function adArm(s: MayorlyState, deviceId: string): StreamArm {
+  return watchArm(s, deviceId, s.settings.autoSwitch.streamAd)
+}
+
+function watchArm(s: MayorlyState, deviceId: string, ruleOn: boolean): StreamArm {
+  if (!ruleOn) {
     const rule = ruleOf(s)
     return { on: false, why: 'the rule is off', ...(rule.cue ? rule : {}) }
   }
@@ -255,6 +270,8 @@ export interface TabSeen {
   tainted: boolean
   /** What its eye can do (STREAM_EYE); an older eye cannot read GTA's word. */
   eye?: number
+  /** Which load of the page its eye is: a new one is a new page, as for a reload. */
+  eyeId?: string | null
   /** When it was last heard from. */
   at: number
 }
@@ -275,12 +292,13 @@ const shareWord = (a: Set<string>, b: Set<string>) => [...a].some((x) => [...b].
 /**
  * The one tab to read: heard from lately, showing, not another game. One whose title shares a
  * word with the task's name first ("Caedrel" for a task called "Caedrel stream"), then the tab in
- * front, then the bigger video.
+ * front, then the bigger video. For the ad rule (`ads`), any game and an unreadable video count (an
+ * ad needs no detector), and a tab behind others too, since its ad is heard: a showing tab first.
  */
-export function pickTab(tabs: TabSeen[], taskTitle: string, now: number): TabSeen | null {
+export function pickTab(tabs: TabSeen[], taskTitle: string, now: number, o: { ads?: boolean } = {}): TabSeen | null {
   const want = words(taskTitle)
-  const score = (t: TabSeen) => (shareWord(words(t.title), want) ? 4 : 0) + (t.active ? 2 : 0)
-  const fit = tabs.filter((t) => now - t.at <= TAB_STALE_MS && t.visible && !t.tainted && t.game !== 'other')
+  const score = (t: TabSeen) => (shareWord(words(t.title), want) ? 4 : 0) + (t.visible ? 8 : 0) + (t.active ? 2 : 0)
+  const fit = tabs.filter((t) => now - t.at <= TAB_STALE_MS && (o.ads || (t.visible && !t.tainted && t.game !== 'other')))
   fit.sort((a, b) => score(b) - score(a) || b.area - a.area || b.at - a.at)
   return fit[0] ?? null
 }
@@ -934,6 +952,106 @@ export function wordStep(mem: WordMemory | null, sight: WordSight, hints: { ad: 
 }
 
 // ---------------------------------------------------------------------------------------------
+// An ad break
+
+/**
+ * An ad on the stream being watched is Alt+Q too, and mutes it (with streamMute), so the wait goes
+ * to something else. The eye knows an ad the way an ad blocker does, from the page itself: Twitch's
+ * banner over the player ("xQc is taking an ad break; stick around to support the stream!",
+ * data-a-target video-ad-label) and its countdown, YouTube's player in an ad. Once per break: the
+ * break starting while its task is on the desk counts, never one already on when the tab is first
+ * heard (a pre-roll as you open it) or one you came back into.
+ */
+export const AD = {
+  /**
+   * The banner can blink out between two ads of one break: the break is over only once posts
+   * without it span this long (two of them at least, so one ad-free post between sparse ones is not the end).
+   */
+  endMs: 3000,
+  /**
+   * A break counts only after this much of the stream itself was seen playing without an ad: a
+   * pre-roll as you open a stream (heard first with no video yet) or after a reload never does.
+   */
+  playMs: 5000,
+  /** Posts come every 0.5 to 5 s; after a silence longer than this, a tab cannot say what it played. */
+  gapMs: 12_000,
+} as const
+
+/** What the ad watch remembers of one tab. */
+export interface AdMemory {
+  on: boolean
+  since: number | null
+  /** The stream seen playing without an ad: from when, and last. */
+  playFrom: number | null
+  playAt: number | null
+  /** The first post without an ad since one was last seen. */
+  clearFrom: number | null
+  lastAt: number
+  /** The rule switched the desk away for this break. */
+  switched: boolean
+}
+
+/** One post: whether an ad shows, and whether a video plays (a post with no video says nothing of the stream). */
+export interface AdPost {
+  ad: boolean
+  playing: boolean
+}
+
+/** One post's ad flag: whether a break started or ended on this tab. */
+export function adWatch(mem: AdMemory | null, post: AdPost, at: number): { memory: AdMemory; started: boolean; ended: boolean } {
+  const quiet = !mem || at - mem.lastAt > AD.gapMs
+  const m: AdMemory = mem ? { ...mem } : { on: false, since: null, playFrom: null, playAt: null, clearFrom: null, lastAt: at, switched: false }
+  m.lastAt = at
+  if (quiet) {
+    m.playFrom = null
+    m.playAt = null
+  }
+  if (post.ad) {
+    m.clearFrom = null
+    if (m.on) return { memory: m, started: false, ended: false }
+    const played = m.playFrom !== null && m.playAt !== null && m.playAt - m.playFrom >= AD.playMs
+    m.on = true
+    m.since = at
+    m.switched = false
+    m.playFrom = null
+    m.playAt = null
+    return { memory: m, started: played, ended: false }
+  }
+  if (post.playing) {
+    m.playFrom ??= at
+    m.playAt = at
+  } else {
+    m.playFrom = null
+    m.playAt = null
+  }
+  if (!m.on) return { memory: m, started: false, ended: false }
+  m.clearFrom ??= at
+  if (quiet || at - m.clearFrom >= AD.endMs) {
+    m.on = false
+    m.clearFrom = null
+    return { memory: m, started: false, ended: true }
+  }
+  return { memory: m, started: false, ended: false }
+}
+
+/** A page's title without the count of notifications some sites put before it ("(20) xQc - Twitch"). */
+export const pageOf = (title: string) => title.replace(/^\(\d+\)\s*/, '')
+
+/**
+ * An ad break began on the stream being watched: what a tap of Alt+Q does. `again`: the break that
+ * switched you away is still on and the desk was brought back by something other than you, so the
+ * echo of a moment ago does not hold it back (your own presses are graceStep's).
+ */
+export function adStep(s: MayorlyState, deviceId: string, o: { sinceFireMs: number; again?: boolean }): PromptStep {
+  const arm = adArm(s, deviceId)
+  if (!arm.on) return { act: null, why: arm.why }
+  if (!o.again && o.sinceFireMs < PROMPT_ECHO_MS) return { act: null, why: 'switched a moment ago' }
+  const act = quickSwitch(s)
+  if (!act) return { act: null, why: 'no recent task to switch to' }
+  return { act, why: 'switched' }
+}
+
+// ---------------------------------------------------------------------------------------------
 // What a death does
 
 /** A death switches only when the rule may still run, no League match of yours is on, and it did not just switch for another. */
@@ -955,11 +1073,12 @@ export const GRACE_MS = 3000
  * Your own Alt+Q right after the rule switched would take you back to the stream: you saw the death
  * too and pressed a beat later. Within GRACE_MS such a switch, or a pick of the stream's task, is let go.
  */
-export function graceStep(a: Action, s: MayorlyState, fired: { at: number; taskId: Id } | null, now: number): { drop: boolean; why: string } {
-  if (!fired || now - fired.at >= GRACE_MS || onDeskId(s) === fired.taskId) return { drop: false, why: '' }
+export function graceStep(a: Action, s: MayorlyState, fired: { at: number; taskId: Id; why?: 'death' | 'ad' } | null, now: number): { drop: boolean; why: string; by: 'death' | 'ad' } {
+  const by = fired?.why ?? 'death'
+  if (!fired || now - fired.at >= GRACE_MS || onDeskId(s) === fired.taskId) return { drop: false, why: '', by }
   const target = a.type === 'desk/switch' ? switchTarget(s) : a.type === 'desk/select' ? (a.leisureId ?? a.entryId ?? null) : null
   const back = target === fired.taskId
-  return back ? { drop: true, why: `already switched: your switch ${((now - fired.at) / 1000).toFixed(1)} s after the death let go` } : { drop: false, why: '' }
+  return back ? { drop: true, why: `already switched: your switch ${((now - fired.at) / 1000).toFixed(1)} s after the ${by === 'ad' ? 'ad' : 'death'} let go`, by } : { drop: false, why: '', by }
 }
 
 /** Where the plain switch would take the desk now: the swap-back, else the parked session. */
@@ -1045,6 +1164,7 @@ export type StreamWord =
   | 'Stream cannot be read'
   | 'Not a game it knows'
   | 'Reload the extension'
+  | 'Watching for ads'
   | 'Off in Settings'
 
 export interface StreamStatus {

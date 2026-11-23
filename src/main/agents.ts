@@ -85,8 +85,8 @@ export const STREAM_MATCHES = [
 export const MANIFEST = {
   manifest_version: 3,
   name: 'Mayorly',
-  version: '1.6.0',
-  description: 'Tells Mayorly on this computer when you send ChatGPT or Gemini a prompt, and, while a stream rule runs, what the stream shows, as a grid of colour (and for GTA, which pixels in its middle are white or red, to read WASTED); mutes the stream when a death switches you away, if you let it.',
+  version: '1.7.0',
+  description: 'Tells Mayorly on this computer when you send ChatGPT or Gemini a prompt, and, while a stream rule runs, what the stream shows, as a grid of colour (and for GTA, which pixels in its middle are white or red, to read WASTED); mutes the stream when a death or an ad break switches you away, if you let it.',
   background: { service_worker: 'background.js' },
   // scripting and the stream sites: the eye goes into stream tabs already open when the extension is installed or reloaded.
   permissions: ['scripting'],

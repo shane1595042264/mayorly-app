@@ -269,8 +269,8 @@ function boot() {
     const g = stream.grace(action)
     if (g.drop) {
       log.info('[stream]', g.why)
-      kept({ cause: 'you', via: 'Your switch let go: a death had just switched you' })
-      say({ phase: 'done', text: 'Switched already: the streamer died' })
+      kept({ cause: 'you', via: `Your switch let go: ${g.by === 'ad' ? 'an ad break' : 'a death'} had just switched you` })
+      say({ phase: 'done', text: g.by === 'ad' ? 'Switched already: an ad break' : 'Switched already: the streamer died' })
       return
     }
     return isDeviceOnly(action) ? engine.dispatch(action) : engine.act(action)
@@ -681,8 +681,9 @@ function boot() {
     const step = promptStep(engine.state, e, Date.now() - promptSwitchAt)
     // A prompt a beat after a streamer's death switched the desk would take it back to the stream.
     const g = step.act ? stream.grace(step.act) : null
-    log.info('[agents]', `${e.app} prompt${e.manual ? '' : ' (not typed)'}: ${g?.drop ? 'a death switched a moment ago' : step.why}`)
-    if (g?.drop) kept({ cause: 'ai', via: `${AGENT_NAME[e.app]} prompt let go: a death had just switched you` })
+    const what = g?.by === 'ad' ? 'an ad break' : 'a death'
+    log.info('[agents]', `${e.app} prompt${e.manual ? '' : ' (not typed)'}: ${g?.drop ? `${what} switched a moment ago` : step.why}`)
+    if (g?.drop) kept({ cause: 'ai', via: `${AGENT_NAME[e.app]} prompt let go: ${what} had just switched you` })
     if (!step.act || g?.drop) return
     promptSwitchAt = auto.at = Date.now()
     const where = e.app === 'browser' ? 'in a browser side panel' : e.app.endsWith('-web') ? 'in the browser' : e.app.endsWith('-app') ? 'in its desktop app' : 'through its hook'

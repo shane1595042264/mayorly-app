@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## An ad on the stream switches you away and mutes it
+
+- When the stream your stream task watches starts an ad break (Twitch's "xQc is taking an ad break" banner, or a YouTube ad), Mayorly does what Alt+Q does and mutes the stream, so you can get something done instead of listening to it. Any stream: Just Chatting or any game, even in a tab behind others. When the break is over the pet says so, and coming back to the stream task unmutes it.
+- Once per break, and only once the stream itself has played a few seconds: the ad before a stream starts never switches you away. Until the break ends, an AI prompt that would take you back to the stream leaves you where you are; coming back yourself still works.
+- Settings, Auto switch, turns it off. Press the reload button on the Mayorly extension in chrome://extensions once, then reload the stream page.
+
 ## GTA: it reads the word WASTED now, not the colour
 
 - GTA 6 turns its picture grey and black and white on its own, and the last build took that for deaths and switched you twice in a minute. Now Mayorly reads the word itself: when WASTED is written in the middle of the stream, it does what Alt+Q does, once per death, and mutes the stream on the way out. FAILED (a mission failed) and BUSTED never count.

@@ -508,12 +508,15 @@ export interface Settings {
  * video is Alt+Q; never your own game, never during a rest (shared/streamdeath.ts). streamMute: that
  * switch also mutes the stream, and coming back to its task unmutes it. streamOpen: a live stream page
  * brought to the front while the desk is on another task switches to the task that watches streams.
+ * streamAd: an ad break starting on the stream that task watches is Alt+Q too (and mutes it with
+ * streamMute), once per break.
  */
 export interface AutoSwitchRules {
   aiPrompt: boolean
   streamDeath: boolean
   streamMute: boolean
   streamOpen: boolean
+  streamAd: boolean
 }
 
 /** What the clerk does with an instruction of that kind: do it (with Undo), ask first, or never. */

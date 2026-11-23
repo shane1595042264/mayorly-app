@@ -92,6 +92,16 @@ function mayorlyWord(data, w, h) {
   return { white: white, red: red, nw: nw, nr: nr }
 }
 
+/**
+ * The words of Twitch's ad banner ("xQc is taking an ad break; stick around to support the stream!",
+ * "Catch xQc right after this ad break", "This Ad supports Twitch"), in the player's own text: the
+ * eye's fallback should Twitch rename the banner's markup. The player's text, never the page's, so a
+ * stream title or chat saying "ad break" is not an ad.
+ */
+function mayorlyAdWords(text) {
+  return /taking an ad break|right after this ad break|this ad supports twitch|stick around to support the stream/i.test(text)
+}
+
 if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id) {
   ;(function () {
     var V = 1
@@ -137,6 +147,16 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
     var top = window === window.top
     var focusAt = null
     var focusSent = null
+    // Whether the last post said an ad was on: a change is said at once, with or without a video
+    // the eye can read (an ad in another shape than the stream).
+    var adSent = false
+    // Whether the last post had a video, and whether one has been sent at all: the first tick and a
+    // video going away (a reload, another channel in the same tab) are said at once, so Mayorly
+    // never takes the next channel's pre-roll for a break in the stream it saw playing.
+    var hadVideo = false
+    var first = true
+    // A mute asked for while no video played: done on the first one that does.
+    var pendingMute = false
     var hadFocus = false
     var wasLive = false
     var noteFocus = function () {
@@ -177,9 +197,26 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
       var el = site === 'twitch' ? document.querySelector('[data-a-target="stream-game-link"]') : site === 'kick' ? document.querySelector('a[href^="/category/"]') : null
       return el ? (el.textContent || '').trim().slice(0, 80) : null
     }
-    var ad = function () {
-      var el = document.querySelector('[data-a-target="video-ad-label"], [data-a-target="video-ad-countdown"], .html5-video-player.ad-showing')
+    // An ad, as the page shows it (what an ad blocker looks for), and what showed it: Twitch's ad
+    // banner over the player (data-a-target video-ad-label, data-test-selector ad-banner-default-text
+    // in Twitch's own code), its countdown, YouTube's player in an ad; on Twitch also the banner's
+    // words inside the player, should its markup change.
+    var shown = function (sel) {
+      var el = document.querySelector(sel)
       return !!el && el.getClientRects().length > 0
+    }
+    var adBy = function () {
+      if (shown('[data-a-target="video-ad-label"], [data-test-selector="ad-banner-default-text"]')) return 'label'
+      if (shown('[data-a-target="video-ad-countdown"]')) return 'countdown'
+      if (shown('.html5-video-player.ad-showing')) return 'player'
+      if (site === 'twitch') {
+        var p = document.querySelector('[data-a-target="video-player"]')
+        if (p && mayorlyAdWords(p.innerText || '')) return 'words'
+      }
+      return null
+    }
+    var ad = function () {
+      return adBy() !== null
     }
     var visible = function () {
       return document.visibilityState === 'visible' || !!document.pictureInPictureElement
@@ -194,21 +231,27 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
       for (var i = 0; i < vs.length; i++) {
         var v = vs[i]
         if (v.paused || v.ended || v.readyState < 2 || v.videoWidth < 320 || !v.videoHeight) continue
+        var rc = v.getBoundingClientRect()
+        var a = Math.max(0, Math.min(rc.right, innerWidth) - Math.max(rc.left, 0)) * Math.max(0, Math.min(rc.bottom, innerHeight) - Math.max(rc.top, 0))
         if (bad.has(v)) {
-          unread = v
+          unread = { v: v, area: Math.round(a) }
           continue
         }
         var aspect = v.videoWidth / v.videoHeight
         if (aspect < 1.6 || aspect > 1.9) continue
-        var rc = v.getBoundingClientRect()
-        var a = Math.max(0, Math.min(rc.right, innerWidth) - Math.max(rc.left, 0)) * Math.max(0, Math.min(rc.bottom, innerHeight) - Math.max(rc.top, 0))
         if (a > area || (document.pictureInPictureElement === v && !best)) {
           best = v
           area = a
         }
       }
       if (best) return { v: best, area: Math.round(area), bad: false }
-      return unread ? { v: unread, area: 0, bad: true } : null
+      return unread ? { v: unread.v, area: unread.area, bad: true } : null
+    }
+    // Any video playing, whatever its shape: an ad in another shape than the stream still gets muted.
+    var anyVideo = function () {
+      var vs = document.querySelectorAll('video')
+      for (var i = 0; i < vs.length; i++) if (!vs[i].paused && !vs[i].ended) return vs[i]
+      return null
     }
     // The player's own mute button, so its icon and remembered volume stay right; else the video itself.
     var muteButton = function () {
@@ -272,7 +315,11 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
     var post = function (m) {
       return new Promise(function (resolve) {
         try {
-          var msg = { mayorly: 'stream', v: V, eye: EYE, site: site, title: document.title, category: category(), visible: visible(), ad: ad(), cost: cost, held: !!mutedBy, live: live(), focusAt: focusAt }
+          var by = adBy()
+          adSent = !!by
+          hadVideo = (m.area || 0) > 0 || m.kind === 'tainted'
+          first = false
+          var msg = { mayorly: 'stream', v: V, eye: EYE, eyeId: me, site: site, title: document.title, category: category(), visible: visible(), ad: !!by, adBy: by, cost: cost, held: !!mutedBy, live: live(), focusAt: focusAt }
           focusSent = focusAt
           for (var k in m) msg[k] = m[k]
           chrome.runtime.sendMessage(msg, function (r) {
@@ -336,13 +383,19 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
           }
         } catch (e) {}
       }
+      if (pendingMute && found) {
+        pendingMute = false
+        mute(found.v)
+      }
       var now = Date.now()
       var r = null
       try {
+        var adNow = !!adBy()
         if (!found) {
           armed = false
-          // Brought to the front with no video playing yet (the home page, a channel loading): said at once.
-          if (focusAt !== focusSent) {
+          // Brought to the front with no video playing yet (the home page, a channel loading), an ad
+          // coming or going in a video the eye cannot read, the video gone, or the first tick: said at once.
+          if (first || hadVideo || focusAt !== focusSent || adNow !== adSent) {
             lastHello = now
             r = await post({ kind: 'hello', area: 0 })
           }
@@ -351,7 +404,7 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
           lastHello = now
           r = await post({ kind: 'hello', area: found.area })
         } else if (found.bad) {
-          if (now - lastHello >= HELLO) {
+          if (adNow !== adSent || now - lastHello >= HELLO) {
             lastHello = now
             r = await post({ kind: 'tainted', area: found.area })
           }
@@ -361,7 +414,7 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
           tainted = false
           var got = ad() ? null : sample(found.v)
           r = await post(got ? { kind: 'frame', area: found.area, grid: got.grid, word: got.word } : { kind: tainted ? 'tainted' : 'hello', area: found.area })
-        } else if (now - lastHello >= (armed ? 2000 : mutedBy ? 2000 : HELLO)) {
+        } else if (adNow !== adSent || now - lastHello >= (armed ? 2000 : mutedBy ? 2000 : HELLO)) {
           lastHello = now
           r = await post({ kind: 'hello', area: found.area })
         }
@@ -374,8 +427,15 @@ if (typeof chrome === 'object' && chrome && chrome.runtime && chrome.runtime.id)
         every = Math.max(250, Math.min(5000, Number(r.every) || 500))
         // Muted by a death that switched you away; Mayorly says when to unmute (back on its task, or
         // the rule or muting turned off), and being read again means the same.
-        if (r.mute === true && found) mute(found.v)
-        else if ((r.mute === false || armed) && mutedBy) unmute()
+        if (r.mute === true) {
+          // No video the eye reads (an ad in another shape): whatever plays, else the next that does.
+          var mv = found ? found.v : anyVideo()
+          if (mv) mute(mv)
+          else pendingMute = true
+        } else if (r.mute === false || armed) {
+          pendingMute = false
+          if (mutedBy) unmute()
+        }
       }
       if (!stopped) setTimeout(tick, armed ? every : 1000)
     }

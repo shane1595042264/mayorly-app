@@ -4,6 +4,9 @@ import { connect } from 'node:net'
 import { onDeskId, type Action, type Id } from '@core/index'
 import type { ClerkNotice } from '../shared/bridge'
 import {
+  adArm,
+  adStep,
+  adWatch,
   deathStep,
   graceStep,
   HELLO_MS,
@@ -18,10 +21,12 @@ import {
   LEAGUE,
   leftStream,
   openStep,
+  pageOf,
   SITE_NAME,
   STREAM_EYE,
   wordSight,
   wordStep,
+  type AdMemory,
   type DeathMemory,
   type DeathTick,
   type StreamArm,
@@ -49,7 +54,7 @@ export interface StreamRule {
   start(): void
   stop(): void
   /** Your own switch right after a death switched you is let go (graceStep). */
-  grace(a: Action): { drop: boolean; why: string }
+  grace(a: Action): { drop: boolean; why: string; by: 'death' | 'ad' }
   status(): StreamStatus
 }
 
@@ -69,6 +74,8 @@ interface Tab {
   trail: { at: number; seen: string; grid: StreamGrid | null; ad: boolean }[]
   /** When the page last came to the front, as last heard: a later one is a new time. */
   focusSeen: number | null
+  /** Its ad break, as last heard. */
+  ad: AdMemory | null
 }
 
 const OFF: StreamReply = { armed: false, every: HELLO_MS }
@@ -95,7 +102,13 @@ export function streamRule(o: {
   const { engine } = o
   const tabs = new Map<string, Tab>()
   let started = false
-  let fired: { at: number; taskId: Id; tab: string } | null = null
+  // The last switch this rule made (a death, or an ad break), and from which task and tab.
+  let fired: { at: number; taskId: Id; tab: string; why: 'death' | 'ad' } | null = null
+  // The desk's last arrival on a task, and whether you brought it there (by hand, or by bringing a
+  // stream to the front): an ad break goes on holding its mute, and switching you off again, only
+  // against an arrival you did not make (an AI prompt's swap-back).
+  let arrived: { taskId: Id | null; at: number; byHand: boolean } | null = null
+  let opening = false
   let firing = false
   let lastArm = ''
   let armedSince: number | null = null
@@ -132,7 +145,10 @@ export function streamRule(o: {
   const status = (): StreamStatus => {
     const a = arm()
     if (!a.taskId || !a.cue) return { taskId: null, word: null }
-    if (!a.on) return a.why === 'the rule is off' ? { taskId: a.taskId, word: 'Off in Settings' } : { taskId: null, word: null }
+    if (!a.on) {
+      if (a.why !== 'the rule is off') return { taskId: null, word: null }
+      return { taskId: a.taskId, word: adArm(engine.state, engine.deviceId).on ? 'Watching for ads' : 'Off in Settings' }
+    }
     const now = Date.now()
     const recent = tabList().filter((t) => now - t.at <= TAB_STALE_MS)
     const word = (w: StreamWord): StreamStatus => ({ taskId: a.taskId as Id, word: w })
@@ -194,7 +210,7 @@ export function streamRule(o: {
       log.info('[stream]', `death on ${site}: ${tick.seen}; ${step.why}`)
       if (!step.act) return
       o.auto.at = Date.now()
-      fired = { at: o.auto.at, taskId: a.taskId as Id, tab: tabId }
+      fired = { at: o.auto.at, taskId: a.taskId as Id, tab: tabId, why: 'death' }
       engine.dispatch(step.act, { cause: 'stream', via: `Streamer died on ${site} (rule: ${a.cue})`, detail: tick.seen })
       // Muted only when the switch took you off this stream (not onto another task that watches it).
       const tab = tabs.get(tabId)
@@ -222,10 +238,13 @@ export function streamRule(o: {
     heard = true
     const prev = tabs.get(p.tab)
     const game = gameOf(p.category, p.title)
-    const tab: Tab = prev ?? { seen: null as unknown as TabSeen, memory: null, grid: null, tick: null, mute: false, mutedFor: null, trail: [], focusSeen: null }
+    const tab: Tab = prev ?? { seen: null as unknown as TabSeen, memory: null, grid: null, tick: null, mute: false, mutedFor: null, trail: [], focusSeen: null, ad: null }
     // Another game on the same tab (the streamer switched): its detector learns the picture afresh.
     if (prev && prev.seen.game !== game) prev.memory = null
-    tab.seen = { tab: p.tab, site: p.site, title: p.title, category: p.category, game, visible: p.visible, active: p.active, area: p.area, tainted: p.kind === 'tainted', eye: p.eye, at: now }
+    // Another load of the page, or another channel in it: what played before says nothing of this
+    // one, so its pre-roll is no break.
+    if (prev?.ad && (prev.seen.eyeId !== p.eyeId || pageOf(prev.seen.title) !== pageOf(p.title))) prev.ad = { ...prev.ad, playFrom: null, playAt: null }
+    tab.seen = { tab: p.tab, site: p.site, title: p.title, category: p.category, game, visible: p.visible, active: p.active, area: p.area, tainted: p.kind === 'tainted', eye: p.eye, eyeId: p.eyeId, at: now }
     tabs.set(p.tab, tab)
     for (const [k, t] of tabs) if (now - t.seen.at > LEAGUE.forgetMs) tabs.delete(k)
 
@@ -238,11 +257,20 @@ export function streamRule(o: {
         if (step.act || step.why !== 'not a live stream') log.info('[stream]', `brought to the front on ${p.site}: ${step.why}${step.to ? `, on ${step.to}` : ''}`)
         if (step.act) {
           o.auto.at = now
-          engine.act(step.act, { cause: 'stream', via: `Brought ${SITE_NAME[p.site]} to the front`, detail: step.to ? `the task that watches streams: ${step.to}` : undefined })
+          // Bringing a stream to the front is yours: the arrival counts as by hand.
+          opening = true
+          try {
+            engine.act(step.act, { cause: 'stream', via: `Brought ${SITE_NAME[p.site]} to the front`, detail: step.to ? `the task that watches streams: ${step.to}` : undefined })
+          } finally {
+            opening = false
+          }
           o.say({ phase: 'done', text: `${SITE_NAME[p.site]}: on ${o.title(onDeskId(engine.state))}` })
         }
       }
     }
+
+    // An ad break that switched you away keeps its mute until it ends, unless you came back yourself.
+    const adHolds = () => !!tab.ad?.on && tab.ad.switched && engine.state.settings.autoSwitch.streamMute && !(arrived?.byHand && arrived.taskId === onDeskId(engine.state))
 
     // A death just switched away from this tab: mute it now, if muting is on. Once the desk is back
     // on that task, or the rule or muting is off, say unmute; a tab armed again needs no mute.
@@ -255,13 +283,61 @@ export function streamRule(o: {
       }
       tab.mute = false
       const holds = tab.mutedFor !== null || p.held
-      if (holds && (r.armed || (tab.mutedFor !== null && onDeskId(engine.state) === tab.mutedFor) || !st.streamMute)) {
+      if (holds && !adHolds() && (r.armed || (tab.mutedFor !== null && onDeskId(engine.state) === tab.mutedFor) || !st.streamMute)) {
         tab.mutedFor = null
         log.info('[stream]', `unmuting ${p.site}`)
         return { ...r, mute: false }
       }
       return r
     }
+    // An ad break beginning on the stream being watched: Alt+Q, and the stream muted on the way out
+    // (through leftStream, with streamMute). Once per break; its end is said only when it switched you.
+    const brk = adWatch(tab.ad, { ad: p.ad, playing: p.area > 0 || p.kind === 'tainted' }, now)
+    tab.ad = brk.memory
+    // A break that switched you away goes on: the desk brought back to the task it switched you off,
+    // by something other than you (an AI prompt's swap-back), is switched off it again while the ad shows.
+    const back =
+      !brk.started &&
+      p.ad &&
+      tab.ad.on &&
+      tab.ad.switched &&
+      fired?.why === 'ad' &&
+      fired.tab === p.tab &&
+      !!arrived &&
+      !arrived.byHand &&
+      arrived.taskId === fired.taskId &&
+      arrived.taskId === onDeskId(engine.state) &&
+      now - arrived.at < 15_000
+    if (brk.started || back) {
+      const aa = adArm(engine.state, engine.deviceId)
+      const watched = aa.on && pickTab(tabList(), aa.title ?? '', now, { ads: true })?.tab === p.tab
+      if (back && !watched) arrived = null
+      if (watched) {
+        const step = adStep(engine.state, engine.deviceId, { sinceFireMs: fired ? now - fired.at : Infinity, again: back })
+        if (back && step.act) arrived = null
+        log.info('[stream]', `ad ${back ? 'still ' : ''}on ${p.site}${p.adBy ? ` (${p.adBy})` : ''}: ${step.why}`)
+        if (step.act) {
+          o.auto.at = now
+          fired = { at: now, taskId: aa.taskId as Id, tab: p.tab, why: 'ad' }
+          tab.ad.switched = true
+          engine.dispatch(step.act, { cause: 'stream', via: `Ad break on ${SITE_NAME[p.site]}`, detail: p.adBy ? `seen by its ${p.adBy === 'words' ? "banner's words" : p.adBy}` : undefined })
+          if (engine.state.settings.autoSwitch.streamMute && onDeskId(engine.state) !== aa.taskId) {
+            tab.mute = true
+            tab.mutedFor = aa.taskId as Id
+          }
+          o.say({ phase: 'done', text: `${SITE_NAME[p.site]} ad: on ${o.title(onDeskId(engine.state))}` })
+        }
+      }
+    } else if (brk.ended && brk.memory.switched) {
+      log.info('[stream]', `ad over on ${p.site}`)
+      const left = fired?.why === 'ad' && fired.tab === p.tab ? fired.taskId : null
+      if (left && onDeskId(engine.state) !== left) o.say({ phase: 'done', text: `${SITE_NAME[p.site]}: the ad break is over` })
+    }
+
+    // While a break that switched you away holds its mute, the eye is not read (an ad has nothing
+    // to read) and so not told to unmute, which being read again would.
+    const armedOr = (r: StreamReply) => (adHolds() ? OFF : r)
+
     const a = arm()
     noteArm(a, now)
     if (!a.on) {
@@ -294,11 +370,11 @@ export function streamRule(o: {
     }
     if (p.kind === 'hello' && !p.ad) {
       pushStatus()
-      return answer(armed)
+      return answer(armedOr(armed))
     }
     if (words && p.eye < STREAM_EYE) {
       pushStatus()
-      return answer(armed)
+      return answer(armedOr(armed))
     }
     const f = !words && p.grid ? leagueFeatures(p.grid, tab.grid, now) : null
     if (p.grid) tab.grid = p.grid
@@ -322,7 +398,7 @@ export function streamRule(o: {
     if (was !== tick.memory.phase) pushStatus()
     // A death switches at once when the own match check is fresh: the answer to this very frame
     // then carries the mute, not the armed reply that would cancel it.
-    return answer(arm().on ? armed : OFF)
+    return answer(arm().on ? armedOr(armed) : OFF)
   }
 
   // Ground truth for tuning: you left a watched stream yourself (with what the detector saw just
@@ -352,11 +428,12 @@ export function streamRule(o: {
       const left = lastDesk
       lastDesk = desk
       const byHand = !firing && now - o.auto.at > 1500 && (action.type === 'desk/switch' || action.type === 'desk/select' || action.type === 'desk/deploy')
+      arrived = { taskId: desk, at: now, byHand: byHand || opening }
       if (byHand && left && lastArm === `on:${left}` && seen && now - seen.at < 3000) {
         log.info('[stream]', `by hand: ${seen.text}`)
         trace(tabs.get(seen.tab), `by hand: ${seen.text}`)
       }
-      if (byHand && fired && desk === fired.taskId && now - fired.at < 8000) log.info('[stream]', `undone: back on the stream ${((now - fired.at) / 1000).toFixed(1)} s after a death switched`)
+      if (byHand && fired && desk === fired.taskId && now - fired.at < 8000) log.info('[stream]', `undone: back on the stream ${((now - fired.at) / 1000).toFixed(1)} s after ${fired.why === 'ad' ? 'an ad' : 'a death'} switched`)
     }
     pushStatus()
   }

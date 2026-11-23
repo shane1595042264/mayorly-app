@@ -12,10 +12,11 @@
 # second run starts a process named League of Legends.exe first: then the death must not switch,
 # nor mute, because that is a match of your own. A third plays GTA (the page names Grand Theft Auto
 # VI): a black and white beat and FAILED on the red wash must not switch; WASTED at 50 s must, once,
-# and mute.
+# and mute. A fourth plays an ad break at 20 s with Twitch's banner: the ad rule must switch, once,
+# mute, and say when the break is over. The first three keep the ad rule off (their ad is no death).
 #
 # CI runs it on a Windows runner (.github/workflows/ci.yml, job stream), never on anyone's own
-# computer. It takes about six minutes.
+# computer. It takes about seven minutes.
 #   npm run build
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-stream.ps1 -Chrome <chrome.exe> [-Out result.json]
 param(
@@ -52,14 +53,16 @@ function Log-Lines([string]$log) {
 
 # One run: a fresh profile and save, the app up and its desk running, Chrome on the page; then
 # waits until `$Until` seconds after the page's t0 and reports what the log and the save say.
-function Run-Stream([string]$name, [string]$plan, [int]$until) {
+function Run-Stream([string]$name, [string]$plan, [int]$until, [string]$adRule = 'off') {
   $data = Join-Path $tmp $name
   New-Item -ItemType Directory -Force $data | Out-Null
   $log = Join-Path $data 'logs\mayorly.log'
   $env:E2E_STREAM_SEED = Join-Path $data 'mayorly.json'
+  $env:E2E_STREAM_AD = $adRule
   Push-Location $App
   try { & npx vitest run src/shared/streamdeath.test.ts -t 'writes the e2e seed' | Out-Null } finally { Pop-Location }
   Remove-Item Env:E2E_STREAM_SEED
+  Remove-Item Env:E2E_STREAM_AD
   if (-not (Test-Path (Join-Path $data 'mayorly.json'))) { throw "$name`: no seed was written." }
   $seed = (Get-Content (Join-Path $data 'mayorly.json') -Raw | ConvertFrom-Json).state
   $alpha = ($seed.entries | Where-Object { $_.title -eq 'alpha' }).id
@@ -112,6 +115,7 @@ function Run-Stream([string]$name, [string]$plan, [int]$until) {
   $startUtc = $start.ToUniversalTime()
   $said = @($lines | Where-Object { $_.text -match '\[stream\]' } | ForEach-Object { '{0:N1}s {1}' -f ($_.at - $startUtc).TotalSeconds, $_.text })
   $deaths = @($lines | Where-Object { $_.text -match '\[stream\] death on' } | ForEach-Object { [pscustomobject]@{ s = ($_.at - $startUtc).TotalSeconds; text = $_.text } })
+  $ads = @($lines | Where-Object { $_.text -match '\[stream\] ad (on|over)' } | ForEach-Object { [pscustomobject]@{ s = ($_.at - $startUtc).TotalSeconds; text = $_.text } })
   # When the page's video was muted, from the page's own reports.
   $mutes = @()
   if (Test-Path $report) {
@@ -126,6 +130,7 @@ function Run-Stream([string]$name, [string]$plan, [int]$until) {
     armed = [bool]($said -match '\] on: ')
     learned = [bool]($said -match '\] learned ')
     deaths = $deaths
+    ads = $ads
     mutes = $mutes
     onDesk = if ($on -eq $alpha) { 'alpha' } elseif ($on -eq $stream) { 'Stream watch' } else { "$on" }
     said = $said
@@ -171,7 +176,14 @@ try {
   $gta.pass = $gta.armed -and @($gta.deaths).Count -eq 1 -and @($gta.deaths)[0].text -match 'switched$' -and @($gta.deaths)[0].s -ge 50 -and @($gta.deaths)[0].s -le 53.5 -and $gta.onDesk -eq 'alpha' -and @($gta.mutes).Count -ge 1 -and @($gta.mutes)[0] -ge @($gta.deaths)[0].s -and @($gta.mutes)[0] -le @($gta.deaths)[0].s + 4
   $result.runs += $gta
 
-  $result.ok = $full.pass -and $own.pass -and $gta.pass
+  # 4. An ad break at 20 s, with Twitch's banner: switched once, muted, and its end said.
+  $ad = Run-Stream 'ad' 'ad' 45 'on'
+  $adOn = @($ad.ads | Where-Object { $_.text -match '\] ad on twitch \(label\): switched$' })
+  $adOver = @($ad.ads | Where-Object { $_.text -match '\] ad over on twitch$' })
+  $ad.pass = $ad.armed -and $adOn.Count -eq 1 -and $adOn[0].s -ge 20 -and $adOn[0].s -le 22.5 -and @($ad.deaths).Count -eq 0 -and $ad.onDesk -eq 'alpha' -and @($ad.mutes).Count -ge 1 -and @($ad.mutes)[0] -ge 20 -and @($ad.mutes)[0] -le 23.5 -and $adOver.Count -eq 1 -and $adOver[0].s -ge 35 -and $adOver[0].s -le 44
+  $result.runs += $ad
+
+  $result.ok = $full.pass -and $own.pass -and $gta.pass -and $ad.pass
 } catch {
   $result.error = $_.Exception.Message
 } finally {

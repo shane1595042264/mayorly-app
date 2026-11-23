@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { onDeskId, reduce, sampleState, type Action, type MayorlyState } from '../core/index'
 import EYE from '../main/stream-eye.js?raw'
 import {
+  AD,
+  adStep,
+  adWatch,
   cellsIn,
+  pageOf,
   CELLS,
   deathStep,
   FRAME_H,
@@ -23,6 +27,7 @@ import {
   isWatched,
   leftStream,
   openStep,
+  type AdMemory,
   type DeathMemory,
   type DeathTick,
   type LeagueFeatures,
@@ -38,6 +43,7 @@ const now = Date.parse('2026-11-22T15:00:00Z')
 
 // The extension's own grid, the very function it ships, run on frames painted here.
 const mayorlyGrid = new Function(`${EYE}\nreturn mayorlyGrid`)() as (data: Uint8ClampedArray, w: number, h: number) => StreamGrid
+const mayorlyAdWords = new Function(`${EYE}\nreturn mayorlyAdWords`)() as (text: string) => boolean
 
 // ---------------------------------------------------------------------------------------------
 // A painted League stream: a moving, coloured world; the minimap in a corner, still and coloured;
@@ -483,7 +489,7 @@ describe('a watched rule', () => {
     bg.act({ type: 'desk/select', leisureId: bg.bg3 })
     expect(streamArm(bg.s, 'here')).toEqual({ on: false, why: 'no stream rule on this task', taskId: bg.bg3 })
     const off = desk()
-    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true, streamOpen: true } } })
+    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: false, streamMute: true, streamOpen: true, streamAd: true } } })
     expect(streamArm(off.s, 'here')).toMatchObject({ on: false, why: 'the rule is off', taskId: off.stream })
     off.act({ type: 'desk/select', leisureId: off.bg3 })
     expect(streamArm(off.s, 'here')).toEqual({ on: false, why: 'the rule is off' })
@@ -585,7 +591,7 @@ describe('a live stream brought to the front', () => {
     expect(openStep(d.s, 'here', page, { sinceFireMs: 4000 }).why).toBe('a death switched away a moment ago')
     const off = desk()
     off.act({ type: 'desk/select', leisureId: off.bg3 })
-    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: true, streamMute: true, streamOpen: false } } })
+    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: true, streamDeath: true, streamMute: true, streamOpen: false, streamAd: true } } })
     expect(openStep(off.s, 'here', page, { sinceFireMs: Infinity }).why).toBe('the rule is off')
     const none = desk({ title: 'TV night', cue: 'someone dies' })
     none.act({ type: 'desk/select', leisureId: none.bg3 })
@@ -597,6 +603,119 @@ describe('a live stream brought to the front', () => {
     broke.act({ type: 'entry/capture', text: 'legal: gamma', start: true })
     const spent = { ...broke.s, tokens: [...broke.s.tokens, { id: 'spend', at: now, amount: -1000, reason: 'market', sittingId: null } as never] }
     expect(openStep(spent, 'here', page, { sinceFireMs: Infinity }).why).toBe('no coin for the couch')
+  })
+})
+
+describe('an ad break', () => {
+  /** Feeds [ms, what] spans a post every `every` ms ('ad', 'play': the stream playing, 'none': no video yet); returns when breaks started and ended. */
+  const breaks = (timeline: [number, 'ad' | 'play' | 'none'][], every = 500, from: AdMemory | null = null) => {
+    let m = from
+    let t = 0
+    const out: string[] = []
+    for (const [ms, what] of timeline) {
+      for (const end = t + ms; t < end; t += every) {
+        const r = adWatch(m, { ad: what === 'ad', playing: what !== 'none' }, now + t)
+        m = r.memory
+        if (r.started) out.push(`start@${t}`)
+        if (r.ended) out.push(`end@${t}`)
+      }
+    }
+    return out
+  }
+
+  it('starts when the banner comes up after the stream played without it, and ends once it has been gone 3 s', () => {
+    expect(breaks([[6000, 'play'], [30_000, 'ad'], [6000, 'play']])).toEqual(['start@6000', `end@${36_000 + AD.endMs}`])
+  })
+
+  it('never starts on a pre-roll: a tab heard first mid-ad, first with no video yet, or after a moment of play', () => {
+    expect(breaks([[20_000, 'ad'], [5000, 'play']])).toEqual([`end@${20_000 + AD.endMs}`])
+    // Opening a channel: a hello with no video, then the pre-roll.
+    expect(breaks([[2000, 'none'], [20_000, 'ad'], [5000, 'play']])).toEqual([`end@${22_000 + AD.endMs}`])
+    // A reload: the stream played, the page went blank, and its pre-roll came up.
+    expect(breaks([[10_000, 'play'], [1000, 'none'], [3000, 'play'], [10_000, 'ad']])).toEqual([])
+    // After a silence nothing is known of what played.
+    const first = adWatch(null, { ad: false, playing: true }, now)
+    const played = adWatch(first.memory, { ad: false, playing: true }, now + 6000)
+    expect(adWatch(played.memory, { ad: true, playing: true }, now + 30_000).started).toBe(false)
+    expect(adWatch(played.memory, { ad: true, playing: true }, now + 8000).started).toBe(true)
+  })
+
+  it('is one break through the blink between two ads, at two posts a second or one in 5 s', () => {
+    expect(breaks([[6000, 'play'], [15_000, 'ad'], [1000, 'play'], [15_000, 'ad'], [5000, 'play'], [10_000, 'ad'], [5000, 'play']])).toEqual([
+      'start@6000',
+      `end@${37_000 + AD.endMs}`,
+      'start@42000',
+      `end@${52_000 + AD.endMs}`,
+    ])
+    // Hellos every 5 s: one ad-free hello in the blink is not the end.
+    expect(breaks([[15_000, 'play'], [15_000, 'ad'], [5000, 'play'], [15_000, 'ad'], [15_000, 'play']], 5000)).toEqual(['start@15000', 'end@55000'])
+  })
+
+  it('is read on the tab of the task, whatever its game, even behind other tabs; a showing one first', () => {
+    const tab = (id: string, o: Partial<TabSeen> = {}): TabSeen => ({ tab: id, site: 'twitch', title: `${id} - Twitch`, category: 'Just Chatting', game: 'other', visible: true, active: true, area: 1000, tainted: false, at: now, ...o })
+    expect(pickTab([tab('xqc')], 'watch xQc', now)).toBeNull()
+    expect(pickTab([tab('xqc')], 'watch xQc', now, { ads: true })?.tab).toBe('xqc')
+    expect(pickTab([tab('xqc', { visible: false, active: false })], 'Stream watch', now, { ads: true })?.tab).toBe('xqc')
+    expect(pickTab([tab('a', { visible: false, area: 5000 }), tab('b')], 'Stream watch', now, { ads: true })?.tab).toBe('b')
+    expect(pickTab([tab('a', { at: now - 20_000 })], 'Stream watch', now, { ads: true })).toBeNull()
+  })
+
+  it('lets go of your own Alt+Q a beat after an ad switched, and says it was the ad', () => {
+    const d = desk()
+    const step = adStep(d.s, 'here', { sinceFireMs: Infinity })
+    d.act(step.act!)
+    const g = graceStep({ type: 'desk/switch' }, d.s, { at: now, taskId: d.stream, why: 'ad' }, now + 1000)
+    expect(g).toMatchObject({ drop: true, by: 'ad' })
+    expect(g.why).toMatch(/after the ad let go/)
+    expect(graceStep({ type: 'desk/switch' }, d.s, { at: now, taskId: d.stream }, now + 1000).by).toBe('death')
+  })
+
+  it('does what a tap of Alt+Q does, on the task that watches streams, with the ad rule on', () => {
+    const d = desk()
+    d.act({ type: 'desk/select', leisureId: d.bg3 })
+    d.act({ type: 'desk/select', leisureId: d.stream })
+    const step = adStep(d.s, 'here', { sinceFireMs: Infinity })
+    expect(step.why).toBe('switched')
+    d.act(step.act!)
+    expect(onDeskId(d.s)).toBe(d.bg3)
+    expect(adStep(d.s, 'here', { sinceFireMs: Infinity })).toEqual({ act: null, why: 'no stream rule on this task' })
+  })
+
+  it('needs only its own rule: on with the death rule off, off with the ad rule off, never a moment after another switch', () => {
+    const d = desk()
+    const rules = d.s.settings.autoSwitch
+    d.act({ type: 'settings/update', patch: { autoSwitch: { ...rules, streamDeath: false } } })
+    expect(adStep(d.s, 'here', { sinceFireMs: Infinity }).why).toBe('switched')
+    d.act({ type: 'settings/update', patch: { autoSwitch: { ...rules, streamAd: false } } })
+    expect(adStep(d.s, 'here', { sinceFireMs: Infinity })).toMatchObject({ act: null, why: 'the rule is off' })
+    d.act({ type: 'settings/update', patch: { autoSwitch: rules } })
+    expect(adStep(d.s, 'here', { sinceFireMs: 500 })).toEqual({ act: null, why: 'switched a moment ago' })
+    // The break that switched you away, with the desk brought back by something else: no echo holds it.
+    expect(adStep(d.s, 'here', { sinceFireMs: 500, again: true }).why).toBe('switched')
+    d.act({ type: 'desk/skip' })
+    expect(adStep(d.s, 'here', { sinceFireMs: Infinity }).act).toBeNull()
+  })
+
+  it("knows Twitch's banner by its words, in the player's text only", () => {
+    expect(mayorlyAdWords('xQc is taking an ad break; stick around to support the stream! Ad (1:14)')).toBe(true)
+    expect(mayorlyAdWords('Catch xQc right after this ad break; stick around to support the stream!')).toBe(true)
+    expect(mayorlyAdWords('This Ad supports Twitch')).toBe(true)
+    expect(mayorlyAdWords('LIVE Intended for certain audiences Volume Clip')).toBe(false)
+    expect(mayorlyAdWords('NO AD BREAKS TODAY | GTA 6 FINAL HOURS')).toBe(false)
+  })
+
+  it('tells another page in the tab by its title, not by a count of notifications', () => {
+    expect(pageOf('(20) xQc - Twitch')).toBe('xQc - Twitch')
+    expect(pageOf('(3) xQc - Twitch')).toBe(pageOf('xQc - Twitch'))
+    expect(pageOf('caseoh_ - Twitch')).not.toBe(pageOf('xQc - Twitch'))
+  })
+
+  it('arrives with what showed it, and only with an ad', () => {
+    const base = { v: 1, eye: 2, kind: 'hello', tab: '7:0', site: 'twitch', title: 'xQc - Twitch', category: 'Grand Theft Auto VI', visible: true, active: true, area: 5, cost: 4 }
+    expect(streamPostOf({ ...base, ad: true, adBy: 'label' })).toMatchObject({ ad: true, adBy: 'label' })
+    expect(streamPostOf({ ...base, ad: false, adBy: 'label' })).toMatchObject({ ad: false, adBy: null })
+    expect(streamPostOf({ ...base, ad: true, adBy: 'x'.repeat(50) })!.adBy).toHaveLength(20)
+    expect(streamPostOf({ ...base, ad: true, adBy: 7 })!.adBy).toBeNull()
   })
 })
 
@@ -670,5 +789,7 @@ describe('the stream tabs', () => {
 it.runIf(!!process.env.E2E_STREAM_SEED)('writes the e2e seed', () => {
   const at = Date.now()
   const d = desk({ at })
+  // The runs whose page plays an ad that must not count (as a death) keep the ad rule off.
+  if (process.env.E2E_STREAM_AD === 'off') d.act({ type: 'settings/update', patch: { autoSwitch: { ...d.s.settings.autoSwitch, streamAd: false } } })
   writeFileSync(process.env.E2E_STREAM_SEED as string, JSON.stringify({ lastBeat: at, state: d.s }))
 })

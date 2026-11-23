@@ -64,7 +64,7 @@ describe('an AI prompt', () => {
     const d = desk()
     expect(prompt(d, typed(false))).toEqual({ switched: false, why: 'not typed by you' })
     const off = desk()
-    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: false, streamDeath: true, streamMute: true, streamOpen: true } } })
+    off.act({ type: 'settings/update', patch: { autoSwitch: { aiPrompt: false, streamDeath: true, streamMute: true, streamOpen: true, streamAd: true } } })
     expect(prompt(off, typed())).toEqual({ switched: false, why: 'the rule is off' })
     const idle = desk()
     idle.act({ type: 'desk/standDown' })
@@ -119,7 +119,7 @@ describe('the hook', { timeout: 30_000 }, () => {
 
 describe('the extension', () => {
   it('carries the stream eye beside the prompt watcher, and both scripts parse', () => {
-    expect(MANIFEST.version).toBe('1.6.0')
+    expect(MANIFEST.version).toBe('1.7.0')
     expect(MANIFEST.content_scripts[1]).toMatchObject({ js: ['stream-eye.js'], matches: STREAM_MATCHES, all_frames: true })
     expect(STREAM_MATCHES).toContain('https://www.twitch.tv/*')
     expect(() => new Script(BACKGROUND)).not.toThrow()
