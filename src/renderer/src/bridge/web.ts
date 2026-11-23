@@ -30,10 +30,11 @@ const DEMO_KEY = { id: 'demo', provider: 'gemini' as const, keyHint: 'demo', mod
 
 export function createWebBridge(): Bridge {
   const newId = () => crypto.randomUUID()
-  // ?demo seeds sample data, ?fresh starts from first run. Neither touches storage.
+  // ?demo seeds sample data, ?fresh starts from first run, ?art is the art bench with no HUD on it.
+  // None of them touches storage.
   const params = new URLSearchParams(location.search)
   const demo = params.has('demo')
-  const scratch = demo || params.has('fresh')
+  const scratch = demo || params.has('fresh') || params.has('art')
   const demoClerk = scratch && params.has('clerk')
   let state: MayorlyState = demo
     ? demoState(Date.now(), newId)

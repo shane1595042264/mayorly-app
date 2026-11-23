@@ -4,6 +4,8 @@ import { bridge } from '../bridge'
 import { AnimatePresence, motion } from 'motion/react'
 import { Couch, Play, Stop, Storefront, Trash } from '@phosphor-icons/react'
 import { balance, blockView, clock, leisureList, marketList, leisureSpentMs, leisureTokensSpent, COUCH_COINS_PER_TOMATO, span, type LeisureItem, type MayorlyState } from '@core/index'
+import { art } from '../lib/art'
+import { ArtIcon } from '../lib/Pixel'
 import { hotkeyLabel } from '../lib/keys'
 import { actionFor, keyLabel, keymapOpen, keysFor, recordUse } from '../lib/keymap'
 import { useListKeys } from '../lib/listkeys'
@@ -39,12 +41,14 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
   }, [])
   const couchN = leisureList(s).length
   const marketN = marketList(s).length
+  const band = leisureBand()
   return (
-    <div className="leisure-wrap">
+    <div className={`leisure-wrap ${band ? 'has-band' : ''}`}>
+      {band}
       <div className="leisure-switch" role="tablist" aria-label="Leisure">
         {(['couch', 'market'] as const).map((v) => (
           <button key={v} type="button" role="tab" aria-selected={view === v} className={`leisure-switch-btn caps ${view === v ? 'on' : ''}`} onClick={() => { if (v !== view) sfx.tick(); setView(v) }}>
-            {v === 'couch' ? <Couch size={15} /> : <Storefront size={15} />}
+            {v === 'couch' ? <ArtIcon id="icon.couch" size={15} fallback={<Couch size={15} />} /> : <ArtIcon id="icon.market" size={15} fallback={<Storefront size={15} />} />}
             {v === 'couch' ? 'Couch' : 'Market'}
             <span className="leisure-switch-n mono num">{v === 'couch' ? couchN : marketN}</span>
             {view === v && <motion.span layoutId="leisure-switch-bar" className="leisure-switch-bar" transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
@@ -58,6 +62,33 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
         </motion.div>
       </AnimatePresence>
     </div>
+  )
+}
+
+/** Screen pixels per art pixel in the band. */
+const BAND_K = 2
+
+/**
+ * The founder's grass along the top of the tab with his dirt path through the middle of it: one
+ * row of path tiles over the grass, 8 art pixels of grass above and below. Null until both are drawn.
+ */
+function leisureBand() {
+  const grass = art('tile.terrain.grass_a')
+  const path = art('tile.terrain.dirt_path')
+  if (!grass || !path) return null
+  const tile = 16 * BAND_K
+  return (
+    <div
+      className="leisure-band"
+      aria-hidden
+      style={{
+        height: 32 * BAND_K,
+        backgroundImage: `url("${path}"), url("${grass}")`,
+        backgroundPosition: `0 ${8 * BAND_K}px, 0 0`,
+        backgroundSize: `${tile}px ${tile}px`,
+        backgroundRepeat: 'repeat-x, repeat',
+      }}
+    />
   )
 }
 
@@ -120,7 +151,7 @@ function CouchList({ s }: { s: MayorlyState }) {
         {onCouch && (
           <div className="leisure-live-wrap">
             <div className="leisure-live">
-              <Couch size={18} />
+              <ArtIcon id="icon.couch" size={18} fallback={<Couch size={18} />} />
               <span className="caps">On the couch</span>
               <span className="ellipsis">{onCouch.block.label}</span>
               <span className="mono num">{onCouch.remainingMs !== null ? clock(onCouch.remainingMs) : ''}</span>

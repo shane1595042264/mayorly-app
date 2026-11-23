@@ -1,6 +1,8 @@
 /* ------------------------------------------------------------ Plus menu
-   The loadout under inspection: a slab with depth at the centre, four attachment
-   arms on leader lines, the whole rig leaning toward the pointer. */
+   The loadout under inspection: a slab with depth at the centre, leaning toward the
+   pointer, and four attachment arms on leader lines. The arms sit on a flat board
+   over the leaning rig (PlusMenu's ARM_AT), so the founder's pixel icons on their
+   tiles stay square pixels. */
 
 .plus {
   position: absolute;
@@ -18,6 +20,19 @@
   transform-style: preserve-3d;
   flex: none;
 }
+/* The board shares the rig's cell, size and centre, and lets the pointer through but on a tile. */
+.plus-rig, .plus-board { grid-area: 1 / 1; }
+.plus-board {
+  position: relative;
+  width: 1180px;
+  height: 720px;
+  flex: none;
+  pointer-events: none;
+}
+.plus-board .opt { pointer-events: auto; }
+/* An arm's own boxes take the pointer as they did on the rig, so a click on its title, between its
+   tiles or on its empty note is the arm's, not the backdrop's (which closes the menu). */
+.plus-board .arm-title, .plus-board .arm-opts, .plus-board .arm-empty { pointer-events: auto; }
 
 /* slab: 460 x 220, centred at (590, 360), 40px deep */
 .slab {
@@ -130,16 +145,18 @@
 .lead-right { left: 820px; top: 360px; width: 72px; height: 1px; }
 .lead-right::after { right: -3px; top: -2px; }
 
-/* arms */
+/* arms, on the board. Each is centred by layout, never by a percentage translate, which can put a
+   tile on half a pixel: the top and bottom arms span the board and centre their tiles, the side arms
+   span its height. The inline translate (ARM_AT) is whole pixels. */
 .arm {
   position: absolute;
-  transform: translateZ(36px);
   text-shadow: var(--shadow-text);
 }
-.arm-ledger { left: 590px; bottom: 552px; translate: -50% 0; }
-.arm-orders { left: 590px; top: 550px; translate: -50% 0; }
-.arm-entry { right: 900px; top: 360px; translate: 0 -50%; width: 300px; }
-.arm-mode { left: 900px; top: 360px; translate: 0 -50%; width: 270px; }
+.arm-ledger { left: 0; right: 0; bottom: 552px; }
+.arm-orders { left: 0; right: 0; top: 550px; }
+.arm-entry, .arm-mode { top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: center; }
+.arm-entry { right: 900px; width: 300px; }
+.arm-mode { left: 900px; width: 270px; }
 
 .arm-title {
   display: flex;
@@ -201,6 +218,9 @@
 .arm-ledger .opt-n, .arm-orders .opt-n { position: absolute; top: 4px; left: 6px; }
 .arm.active .opt-n { opacity: 0.85; }
 .opt-icon { display: grid; place-items: center; flex: none; }
+/* A drawn icon keeps its own colours, so a tile that cannot be picked shows it faint, as the
+   line icon goes grey. */
+.opt:disabled .px { opacity: 0.4; }
 .opt-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .opt-meta { flex: none; font-size: 11px; opacity: 0.75; }
 

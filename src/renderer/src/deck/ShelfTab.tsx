@@ -4,6 +4,7 @@ import {
   completionHistory, dayStats, entrySpentMs, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, ledgerEntries, span, startOfDay, type Entry, type GlyphName, type Ledger, type LedgerTheme, type MayorlyState,
 } from '@core/index'
 import { Glyph, GLYPH_NAMES, glyphKey, localGlyph } from '../lib/glyphs'
+import { ArtIcon } from '../lib/Pixel'
 import { bridge } from '../bridge'
 import { distinctTheme, ledgerVars, THEME_COLORS } from '../lib/themes'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
@@ -13,6 +14,7 @@ import { current, dispatch, useNow } from '../store'
 import { Tomatoes } from './Tomatoes'
 import { EntryHistory } from './EntryHistory'
 import { CueCount, CueToggle, Cues } from './Cues'
+import { ShelfScene } from './ShelfScene'
 
 // The ledger shelf: nine bays. Every ledger here is hand-written by you, so the
 // clerk may file into it but never rename, merge or remove it. A bay opens the
@@ -83,9 +85,12 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
 
   return (
     <div className="shelf">
-      <p className="shelf-note dim">
-        {s.ledgers.length} of {LEDGER_CAP} bays. Each ledger carries a criterion; the clerk files against the criterion, not the name.
-      </p>
+      <div className="shelf-head">
+        <ShelfScene s={s} open={setOpen} />
+        <p className="shelf-note dim">
+          {s.ledgers.length} of {LEDGER_CAP} bays. Each ledger carries a criterion; the clerk files against the criterion, not the name.
+        </p>
+      </div>
       <div className="shelf-grid">
         {slots.map((l, i) => {
           if (l && editing === l.id) return <LedgerForm key={l.id} s={s} ledger={l} done={() => setEditing(null)} />
@@ -122,7 +127,11 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
                 <span>{openCount} open</span>
                 <span>{span(ms)} today</span>
                 {l.pays === false && <span className="bay-nopay" title="Paid work: tomatoes count, no coin is minted">no coins</span>}
-                {l.handWritten && <LockSimple size={12} aria-label="Hand-written, locked from the clerk" />}
+                {l.handWritten && (
+                  <span className="bay-lock" role="img" aria-label="Hand-written, locked from the clerk" title="Hand-written, locked from the clerk">
+                    <ArtIcon id="icon.ledger.locked" size={12} fallback={<LockSimple size={12} />} />
+                  </span>
+                )}
               </span>
             </div>
           )

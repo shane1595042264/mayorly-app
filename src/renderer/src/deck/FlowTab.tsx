@@ -8,6 +8,7 @@ import { bridge } from '../bridge'
 import { hotkeyLabel } from '../lib/keys'
 import { cycleLedger, useListKeys } from '../lib/listkeys'
 import { noteOrigin } from '../lib/origin'
+import { ArtIcon, Pixel } from '../lib/Pixel'
 import { dispatch, useAi, useNow } from '../store'
 import { ledgerVars } from '../lib/themes'
 import { Tomatoes } from './Tomatoes'
@@ -110,7 +111,7 @@ export function FlowTab({ s }: { s: MayorlyState }) {
               title={!clerkOn ? 'Add an AI key in Settings for the clerk to sort the tray' : trayCount === 0 ? 'The tray is empty' : 'Send the tray to the clerk now'}
               onClick={() => void autoClassify()}
             >
-              <Sparkle size={16} /> {sorting ? 'Sorting' : 'Auto-classify'}
+              <ArtIcon id="icon.clerk" size={16} fallback={<Sparkle size={16} />} /> {sorting ? 'Sorting' : 'Auto-classify'}
             </button>
             <button type="button" className="btn" disabled={flow.length === 0} onClick={() => dispatch({ type: 'desk/deploy', mode: 'blitz' })}>
               <Lightning size={16} /> Blitz the flow
@@ -124,6 +125,8 @@ export function FlowTab({ s }: { s: MayorlyState }) {
 
         {flow.length === 0 ? (
           <div className="empty">
+            {/* The founder's idle desk, at the scene's 2x; nothing until it is drawn. */}
+            <Pixel id="prop2x2.desk.idle" scale={2} className="empty-art" />
             <p className="empty-title">The flow is empty.</p>
             <p>Capture anything from anywhere with {hotkeyLabel(s.settings.hotkeys.capture)}. It lands here in order, and Blitz runs it top to bottom.</p>
             <p>{hotkeyLabel(s.settings.hotkeys.plus)} deploys the desk, {hotkeyLabel(s.settings.hotkeys.deck)} opens this deck, and ? lists every key.</p>

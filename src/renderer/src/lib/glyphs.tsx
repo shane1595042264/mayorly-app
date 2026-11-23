@@ -2,10 +2,13 @@ import {
   Airplane, Alarm, Anchor, Archive, Atom, Baby, Bank, Barbell, Bathtub, Bed, Bicycle, Boat, BookOpen, Bookmark, Books, Brain, Briefcase, BriefcaseMetal, Broadcast, Broom, Bug, Buildings, Cake, Calculator, Calendar, Camera, Campfire, Car, Carrot, Cat, ChalkboardTeacher, ChartBar, ChartLine, ChartPie, ChatCircle, CheckSquare, ClipboardText, Clock, Cloud, Code, Coffee, Coin, Coins, Compass, CookingPot, Couch, Cpu, CreditCard, Crosshair, Crown, Database, Desktop, DiceFive, Dna, Dog, Dress, Drop, Envelope, Exam, Eye, Factory, FileText, FilmSlate, Fire, FirstAid, Fish, Flag, Flask, Flower, Folder, ForkKnife, GameController, Gavel, Gear, GitBranch, Globe, GraduationCap, Guitar, Hammer, HandHeart, Handshake, Headphones, Heart, Heartbeat, Highlighter, Hourglass, House, IdentificationBadge, Image, Infinity, Kanban, Key, Keyboard, Laptop, Leaf, Lightbulb, Lightning, ListChecks, Lock, MagnifyingGlass, MapPin, Medal, Megaphone, Microphone, Microscope, Money, Moon, Mountains, MusicNotes, Needle, NotePencil, Notebook, Package, PaintBrush, Palette, PawPrint, PenNib, Pencil, PersonSimpleBike, PersonSimpleRun, PersonSimpleSwim, PersonSimpleTaiChi, PersonSimpleWalk, Phone, PianoKeys, PiggyBank, Pill, Plant, PresentationChart, PuzzlePiece, Radio, Receipt, Recycle, Robot, Rocket, Scales, Scissors, Screwdriver, SealCheck, Shield, ShoppingCart, Sneaker, Snowflake, Sparkle, SpeakerHigh, Stamp, Star, Storefront, Student, Suitcase, Sun, TShirt, Target, Television, Tent, TerminalWindow, TestTube, Timer, Toolbox, Tooth, Train, Translate, Tree, Trophy, Umbrella, User, Users, VideoCamera, Wallet, WashingMachine, Wind, Wine, Wrench, YinYang, type Icon,
 } from '@phosphor-icons/react'
 import type { GlyphName } from '@core/index'
+import { glyphArt } from './art'
+import { ArtIcon } from './Pixel'
 
 // A ledger's glyph is a Phosphor icon, picked by name from this catalogue: one weight, one style,
 // 174 of them, chosen for what ledgers tend to be about. Unknown names draw the crosshair.
-// The clerk picks from these names too; nothing is ever drawn by a model.
+// The clerk picks from these names too; nothing is ever drawn by a model. A name the founder has
+// drawn (mayorly-assets: glyph.<name>) shows his drawing instead, wherever the glyph shows.
 
 export const GLYPHS: Record<string, Icon> = {
   'briefcase': Briefcase,
@@ -211,10 +214,14 @@ export function glyphKey(name: GlyphName | undefined): string | null {
   return l && GLYPHS[l] ? l : null
 }
 
-export function Glyph({ name, size = 16 }: { name: GlyphName | undefined; size?: number }) {
+/** `line`: always the Phosphor line, for a place that leans or scales (the Plus menu's slab), where a drawing would be resampled. */
+export function Glyph({ name, size = 16, line = false }: { name: GlyphName | undefined; size?: number; line?: boolean }) {
   const key = glyphKey(name)
   const G = (key && GLYPHS[key]) || Crosshair
-  return <G size={size} weight="light" aria-hidden />
+  const icon = <G size={size} weight="light" aria-hidden />
+  // A drawn glyph keeps its own colours (the ledger's colour tints only the Phosphor line) and
+  // shows at the whole scale nearest `size`: 16 px up to 23, 32 px from 24.
+  return key && !line ? <ArtIcon id={glyphArt(key)} size={size} fallback={icon} /> : icon
 }
 
 /**

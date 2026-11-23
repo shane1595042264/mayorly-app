@@ -6,6 +6,7 @@ import { IS_MAC, MODIFIER_KEYS, hotkeyLabel, physicalKey } from '../lib/keys'
 import { conflictsOf, GLOBAL_ACTIONS, KEYS, keyLabel, keyOf, keysFor, SCOPES, setKeymapOpen, usesOf, type Scope } from '../lib/keymap'
 import { reveal } from '../lib/listkeys'
 import { dispatch } from '../store'
+import { ui9Frame } from './ui9'
 
 // The Keymap screen, after Minecraft's controls: sections of rows, each a thing you can do
 // and the key that does it, bevelled keycaps you press and then press a key into. Sections
@@ -222,12 +223,14 @@ export function Keymap({ s, close }: { s: MayorlyState; close: () => void }) {
   })
 
   const changed = rows.filter((r) => r.changed).length
+  // The founder's wood panel as the frame, at 2x, around the dark screen; the CSS bevel until drawn.
+  const frame = ui9Frame('ui9.panel.wood', 2)
 
-  // On the page, not in the deck: the deck tilts and can sit partly off the window, and this
-  // screen is sized to the window so it always fits whole.
+  // On the page, not in the deck: the deck can sit partly off the window, and this screen is
+  // sized to the window so it always fits whole.
   return createPortal(
     <div className="keymap-wrap" role="dialog" aria-label="Keymap" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="keymap">
+      <div className={`keymap ${frame ? 'is-framed' : ''}`} style={frame}>
         <header className="keymap-head">
           <Keyboard size={22} />
           <h2 className="keymap-title">Controls</h2>

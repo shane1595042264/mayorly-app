@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
-import { art } from '../lib/art'
+import { AnimatePresence, motion, type TransformProperties } from 'motion/react'
+import { art, specOf } from '../lib/art'
+import { Pixel, PixelAnim } from '../lib/Pixel'
+import { PixelNumber } from '../lib/PixelNumber'
 import { setShownCoins } from '../lib/coinView'
 import { sfx } from '../lib/sound'
 
@@ -9,6 +11,8 @@ import { sfx } from '../lib/sound'
 // reach it. The coin is the founder's hand-drawn icon.coin at whole-pixel scale.
 // `out` is the couch's coin, taken: the counter shows the balance before, a coin leaves
 // it for the tomato, the count goes down as it lands, and the sound falls instead of rising.
+// Once the founder draws the coin turning (icon.coin.spin), each flying coin plays that strip
+// and only travels, on whole pixels; until then it turns and swells by CSS as it always has.
 
 interface Props {
   amount: number
@@ -29,6 +33,20 @@ interface Props {
 const MAX_COINS = 8
 const FLIGHT_MS = 720
 const STAGGER_MS = 90
+/** The coins at 2x, 32 px, in the air and on the counter. */
+const COIN_SCALE = 2
+/** The drawn spin's speed: four frames, two and a half turns a second. */
+const SPIN_FPS = 10
+/** The counter's number in the founder's digits: 18x24 a glyph, about the height of its 30 px text. */
+const COUNT_SCALE = 3
+
+const whole = (v: string | number | undefined): number => Math.round(parseFloat(String(v ?? 0)) || 0)
+/** Motion's translation on whole pixels and nothing else, so a drawn coin never lands between two. */
+const wholePixels = (t: TransformProperties): string => {
+  const x = whole(t.x)
+  const y = whole(t.y)
+  return x || y ? `translate(${x}px, ${y}px)` : 'none'
+}
 
 export function CashIn({ amount, balance, from, out: spend = false, anchor = null, ceiling = 8, startAt = null, onDone }: Props) {
   const start = startAt ?? (spend ? balance + amount : balance - amount)
@@ -78,6 +96,10 @@ export function CashIn({ amount, balance, from, out: spend = false, anchor = nul
     return () => clearTimeout(t)
   }, [landed, coins])
 
+  // The drawn spin, once it exists; until then the plain coin turns by CSS.
+  const spin = !!art('icon.coin.spin')
+  const spinFrames = specOf('icon.coin.spin').frames
+
   return (
     <div className="cashin" aria-live="polite">
       <AnimatePresence onExitComplete={onDone}>
@@ -87,34 +109,64 @@ export function CashIn({ amount, balance, from, out: spend = false, anchor = nul
             ref={target}
             className={`cashin-counter ${out ? 'is-spend' : ''}`}
             initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0, scale: landed > 0 && landed < coins ? [1, 1.06, 1] : 1 }}
+            // Never scaled: the coin and the digits are drawn on whole pixels. (The 6% swell a landing
+            // once asked for never played: a spring only goes from its first keyframe to its last.)
+            animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8, transition: { duration: 0.35 } }}
             transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+            transformTemplate={wholePixels}
           >
-            <img className="cashin-coin-icon" src={art('icon.coin')} alt="" />
-            <span className="cashin-num num">{shown.toLocaleString()}</span>
+            <Pixel id="icon.coin" scale={COIN_SCALE} className="cashin-coin-icon" />
+            <PixelNumber
+              text={String(shown)}
+              scale={COUNT_SCALE}
+              className="cashin-num"
+              fallback={<span className="cashin-num num">{shown.toLocaleString()}</span>}
+            />
             <span className={`mono num ${out ? 'cashin-minus' : 'cashin-plus'}`}>{out ? `-${amount}` : `+${amount}`}</span>
           </motion.div>
         )}
-        {!gone && to && Array.from({ length: coins }, (_, i) => (
-          <motion.img
-            key={`c${i}`}
-            className="cashin-coin"
-            src={art('icon.coin')}
-            alt=""
-            initial={{ x: from.x - 16, y: from.y - 16, opacity: 0, scale: 0.6, rotate: 0 }}
-            animate={{
-              x: out ? [to.x - 16, (from.x + to.x) / 2 - 16 + (i % 2 ? 40 : -40), from.x - 16] : [from.x - 16, (from.x + to.x) / 2 - 16 + (i % 2 ? 40 : -40), to.x - 16],
-              y: out ? [to.y - 16, Math.max(ceiling, Math.min(from.y, to.y) - lift - i * 12), from.y - 16] : [from.y - 16, Math.max(ceiling, Math.min(from.y, to.y) - lift - i * 12), to.y - 16],
-              opacity: [0, 1, 1, 0],
-              // Into a count in the deck the coins shrink as they arrive, so its digits stay readable.
-              scale: anchor && !out ? [0.6, 1.1, 0.4] : anchor ? [0.4, 1.1, 0.7] : [0.6, 1.1, 0.7],
-              rotate: [0, 180 + i * 20, 360 + i * 20],
-            }}
-            transition={{ duration: FLIGHT_MS / 1000, delay: (i * STAGGER_MS) / 1000, ease: 'easeInOut', times: [0, 0.5, 1] }}
-            onAnimationComplete={() => land(i)}
-          />
-        ))}
+        {!gone && to && Array.from({ length: coins }, (_, i) => {
+          const x = out ? [to.x - 16, (from.x + to.x) / 2 - 16 + (i % 2 ? 40 : -40), from.x - 16] : [from.x - 16, (from.x + to.x) / 2 - 16 + (i % 2 ? 40 : -40), to.x - 16]
+          const y = out ? [to.y - 16, Math.max(ceiling, Math.min(from.y, to.y) - lift - i * 12), from.y - 16] : [from.y - 16, Math.max(ceiling, Math.min(from.y, to.y) - lift - i * 12), to.y - 16]
+          const timing = { duration: FLIGHT_MS / 1000, delay: (i * STAGGER_MS) / 1000, ease: 'easeInOut' as const, times: [0, 0.5, 1] }
+          // The drawn spin: the strip turns the coin, and the coin only travels. Each starts on its own
+          // frame, so a handful of coins never turn in step.
+          if (spin) {
+            return (
+              <motion.span
+                key={`c${i}`}
+                className="cashin-coin is-spin"
+                initial={{ x: from.x - 16, y: from.y - 16, opacity: 0 }}
+                animate={{ x, y, opacity: [0, 1, 1, 0] }}
+                transition={timing}
+                transformTemplate={wholePixels}
+                onAnimationComplete={() => land(i)}
+              >
+                <PixelAnim id="icon.coin.spin" scale={COIN_SCALE} fps={SPIN_FPS} style={{ display: 'block', animationDelay: `${-(i % spinFrames) / SPIN_FPS}s` }} />
+              </motion.span>
+            )
+          }
+          return (
+            <motion.img
+              key={`c${i}`}
+              className="cashin-coin"
+              src={art('icon.coin')}
+              alt=""
+              initial={{ x: from.x - 16, y: from.y - 16, opacity: 0, scale: 0.6, rotate: 0 }}
+              animate={{
+                x,
+                y,
+                opacity: [0, 1, 1, 0],
+                // Into a count in the deck the coins shrink as they arrive, so its digits stay readable.
+                scale: anchor && !out ? [0.6, 1.1, 0.4] : anchor ? [0.4, 1.1, 0.7] : [0.6, 1.1, 0.7],
+                rotate: [0, 180 + i * 20, 360 + i * 20],
+              }}
+              transition={timing}
+              onAnimationComplete={() => land(i)}
+            />
+          )
+        })}
       </AnimatePresence>
     </div>
   )

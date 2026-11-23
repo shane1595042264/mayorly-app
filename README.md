@@ -2,7 +2,7 @@
 
 The application layer of **Mayorly**, for Windows and macOS. A transparent focus HUD that sits on top of whatever you are doing, runs your day as one continuous flow, and rotates between the things you care about on rules you write.
 
-It is the architecture north star for the whole project: the entries, ledgers, desk, tomatoes and coins from [mayorly-design](https://github.com/shane1595042264/mayorly-design) live here as a pure domain core, and the HUD is the first client of it. The pixel-art Mayor's Hall from [mayorly-assets](https://github.com/shane1595042264/mayorly-assets) becomes a second client later, on the same core.
+It is the whole product: the entries, ledgers, desk, tomatoes and coins from [mayorly-design](https://github.com/shane1595042264/mayorly-design) live here as a pure domain core, with the HUD, the deck and the iPhone app on top. Mayorly is a zero-friction desk for power users; the walkable pixel town it started as was dropped on 2026-11-23. The founder's hand-drawn sprites come from [mayorly-assets](https://github.com/shane1595042264/mayorly-assets) (`npm run art`).
 
 ![The field HUD over a desktop, mid-rotation](docs/screenshots/field.jpg)
 
@@ -122,7 +122,7 @@ src/renderer  the HUD: field HUD, Plus menu, deck, capture. A client of the brid
 src/shared    the Bridge contract every client speaks.
 ```
 
-The full picture, including how the pixel game and the mod API plug in, is in [docs/architecture.md](docs/architecture.md). Every non-obvious choice is in [docs/decisions.md](docs/decisions.md).
+The full picture, including how a mod API would plug in, is in [docs/architecture.md](docs/architecture.md). Every non-obvious choice is in [docs/decisions.md](docs/decisions.md).
 
 ![The deck: supersets tab](docs/screenshots/deck-supersets.jpg)
 

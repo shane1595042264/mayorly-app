@@ -2,6 +2,11 @@
 
 Newest first. Each entry records what was decided, why, and what would reverse it. Product-level decisions live in [mayorly-design/docs/04-decisions.md](https://github.com/shane1595042264/mayorly-design/blob/main/docs/04-decisions.md); these are the ones this layer made.
 
+## 2026-11-23
+
+### The founder's sprites replace stock visuals where they say something at a glance
+With the walkable town dropped (mayorly-design, same day), the art goes where the founder looks all day: the pet's states, the coin in motion, icons for Mayorly's own things (the clerk in place of the stock AI sparkle, the couch, the stamp, the tray, his ledger glyphs), and every sprite he drew for the town in a place of its own (the Shelf tab's scene of his wall, floor, shelf and desk, with the ledgers as spines; the Leisure tab's band of grass and path; his parchment and wood frames). Sprites come from mayorly-assets by slot id (`npm run art`, `lib/art.ts`); one not drawn yet falls back to what was there, so code never waits for a drawing. Shown only at whole-number scales, which is why the deck and the Plus menu no longer tilt at rest. **Why:** the founder: the app looked modern and simple, and generic; the personal touch is his own drawings, not a world to walk around. **Rejected:** a pixel font for all text (long task names need a real typeface; his own numerals are a later slot). **Reverses if:** a drawing reads slower than what it replaced; then the stock one comes back for that spot.
+
 ## 2026-10-22
 
 ### Tokens are harvested: paid when the entry is cleared

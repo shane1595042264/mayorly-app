@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { onFeel, tap } from '../feel'
-import { Couch as CouchIcon, GearSix, Plus, SquaresFour, Timer as TimerIcon } from '@phosphor-icons/react'
+import { Couch as CouchIcon, GearSix, Plus, SquaresFour, Timer as TimerIcon, type Icon } from '@phosphor-icons/react'
 import { Capture } from './Capture'
 import { Couch } from './Couch'
 import { Ledgers } from './Ledgers'
@@ -12,6 +12,8 @@ import { Timer } from './Timer'
 import { dismissToast, showToast, useToast } from '../toast'
 import { blockView, clock } from '@core/index'
 import { current, useMayorly, useNow } from '../store'
+import { art, type ArtId } from '../../renderer/src/lib/art'
+import { Pixel } from '../../renderer/src/lib/Pixel'
 
 // Four places, the desk first, and the inbox in the middle of them: one tap from anywhere to type
 // or say a task. The picker and the capture are sheets over whichever place is open.
@@ -23,6 +25,31 @@ const TABS = [
   { id: 'couch', label: 'Couch', icon: CouchIcon },
   { id: 'settings', label: 'Settings', icon: GearSix },
 ] as const
+
+/** Each place's drawing in the bar, by the founder; the gear has none, and one not drawn yet is Phosphor's. */
+function tabArt(id: Tab, on: boolean): ArtId | null {
+  if (id === 'desk') return 'icon.tomato'
+  // The ledger book lies open while you are in it.
+  if (id === 'ledgers') return on && art('icon.ledger.open') ? 'icon.ledger.open' : 'icon.ledger.closed'
+  if (id === 'couch') return 'icon.couch'
+  return null
+}
+
+/**
+ * The bar's drawings at 2x: 32 px, near the 24 px line icons' weight, since a 16 px drawing reads
+ * small on a phone. Each sits in the line icons' 24 px slot and spills 4 px above it (into the tab's
+ * padding) and below it (into the gap over the label, whose letters start lower), so the labels stay
+ * level and the bar keeps its height.
+ */
+const TAB_ART_SCALE = 2
+
+function TabIcon({ id, on, Line }: { id: Tab; on: boolean; Line: Icon }) {
+  const line = <Line size={24} weight={on ? 'fill' : 'regular'} aria-hidden />
+  const drawn = tabArt(id, on)
+  if (!drawn || !art(drawn)) return line
+  const spill = (24 - 16 * TAB_ART_SCALE) / 2
+  return <span className="tab-art"><Pixel id={drawn} scale={TAB_ART_SCALE} style={{ margin: spill }} /></span>
+}
 
 export function App() {
   const toast = useToast()
@@ -122,7 +149,7 @@ export function App() {
               </button>
             )}
             <motion.button type="button" className="tab" aria-current={tab === t.id ? 'page' : undefined} onClick={() => go(t.id)} whileTap={{ scale: 0.9 }}>
-              <t.icon size={24} weight={tab === t.id ? 'fill' : 'regular'} aria-hidden />
+              <TabIcon id={t.id} on={tab === t.id} Line={t.icon} />
               {t.id === 'desk' && tab !== 'desk' ? <DeskLabel /> : t.label}
               {tab === t.id && <motion.i layoutId="tab-dot" className="tab-dot" transition={{ type: 'spring', stiffness: 500, damping: 34 }} />}
             </motion.button>

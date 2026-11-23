@@ -2,6 +2,15 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Your drawings, in the app
+
+- The Shelf tab opens on your own room: your wall and floor, your bookshelf with each ledger standing on it as a spine (hand-written ones in your locked spine), and your desk, with the mail tray on it while the tray holds something. Click a spine to open that ledger.
+- The Leisure tab has your grass and path along the top. The clerk's question card is framed in your parchment, the Keymap and What's New in your wood. An empty Flow shows your desk.
+- In the Plus menu, the pomodoro is your tomato and Capture is your mail tray. On the phone, the Desk tab is your tomato and the Ledgers tab your ledger book, open while you are on it.
+- Everything you draw next lands by itself: the pet's states (working, resting, the couch, paused, idle, carried, the hop), the coin turning in flight, the clerk in place of the AI sparkle, the couch, the stamp, the letter, the market and your ledger glyphs. Until each is drawn, that spot looks as it did.
+- The deck no longer tilts, and the Plus menu's tiles sit flat, so every pixel of your art stays square.
+- For drawing: `tf scaffold pet.tomato.rest` opens the exact canvas in Aseprite with your palette; `npm run art -- --watch` in the app and `npm run web` at localhost:5199/?art show each save in place within a second.
+
 ## Playing League puts your League task on the desk
 
 - The moment a League of Legends match of yours starts on this computer, Mayorly puts your League couch item ("couch: league of legends 2026") on the desk, from whatever you were on, a rest included. If it was already there but paused, it runs again. The pet says so, and the switch log calls it Game.

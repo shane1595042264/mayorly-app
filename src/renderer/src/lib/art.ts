@@ -3,12 +3,12 @@
 // caller then shows what it showed before: the plain tomato, a Phosphor icon. Hand-drawn only, and
 // shown only at whole-number scales (lib/Pixel.tsx), so a pixel is always a square of pixels.
 
+// In dev a PNG saved in Aseprite re-runs this module (Vite's HMR, through `npm run art -- --watch`),
+// and Vite gives the changed file a fresh `?t=`, so every image fetches the new drawing without a
+// reload. A build inlines or hashes them instead.
 const files = import.meta.glob<string>('../assets/art/*.png', { eager: true, import: 'default' })
-// In dev a PNG saved in Aseprite re-runs this module (Vite's HMR, through `npm run art -- --watch`);
-// a new query makes every image fetch the new drawing. A build inlines or hashes them instead.
-const bust = import.meta.env.DEV ? `?t=${Date.now()}` : ''
 const urls = new Map<string, string>()
-for (const [path, url] of Object.entries(files)) urls.set(path.slice(path.lastIndexOf('/') + 1, -'.png'.length), url + bust)
+for (const [path, url] of Object.entries(files)) urls.set(path.slice(path.lastIndexOf('/') + 1, -'.png'.length), url)
 
 /** A sprite's canvas: one frame's width and height, and how many frames are stacked top to bottom. */
 export interface ArtSpec {

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { announce, captured, tap } from '../feel'
-import { Broom, Couch, Microphone, Play, Stop, Tray } from '@phosphor-icons/react'
+import { Broom, Microphone, Play, Stop } from '@phosphor-icons/react'
 import { captureLine, clearNotice, sweepTray, useClerk } from '../ai'
 import { dictationAvailable, listen } from '../dictation'
 import { act, useMayorly } from '../store'
 import { findTasks, foldSearch, onDeskId, prefixClerk } from '@core/index'
-import { LedgerDot, Sheet } from './parts'
+import { CouchArt, LedgerDot, Sheet, TrayArt } from './parts'
 import { marked } from './Picker'
 import { Glyph } from '../../renderer/src/lib/glyphs'
 
@@ -140,7 +140,7 @@ export function Capture({ onClose }: { onClose: () => void }) {
                 const l = f.kind === 'entry' ? s.ledgers.find((x) => x.id === f.entry.ledgerId) : undefined
                 const where = f.kind === 'entry' ? l?.name ?? 'Tray' : 'Couch'
                 // Drawn as the picker draws a match: the ledger's icon and dot, the typed words lit.
-                const icon = f.kind === 'leisure' ? <Couch size={18} /> : l ? <span className="glyph-dot" style={{ color: 'var(--muted)' }}><Glyph name={l.glyph} size={18} /><LedgerDot ledger={l} /></span> : <Tray size={18} />
+                const icon = f.kind === 'leisure' ? <CouchArt size={18} /> : l ? <span className="glyph-dot" style={{ color: 'var(--muted)' }}><Glyph name={l.glyph} size={18} /><LedgerDot ledger={l} /></span> : <TrayArt size={18} />
                 const desk = leaving ? deskAtLeave.current : onDeskId(s)
                 return (
                   <motion.button type="button" key={id} className="row search-row" whileTap={{ scale: 0.98 }} onClick={() => { setLeaving(existing); deskAtLeave.current = onDeskId(s); startExisting(f) }}>

@@ -3,6 +3,7 @@ import { Check, Sparkle, X } from '@phosphor-icons/react'
 import type { Arrangement } from '../../../shared/bridge'
 import { bridge } from '../bridge'
 import { onCalendarAsk, takeCalendarAsk } from '../lib/calendarAsk'
+import { ArtIcon } from '../lib/Pixel'
 import { aiOn } from '../store'
 
 // The ask box: one line to the clerk about the calendar. The answer comes back as a proposal
@@ -56,7 +57,7 @@ export function AskClerk() {
   if (proposal) {
     return (
       <section className="cal-sel ask-card" onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); discard() } else if (e.key === 'Enter' && !needs.length) { e.preventDefault(); void apply() } e.stopPropagation() }} tabIndex={-1} ref={(el) => el?.focus()}>
-        <h3 className="side-title caps"><Sparkle size={12} weight="fill" /> The clerk proposes</h3>
+        <h3 className="side-title caps"><ArtIcon id="icon.clerk" size={12} fallback={<Sparkle size={12} weight="fill" />} /> The clerk proposes</h3>
         <p className="ask-say mono">{proposal.say}</p>
         {proposal.ask && <p className="field-help">{proposal.ask}</p>}
         <ul className="ask-lines">

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, type Variants } from 'motion/react'
 import { rowIn } from './motion'
-import { MagnifyingGlass, ArrowCounterClockwise, ArrowDown, ArrowLeft, ArrowUp, CaretRight, Check, PencilSimple, Play, Plus, Trash, Tray } from '@phosphor-icons/react'
+import { MagnifyingGlass, ArrowCounterClockwise, ArrowDown, ArrowLeft, ArrowUp, CaretRight, Check, PencilSimple, Play, Plus, Trash } from '@phosphor-icons/react'
 import {
   dayStats, deriveCode, parseEstimate, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, onDeskId, openFlow, span, startOfDay, tomatoLabel,
   type Entry, type Ledger, type LedgerTheme,
@@ -11,7 +11,7 @@ import { distinctTheme, THEME_COLORS } from '../../renderer/src/lib/themes'
 import { act, useMayorly, useNow } from '../store'
 import { dismissToast, showToast } from '../toast'
 import { captured, tap } from '../feel'
-import { LedgerDot, Sheet, Toggle, Tomato } from './parts'
+import { LedgerDot, Sheet, Toggle, Tomato, TrayArt } from './parts'
 
 // The shelf: every ledger with what is open in it and today's time, the tray of unfiled
 // entries, and inside a ledger its entries in the flow's order. A tap on an entry offers what
@@ -76,7 +76,7 @@ export function Ledgers({ home = 0, onSearch }: { home?: number; onSearch?: (led
         })}
         {tray.length > 0 && (
           <button type="button" className="row" onClick={() => setOpen({ kind: 'ledger', id: null })}>
-            <span className="glyph"><Tray size={20} /></span>
+            <span className="glyph"><TrayArt size={20} /></span>
             <span className="row-main"><span className="row-title">Tray</span><span className="row-sub">{tray.length} not filed yet</span></span>
             <CaretRight size={16} className="row-end" />
           </button>

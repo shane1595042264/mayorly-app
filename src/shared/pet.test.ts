@@ -6,7 +6,7 @@ import { anchorInBox, captionBox, clampAnchor, drawerBox, homeAnchor, LOG, nearP
 const legacy = {
   PET: { width: 140 + 10 + 48, height: 48 + 24 },
   TASK_LINES: 2 * 12 * 1.15,
-  INSET: { x: 4, y: 4 },
+  INSET: { x: 12, y: 12 },
   DRAWER: { width: 340, height: 360 },
   CAPTION: { width: 360, height: 40 },
   TOMATO: 48,

@@ -6,6 +6,7 @@
   z-index: var(--z-modal);
   display: grid;
   place-items: center;
+  /* Depth for the deck's rise as it opens only; at rest it is flat (Deck.tsx). */
   perspective: 1800px;
 }
 
@@ -77,6 +78,13 @@
 }
 .deck-body::-webkit-scrollbar { width: 8px; }
 .deck-body::-webkit-scrollbar-thumb { background: var(--line-2); }
+/* The founder's sprites keep their whole scale whatever the deck's text size: the body's zoom is
+   undone on each one (and on the scene and the band as wholes), so an art pixel stays an exact
+   square of screen pixels. */
+.deck-body :is(.shelf-scene, .leisure-band, .art-icon, .empty-art, .mini-tomato, .wallet-coin, .market-price img, .market-chip-price img, .price-input img) {
+  /* A hair over the exact inverse: 1 / 1.05 in floats lands a whisker under 1, and a sprite came out a pixel short. */
+  zoom: calc(1.000001 / var(--text-deck, 1));
+}
 
 /* ------------------------------------------------------------ controls */
 
@@ -165,6 +173,7 @@
 .side-title { margin: 0 0 12px; font-size: 12px; color: var(--ink-2); }
 
 .empty { max-width: 480px; padding: 28px 0; color: var(--ink-2); }
+.empty-art { display: block; margin: 0 0 14px; }
 .empty p { margin: 0 0 6px; }
 .empty-title { font-size: 22px; font-weight: 500; color: var(--ink); }
 
@@ -214,6 +223,24 @@
 /* ------------------------------------------------------------ shelf */
 
 .shelf-note { margin: 0 0 16px; font-size: 14px; color: var(--ink-2); }
+/* The scene, with the note beside it at floor level. With no scene it is the note as it was. */
+.shelf-head { display: flex; align-items: flex-end; gap: 20px; margin: 0 0 16px; }
+.shelf-head .shelf-note { flex: 1; min-width: 0; margin: 0; }
+/* The founder's hall (ShelfScene.tsx): every piece placed in whole art pixels at one scale. */
+.shelf-scene { position: relative; flex: none; overflow: hidden; image-rendering: pixelated; }
+.shelf-scene-wall, .shelf-scene-floor { position: absolute; left: 0; right: 0; }
+.shelf-scene-wall { top: 0; }
+.shelf-scene-thing { position: absolute; }
+/* A spine is a button the size of the spine; its icon hangs out of it and never takes the pointer. */
+.shelf-spine { position: absolute; padding: 0; }
+.shelf-spine-px { position: absolute; pointer-events: none; }
+/* Under the pointer a ledger comes up one art pixel and shows its colour, never tinting the drawing. */
+/* Only the picture lifts: the button stays put, so its hit box never slides off the pointer. */
+.shelf-spine:hover { outline: 2px solid var(--ledger, var(--accent)); outline-offset: 0; }
+.shelf-spine:hover .shelf-spine-px { translate: 0 calc(-1 * var(--k, 2px)); }
+.shelf-spine:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.shelf-spine-empty { position: absolute; inset: 0; border: 1px dashed var(--line-2); }
+.bay-lock { display: inline-flex; align-items: center; }
 .shelf-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .bay {
   position: relative;
@@ -523,10 +550,12 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 /* ------------------------------------------------------------ the clerk asks */
 
 .clerk-ask {
+  /* Centred by its margins, not a translate, so the card and its sprite sit on whole pixels. */
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
   bottom: 28px;
-  translate: -50% 0;
   z-index: var(--z-toast);
   display: flex;
   align-items: center;
@@ -548,6 +577,15 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 }
 .clerk-ask input:focus { border-color: var(--accent); }
 .clerk-ask input::placeholder { color: rgb(237 240 241 / 0.48); }
+/* On the founder's parchment (ClerkAsk sets the nine-slice): its own square corners, no glass,
+   and dark ink on the light page. */
+.clerk-ask.is-parchment { padding: 0 2px; background: none; clip-path: none; color: #2e222f; }
+.clerk-ask.is-parchment .clerk-ask-q { color: #2e222f; }
+.clerk-ask.is-parchment input { border-color: rgb(46 34 47 / 0.5); background: rgb(46 34 47 / 0.08); color: #2e222f; }
+.clerk-ask.is-parchment input:focus { border-color: #2e222f; }
+.clerk-ask.is-parchment input::placeholder { color: rgb(46 34 47 / 0.85); }
+.clerk-ask.is-parchment .btn.ghost { color: #2e222f; }
+.clerk-ask.is-parchment .btn.ghost:hover { border-color: rgb(46 34 47 / 0.45); }
 
 /* ------------------------------------------------------------ leisure */
 
@@ -641,6 +679,9 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
   box-shadow: inset 2px 2px 0 #5b6166, inset -2px -2px 0 #15181a, 0 24px 80px rgb(0 0 0 / 0.6);
 }
 .keymap-head { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 2px solid #26292c; }
+/* Framed by the founder's wood panel (Keymap.tsx, WhatsNew.tsx set the nine-slice): the bevel
+   shadows go, the drop shadow stays. */
+.keymap.is-framed, .whatsnew.is-framed { box-shadow: 0 24px 80px rgb(0 0 0 / 0.6); }
 
 /* What changed: the same frame as the Controls screen, sized to a note. */
 .whatsnew {
@@ -810,6 +851,9 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
    chrome is the couch's purple, the colour of what is bought rather than earned. */
 
 .leisure-wrap { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 18px; min-height: 100%; }
+/* The founder's grass and path along the top (LeisureTab.tsx), above the switch. */
+.leisure-wrap.has-band { grid-template-rows: auto auto minmax(0, 1fr); }
+.leisure-band { image-rendering: pixelated; }
 .leisure-switch { display: flex; align-items: center; gap: 4px; border-bottom: 1px solid var(--line); }
 .leisure-switch-btn {
   position: relative;

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowsLeftRight, CaretRight, ListBullets, Check, Couch as CouchIcon, Pause, Play, SkipForward, Stop } from '@phosphor-icons/react'
+import { ArrowsLeftRight, CaretRight, ListBullets, Check, Pause, Play, SkipForward, Stop } from '@phosphor-icons/react'
 import {
   balance, blockView, switchSession, clock, dayStats, objectives, onDeskId, openFlow, span, startOfDay, switchTarget, taskTomatoes, tomatoLabel,
   type MayorlyState,
@@ -11,7 +11,10 @@ import { upcoming } from '../next'
 import { act, current, deviceId, useMayorly, useNow } from '../store'
 import { onFeel } from '../feel'
 import { showToast } from '../toast'
-import { Coin, LedgerDot, Tomato } from './parts'
+import { Coin, CouchArt, LedgerDot, Tomato } from './parts'
+
+/** The hop moves the drawing in whole pixels only, so its pixels stay square on the way up and down. */
+const wholePixels = ({ y }: { y?: string | number }) => `translateY(${Math.round(parseFloat(String(y ?? 0)) || 0)}px)`
 
 // The desk. One question: what am I on, and how much of this block is left? The clock answers
 // it and is the biggest thing on the phone. Below it the task (tap to pick another), one white
@@ -190,8 +193,9 @@ export function Timer({ openPicker, openSync }: { openPicker: () => void; openSy
         </span>
         {crop === null ? <span className="crop num">{idle ? (nextUp ? 'Tap Start, or tap here for another' : 'Tap here to choose one') : ledger ? 'Time on this ledger counts' : 'The time counts; tap here to pick a task'}</span> : (
           <span className="crop num">
-            <motion.span key={hop} style={{ display: 'inline-flex' }} initial={hop ? { y: 0, rotate: 0 } : false} animate={hop ? { y: [0, -14, 0, -5, 0], rotate: [0, -12, 8, 0, 0] } : {}} transition={{ duration: 0.7, ease: 'easeOut' }}>
-              {leisure ? <CouchIcon size={16} /> : <Tomato />}
+            {/* A new tomato hops; it never turns, which would smear the founder's pixels. */}
+            <motion.span key={hop} style={{ display: 'inline-flex' }} transformTemplate={wholePixels} initial={hop ? { y: 0 } : false} animate={hop ? { y: [0, -14, 0, -5, 0] } : {}} transition={{ duration: 0.7, ease: 'easeOut' }}>
+              {leisure ? <CouchArt size={16} /> : <Tomato />}
             </motion.span>
             <b><Pop value={tomatoLabel(crop)} /></b>
             {leisure ? 'blocks on this' : 'on this task'}

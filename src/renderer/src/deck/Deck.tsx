@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion, useReducedMotion, useTransform } from 'motion/react'
+import { motion, useReducedMotion } from 'motion/react'
 import { X } from '@phosphor-icons/react'
 import { balance, type MayorlyState } from '@core/index'
 import type { BuildInfo } from '../../../shared/bridge'
@@ -7,7 +7,6 @@ import { bridge } from '../bridge'
 import { useShownCoins } from '../lib/coinView'
 import { hasCalendarAsk, onCalendarAsk } from '../lib/calendarAsk'
 import { onDeckTab, takeDeckTab } from '../lib/deckTab'
-import { useLean } from '../lib/parallax'
 import { sfx } from '../lib/sound'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { current } from '../store'
@@ -60,9 +59,6 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
   const panel = useRef<HTMLElement>(null)
   useEffect(() => panel.current?.focus(), [])
   const reduce = useReducedMotion()
-  const lean = useLean(1.4)
-  const rotateX = useTransform(lean.rotateX, (r) => 3 + r)
-  const rotateY = lean.rotateY
 
   const setTab = (t: Tab) => {
     remembered = t
@@ -104,9 +100,11 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
       exit={{ opacity: 0, transition: { duration: 0.18 } }}
       onMouseDown={(e) => e.target === e.currentTarget && close()}
     >
+      {/* Flat at rest: no tilt and no lean toward the pointer, since any 3D turn resamples the
+          founder's sprites inside. It still comes up out of the screen as it opens; at z 0 Motion
+          writes no transform at all, so every sprite lands on whole pixels. */}
       <motion.section
         className="deck"
-        style={{ rotateX, rotateY }}
         initial={reduce ? false : { z: -120, opacity: 0 }}
         animate={{ z: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 180, damping: 24 }}

@@ -12,6 +12,7 @@ import { hotkeyLabel, matchesAcceleratorKey, physicalKey } from '../lib/keys'
 import { actionFor, keyLabel, keysFor, recordUse } from '../lib/keymap'
 import { Scramble } from '../lib/Scramble'
 import { useLean } from '../lib/parallax'
+import { ArtIcon, PixelZoom } from '../lib/Pixel'
 import { ledgerVars } from '../lib/themes'
 import { sfx } from '../lib/sound'
 import { useHudEvents, useNow } from '../store'
@@ -36,6 +37,40 @@ interface Props {
   stage: (action: Action | null) => void
 }
 
+// The slab and its leader lines lean back (TILT_X, TILT_Y, and toward the pointer); the arms do not.
+// A leaning plane resamples everything drawn on it, and the tiles carry the founder's pixel icons,
+// which keep square pixels only flat and at whole scales. So the arms sit on a flat board over the
+// rig, each moved to where its edge facing the slab showed when it leaned with the rig, to the whole
+// pixel: the menu looks as it did, and the leader lines still point at the arms.
+const TILT_X = 8
+const TILT_Y = -11
+/** plus.css: the perspective on .plus, and how far the arms stood off the rig (their old translateZ). */
+const PERSPECTIVE = 1400
+const ARM_LIFT = 36
+
+/** Where a point of the rig, from its centre (z toward you), lands on screen at the resting tilt. */
+function onRig(x: number, y: number, z: number): [number, number] {
+  const a = (TILT_X * Math.PI) / 180
+  const b = (TILT_Y * Math.PI) / 180
+  // rotateX(a) rotateY(b): the point turns about y, then about x, then perspective scales it.
+  const x1 = x * Math.cos(b) + z * Math.sin(b)
+  const z1 = -x * Math.sin(b) + z * Math.cos(b)
+  const y2 = y * Math.cos(a) - z1 * Math.sin(a)
+  const z2 = y * Math.sin(a) + z1 * Math.cos(a)
+  const k = PERSPECTIVE / (PERSPECTIVE - z2)
+  return [x1 * k, y2 * k]
+}
+
+/** Each arm's whole-pixel move from its flat place (plus.css) to where it showed on the leaning rig. */
+const ARM_AT: Record<Arm, string> = (() => {
+  const at = (x: number, y: number) => {
+    const [px, py] = onRig(x, y, ARM_LIFT)
+    return `${Math.round(px - x)}px ${Math.round(py - y)}px`
+  }
+  // The edge of each arm that faces the slab, from the rig's centre at (590, 360).
+  return { ledger: at(0, -192), orders: at(0, 190), entry: at(-310, 0), mode: at(310, 0) }
+})()
+
 interface Pick {
   ledgerId: Id | null
   entryId: Id | null
@@ -50,8 +85,8 @@ export function PlusMenu({ s, close, open, stage }: Props) {
   const v = blockView(s, now)
   const reduce = useReducedMotion()
   const lean = useLean(7)
-  const rotateX = useTransform(lean.rotateX, (r) => 8 + r)
-  const rotateY = useTransform(lean.rotateY, (r) => -11 + r)
+  const rotateX = useTransform(lean.rotateX, (r) => TILT_X + r)
+  const rotateY = useTransform(lean.rotateY, (r) => TILT_Y + r)
   const [slabScope, animateSlab] = useAnimate()
   // The menu's text size scales the whole rig; the fit then keeps the bigger rig on screen.
   const textSize = s.settings.text.plus
@@ -105,7 +140,7 @@ export function PlusMenu({ s, close, open, stage }: Props) {
       key: 'couch',
       label: 'COUCH',
       n: 0,
-      icon: <Couch size={22} weight="light" />,
+      icon: <ArtIcon id="icon.couch" size={22} fallback={<Couch size={22} weight="light" />} />,
       current: onCouch,
       apply: () => {
         if (onCouch) return
@@ -139,7 +174,7 @@ export function PlusMenu({ s, close, open, stage }: Props) {
           key: 'pomodoro',
           label: 'Pomodoro',
           meta: `${s.settings.focusMin} / ${s.settings.shortRestMin}`,
-          icon: <Timer size={18} weight="light" />,
+          icon: <ArtIcon id="icon.tomato" size={18} fallback={<Timer size={18} weight="light" />} />,
           current: (pick.mode ?? plan?.mode) === 'pomodoro',
           apply: () => deploy('pomodoro'),
         },
@@ -165,14 +200,14 @@ export function PlusMenu({ s, close, open, stage }: Props) {
       orders:
         desk === 'idle'
           ? [
-              { key: 'capture', label: 'Capture', icon: <Tray size={18} weight="light" />, apply: () => open('capture') },
+              { key: 'capture', label: 'Capture', icon: <ArtIcon id="prop1x1.mailtray" size={18} fallback={<Tray size={18} weight="light" />} />, apply: () => open('capture') },
               { key: 'deck', label: 'Deck', icon: <SquaresFour size={18} weight="light" />, apply: () => open('deck') },
             ]
           : [
               desk === 'running'
                 ? { key: 'hold', label: 'Hold', icon: <Pause size={18} weight="light" />, apply: () => finish({ type: 'desk/pause' }) }
                 : { key: 'resume', label: 'Resume', icon: <Play size={18} weight="light" />, apply: () => picked ? close() : finish({ type: 'desk/resume' }) },
-              { key: 'clear', label: 'Clear', icon: <Check size={18} weight="light" />, disabled: !entry || !live, apply: () => entry && finish({ type: 'entry/complete', id: entry.id }) },
+              { key: 'clear', label: 'Clear', icon: <ArtIcon id="icon.stamp" size={18} fallback={<Check size={18} weight="light" />} />, disabled: !entry || !live, apply: () => entry && finish({ type: 'entry/complete', id: entry.id }) },
               { key: 'skip', label: 'Skip', icon: <SkipForward size={18} weight="light" />, apply: () => finish({ type: 'desk/skip' }) },
               { key: 'stand', label: 'Stand down', icon: <Stop size={18} weight="light" />, apply: () => finish({ type: 'desk/standDown' }) },
               { key: 'deck', label: 'Deck', icon: <SquaresFour size={18} weight="light" />, apply: () => open('deck') },
@@ -339,7 +374,8 @@ export function PlusMenu({ s, close, open, stage }: Props) {
             <i className="node n-top" /><i className="node n-left" /><i className="node n-right" /><i className="node n-bottom" />
             <div className="slab-top">
               <div className="slab-code">
-                {ledger && <Glyph name={ledger.glyph} size={30} />}
+                {/* The slab leans, which would resample a drawing: line icons here, drawings on the flat arms. */}
+                {ledger && <Glyph name={ledger.glyph} size={30} line />}
                 {!ledger && onCouch && <Couch size={30} weight="light" />}
                 <Scramble text={v?.block.kind === 'rest' ? 'REST' : onCouch ? 'COUCH' : ledger?.code ?? 'FREE'} />
               </div>
@@ -368,7 +404,19 @@ export function PlusMenu({ s, close, open, stage }: Props) {
           <div className="slab-edge e-bottom" />
           <div className="slab-edge e-left" />
         </div>
+      </motion.div>
 
+      {/* The arms on a board that never leans: see ARM_AT. It arrives with the rig, flat. */}
+      <motion.div
+        className="plus-board"
+        style={{ scale: fit }}
+        initial={reduce ? false : { z: -160, opacity: 0 }}
+        animate={{ z: 0, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 170, damping: 22 }}
+      >
+        {/* Fitted to a screen narrower than the rig (the portrait monitor) or a text size other than 100%, a
+            drawn icon would be resampled: the tiles show their line icons then. */}
+        <PixelZoom.Provider value={fit}>
         <ArmView id="ledger" title="Ledger" keyHint={keyLabel(keysFor('plus.ledger', s.settings)[0] ?? '')} active={arm === 'ledger'} opts={arms.ledger} cursor={cursor.ledger}
           empty="No ledgers yet. Write one in the deck."
           onHover={(i) => { setArm('ledger'); setCursor((c) => ({ ...c, ledger: i })) }} onApply={applyOpt} />
@@ -381,6 +429,7 @@ export function PlusMenu({ s, close, open, stage }: Props) {
         <ArmView id="orders" title="Orders" keyHint={keyLabel(keysFor('plus.orders', s.settings)[0] ?? '')} active={arm === 'orders'} opts={arms.orders} cursor={cursor.orders}
           empty=""
           onHover={(i) => { setArm('orders'); setCursor((c) => ({ ...c, orders: i })) }} onApply={applyOpt} />
+        </PixelZoom.Provider>
       </motion.div>
 
       <footer className="plus-hints hint-row">
@@ -409,7 +458,7 @@ function ArmView(props: {
 }) {
   const { id, title, keyHint, active, opts, cursor, empty, onHover, onApply } = props
   return (
-    <section className={`arm arm-${id} ${active ? 'active' : ''}`} aria-label={title}>
+    <section className={`arm arm-${id} ${active ? 'active' : ''}`} aria-label={title} style={{ translate: ARM_AT[id] }}>
       <header className="arm-title caps">
         <span className="key">{keyHint}</span>
         {title}

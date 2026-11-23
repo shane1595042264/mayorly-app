@@ -2,15 +2,22 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import type { ClerkQuestion } from '../../../shared/bridge'
 import { art } from '../lib/art'
+import { Pixel } from '../lib/Pixel'
 import { bridge } from '../bridge'
 import { dispatch } from '../store'
+import { ui9Frame } from './ui9'
 
 // After you correct or confirm a filing, the clerk asks one question. The card stays
 // five seconds, longer once you start typing; Enter answers, Esc or the timer lets it go.
-// The sprite is the tomato until the clerk character (char.clerk in mayorly-assets)
-// is drawn; it is one file to swap.
+// The sprite is the founder's icon.clerk at 3x, the tomato until that is drawn. The card
+// is his parchment panel at the same 3x, the glass card until that is drawn.
 
 const LINGER_MS = 5000
+
+// The parchment's green corner triangles reach one pixel past the standard 8 (row 3 and column 3
+// run to x and y 8), so at 8 the edges would carry a green pixel at each end and stretch it into a
+// bar. At 9 every edge and the centre are one colour along their length and stretch clean.
+const PARCHMENT_SLICE = 9
 
 export function ClerkAsk() {
   const [q, setQ] = useState<ClerkQuestion | null>(null)
@@ -39,12 +46,15 @@ export function ClerkAsk() {
     dismiss()
   }
 
+  const frame = ui9Frame('ui9.panel.parchment', 3, { slice: PARCHMENT_SLICE, fill: true })
+
   return (
     <AnimatePresence>
       {q && (
         <motion.div
           key={q.entryId + q.question}
-          className="clerk-ask"
+          className={`clerk-ask ${frame ? 'is-parchment' : ''}`}
+          style={frame}
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 10, transition: { duration: 0.15 } }}
@@ -53,7 +63,7 @@ export function ClerkAsk() {
           aria-label="The clerk asks"
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <img className="clerk-ask-sprite" src={art('icon.tomato')} alt="" />
+          <Pixel id="icon.clerk" scale={3} className="clerk-ask-sprite" fallback={<img className="clerk-ask-sprite" src={art('icon.tomato')} alt="" />} />
           <div className="clerk-ask-body">
             <p className="clerk-ask-q">{q.question}</p>
             <input

@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy } from 'react'
 import { MotionConfig } from 'motion/react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
@@ -23,11 +23,14 @@ if (caption) document.body.classList.add('caption')
 if (effects) document.body.classList.add('effects')
 if (drawer) document.body.classList.add('drawer-page')
 if (switchlog) document.body.classList.add('switchlog-page')
+// ?art in the browser build (npm run web) is the art bench, the founder's sprites as they are saved.
+// Development only and never under the shell, so the desktop app's bundle does not carry it.
+const Bench = import.meta.env.DEV && !window.mayorly && params.has('art') ? lazy(() => import('./bench/Bench').then((m) => ({ default: m.Bench }))) : null
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <MotionConfig reducedMotion="user">
-      <ErrorBoundary>{caption ? <CaptionApp /> : effects ? <EffectsApp /> : drawer ? <DrawerApp /> : switchlog ? <SwitchLogApp /> : <App />}</ErrorBoundary>
+      <ErrorBoundary>{Bench ? <Suspense fallback={null}><Bench /></Suspense> : caption ? <CaptionApp /> : effects ? <EffectsApp /> : drawer ? <DrawerApp /> : switchlog ? <SwitchLogApp /> : <App />}</ErrorBoundary>
     </MotionConfig>
   </StrictMode>,
 )

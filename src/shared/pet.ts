@@ -28,8 +28,12 @@ export type Side = 'left' | 'right'
 export const PET = { width: 140 + 10 + 48, height: 48 + 24 }
 /** Two task lines at the design size (12px, line height 1.15): what grows when the pet's text setting does. */
 export const TASK_LINES = 2 * 12 * 1.15
-/** The pet's own corner inside its box; matches `body.compact .pet-wrap` in hud.css. */
-export const INSET = { x: 4, y: 4 }
+/**
+ * The pet's own corner inside its box; matches `body.compact .pet-wrap` in hud.css. 12, not the 4 it
+ * was: the founder's pet drawings are 24x24 at 3x round the 16x16 tomato, 12 px past it on every side,
+ * and a Mac's window (or a Windows screen edge) cut what lay beyond 4.
+ */
+export const INSET = { x: 12, y: 12 }
 /** The quick drawer's box, inset included; the drawer itself is 4px inside it. */
 export const DRAWER = { width: 340, height: 360 }
 /** The switch log's box, inset included, and the least height it shrinks to where the screen is short. */

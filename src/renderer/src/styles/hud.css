@@ -24,9 +24,9 @@
 /* Compact: the window is the pet. The shell hangs it off the tomato on the side it favours.
    On Windows the overlay is the work area and the page places the pet itself, in the same box
    (src/shared/pet.ts), wherever the tomato was left; the corners above are only its first home. */
-body.compact .pet-wrap { bottom: 4px; }
-body.compact .pet-right { right: 4px; }
-body.compact .pet-left { left: 4px; }
+body.compact .pet-wrap { bottom: 12px; }
+body.compact .pet-right { right: 12px; }
+body.compact .pet-left { left: 12px; }
 
 /* The resting HUD is only the tomato and a number, on both desktops. The older pieces stay
    mounted, unseen, for the sounds they play. Body-qualified to outrank their own display rules below. */
@@ -60,6 +60,16 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
   filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.55));
   user-select: none;
   -webkit-user-drag: none;
+}
+/* The founder's drawing for the pet's state (PetSprite, pet.tomato.*): its canvas at 3x, placed by
+   PetSprite on whole pixels so the tomato in its middle sits exactly on the plain one. The plain
+   sprite stays, unseen, as the drag handle's size and the hit test's; the drawing takes no pointer,
+   so whatever is drawn round the tomato is not part of the pet's 48x48. */
+.pet-sprite.is-drawn { visibility: hidden; }
+.pet-art {
+  position: absolute;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.55));
 }
 /* The sign's column: the task line above, the number below. Its width is the window's. */
 .pet-col { display: grid; gap: 3px; width: 140px; justify-items: end; }
@@ -124,6 +134,12 @@ body.compact .pet-sign { -webkit-app-region: no-drag; }
   border: 1px solid var(--line);
   clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
 }
+/* The founder's digits (font.digits, PixelNumber) in place of the text, once drawn: centred in the
+   box the text had, on whole pixels, so neither plate changes size. The sign's 16 px glyphs sit 6 px
+   inside its borders top and bottom, the count's 8 px glyphs 5 px. The digits keep their own colours;
+   the sign's state still shows on its border. */
+.pet-sign .px-num { display: flex; justify-content: center; height: 22px; padding-top: 2px; }
+.pet-count .px-num { display: flex; justify-content: center; height: 13px; padding-top: 2px; }
 .pet-sign:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 .pet-sign.tone-live { color: var(--ledger, var(--accent)); border-color: var(--ledger-2, var(--accent-2)); }
 .pet-sign.tone-rest { color: var(--ink-2); }
@@ -518,13 +534,18 @@ body.effects { background: transparent; }
   box-shadow: 0 12px 40px rgb(0 0 0 / 0.45);
   clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
 }
-.cashin-coin-icon { width: 32px; height: 32px; image-rendering: pixelated; }
+/* The coin on the counter is icon.coin at 2x (Pixel sizes it); the number is the founder's digits at
+   3x once drawn (a flex row, so its 24 px glyphs centre on the coin's 32 on whole pixels), else text. */
+.cashin-coin-icon { display: block; }
 .cashin-num { font-size: 30px; font-weight: 600; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.cashin-num.px-num { display: flex; }
 .cashin-plus { font-size: 14px; color: var(--accent); }
 /* The couch's coin, taken: the counter in the couch's colour, counting down. */
 .cashin-counter.is-spend { border-color: var(--leisure-2); }
 .cashin-minus { font-size: 14px; color: var(--leisure); }
 .cashin-coin { position: absolute; left: 0; top: 0; width: 32px; height: 32px; image-rendering: pixelated; filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.5)); }
+/* The drawn spin (icon.coin.spin): the strip inside turns the coin, this box only travels. */
+.cashin-coin.is-spin { display: block; line-height: 0; }
 
 /* ------------------------------------------------------------ when the HUD itself breaks */
 .hud-error { position: fixed; right: 16px; bottom: 16px; z-index: var(--z-toast); display: grid; gap: 8px; max-width: 360px; padding: 14px 16px; border: 1px solid var(--line-2); background: var(--glass); color: var(--ink); box-shadow: 0 12px 40px rgb(0 0 0 / 0.45); }
@@ -545,20 +566,3 @@ body.effects { background: transparent; }
 .order-step.is-never, .order-step.is-undone { color: var(--ink-3); }
 .order-say { margin: 0; font-size: 13px; color: var(--ink-2); }
 .order-card .form-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
-/* ------------------------------------------------------------ gaming mode: the gaming tomato
-   assets/tomato_gaming.png, drawn by the founder, takes the tomato's place: centred on it and
-   scaled 3x like it, so a canvas bigger than 16 x 16 spreads round the tomato evenly. The usual
-   sprite stays, unseen, as the drag handle's size. */
-.pet-sprite.is-gaming { visibility: hidden; }
-.pet-sprite-gaming {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%) scale(3);
-  image-rendering: pixelated;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-drag: none;
-  filter: drop-shadow(0 0.7px 1px rgb(0 0 0 / 0.55));
-}

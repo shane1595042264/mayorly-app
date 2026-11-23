@@ -1,10 +1,21 @@
-import type { CSSProperties, ReactNode } from 'react'
+import { createContext, useContext, type CSSProperties, type ReactNode } from 'react'
 import { art, specOf, type ArtId } from './art'
 import './pixel.css'
 
 // The founder's sprites on screen, always at a whole-number scale with nearest-neighbour sampling, so
 // each art pixel is an exact square of screen pixels. A sprite not drawn yet shows `fallback` (the
 // plain tomato, a Phosphor icon), so a drawing can arrive any day without code waiting for it.
+
+/**
+ * The scale the page puts on everything inside it (the pet's HUD scale, the Plus menu's fit to the
+ * screen). Where that would make a drawing's pixels uneven, a drawing that has a fallback shows the
+ * fallback instead (the Phosphor icon, the text), as it did before it was drawn. One with none (the
+ * pet) still shows, as the plain tomato always has.
+ */
+export const PixelZoom = createContext(1)
+
+/** Whether `k` art-to-CSS pixels under the page's zoom still make whole screen pixels. */
+export const wholeUnder = (k: number, zoom: number) => Math.abs(k * zoom - Math.round(k * zoom)) < 0.01
 
 interface Props {
   id: ArtId
@@ -20,9 +31,10 @@ interface Props {
 /** A one-frame sprite (or a strip's first frame), or the fallback. */
 export function Pixel({ id, scale = 1, fallback = null, className, style, title }: Props) {
   const url = art(id)
-  if (!url) return <>{fallback}</>
-  const s = specOf(id)
+  const zoom = useContext(PixelZoom)
   const k = Math.max(1, Math.round(scale))
+  if (!url || (fallback !== null && !wholeUnder(k, zoom))) return <>{fallback}</>
+  const s = specOf(id)
   if (s.frames > 1) return <PixelAnim id={id} scale={k} fps={0} className={className} style={style} title={title} />
   return <img className={`px ${className ?? ''}`} src={url} width={s.w * k} height={s.h * k} alt="" draggable={false} style={style} title={title} />
 }
@@ -33,9 +45,10 @@ export function Pixel({ id, scale = 1, fallback = null, className, style, title 
  */
 export function PixelAnim({ id, scale = 1, fps = 2, fallback = null, className, style, title }: Props & { fps?: number }) {
   const url = art(id)
-  if (!url) return <>{fallback}</>
-  const s = specOf(id)
+  const zoom = useContext(PixelZoom)
   const k = Math.max(1, Math.round(scale))
+  if (!url || (fallback !== null && !wholeUnder(k, zoom))) return <>{fallback}</>
+  const s = specOf(id)
   const h = s.h * k
   const css = {
     width: s.w * k,

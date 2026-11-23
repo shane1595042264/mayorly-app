@@ -1,0 +1,278 @@
+/* ------------------------------------------------------------ the art bench (?art, bench/Bench.tsx)
+   Every sprite at 1x and at the scale the app shows it. A sprite only stays crisp on whole screen
+   pixels, so every length here is a whole number of px, every line of text has a px line height, the
+   grid's columns are a fixed width, and nothing that holds a sprite is centred in a box whose free
+   space could be odd. */
+
+.bench {
+  /* The ledgers' magenta (THEME_COLORS): art tools mark a missing texture in magenta. */
+  --bench-missing: #e06bd0;
+  /* What a sprite sits on: the app's void by default, its ink as a light page, or a checkerboard. */
+  --bench-stage: var(--void);
+  --bench-stage-ink: var(--ink-2);
+  --bench-guide: var(--ink-3);
+  position: fixed;
+  inset: 0;
+  overflow: auto;
+  padding: 24px 24px 64px;
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 20px;
+  user-select: text;
+  cursor: auto;
+}
+.bench[data-backdrop='light'] {
+  --bench-stage: var(--ink);
+  --bench-stage-ink: var(--void);
+  --bench-guide: rgb(11 13 14 / 0.52);
+}
+.bench[data-backdrop='checker'] {
+  --bench-stage: repeating-conic-gradient(var(--line-2) 0 25%, transparent 0 50%) 0 0 / 16px 16px, var(--void);
+}
+.bench code {
+  font-family: var(--font-data);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+/* The head: what the page is, how many are drawn, the backdrop, the groups. */
+.bench-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.bench-lede {
+  max-width: 760px;
+  margin: 4px 0 0;
+  color: var(--ink-2);
+}
+.bench-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 12px;
+}
+.bench-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.bench-control button {
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+}
+.bench-control button:first-of-type { margin-left: 4px; }
+.bench-control button.is-on {
+  border-color: var(--accent-2);
+  color: var(--accent);
+}
+.bench-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.bench-nav a {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.bench-nav a:hover { color: var(--ink); }
+.bench-count {
+  margin-left: 6px;
+  font-family: var(--font-data);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-3);
+}
+
+/* A group: its title, a line on where it shows, then its tiles. */
+.bench-group { margin-top: 32px; }
+.bench-group-title {
+  margin: 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.bench-note {
+  max-width: 760px;
+  margin: 4px 0 12px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.bench-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 320px);
+  gap: 16px;
+  align-items: start;
+}
+
+/* A sprite's card. */
+.bench-tile {
+  padding: 12px;
+  border: 1px solid var(--line);
+  background: var(--glass-3);
+}
+.bench-tile-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.bench-id {
+  line-height: 18px;
+  word-break: break-all;
+}
+.bench-badge {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--accent-2);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.bench-tile.is-missing .bench-badge {
+  border-color: var(--bench-missing);
+  color: var(--bench-missing);
+}
+.bench-meta {
+  margin: 2px 0 0;
+  font-family: var(--font-data);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-3);
+}
+.bench-where {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--ink-2);
+}
+.bench-today {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--bench-missing);
+}
+.bench-warn {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--accent);
+}
+
+/* The views: each a stage with the sprite on it, and a caption. Lined up on their bottoms. */
+.bench-views {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
+.bench-view {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 100%;
+  margin: 0;
+}
+.bench-view figcaption {
+  font-family: var(--font-data);
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--ink-3);
+}
+.bench-stage {
+  display: flex;
+  align-items: flex-end;
+  padding: 8px;
+  background: var(--bench-stage);
+}
+.bench-stage img,
+.bench-stage .px-anim { display: block; }
+
+/* Not drawn yet: a dashed box the sprite's size, with what the app shows meanwhile. */
+.bench-missing {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px dashed var(--bench-missing);
+  font-family: var(--font-ui);
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--bench-stage-ink);
+}
+
+/* The pet's corner: the Mac's pet window, and the app's own sign, count and sprite (hud.css) placed
+   in it as the pet lays them out. Room all round, so a canvas bigger than the window still shows
+   as Windows shows it. */
+.bench-plate {
+  display: block;
+  padding: 16px;
+}
+.bench-window {
+  position: relative;
+  display: block;
+}
+.bench[data-guides='on'] .bench-window { outline: 1px dashed var(--bench-guide); }
+.bench-at { position: absolute; }
+
+/* A card wider than one column: the Shelf tab's picture, twice. */
+.bench-tile-wide { grid-column: span 2; }
+.bench-name {
+  margin: 0;
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Tiles side by side. */
+.bench-swatch { display: grid; }
+
+/* A frame as a box (ui9Frame gives the border image); words in it for scale. */
+.bench-nine {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ui);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink);
+}
+.bench-nine.is-dark-ink { color: var(--void); }
+/* No middle drawn: the words sit on the stage. */
+.bench-nine.is-open { color: var(--bench-stage-ink); }
+
+/* The founder's digits as a row of blocks, so no glyph sits on a fractional baseline. */
+.bench-num.px-num { display: flex; }

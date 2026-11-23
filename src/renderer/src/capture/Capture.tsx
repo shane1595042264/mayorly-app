@@ -6,10 +6,13 @@ import { looksLikeInstruction, stripInstruction, type InstructionPlan } from '..
 import { bridge } from '../bridge'
 import { askCalendar } from '../lib/calendarAsk'
 import { actionFor, keyLabel, keysFor, recordUse } from '../lib/keymap'
+import { ArtIcon } from '../lib/Pixel'
 import { aiOn, dispatch } from '../store'
 
 // The command line. Plain text is an entry for the clerk to file. A leading slash
 // is an order:  /ss legal 25, dance 20 x3   /pomo dance   /blitz   /hold   /stand
+// The prompt is the founder's letter (icon.letter, an unfiled entry) and the clerk's answer carries
+// the clerk's face (icon.clerk), each at 1x; until they are drawn, the caret and the sparkle.
 
 interface Plan {
   tone: 'file' | 'tray' | 'order' | 'error' | 'idle'
@@ -147,7 +150,7 @@ export function Capture({ s, close }: { s: MayorlyState; close: () => void }) {
     >
       <label className="capture-label caps" htmlFor="capture-input">Capture</label>
       <div className="capture-line" key={flash}>
-        <CaretRight size={18} weight="bold" className="capture-caret" aria-hidden />
+        <ArtIcon id="icon.letter" size={18} className="capture-caret" fallback={<CaretRight size={18} weight="bold" className="capture-caret" aria-hidden />} />
         <input
           id="capture-input"
           autoFocus
@@ -233,7 +236,7 @@ function OrderCard({ order, close, again }: { order: { line: string; plan: Instr
     >
       <span className="capture-label caps">Clerk</span>
       <div className="order-card" role="dialog" aria-label="The clerk's answer" tabIndex={-1} onKeyDown={onKey} ref={(el) => el?.focus()}>
-        <p className="order-line"><Sparkle size={14} weight="fill" /> {stripInstruction(order.line)}</p>
+        <p className="order-line"><ArtIcon id="icon.clerk" size={14} fallback={<Sparkle size={14} weight="fill" />} /> {stripInstruction(order.line)}</p>
         {!plan ? (
           <p className="order-say dim">Reading it…</p>
         ) : (

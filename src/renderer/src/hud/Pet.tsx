@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion, useReducedMotion, type TransformProperties } from 'motion/react'
 import { blockView, clock, dayStats, nextBlock, startOfDay, switchTarget, taskTomatoes, tomatoLabel, type MayorlyState } from '@core/index'
 import type { UiMode } from '../../../shared/bridge'
 import { INSET, anchorInBox, captionBox, dragScale, overlaps, petBox, type Point, type Rect } from '../../../shared/pet'
 import { art } from '../lib/art'
+import { PixelZoom } from '../lib/Pixel'
+import { PixelNumber } from '../lib/PixelNumber'
 import { bridge } from '../bridge'
 import { hotkeyLabel } from '../lib/keys'
 import { ledgerVars } from '../lib/themes'
 import { useNow } from '../store'
+import { PetSprite, drawnPet, petStates, type PetTone } from './PetSprite'
 
 // The resting HUD is the founder's tomato holding one sign: the clock while a block
 // runs, with the tomatoes finished on that task in a small number beside it, and today's
@@ -55,6 +58,29 @@ interface Props {
 const MOVE_HINT = 'Arrows move, + and - resize, 1 to 4 corners, Enter when done'
 /** A press that moves less than this is not a drag. */
 const DRAG_PX = 4
+/** The hover hop, up 6 px and back; the drawn hop (pet.tomato.hop) shows for exactly this long. */
+const HOP_S = 0.32
+/** The founder's digits in the sign: 12x16 a glyph, inside the 80 px plate's 66 px of text. A clock of
+ * an hour or more (seven cells, 84 px) does not fit and shows the plain text. */
+const SIGN_SCALE = 2
+const SIGN_TEXT_PX = 66
+/** The task's count beside it: 6x8 a glyph, the size of its 13 px text. */
+const COUNT_SCALE = 1
+const COUNT_TEXT_PX = 44
+
+const whole = (v: string | number | undefined): number => Math.round(parseFloat(String(v ?? 0)) || 0)
+
+/**
+ * Motion's own transform with the translation on whole pixels, so a sprite never lands between two.
+ * Without `scaled` the scale is left out: a drawing is only ever shown at its whole-number size.
+ */
+function wholePixels(t: TransformProperties, scaled = true): string {
+  const x = whole(t.x)
+  const y = whole(t.y)
+  const s = scaled && t.scale !== undefined ? parseFloat(String(t.scale)) : 1
+  const parts = [x || y ? `translate(${x}px, ${y}px)` : '', s !== 1 && Number.isFinite(s) ? `scale(${s})` : '']
+  return parts.filter(Boolean).join(' ') || 'none'
+}
 
 export function Pet({ s, away, moving, open, side, dragging, compact, notice, nudge, here, anchor, area, onDrag, onPlace, onGrab, onScale, panel }: Props) {
   // Idle, the pet only counts today's tomatoes; a clock is what needs the quarter second.
@@ -69,8 +95,20 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
     if (dragging) setHover(false)
   }, [dragging])
 
+  // The hop on arriving: the drawn hop shows while it plays, then the pet is back to its state.
+  const [hopping, setHopping] = useState(false)
+  useEffect(() => {
+    if (!hover || reduce || dragging) {
+      setHopping(false)
+      return
+    }
+    setHopping(true)
+    const t = setTimeout(() => setHopping(false), HOP_S * 1000)
+    return () => clearTimeout(t)
+  }, [hover, reduce, dragging])
+
   let sign: string
-  let tone: 'idle' | 'live' | 'hold' | 'rest' | 'ready' | 'couch'
+  let tone: PetTone
   /** The line above the sign: what the desk is on, up to two lines of the column. */
   let task = ''
   // The current task's own count, beside the clock. Idle, the sign itself is today's.
@@ -85,14 +123,18 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
     // A hold shows as a hold wherever the desk is, the couch included: the colour is the state.
     tone = v.status === 'paused' ? 'hold' : v.status === 'ready' ? 'ready' : v.block.kind === 'leisure' ? 'couch' : v.block.kind === 'focus' ? 'live' : 'rest'
   }
-  const breathing = tone === 'live' && !reduce && !dragging
+  const gaming = s.settings.gaming
+  // The founder's drawing for what the pet is doing (PetSprite), or null for the plain tomato.
+  const drawn = drawnPet(petStates({ gaming, held: dragging, hop: hopping, tone }))
+  // The plain tomato breathes through a focus block; a drawing is never scaled, and the drawn work
+  // loop's two frames are its breath.
+  const breathing = tone === 'live' && !reduce && !dragging && !drawn
   // Hover says only what the pet does not already show: how to start when idle, how to get back to the other session.
   const back = v ? switchTarget(s) : null
   // Idle with a block coming up within two hours: the plan's next step, not the deploy hint.
   const next = !v ? nextBlock(s, now) : null
   const nextEntry = next && next.start - now < 2 * 3_600_000 ? s.entries.find((e) => e.id === next.entryId) : null
   const nextAt = next ? new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZone: s.settings.calendar.tz || undefined }).format(Math.max(next.start, now)) : ''
-  const gaming = s.settings.gaming
   const hint = gaming
     ? `Gaming mode: shortcuts off. ${hotkeyLabel(s.settings.hotkeys.gaming)} turns them on.`
     : !v
@@ -246,6 +288,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
       <motion.div
         className={`pet-wrap ${right ? 'pet-right' : 'pet-left'}`}
         style={{ scale, ...placed, ...ledgerVars(v?.ledger) }}
+        transformTemplate={(t) => wholePixels(t)}
         animate={{ opacity: away ? 0 : 1, y: away ? 4 : 0 }}
         transition={away ? { duration: 0.14, ease: 'easeOut' } : { type: 'spring', stiffness: 220, damping: 26 }}
         onMouseEnter={() => setHover(true)}
@@ -257,13 +300,15 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
         }}
         data-hit
       >
+        {/* The HUD scale is on everything in here: the digits fall back to text where it would make their pixels uneven. */}
+        <PixelZoom.Provider value={scale}>
         <div className="pet" role="status" aria-label="Desk status">
           <div className="pet-col">
             {task && <span className={`pet-task clamp tone-${tone}`} title={task}>{task}</span>}
             <div className="pet-sign-row">
               {done !== null && (
                 <span className="pet-count num" title="Tomatoes finished on this task" aria-label={`${done} ${done === '1' ? 'tomato' : 'tomatoes'} on this task`}>
-                  {done}
+                  <PixelNumber text={done} scale={COUNT_SCALE} maxWidth={COUNT_TEXT_PX} />
                 </span>
               )}
               <button
@@ -272,7 +317,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
                 onClick={() => open('plus')}
                 title={v ? 'Swap' : 'Deploy'}
               >
-                {sign}
+                <PixelNumber text={sign} scale={SIGN_SCALE} maxWidth={SIGN_TEXT_PX} />
               </button>
             </div>
           </div>
@@ -280,6 +325,8 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
             className={`pet-body ${moving ? 'is-moving' : ''} ${dragging ? 'is-dragging' : ''}`}
             title="Drag to move"
             {...drag}
+            // The hop lands on whole pixels; only the plain tomato is ever scaled (its breath).
+            transformTemplate={(t) => wholePixels(t, !drawn)}
             animate={
               reduce || dragging ? { y: 0, scale: 1 }
                 : hover ? { y: [0, -6, 0], scale: 1 }
@@ -287,18 +334,21 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
                     : { y: 0, scale: 1 }
             }
             transition={
-              hover ? { duration: 0.32, ease: 'easeOut' }
+              hover ? { duration: HOP_S, ease: 'easeOut' }
                 : breathing ? { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }
                   : { duration: 0.2 }
             }
           >
-            <img className={`pet-sprite ${gaming ? 'is-gaming' : ''}`} src={art('icon.tomato')} alt="" draggable={false} />
-            {/* Gaming mode: the founder's own gaming tomato, centred on the usual one at the same 3x, so a
-                larger canvas (fire all around) still lines up as long as the tomato stays in its middle. */}
-            {gaming && <img className="pet-sprite-gaming" src={art('pet.tomato.gaming')} alt="" draggable={false} />}
+            {/* The plain tomato stays in place under a drawing, unseen, so the drag box and the hit
+                test are the same 48x48 whatever the pet is wearing. */}
+            <img className={`pet-sprite ${drawn ? 'is-drawn' : ''}`} src={art('icon.tomato')} alt="" draggable={false} />
+            {/* The founder's drawing for this state (gaming mode's headset among them), centred on the
+                tomato at the same 3x on whole pixels; held still while carried. */}
+            {drawn && <PetSprite state={drawn} still={dragging} />}
             {moving && <span className="pet-resize" title="Drag to resize" aria-hidden {...handle} />}
           </motion.div>
         </div>
+        </PixelZoom.Provider>
       </motion.div>
     </>
   )

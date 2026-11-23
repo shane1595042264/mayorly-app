@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, useDragControls, type PanInfo } from 'motion/react'
-import { Minus, Plus } from '@phosphor-icons/react'
+import { Couch, Minus, Plus, Tray } from '@phosphor-icons/react'
 import type { Ledger } from '@core/index'
 import { art } from '../../renderer/src/lib/art'
+import { ArtIcon } from '../../renderer/src/lib/Pixel'
 import { THEME_COLORS } from '../../renderer/src/lib/themes'
 import { tap } from '../feel'
 import { dismissToast } from '../toast'
@@ -14,6 +15,16 @@ export function Tomato({ scale = 1 }: { scale?: number }) {
 }
 export function Coin({ scale = 1 }: { scale?: number }) {
   return <img className="px" src={art('icon.coin')} width={16 * scale} height={16 * scale} alt="" />
+}
+
+/** The couch wherever leisure shows: the founder's icon.couch at the whole scale nearest `size`, else Phosphor's. */
+export function CouchArt({ size = 16 }: { size?: number }) {
+  return <ArtIcon id="icon.couch" size={size} fallback={<Couch size={size} />} />
+}
+
+/** The tray of entries not filed yet: the founder's mail tray (prop1x1.mailtray), else Phosphor's. */
+export function TrayArt({ size = 16 }: { size?: number }) {
+  return <ArtIcon id="prop1x1.mailtray" size={size} fallback={<Tray size={size} />} />
 }
 
 export function LedgerDot({ ledger }: { ledger: Ledger | null | undefined }) {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowCounterClockwise, Couch, KeyReturn, MagnifyingGlass, Plus, Repeat, Tray, X } from '@phosphor-icons/react'
+import { ArrowCounterClockwise, KeyReturn, MagnifyingGlass, Plus, Repeat, X } from '@phosphor-icons/react'
 import {
   findTasks, foldSearch, formatSuperset, oneEdit, parseEstimate, startOfDay, leisureList, matchLedger, onDeskId, openFlow, parseSuperset, prefixClerk, recentTasks, tomatoLabel, entryTomatoes,
   type Entry, type FoundTask, type Mode,
@@ -7,7 +7,7 @@ import {
 import { Glyph } from '../../renderer/src/lib/glyphs'
 import { act, useMayorly, useNow } from '../store'
 import { captureLine, useClerk } from '../ai'
-import { LedgerDot, Sheet, Tomato } from './parts'
+import { CouchArt, LedgerDot, Sheet, Tomato, TrayArt } from './parts'
 import { AnimatePresence, motion } from 'motion/react'
 import { announce, captured, softConfirm, tap } from '../feel'
 
@@ -127,7 +127,7 @@ export function Picker({ onClose, scope }: { onClose: () => void; scope?: Picker
   const ledgersInOrder = scope?.ledgerId ? [...s.ledgers.filter((l) => l.id === scope.ledgerId), ...s.ledgers.filter((l) => l.id !== scope.ledgerId)] : s.ledgers
   const couchSection = (leisureList(s).length > 0 || scope?.couch) && (
     <section>
-      <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Couch size={15} />Couch, one coin a block</h3>
+      <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><CouchArt size={15} />Couch, one coin a block</h3>
       <div className="list">
         {leisureList(s).map((x) => (
           <button type="button" key={x.id} className={`row ${x.id === onDesk ? 'on' : ''}`} onClick={() => pickLeisure(x.id)}>
@@ -335,7 +335,7 @@ export function Picker({ onClose, scope }: { onClose: () => void; scope?: Picker
             {/* Rows come in with a short rise; a row that no longer matches is gone at once, so no
                 two rows are ever drawn over each other while you type. */}
               {found.map((f, i) => {
-                if (f.kind === 'leisure') return resultRow(f.item.id, i, <Couch size={18} />, f.item.title, f.item.id === onDesk ? 'On the desk now' : 'Couch, one coin a block', () => pick(f), { on: f.item.id === onDesk, end: top === f || (target === 'desk' && i === 0) ? returnMark : null })
+                if (f.kind === 'leisure') return resultRow(f.item.id, i, <CouchArt size={18} />, f.item.title, f.item.id === onDesk ? 'On the desk now' : 'Couch, one coin a block', () => pick(f), { on: f.item.id === onDesk, end: top === f || (target === 'desk' && i === 0) ? returnMark : null })
                 const e = f.entry
                 const l = s.ledgers.find((x) => x.id === e.ledgerId)
                 const crop = entryTomatoes(s, e.id, now)
@@ -343,7 +343,7 @@ export function Picker({ onClose, scope }: { onClose: () => void; scope?: Picker
                 const byCode = !!l && words.some((w) => w.length >= 2 && l.code.toLowerCase().startsWith(w) && !foldSearch(e.title).includes(w))
                 const sub = e.id === onDesk ? 'On the desk now' : `${l ? `${l.name}${byCode ? ` (${l.code})` : ''}` : 'Tray'}${e.estimateMin ? `, ${e.estimateMin} min` : ''}`
                 const end = top === f || (target === 'desk' && i === 0) ? returnMark : crop >= 0.1 ? <span className="row-end num row-crop"><Tomato /><b>{tomatoLabel(crop)}</b></span> : null
-                return resultRow(e.id, i, l ? <span className="glyph-dot" style={{ color: 'var(--muted)' }}><Glyph name={l.glyph} size={18} /><LedgerDot ledger={l} /></span> : <Tray size={18} />, e.title, sub, () => pick(f), { on: e.id === onDesk, end })
+                return resultRow(e.id, i, l ? <span className="glyph-dot" style={{ color: 'var(--muted)' }}><Glyph name={l.glyph} size={18} /><LedgerDot ledger={l} /></span> : <TrayArt size={18} />, e.title, sub, () => pick(f), { on: e.id === onDesk, end })
               })}
               {sets.map((x, i) => resultRow(`set-${x.id}`, found.length + i, <Repeat size={18} />, x.name || 'Superset', x.id === runningSet?.id ? 'Superset, running now' : 'Superset, starts at its first slot', () => (x.id === runningSet?.id ? toTimer() : deploySet(x.id)), { end: target === 'set' && i === 0 ? returnMark : null }))}
               {cleared.map((e, i) => resultRow(`done-${e.id}`, found.length + sets.length + i, <ArrowCounterClockwise size={18} />, e.title, `Cleared ${e.doneAt! >= startOfDay(now) ? 'today' : new Date(e.doneAt!).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, reopens it`, () => reopen(e), { end: target === 'cleared' && i === 0 ? returnMark : null }))}
@@ -390,7 +390,7 @@ export function Picker({ onClose, scope }: { onClose: () => void; scope?: Picker
           })}
           {flow.some((e) => e.ledgerId === null) && (
             <section>
-              <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Tray size={15} />Tray</h3>
+              <h3 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><TrayArt size={15} />Tray</h3>
               <div className="list">{flow.filter((e) => e.ledgerId === null).map(entryRow)}</div>
             </section>
           )}

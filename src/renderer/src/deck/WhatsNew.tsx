@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { Sparkle } from '@phosphor-icons/react'
 import type { BuildInfo } from '../../../shared/bridge'
 import { builtOn } from '../../../shared/build'
+import { ArtIcon } from '../lib/Pixel'
+import { ui9Frame } from './ui9'
 
 // What changed, once per build: the first time a build launches on a machine the deck opens
 // on this card. Settings can bring it back. Enter, Esc, a click outside or the button close it.
@@ -20,11 +22,14 @@ export function WhatsNew({ build, close }: { build: BuildInfo; close: () => void
     return () => window.removeEventListener('keydown', onKey, true)
   }, [close])
 
+  // The same wood frame as the Controls screen; the CSS bevel until it is drawn.
+  const frame = ui9Frame('ui9.panel.wood', 2)
+
   return createPortal(
     <div className="keymap-wrap" role="dialog" aria-label="What changed" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <section className="whatsnew">
+      <section className={`whatsnew ${frame ? 'is-framed' : ''}`} style={frame}>
         <header className="whatsnew-head">
-          <Sparkle size={18} weight="fill" />
+          <ArtIcon id="icon.clerk" size={18} fallback={<Sparkle size={18} weight="fill" />} />
           <h2 className="keymap-title">Updated</h2>
         </header>
         <p className="whatsnew-when mono num">

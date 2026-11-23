@@ -3,6 +3,7 @@ import { ArrowCounterClockwise, CalendarBlank, CaretLeft, CaretRight, GearSix, L
 import { openFlow, span, type Action, type CalBlock, type CalEvent, type ExternalEvent, type MayorlyState } from '@core/index'
 import { dayKey, startOfDayIn, wallClock, workOn, zonedEpoch } from '../../../shared/windows'
 import { askCalendar } from '../lib/calendarAsk'
+import { ArtIcon } from '../lib/Pixel'
 import { actionFor, keymapOpen, recordUse } from '../lib/keymap'
 import { useListKeys } from '../lib/listkeys'
 import { ledgerVars } from '../lib/themes'
@@ -214,7 +215,7 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
             <Warning size={14} weight="fill" />
             {late.length === 1 ? 'One entry needs attention: ' : `${late.length} entries need attention: `}
             <span className="cal-overflow-text">{late.map((o, i) => `${i ? ', ' : ''}${o.entry!.title} (${span(o.minutes * MIN)} ${o.kind === 'past-due' ? 'past its due' : 'cannot fit before its due'})`)}</span>
-            <button type="button" className="btn ghost small" onClick={() => askCalendar(`Find room before the due for ${late.map((o) => `"${o.entry!.title}"`).join(' and ')}`)}><Sparkle size={12} /> Ask the clerk</button>
+            <button type="button" className="btn ghost small" onClick={() => askCalendar(`Find room before the due for ${late.map((o) => `"${o.entry!.title}"`).join(' and ')}`)}><ArtIcon id="icon.clerk" size={12} fallback={<Sparkle size={12} />} /> Ask the clerk</button>
           </p>
         )}
         {waiting.length > 0 && (
@@ -298,7 +299,7 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
                       <div key={it.id} className={`cal-item cal-event ${isSel ? 'is-selected' : ''} ${it.event.entryId ? 'pinned' : ''} ${lifted}`} style={style} data-row={it.id} title={`${it.event.title} ${fmt(it.start)} to ${fmt(it.end)}. Drag to move it, the bottom edge to resize it.`} onPointerDown={(ev) => grabItem(ev, it, 'move')}>
                         <span className="cal-item-t mono num">{fmt(it.start)}</span>
                         <span className="cal-item-title">{it.event.title}</span>
-                        {it.event.origin === 'clerk' ? <Sparkle size={12} className="cal-item-icon" /> : it.event.entryId ? <PushPin size={12} className="cal-item-icon" /> : <Lock size={12} className="cal-item-icon" />}
+                        {it.event.origin === 'clerk' ? <ArtIcon id="icon.clerk" size={12} className="cal-item-icon" fallback={<Sparkle size={12} className="cal-item-icon" />} /> : it.event.entryId ? <PushPin size={12} className="cal-item-icon" /> : <Lock size={12} className="cal-item-icon" />}
                         <span className="cal-resize" aria-hidden onPointerDown={(ev) => grabItem(ev, it, 'resize')} />
                       </div>
                     )

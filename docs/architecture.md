@@ -2,12 +2,12 @@
 
 **Status:** v0.1, Windows and macOS. Last updated 2026-10-19.
 
-This repo is the application layer of Mayorly: the rules of the product as running code, and the first client on top of them. The design repo says what Mayorly is; this repo is what it does. Anything that later draws pixels, talks to a phone, or plugs into Stardew sits on the same core and speaks the same contract.
+This repo is the application layer of Mayorly: the rules of the product as running code, and the clients on top of them. The design repo says what Mayorly is; this repo is what it does. The phone and anything that plugs in later sit on the same core and speak the same contract. The walkable pixel Mayor's Hall that was once to be a second client was dropped on 2026-11-23 (mayorly-design's decision log): Mayorly is a zero-friction desk for power users.
 
 ## Three layers
 
 ```
- clients            HUD overlay (this repo)   pixel Mayor's Hall (later)   mods via local API (later)
+ clients            HUD overlay (this repo)   iPhone app (this repo)   mods via local API (later)
                           |                           |                            |
  contract           ------------------------ Bridge: actions in, snapshots and events out -----------
                           |
@@ -20,7 +20,7 @@ This repo is the application layer of Mayorly: the rules of the product as runni
 
 **The host owns time and storage.** The Electron main process holds the only live copy of state, ticks the reducer once a second, persists after every change, and broadcasts snapshots. Renderers never compute anything that matters; they render snapshots and send actions. If a window crashes, nothing is lost.
 
-**Clients are interchangeable.** `src/shared/bridge.ts` is the whole contract: `getState`, `dispatch`, `onState`, `onEvents`, `onCommand`, plus two window hints. The Electron preload implements it over IPC. `src/renderer/src/bridge/web.ts` implements it by running the same engine inside a browser tab, which is how the HUD is developed and screenshotted without Electron. The local sync API promised in the product spec is a third implementation over HTTP on `127.0.0.1`, and the pixel game is another renderer on either.
+**Clients are interchangeable.** `src/shared/bridge.ts` is the whole contract: `getState`, `dispatch`, `onState`, `onEvents`, `onCommand`, plus two window hints. The Electron preload implements it over IPC. `src/renderer/src/bridge/web.ts` implements it by running the same engine inside a browser tab, which is how the HUD is developed and screenshotted without Electron. The local sync API promised in the product spec is a third implementation over HTTP on `127.0.0.1`.
 
 ## The domain
 
@@ -104,8 +104,8 @@ Sync is one document per account with a revision (`GET`/`PUT /sync/state`). The 
 ## How the rest of Mayorly plugs in
 
 - **mayorly-design** is upstream of this repo. Rule changes start there and land here in `src/core/rules.ts`.
-- **mayorly-assets** becomes a client concern. The pixel Mayor's Hall is a renderer that reads the same snapshots: ledgers on the shelf (`prop2x4.bookshelf` bays), the desk prop switching to `desk.working` while the desk runs, tokens as `icon.coin`. Nothing in the core changes for it.
-- **mayorly-workshop** is unaffected; it feeds the assets repo.
+- **mayorly-assets** holds the founder's hand-drawn sprites; `npm run art` copies the ones that pass its standard into `src/renderer/src/assets/art`, and `lib/art.ts` finds them by slot id. The ledgers stand on his shelf in the Shelf tab (`prop2x4.bookshelf` bays), the desk prop switches to `desk.working` while the desk runs, coins are `icon.coin`. Nothing in the core changes for them.
+- **mayorly-workshop** is parked; it was for outside artists.
 - **The local sync API** is a small HTTP server in the main process that maps routes onto `engine.state` and `engine.dispatch`. The Bridge shape is already what it needs.
 
 ## Not built yet, on purpose
