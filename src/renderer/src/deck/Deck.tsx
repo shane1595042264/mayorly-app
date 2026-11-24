@@ -57,6 +57,11 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
     if ((TABS as readonly string[]).includes(t)) setTab(t as Tab)
   }), [])
   const closeNotes = () => setNews(null)
+  // Read by the key handler below, which is not remade when the card opens or closes: it once read
+  // `news` from the render it was made in, so after Got it every key stayed ignored until the app
+  // happened to render again (an idle desk never did).
+  const newsOpen = useRef(false)
+  newsOpen.current = !!news
   const panel = useRef<HTMLElement>(null)
   useEffect(() => panel.current?.focus(), [])
   const reduce = useReducedMotion()
@@ -73,7 +78,7 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
   // The deck's own keys, from the keymap: close, the tabs, and the Keymap screen itself.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (keymapOpen() || news) return
+      if (keymapOpen() || newsOpen.current) return
       const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select')
       if (typing) {
         if (e.key === 'Escape') (typing as HTMLElement).blur()

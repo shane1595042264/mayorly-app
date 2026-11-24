@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Keys work again after Got it
+
+- After you closed this card with Got it, the deck ignored its keys (1 to 7 for the tabs, Q and E, Esc) until something else changed on screen. They work straight away now.
+
 ## Clear works on the couch
 
 - Alt+C now clears a couch item too: done with the show or the game, it leaves the couch list with the Done hit. If you swapped onto it from a task, you are back on that task with the clock still running; if you sat down on it directly, you stand up.
