@@ -26,6 +26,7 @@ import { Objectives } from './hud/Objectives'
 import { Pet } from './hud/Pet'
 import { MODIFIER_KEYS, hotkeyLabel, matchesAcceleratorKey, physicalKey } from './lib/keys'
 import { setSoundEnabled, sfx } from './lib/sound'
+import { useHoverJuice } from './lib/hoverJuice'
 import { onCalendarAsk } from './lib/calendarAsk'
 import { requestDeckTab } from './lib/deckTab'
 import { ARM_OF_ACTION, ARM_OF_COMMAND, isPick, onArm, pointArm, pointPick, takeArmHint, takePickHint } from './plus/arms'
@@ -127,6 +128,8 @@ export function App() {
   }, [])
   const speaks = lastImpact(impacts)
 
+  // A card under the pointer glows where the pointer is and ticks as it comes on (lib/hoverJuice.ts).
+  useHoverJuice()
   // Every keystroke in a box thumps the box it is in (.juice-type, hud.css): the search, the capture
   // line, a field in Settings. The class is taken off and put back so each key restarts it.
   useEffect(() => {

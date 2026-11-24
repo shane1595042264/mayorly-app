@@ -7,6 +7,11 @@ The top section is what the app shows once per build, the first time that build 
 - Alt+C now clears a couch item too: done with the show or the game, it leaves the couch list with the Done hit. If you swapped onto it from a task, you are back on that task with the clock still running; if you sat down on it directly, you stand up.
 - On the couch list, c clears the row you are on, and Clear in the Alt+T menu works on a couch item.
 
+## Picked up under the mouse
+
+- Hover a ledger on the Shelf, a tile on Record, a superset or a tile in the Alt+T menu and it is picked up like a card: it wobbles up onto a shadow, a shine runs across it, it glows where the mouse is, and there is a soft flick. Record's numbers lean toward the mouse and turn amber.
+- Rows lift and snap with their ledger's colour down the edge; the week's bars and the ledger bars jump when you point at them.
+
 ## Tips, force mode, and everything hits harder
 
 - Click something a key also does and the key shows up big in the middle of the screen: the tab's number, Esc to close, Alt+T for the swap menu, Enter for the row you are on. Force mode is on: the click does nothing until you press the key, and pressing it says Nice. Ctrl+Alt+. turns force mode off, Ctrl+Alt+, turns tips off; every tip says so under it, and Settings, Hotkeys, has both.

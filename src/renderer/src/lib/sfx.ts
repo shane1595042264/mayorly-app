@@ -197,6 +197,12 @@ export const sfx = {
     if (!a) return
     click(a, a.currentTime, 0.12, 4200)
   },
+  /** The pointer coming onto a card: a soft flick, a little different each time, as a card under a finger. */
+  hover() {
+    const a = ac()
+    if (!a) return
+    click(a, a.currentTime, 0.06, 2400 + Math.random() * 1100)
+  },
   /** An entry cleared: one clean high ding with a soft tail. */
   clear() {
     const a = ac()

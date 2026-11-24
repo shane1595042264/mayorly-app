@@ -740,6 +740,185 @@ body.effects { background: transparent; }
   .tab, .settings-rail-item, .leisure-switch-btn, .seg button, .row, .find-row, .keymap-row, .cal-item, .opt, .juice-type, .find-list > li, .settings-search-results li { animation: none !important; }
 }
 
+/* ------------------------------------------------------------ hover juice
+   A card under the pointer is picked up, as Balatro's are: it wobbles up off the table onto a hard
+   shadow, a shine runs across it once, and a glow sits where the pointer is (`--mx`, `--my`, from
+   lib/hoverJuice.ts, which also ticks). Record's tiles, text only, lean toward the pointer too
+   (`--tx`, `--ty`). A row lifts, snaps sideways and a bar of its ledger's colour wipes down its edge;
+   a chart's bar jumps. Held while hovered: whole-pixel lifts and shadows only. The wobble and the pop
+   are over in half a second and end at scale 1 and no turn, so nothing with a sprite in it rests
+   scaled or turned. Only the thing under the pointer moves, so the overlay stays cheap to paint. */
+
+.bay, .tile, .opt, .ss-item { --glow: var(--ledger, var(--accent)); --lift: 5px; isolation: isolate; }
+.opt { --glow: #fff; --lift: 3px; }
+.bay, .tile, .ss-item { position: relative; }
+.bay, .ss-item, .opt {
+  transition-property: color, background, border-color, box-shadow, translate, scale;
+  transition-duration: 0.15s, 0.15s, 0.15s, 0.22s, 0.36s, 0.3s;
+  transition-timing-function: ease, ease, ease, ease, cubic-bezier(0.34, 1.9, 0.64, 1), cubic-bezier(0.34, 1.9, 0.64, 1);
+}
+/* The shine (::before) runs once as the pointer comes on; the glow (::after) follows it. Both sit
+   on the card's face under its words (z-index -1 in the card's own stacking context). */
+.bay::before, .tile::before, .opt::before, .ss-item::before,
+.bay::after, .tile::after, .opt::after, .ss-item::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+.bay::before, .tile::before, .opt::before, .ss-item::before {
+  opacity: 0;
+  background: linear-gradient(105deg, transparent 40%, rgb(255 255 255 / 0.24) 48%, rgb(255 255 255 / 0.07) 53%, transparent 60%) no-repeat;
+  background-size: 300% 100%;
+  background-position: 100% 0;
+}
+.bay::after, .tile::after, .opt::after, .ss-item::after {
+  opacity: 0;
+  background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--glow) 26%, transparent), transparent 70%) no-repeat;
+  background-clip: content-box;
+  background-origin: content-box;
+  transition: opacity 0.2s;
+}
+.bay:hover::before, .tile:hover::before, .opt:hover:not(:disabled)::before, .ss-item:hover::before { animation: juice-shine 0.62s cubic-bezier(0.2, 0.7, 0.3, 1); }
+/* Hovered, the glow's box also reaches down under the lift, painting nothing there: the strip the
+   card rose off stays the card's, so a pointer at its foot never drops it and picks it up again. */
+.bay:hover::after, .tile:hover::after, .opt:hover:not(:disabled)::after, .ss-item:hover::after {
+  opacity: 1;
+  bottom: calc(-1 * var(--lift) - 2px);
+  padding-bottom: calc(var(--lift) + 2px);
+  pointer-events: auto;
+}
+
+/* Picked up: up off the table onto a hard shadow, the edge in its colour, with a wobble. */
+.bay:hover, .ss-item:hover {
+  translate: 0 -5px;
+  border-color: var(--glow);
+  background: rgb(237 240 241 / 0.07);
+  box-shadow: 0 5px 0 rgb(0 0 0 / 0.55), 0 16px 30px rgb(0 0 0 / 0.45), 0 0 0 1px color-mix(in srgb, var(--glow) 55%, transparent);
+  animation: juice-pickup 0.5s ease-out;
+}
+.ss-item.on:hover { box-shadow: inset 2px 0 0 var(--accent), 0 5px 0 rgb(0 0 0 / 0.55), 0 16px 30px rgb(0 0 0 / 0.45), 0 0 0 1px color-mix(in srgb, var(--glow) 55%, transparent); }
+.bay:hover .bay-glyph, .bay:hover .bay-code { animation: juice-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.bay:active, .ss-item:active { translate: 0 -1px; scale: 0.97; box-shadow: 0 1px 0 rgb(0 0 0 / 0.55); transition-duration: 0.06s; }
+
+/* The swap menu's tiles: up three pixels onto a shadow, a wobble, the number bouncing. */
+.opt:hover:not(:disabled) {
+  translate: 0 -3px;
+  border-color: var(--ink-3);
+  color: var(--ink);
+  box-shadow: 0 4px 0 rgb(0 0 0 / 0.6), 0 14px 26px rgb(0 0 0 / 0.45);
+  animation: juice-pickup 0.46s ease-out;
+}
+.arm.active .opt:hover:not(:disabled) { box-shadow: 0 4px 0 rgb(120 70 10 / 0.9), 0 14px 26px rgb(0 0 0 / 0.45); }
+.arm.active .opt.current:hover:not(:disabled) { box-shadow: 0 0 0 2px var(--ink), 0 4px 0 rgb(0 0 0 / 0.6), 0 14px 26px rgb(0 0 0 / 0.45); }
+.opt:hover:not(:disabled) .opt-n, .opt:hover:not(:disabled) .opt-icon { animation: juice-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.opt:active:not(:disabled) { translate: 0 1px; scale: 0.94; box-shadow: none; transition-duration: 0.06s; }
+
+/* Record's tiles are cards under the pointer: lifted, leaning toward it, the number popping in its colour. */
+.tiles { margin-left: -16px; }
+.tile, .tile:first-child { padding: 10px 16px; }
+.tile {
+  transition: transform 0.14s ease-out, translate 0.36s cubic-bezier(0.34, 1.9, 0.64, 1), background 0.15s, box-shadow 0.22s;
+}
+.tile:hover {
+  translate: 0 -5px;
+  /* The side under the pointer rises toward you, so the edge it is on grows under it, never away. */
+  transform: perspective(520px) rotateX(calc(var(--ty, 0) * 9deg)) rotateY(calc(var(--tx, 0) * -11deg));
+  background: rgb(237 240 241 / 0.06);
+  box-shadow: 0 5px 0 rgb(0 0 0 / 0.55), 0 16px 30px rgb(0 0 0 / 0.45), 0 0 0 1px color-mix(in srgb, var(--glow) 50%, transparent);
+}
+.tile:hover .tile-big { color: var(--accent); animation: juice-num 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.tile:hover .tile-label { color: var(--ink); }
+.tile-big { display: inline-block; transform-origin: 0 100%; transition: color 0.15s; }
+
+/* Rows: a bar of the ledger's colour wipes down the edge, the row lifts and snaps sideways. */
+.row, .cleared li, .log li, .barlist li, .market-log li { position: relative; transition: translate 0.32s cubic-bezier(0.34, 1.9, 0.64, 1), background 0.15s, box-shadow 0.2s, border-color 0.15s; }
+.row::before, .cleared li::before, .log li::before, .barlist li::before, .market-log li::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  bottom: -1px;
+  width: 3px;
+  background: var(--ledger, var(--accent));
+  scale: 1 0;
+  transform-origin: 50% 0;
+  transition: scale 0.26s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+.row:hover::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 4px; }
+.row:hover::before, .cleared li:hover::before, .log li:hover::before, .barlist li:hover::before, .market-log li:hover::before { scale: 1 1; }
+.row:hover {
+  translate: 0 -2px;
+  border-color: var(--line-2);
+  background: rgb(237 240 241 / 0.065);
+  box-shadow: 0 3px 0 rgb(0 0 0 / 0.5), 0 12px 24px rgb(0 0 0 / 0.32);
+  animation: juice-snap 0.34s ease-out;
+}
+.row.live:hover { box-shadow: inset 2px 0 0 var(--ledger, var(--accent)), 0 3px 0 rgb(0 0 0 / 0.5), 0 12px 24px rgb(0 0 0 / 0.32); }
+.cleared li:hover, .log li:hover, .barlist li:hover, .market-log li:hover { background: rgb(237 240 241 / 0.055); color: var(--ink); animation: juice-snap-flat 0.3s ease-out; }
+.cleared li, .log li, .barlist li, .market-log li { padding-left: 8px; margin-left: -8px; }
+/* A ledger's bar jumps along its track and lights. */
+.barlist li:hover .barlist-track i { background: var(--ledger, var(--accent)); animation: juice-bar 0.44s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: 0 50%; }
+.barlist li:hover .num { color: var(--ink); }
+/* The week's columns: the one under the pointer jumps up and lights; its number pops in. */
+.col:hover .col-plot i { background: var(--ink); animation: juice-col 0.44s cubic-bezier(0.34, 1.56, 0.64, 1); transform-origin: 50% 100%; }
+.col:hover .col-plot i.today { background: var(--accent); }
+.col:hover .col-label { color: var(--ink); }
+.col-plot .tip { animation: juice-tip 0.3s cubic-bezier(0.34, 1.8, 0.64, 1); transform-origin: 50% 100%; }
+
+@keyframes juice-shine {
+  0% { background-position: 100% 0; opacity: 1; }
+  100% { background-position: 0% 0; opacity: 1; }
+}
+@keyframes juice-pickup {
+  0% { rotate: 0deg; scale: 1; }
+  22% { rotate: -2.2deg; scale: 1.045; }
+  48% { rotate: 1.6deg; scale: 1.01; }
+  72% { rotate: -0.7deg; scale: 1; }
+  100% { rotate: 0deg; scale: 1; }
+}
+@keyframes juice-num {
+  0% { scale: 1; }
+  35% { scale: 1.22; }
+  65% { scale: 0.96; }
+  100% { scale: 1; }
+}
+@keyframes juice-snap {
+  0% { translate: 0 -2px; }
+  30% { translate: 6px -2px; }
+  60% { translate: -2px -2px; }
+  100% { translate: 0 -2px; }
+}
+@keyframes juice-snap-flat {
+  0% { translate: 0 0; }
+  35% { translate: 5px 0; }
+  70% { translate: -1px 0; }
+  100% { translate: 0 0; }
+}
+@keyframes juice-bar {
+  0% { scale: 1 1; }
+  35% { scale: 1.08 1.6; }
+  70% { scale: 0.98 0.9; }
+  100% { scale: 1 1; }
+}
+@keyframes juice-col {
+  0% { scale: 1 1; }
+  35% { scale: 1.18 1.12; }
+  70% { scale: 0.96 0.97; }
+  100% { scale: 1 1; }
+}
+@keyframes juice-tip {
+  0% { opacity: 0; scale: 0.6; }
+  100% { opacity: 1; scale: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bay, .tile, .opt, .ss-item, .row, .cleared li, .log li, .barlist li, .market-log li { animation: none !important; translate: none !important; transform: none !important; }
+  .bay *, .tile *, .opt *, .col *, .barlist * { animation: none !important; }
+  .bay::before, .tile::before, .opt::before, .ss-item::before { animation: none !important; }
+}
+
 /* ------------------------------------------------------------ coins, Balatro's way (hud/CashIn.tsx) */
 
 /* A coin lands: the counter jolts (whole pixels, the translate property, apart from Motion's transform) and flashes. */
