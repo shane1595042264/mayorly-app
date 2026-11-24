@@ -492,12 +492,64 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 
 /* ------------------------------------------------------------ settings */
 
-.settings { display: grid; gap: 30px; max-width: 860px; }
+/* A rail of areas beside one area's view. Each section of an area is a row: its title and what it
+   is for on the left, its controls in a panel on the right, a rule between rows. Narrow (a small
+   window, a big deck text size), the rows stack and then the rail goes across the top. */
+.settings { container: settings / inline-size; }
+.settings-layout { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 36px; align-items: start; }
+.settings-rail { position: sticky; top: 0; display: grid; gap: 2px; }
+.settings-rail-item { display: flex; align-items: center; gap: 11px; height: 40px; padding: 0 12px; font-size: 16px; color: var(--ink-2); text-align: left; transition: color 0.15s, background 0.15s; }
+.settings-rail-item:hover { color: var(--ink); background: var(--glass-3); }
+.settings-rail-item.on { color: var(--ink); background: rgb(237 240 241 / 0.08); box-shadow: inset 2px 0 0 var(--accent); }
+.settings-rail-item.on svg { color: var(--accent); }
+.settings-rail-item svg, .settings-rail-item .art-icon { flex: none; }
+.settings-main { container: settings-main / inline-size; min-width: 0; }
+/* Stuck flush under the deck's head, over the body's top padding, so nothing peeks out above it. */
+.settings-main .settings-search { top: -24px; }
+.settings-area[hidden] { display: none; }
+.settings-area-title { margin: 26px 0 0; font-size: 28px; font-weight: 600; line-height: 1.1; }
+.settings-area-lede { margin: 8px 0 0; max-width: 640px; font-size: 15px; line-height: 1.4; color: var(--ink-2); }
+.setting-row { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: 32px; padding: 28px 0; }
+.setting-row + .setting-row { border-top: 1px solid var(--line); }
+.setting-label { display: grid; gap: 8px; align-content: start; justify-items: start; padding-top: 8px; }
+.setting-label .side-title { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.2; color: var(--ink); }
+.setting-desc { margin: 0; font-size: 14px; line-height: 1.4; color: rgb(237 240 241 / 0.6); }
+.setting-label .btn { margin-top: 6px; }
+.setting-panel { display: grid; gap: 14px; align-content: start; min-width: 0; padding: 18px 20px; background: rgb(237 240 241 / 0.035); border: 1px solid var(--line); }
+.setting-panel > p { margin: 0; }
+.setting-panel > .btn { justify-self: start; }
+.setting-panel > :is(.ai-add, .checks, .hotkeys, .sound-search, .work-ledgers, .hours-grid) { margin: 0; }
+.setting-panel .ai-key { margin-bottom: 0; }
+.setting-panel .form-actions { margin-top: 0; }
+.setting-path { overflow-wrap: anywhere; font-size: 12px; }
 .checks { display: grid; gap: 11px; margin-top: 18px; }
-.sound-cues { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.sound-cues .btn { padding: 4px 10px; font-size: 12px; }
-.hotkeys { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-top: 12px; }
+.rules.rules-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rules.rules-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Inputs on one line across a row whatever their labels' wrapping. */
+.hotkeys { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); align-items: end; gap: 14px; margin-top: 12px; }
 .settings .rules .field:nth-last-child(-n + 2) { grid-column: auto; }
+.setting-panel .alarm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.alarm-row .field-label { flex: 0 0 96px; }
+.deck .alarm-row select { flex: 1 1 160px; width: auto; }
+.switch-rule { display: grid; gap: 4px; justify-items: start; }
+.switch-rule + .switch-rule { padding-top: 14px; border-top: 1px solid var(--line); }
+.switch-rule-help { margin: 0; padding-left: 26px; line-height: 1.4; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.switch-rule-help.open { display: block; }
+.switch-rule-more { margin-left: 26px; font-size: 13px; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-2); }
+.switch-rule-more:hover { color: var(--ink); }
+@container settings-main (max-width: 800px) {
+  .setting-row { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .setting-label { padding-top: 0; }
+  .rules.rules-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container settings-main (max-width: 460px) {
+  .rules.rules-3 { grid-template-columns: minmax(0, 1fr); }
+}
+@container settings (max-width: 620px) {
+  .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .settings-rail { position: static; display: flex; flex-wrap: wrap; gap: 2px 4px; }
+  .settings-rail-item { height: 34px; font-size: 15px; }
+}
 
 /* ------------------------------------------------------------ account */
 
@@ -519,8 +571,6 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .ai-status.failing { color: #ff9b8c; border-color: rgb(255 155 140 / 0.5); }
 .ai-add { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
 .ai-add input { flex: 1; min-width: 0; }
-.key-sync { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
-.key-sync .ai-add, .key-sync .form-actions { align-self: stretch; }
 
 /* ------------------------------------------------------------ inside a ledger */
 
@@ -661,8 +711,6 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .row.is-selected { border-color: var(--accent); background: rgb(240 174 60 / 0.07); }
 .row.is-selected .row-actions { opacity: 1; }
 .bay.is-selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-2); }
-.section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.section-head .side-title { margin: 0; }
 
 /* ------------------------------------------------------------ the Keymap screen
    After Minecraft's controls: rows of things to do, each with its bevelled keycap. */

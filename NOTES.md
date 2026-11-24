@@ -2,12 +2,20 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Settings, one area at a time
+
+- Settings has a rail down the left: Timer, Auto switch, Sound and light, Pet and text, Calendar, Clerk, Hotkeys, Account and data. Each opens its own view, so nothing is lost in one long page. j and k step through them, like rows on the other tabs.
+- Every section is a row: its name and what it is for on the left, its controls in a panel on the right, a line between rows.
+- Auto switch has its rules grouped as AI prompts, Streams and Games. Each rule shows two lines of what it does; More opens the rest.
+- The search still finds everything: pick a result in another area and Settings opens that area and takes you to it.
+- Delete account sits last, on its own, under Account and data.
+
 ## A switch you can hear and see
 
 - Every time the task on the desk changes, you hear a weapon swap: a quick whoosh into a deep, heavy thump and a metal lock. Alt+Q, a pick, a parked session brought back, an AI prompt, a streamer's death, an ad, your League match. Switching back to a parked session used to make no sound at all.
 - The sides of the screen breathe in the colour of the task you switched to (its ledger's colour, purple for the couch), with a jolt on the thump, and fade within a second. Only Mayorly's own layer moves; your windows never shake.
 - Browsing in the Plus menu keeps its light click, a fresh start keeps your work alarm, and a clear keeps its ding.
-- Settings, next to Sound cues: turn the light off, or Try a switch to see and hear it.
+- Settings, Sound and light: turn the light off, or Try a switch to see and hear it.
 
 ## Your drawings, in the app
 

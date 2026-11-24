@@ -11,7 +11,7 @@ import { MagnifyingGlass, X } from '@phosphor-icons/react'
 const SOURCES = '[data-setting], .side-title, .section-title, .field-label, .check > span:last-child, .row-title, .label'
 const HEADINGS = '.side-title, .section-title'
 /** What a found label stands for: the field, row or toggle it labels, else itself. */
-const HOLDER = '[data-setting], label.field, .field, label.check, .check, .row, .key-sync, section'
+const HOLDER = '[data-setting], label.field, .field, label.check, .check, .row, section'
 
 export interface SettingHit {
   el: HTMLElement
@@ -88,10 +88,11 @@ function marked(label: string, query: string): ReactNode {
 }
 
 /**
- * The search box. `root` is the settings page it searches. The results drop under the box; arrow
- * keys and Enter work as in any list, Escape clears. On the desktop `/` focuses it.
+ * The search box. `root` is the settings page it searches, hidden views included. The results drop
+ * under the box; arrow keys and Enter work as in any list, Escape clears. On the desktop `/` focuses
+ * it. `reveal` shows a hidden view holding the chosen setting, and says whether it had to.
  */
-export function SettingsSearch({ root, placeholder = 'Search settings' }: { root: RefObject<HTMLElement | null>; placeholder?: string }) {
+export function SettingsSearch({ root, placeholder = 'Search settings', reveal }: { root: RefObject<HTMLElement | null>; placeholder?: string; reveal?: (el: HTMLElement) => boolean }) {
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(0)
   const [open, setOpen] = useState(false)
@@ -114,7 +115,9 @@ export function SettingsSearch({ root, placeholder = 'Search settings' }: { root
     if (!hit) return
     setOpen(false)
     input.current?.blur()
-    jumpTo(hit.el)
+    // A setting in a view that is not showing: the page shows it first, and the jump waits a frame for it.
+    if (reveal?.(hit.el)) requestAnimationFrame(() => requestAnimationFrame(() => jumpTo(hit.el)))
+    else jumpTo(hit.el)
   }
 
   return (

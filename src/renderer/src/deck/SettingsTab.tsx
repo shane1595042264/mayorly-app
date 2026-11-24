@@ -1,17 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArrowsClockwise, GoogleLogo, Keyboard, Play, Plus, Trash, UploadSimple } from '@phosphor-icons/react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { ArrowsClockwise, ArrowsLeftRight, CalendarBlank, GoogleLogo, Keyboard, Play, Plus, Robot, SpeakerHigh, TextAa, Timer, Trash, UploadSimple, UserCircle, type Icon } from '@phosphor-icons/react'
 import { ALARM_TONES, LEDGER_CAP, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type ClerkSettings, type MayorlyState, type Recipe, type Settings, type ClerkAllow, type AutoSwitchRules } from '@core/index'
 import type { AiKeySync, AiProvider, AiPublic, AppInfo } from '../../../shared/bridge'
 import { DEFAULT_THRESHOLD, TRIALS } from '../../../shared/ai/tuning'
 import { builtOn } from '../../../shared/build'
 import { bridge } from '../bridge'
 import { hotkeyLabel, IS_MAC } from '../lib/keys'
-import { GLOBAL_ACTIONS } from '../lib/keymap'
-import { dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
+import { actionFor, GLOBAL_ACTIONS, keymapOpen } from '../lib/keymap'
+import { current, dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
 import { decodeAlarm, playAlarm, sfx } from '../lib/sound'
 import { previewPulse } from '../hud/SwitchPulse'
+import { ArtIcon } from '../lib/Pixel'
+import type { ArtId } from '../lib/art'
 import { SoundSearch } from './SoundSearch'
-import { PlanSettings } from './PlanSettings'
+import { HoursFields, PLAN_HELP, PlanFields, SessionFields, WorkFields } from './PlanSettings'
 import { dayKey } from '../../../shared/windows'
 import { SettingsSearch } from '../lib/settingsSearch'
 
@@ -21,97 +23,260 @@ const ACCELERATOR = /^((Ctrl|Control|Alt|Option|AltGr|Shift|Super|Meta|Cmd|Comma
 /** Stored accelerators keep Electron's cross-platform spelling: Option is Alt. */
 const normalise = (v: string) => v.trim().replace(/\bOption\b/gi, 'Alt')
 
+type AreaId = 'timer' | 'switch' | 'sound' | 'pet' | 'calendar' | 'clerk' | 'keys' | 'account'
+
+/**
+ * Settings is one view per area, picked from the rail, so a section is never lost in a long page.
+ * A rail icon the founder has drawn (`art`) shows in place of the Phosphor one.
+ */
+const AREAS: { id: AreaId; label: string; icon: Icon; art?: ArtId; electron?: boolean }[] = [
+  { id: 'timer', label: 'Timer', icon: Timer, art: 'icon.tomato' },
+  { id: 'switch', label: 'Auto switch', icon: ArrowsLeftRight, electron: true },
+  { id: 'sound', label: 'Sound and light', icon: SpeakerHigh },
+  { id: 'pet', label: 'Pet and text', icon: TextAa },
+  { id: 'calendar', label: 'Calendar', icon: CalendarBlank },
+  { id: 'clerk', label: 'Clerk', icon: Robot, art: 'icon.clerk' },
+  { id: 'keys', label: 'Hotkeys', icon: Keyboard },
+  { id: 'account', label: 'Account and data', icon: UserCircle },
+]
+
+/** The area last open, kept while the app runs, so the deck comes back to it. */
+let lastArea: AreaId = 'timer'
 
 export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyState; kind: 'electron' | 'web'; openKeymap: () => void; openNotes: () => void }) {
   const st = s.settings
   const set = (patch: Partial<Settings>) => dispatch({ type: 'settings/update', patch })
   const page = useRef<HTMLDivElement>(null)
+  const areas = AREAS.filter((a) => kind === 'electron' || !a.electron)
+  const [area, setArea] = useState<AreaId>(() => (areas.some((a) => a.id === lastArea) ? lastArea : 'timer'))
+  useEffect(() => {
+    lastArea = area
+  }, [area])
+
+  const go = (id: AreaId) => {
+    setArea(id)
+    page.current?.closest('.deck-body')?.scrollTo({ top: 0 })
+  }
+  const step = (by: number): AreaId => {
+    const i = areas.findIndex((a) => a.id === area)
+    const next = areas[Math.min(areas.length - 1, Math.max(0, i + by))].id
+    if (next !== area) go(next)
+    return next
+  }
+
+  // The list keys (j and k unless changed) step through the areas, as they step through a list on
+  // the other tabs. Not the arrows: on this tab they scroll.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (keymapOpen() || e.altKey || e.ctrlKey || e.metaKey || e.key.startsWith('Arrow')) return
+      if ((e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable]')) return
+      const now = current()
+      const action = now ? actionFor(e, 'list', now.settings) : null
+      if (action !== 'list.down' && action !== 'list.up') return
+      e.preventDefault()
+      step(action === 'list.down' ? 1 : -1)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  /** With the rail focused, the arrows move along it. */
+  const onRailKey = (e: ReactKeyboardEvent<HTMLElement>) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
+    e.preventDefault()
+    const id = step(e.key === 'ArrowDown' ? 1 : -1)
+    e.currentTarget.querySelector<HTMLElement>(`[data-area-tab="${id}"]`)?.focus()
+  }
+
+  /** A search result in another area opens that area before the page scrolls to it. */
+  const reveal = (el: HTMLElement) => {
+    const id = el.closest<HTMLElement>('[data-area]')?.dataset.area as AreaId | undefined
+    if (!id || id === area) return false
+    setArea(id)
+    return true
+  }
 
   return (
     <div className="settings" ref={page}>
-      <SettingsSearch root={page} placeholder="Search settings, or press /" />
-      <section>
-        <h3 className="side-title caps">Desk</h3>
-        <div className="rules">
-          <Num label="Focus" help="minutes, and the tomato length" value={st.focusMin} min={1} max={180} onChange={(focusMin) => set({ focusMin })} />
-          <Num label="Rest" help="minutes" value={st.shortRestMin} min={0} max={60} onChange={(shortRestMin) => set({ shortRestMin })} />
-          <Num label="Long rest" help="minutes" value={st.longRestMin} min={0} max={120} onChange={(longRestMin) => set({ longRestMin })} />
-          <Num label="Long rest every" help="focus blocks" value={st.longRestEvery} min={1} max={12} onChange={(longRestEvery) => set({ longRestEvery })} />
-        </div>
-        <div className="checks">
-          <Check label="Start the next focus or couch block on its own" value={st.autoStartFocus} onChange={(autoStartFocus) => set({ autoStartFocus })} />
-          <Check label="Start rests on their own" value={st.autoStartRest} onChange={(autoStartRest) => set({ autoStartRest })} />
-          <div className="sound-cues" data-setting="sound, switch sound, swap, task switch, thud, flash, glow, pulse, edges, shake">
-            <Check label="Sound cues" value={st.sound} onChange={(sound) => set({ sound })} />
-            <Check label="Light the screen's edges when the task changes" value={st.switchPulse} onChange={(switchPulse) => set({ switchPulse })} />
-            <button className="btn ghost" type="button" title="The sound and the light when the task on the desk changes" onClick={() => { sfx.switch(true); previewPulse() }}><Play size={14} /> Try a switch</button>
-          </div>
-          {kind === 'electron' && <Check label="Open at login" value={st.openAtLogin} onChange={(openAtLogin) => set({ openAtLogin })} />}
-          {kind === 'electron' && <AutoSwitchRulesField rules={st.autoSwitch} set={(autoSwitch) => set({ autoSwitch })} />}
-          {kind === 'electron' && IS_MAC && <Check label="Timer beside the menu bar tomato" value={st.trayTimer} onChange={(trayTimer) => set({ trayTimer })} />}
-        </div>
-      </section>
-
-      <AlarmSection s={s} kind={kind} />
-
-      <section>
-        <h3 className="side-title caps">HUD</h3>
-        <div className="rules">
-          <div className="field">
-            <span className="field-label caps">Side</span>
-            <div className="seg" role="radiogroup" aria-label="HUD side">
-              {(['left', 'right'] as const).map((v) => (
-                <button key={v} role="radio" aria-checked={st.hudSide === v} className={st.hudSide === v ? 'on' : ''} onClick={() => bridge.snap(v === 'left' ? 3 : 4)}>
-                  {v === 'left' ? 'Left' : 'Right'}
-                </button>
-              ))}
-            </div>
-          </div>
-          <label className="field">
-            <span className="field-label caps">Scale</span>
-            <input type="range" min={0.7} max={1.6} step={0.05} value={st.hudScale} onChange={(e) => set({ hudScale: Number(e.target.value) })} />
-            <span className="field-help mono num">{Math.round(st.hudScale * 100)}%</span>
-          </label>
-        </div>
-        <h4 className="field-label caps" style={{ marginTop: 18 }}>Text size</h4>
-        <p className="field-help">Per area, on this machine. The pet grows with its task line.</p>
-        <div className="rules">
-          <TextSize label="Pet" value={st.text.pet} onChange={(pet) => set({ text: { ...st.text, pet } })} />
-          <TextSize label="Deck" value={st.text.deck} onChange={(deck) => set({ text: { ...st.text, deck } })} />
-          <TextSize label="Swap menu" value={st.text.plus} onChange={(plus) => set({ text: { ...st.text, plus } })} />
-        </div>
-      </section>
-
-      <CalendarSection s={s} />
-
-      {kind === 'electron' && <AccountSection />}
-      {kind === 'electron' && <AiSection clerk={st.clerk} setClerk={(p) => set({ clerk: { ...st.clerk, ...p } })} />}
-      <DataSection kind={kind} openNotes={openNotes} />
-      <HouseRulesSection s={s} />
-      <RecipesSection s={s} />
-
-      <section>
-        <div className="section-head">
-          <h3 className="side-title caps">Hotkeys</h3>
-          <button type="button" className="btn" onClick={openKeymap} title="Every key in the app, and the ones you changed (? in the deck)">
-            <Keyboard size={14} /> Keymap
-          </button>
-        </div>
-        <p className="field-help">
-          Global, they work from any app. Use a modifier combo such as {EXAMPLE} or Ctrl+Shift+Space.
-          {IS_MAC && ' Option combos replace the characters they would type while Mayorly runs.'}
-        </p>
-        <div className="hotkeys">
-          {GLOBAL_ACTIONS.map(([action, label]) => (
-            <HotkeyField key={action} label={label} value={st.hotkeys[action]} onCommit={(v) => set({ hotkeys: { ...st.hotkeys, [action]: v } })} />
+      <div className="settings-layout">
+        <nav className="settings-rail" aria-label="Settings" onKeyDown={onRailKey}>
+          {areas.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              data-area-tab={a.id}
+              className={`settings-rail-item ${area === a.id ? 'on' : ''}`}
+              aria-current={area === a.id ? 'page' : undefined}
+              onClick={() => go(a.id)}
+            >
+              {a.art ? <ArtIcon id={a.art} size={16} fallback={<a.icon size={17} />} /> : <a.icon size={17} />}
+              <span>{a.id === 'account' && kind === 'web' ? 'Your data' : a.label}</span>
+            </button>
           ))}
+        </nav>
+
+        <div className="settings-main">
+          <SettingsSearch root={page} placeholder="Search settings, or press /" reveal={reveal} />
+
+          <Area id="timer" title="Timer" open={area}>
+            <Row title="Lengths" desc="Minutes in each block, and how often the long rest comes." setting="focus, rest, long rest, pomodoro, minutes, tomato length">
+              <div className="rules rules-4">
+                <Num label="Focus" help="minutes, and the tomato length" value={st.focusMin} min={1} max={180} onChange={(focusMin) => set({ focusMin })} />
+                <Num label="Rest" help="minutes" value={st.shortRestMin} min={0} max={60} onChange={(shortRestMin) => set({ shortRestMin })} />
+                <Num label="Long rest" help="minutes" value={st.longRestMin} min={0} max={120} onChange={(longRestMin) => set({ longRestMin })} />
+                <Num label="Long rest every" help="focus blocks" value={st.longRestEvery} min={1} max={12} onChange={(longRestEvery) => set({ longRestEvery })} />
+              </div>
+            </Row>
+            <Row title="Starting on its own" desc="Off, a block that ends waits for you to start the next one." setting="auto start, autostart, next block, start rests">
+              <div className="checks">
+                <Check label="Start the next focus or couch block on its own" value={st.autoStartFocus} onChange={(autoStartFocus) => set({ autoStartFocus })} />
+                <Check label="Start rests on their own" value={st.autoStartRest} onChange={(autoStartRest) => set({ autoStartRest })} />
+              </div>
+            </Row>
+          </Area>
+
+          {kind === 'electron' && (
+            <Area id="switch" title="Auto switch" lede="Rules that change the task on the desk for you. Each one is kept on this computer only." open={area}>
+              <AutoSwitchRows rules={st.autoSwitch} set={(autoSwitch) => set({ autoSwitch })} />
+            </Area>
+          )}
+
+          <Area id="sound" title="Sound and light" open={area}>
+            <Row
+              title="Task switch"
+              desc="What a change of task on the desk sounds and looks like. Sound cues turns every sound off or on, the alarms included."
+              setting="sound, sound cues, switch sound, swap, task switch, thud, flash, glow, pulse, edges, shake"
+            >
+              <div className="checks">
+                <Check label="Sound cues" value={st.sound} onChange={(sound) => set({ sound })} />
+                <Check label="Light the screen's edges when the task changes" value={st.switchPulse} onChange={(switchPulse) => set({ switchPulse })} />
+              </div>
+              <div className="form-actions">
+                <button className="btn" type="button" title="The sound and the light when the task on the desk changes" onClick={() => { sfx.switch(true); previewPulse() }}><Play size={14} /> Try a switch</button>
+              </div>
+            </Row>
+            <AlarmRows s={s} kind={kind} />
+          </Area>
+
+          <Area id="pet" title="Pet and text" open={area}>
+            <Row title="Place and size" desc="The bottom corner the pet snaps to, and how big it is. Drag the tomato to put it anywhere else." setting="HUD, side, scale, pet, corner, size">
+              <div className="rules">
+                <div className="field">
+                  <span className="field-label caps">Side</span>
+                  <div className="seg" role="radiogroup" aria-label="HUD side">
+                    {(['left', 'right'] as const).map((v) => (
+                      <button key={v} role="radio" aria-checked={st.hudSide === v} className={st.hudSide === v ? 'on' : ''} onClick={() => bridge.snap(v === 'left' ? 3 : 4)}>
+                        {v === 'left' ? 'Left' : 'Right'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <label className="field">
+                  <span className="field-label caps">Scale</span>
+                  <input type="range" min={0.7} max={1.6} step={0.05} value={st.hudScale} onChange={(e) => set({ hudScale: Number(e.target.value) })} />
+                  <span className="field-help mono num">{Math.round(st.hudScale * 100)}%</span>
+                </label>
+              </div>
+            </Row>
+            <Row title="Text size" desc="Per area, on this machine. The pet grows with its task line." setting="text size, font, zoom, bigger, smaller">
+              <div className="rules rules-3">
+                <TextSize label="Pet" value={st.text.pet} onChange={(pet) => set({ text: { ...st.text, pet } })} />
+                <TextSize label="Deck" value={st.text.deck} onChange={(deck) => set({ text: { ...st.text, deck } })} />
+                <TextSize label="Swap menu" value={st.text.plus} onChange={(plus) => set({ text: { ...st.text, plus } })} />
+              </div>
+            </Row>
+            {kind === 'electron' && (
+              <Row title="This computer" desc="Kept on this machine only, never synced." setting="startup, login, launch, menu bar, tray">
+                <div className="checks">
+                  <Check label="Open at login" value={st.openAtLogin} onChange={(openAtLogin) => set({ openAtLogin })} />
+                  {IS_MAC && <Check label="Timer beside the menu bar tomato" value={st.trayTimer} onChange={(trayTimer) => set({ trayTimer })} />}
+                </div>
+              </Row>
+            )}
+          </Area>
+
+          <Area id="calendar" title="Calendar" lede="The clerk plans open entries into these hours automatically, from now. What does not fit waits beyond the plan." open={area}>
+            <Row title="Work hours" desc={PLAN_HELP.work} setting="work schedule, work hours, job, holidays, day off, work ledgers">
+              <WorkFields s={s} />
+            </Row>
+            <Row title="Your hours" desc={PLAN_HELP.hours(s)} setting="your hours, planner hours, available">
+              <HoursFields s={s} />
+            </Row>
+            <Row title="Sessions" desc={PLAN_HELP.sessions} setting="sessions, session length, shortest, longest">
+              <SessionFields s={s} />
+            </Row>
+            <Row title="How it plans" desc="How far ahead, in what order, and what happens at a due." setting="plan range, horizon, mode, rotate, get it done, late, due">
+              <PlanFields s={s} />
+            </Row>
+            <OutsideCalendars s={s} />
+            <PlanFeed />
+          </Area>
+
+          <Area id="clerk" title="Clerk" open={area}>
+            {kind === 'electron' && <AiRows clerk={st.clerk} setClerk={(p) => set({ clerk: { ...st.clerk, ...p } })} />}
+            <HouseRulesRow s={s} />
+            <RecipesRow s={s} />
+          </Area>
+
+          <Area id="keys" title="Hotkeys" open={area}>
+            <Row
+              title="Global hotkeys"
+              desc={<>They work from any app. Use a modifier combo such as {EXAMPLE} or Ctrl+Shift+Space.{IS_MAC && ' Option combos replace the characters they would type while Mayorly runs.'}</>}
+              setting="hotkeys, shortcuts, keys, global"
+              aside={
+                <button type="button" className="btn" onClick={openKeymap} title="Every key in the app, and the ones you changed (? in the deck)">
+                  <Keyboard size={14} /> Keymap
+                </button>
+              }
+            >
+              <div className="hotkeys">
+                {GLOBAL_ACTIONS.map(([action, label]) => (
+                  <HotkeyField key={action} label={label} value={st.hotkeys[action]} onCommit={(v) => set({ hotkeys: { ...st.hotkeys, [action]: v } })} />
+                ))}
+              </div>
+            </Row>
+          </Area>
+
+          <Area id="account" title={kind === 'electron' ? 'Account and data' : 'Your data'} open={area}>
+            {kind === 'electron' && <AccountRow />}
+            <DataRows kind={kind} openNotes={openNotes} />
+            {kind === 'electron' && <DeleteAccountRow />}
+          </Area>
         </div>
-      </section>
+      </div>
     </div>
   )
 }
 
-function AlarmSection({ s, kind }: { s: MayorlyState; kind: 'electron' | 'web' }) {
+/** One area's view. Every area stays on the page while hidden, so the search finds what is in all of them. */
+function Area({ id, title, lede, open, children }: { id: AreaId; title: string; lede?: string; open: AreaId; children: ReactNode }) {
+  return (
+    <div className="settings-area" data-area={id} hidden={open !== id}>
+      <h2 className="settings-area-title">{title}</h2>
+      {lede && <p className="settings-area-lede">{lede}</p>}
+      {children}
+    </div>
+  )
+}
+
+/**
+ * One section: its title and what it is for on the left, its controls in a panel on the right (stacked
+ * when the deck is narrow). `setting` is more words for the search to find it by.
+ */
+function Row({ title, desc, setting, aside, children }: { title: string; desc?: ReactNode; setting?: string; aside?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="setting-row">
+      <div className="setting-label">
+        <h3 className="side-title" data-setting={setting ? `${title}, ${setting}` : undefined}>{title}</h3>
+        {desc && <p className="setting-desc">{desc}</p>}
+        {aside}
+      </div>
+      <div className="setting-panel">{children}</div>
+    </section>
+  )
+}
+
+function AlarmRows({ s, kind }: { s: MayorlyState; kind: 'electron' | 'web' }) {
   const [busy, setBusy] = useState<AlarmKind | null>(null)
   const [error, setError] = useState<string | null>(null)
   const upload = async (alarm: AlarmKind) => {
@@ -126,44 +291,43 @@ function AlarmSection({ s, kind }: { s: MayorlyState; kind: 'electron' | 'web' }
     finally { setBusy(null) }
   }
   return (
-    <section>
-      <h3 className="side-title caps" data-setting="Alarms, sound, tone, bell, chime, audio, upload">Alarms</h3>
-      <p className="field-help">Work and break sounds on this machine. Sound cues must be on for alarms; Preview always plays.</p>
-      <div className="rules">
-        {(['work', 'rest'] as const).map(alarm => {
+    <>
+      <Row title="Alarms" desc="Work and break sounds on this machine. They play while Sound cues is on; Preview always plays." setting="alarm, sound, tone, bell, chime, audio, upload, work starts, break starts">
+        {(['work', 'rest'] as const).map((alarm) => {
           const choice = s.settings.alarms[alarm]
           const label = alarm === 'work' ? 'Work starts' : 'Break starts'
-          return <div className="field" key={alarm}>
-            <label className="field-label caps" htmlFor={`alarm-${alarm}`}>{label}</label>
-            <select id={`alarm-${alarm}`} value={choice.tone} onChange={e => {
-              setError(null)
-              void dispatch({ type: 'settings/update', patch: { alarms: { ...s.settings.alarms, [alarm]: { ...choice, tone: e.target.value as AlarmTone } } } })
-            }}>
-              {ALARM_TONES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-              {choice.customId && <option value="custom">{choice.customName ?? 'Custom sound'}</option>}
-            </select>
-            <div className="form-actions">
-              <button className="btn" type="button" disabled={choice.tone === 'silent'} aria-label={`Preview ${alarm === 'work' ? 'work' : 'break'} alarm`} onClick={() => { setError(null); void playAlarm(choice, true).catch(e => setError(e instanceof Error ? e.message : String(e))) }}><Play size={14} /> Preview</button>
-              <button className="btn" type="button" disabled={busy !== null || kind !== 'electron'} title={kind === 'web' ? 'Upload custom sounds in the desktop app' : undefined} onClick={() => void upload(alarm)}><UploadSimple size={14} /> {busy === alarm ? 'Reading' : 'Upload sound'}</button>
+          return (
+            <div className="field alarm-row" key={alarm}>
+              <label className="field-label caps" htmlFor={`alarm-${alarm}`}>{label}</label>
+              <select id={`alarm-${alarm}`} value={choice.tone} onChange={(e) => {
+                setError(null)
+                void dispatch({ type: 'settings/update', patch: { alarms: { ...s.settings.alarms, [alarm]: { ...choice, tone: e.target.value as AlarmTone } } } })
+              }}>
+                {ALARM_TONES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                {choice.customId && <option value="custom">{choice.customName ?? 'Custom sound'}</option>}
+              </select>
+              <button className="btn" type="button" disabled={choice.tone === 'silent'} aria-label={`Preview ${alarm === 'work' ? 'work' : 'break'} alarm`} onClick={() => { setError(null); void playAlarm(choice, true).catch((e) => setError(e instanceof Error ? e.message : String(e))) }}><Play size={14} /> Preview</button>
+              <button className="btn" type="button" disabled={busy !== null || kind !== 'electron'} title={kind === 'web' ? 'Upload custom sounds in the desktop app' : 'A sound file of your own'} onClick={() => void upload(alarm)}><UploadSimple size={14} /> {busy === alarm ? 'Reading' : 'Upload'}</button>
             </div>
-          </div>
+          )
         })}
-      </div>
-      <p className="field-help">MP3, WAV, OGG, M4A, AAC or FLAC, up to 5 MB. Custom alarms play up to 15 seconds.</p>
-      {error && <p className="field-error" role="alert">{error}</p>}
-      <SoundSearch canSave={kind === 'electron'} />
-    </section>
+        <p className="field-help">MP3, WAV, OGG, M4A, AAC or FLAC, up to 5 MB. Custom alarms play up to 15 seconds.</p>
+        {error && <p className="field-error" role="alert">{error}</p>}
+      </Row>
+      <Row title="Sound library" desc="Short sounds to find as you type, for work or break." setting="sound library, search sounds, find a sound, freesound">
+        <SoundSearch canSave={kind === 'electron'} />
+      </Row>
+    </>
   )
 }
 
-function AccountSection() {
+function AccountRow() {
   const account = useAccount()
   const sync = useSyncStatus()
   const now = useNow(10_000)
   const [available, setAvailable] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [confirm, setConfirm] = useState(false)
   const [link, setLink] = useState<{ code: string; expiresAt: string } | null>(null)
   useEffect(() => void bridge.accountsAvailable().then(setAvailable), [])
   const linkPhone = async () => {
@@ -175,19 +339,6 @@ function AccountSection() {
     }
   }
   const linkLeft = link ? Math.max(0, Math.ceil((Date.parse(link.expiresAt) - now) / 60_000)) : 0
-  const remove = async () => {
-    if (!confirm) {
-      setConfirm(true)
-      return
-    }
-    setConfirm(false)
-    setError(null)
-    try {
-      await bridge.deleteAccount()
-    } catch (e) {
-      setError(e instanceof Error ? e.message.replace(/^Error: /, '') : String(e))
-    }
-  }
 
   const signIn = async () => {
     setBusy(true)
@@ -210,8 +361,7 @@ function AccountSection() {
   }
 
   return (
-    <section>
-      <h3 className="side-title caps" data-setting="Account, Google, sign in, sign out, sync, link a phone, code, delete account">Account</h3>
+    <Row title="Account" desc="Keeps your ledgers, entries and record on the server, and the same on every machine you sign in on." setting="Google, sign in, sign out, sync, link a phone, code">
       {!available ? (
         <p className="field-help">This build has no sync server configured.</p>
       ) : account ? (
@@ -222,11 +372,8 @@ function AccountSection() {
           </div>
           <span className={`field-help ${sync.phase === 'error' ? 'field-error' : ''}`}>{line}</span>
           <div className="form-actions">
-            <button className="btn ghost" onClick={() => void bridge.signOut()}>Sign out</button>
+            <button className="btn" onClick={() => void bridge.signOut()}>Sign out</button>
             <button className="btn ghost" title="Every signed-in machine, this one included" onClick={() => void bridge.signOutEverywhere().catch((e) => setError(e instanceof Error ? e.message : String(e)))}>Sign out everywhere</button>
-            <button className={`btn ghost ${confirm ? 'warn' : ''}`} onClick={() => void remove()} onBlur={() => setConfirm(false)}>
-              {confirm ? 'Confirm: delete the account and its copy on the server' : 'Delete account'}
-            </button>
           </div>
           {error && <span className="field-error">{error}</span>}
           <div className="link-phone" data-setting="Link a phone, iPhone, code">
@@ -240,11 +387,9 @@ function AccountSection() {
               <span className="field-help">Signs Mayorly on your phone in to this account with a one-time code.</span>
             )}
           </div>
-          <p className="field-help">Deleting removes the account and the synced document from the server. This machine keeps its own copy.</p>
         </div>
       ) : (
         <div className="account">
-          <p className="field-help">Keeps your ledgers, entries and record on the server, and the same on every machine you sign in on.</p>
           <button className="btn primary" onClick={() => void signIn()} disabled={busy}>
             <GoogleLogo size={16} weight="bold" aria-hidden />
             {busy ? 'Waiting for the browser' : 'Sign in with Google'}
@@ -252,35 +397,69 @@ function AccountSection() {
           {error && <span className="field-error">{error}</span>}
         </div>
       )}
-    </section>
+    </Row>
   )
 }
 
-/** Where the data is, a way out and a way back in, and which build this is. */
-function DataSection({ kind, openNotes }: { kind: 'electron' | 'web'; openNotes: () => void }) {
+/** The one thing in Settings that cannot be undone: last, on its own, and asked twice. */
+function DeleteAccountRow() {
+  const account = useAccount()
+  const [confirm, setConfirm] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (!account) return null
+  const remove = async () => {
+    if (!confirm) {
+      setConfirm(true)
+      return
+    }
+    setConfirm(false)
+    setError(null)
+    try {
+      await bridge.deleteAccount()
+    } catch (e) {
+      setError(e instanceof Error ? e.message.replace(/^Error: /, '') : String(e))
+    }
+  }
+  return (
+    <Row title="Delete account" desc="Removes the account and the synced document from the server. This machine keeps its own copy." setting="delete account, remove account, close account">
+      <button className="btn warn" onClick={() => void remove()} onBlur={() => setConfirm(false)}>
+        {confirm ? 'Confirm: delete the account and its copy on the server' : 'Delete account'}
+      </button>
+      {error && <span className="field-error">{error}</span>}
+    </Row>
+  )
+}
+
+/** Where the data is, a way out and a way back in; then which build this is. */
+function DataRows({ kind, openNotes }: { kind: 'electron' | 'web'; openNotes: () => void }) {
   const [info, setInfo] = useState<AppInfo | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
   useEffect(() => void bridge.getInfo().then(setInfo), [])
   return (
-    <section>
-      <h3 className="side-title caps">Your data</h3>
-      <p className="field-help">
-        {kind === 'electron'
-          ? `One file on this machine${info ? `, in ${info.dataDir}` : ''}, with a copy a day in backups beside it. Export writes the same JSON anywhere; import replaces what is here, after another copy to backups.`
+    <>
+      <Row
+        title="Your data"
+        desc={kind === 'electron'
+          ? 'One file on this machine, with a copy a day in backups beside it. Export writes the same JSON anywhere; import replaces what is here, after another copy to backups.'
           : 'In this browser. Export downloads it as JSON.'}
-      </p>
-      <div className="form-actions">
-        <button className="btn" onClick={() => void bridge.exportState().then((p) => setMsg(p ? `Exported to ${p}` : null))}>Export</button>
-        {kind === 'electron' && <button className="btn ghost" onClick={() => void bridge.importState().then((r) => setMsg(r.message || null))}>Import</button>}
-      </div>
-      {msg && <p className="field-help">{msg}</p>}
+        setting="export, import, backup, json, file, data folder"
+      >
+        {kind === 'electron' && info?.dataDir && <p className="field-help mono setting-path">{info.dataDir}</p>}
+        <div className="form-actions">
+          <button className="btn" onClick={() => void bridge.exportState().then((p) => setMsg(p ? `Exported to ${p}` : null))}>Export</button>
+          {kind === 'electron' && <button className="btn ghost" onClick={() => void bridge.importState().then((r) => setMsg(r.message || null))}>Import</button>}
+        </div>
+        {msg && <p className="field-help">{msg}</p>}
+      </Row>
       {info && (
-        <p className="field-help build-line">
-          <span className="mono num">Mayorly {info.version}{info.arch ? `  ${info.arch}` : ''}  build {info.commit}  built {builtOn(info)}</span>
-          <button type="button" className="btn ghost" onClick={openNotes}>What changed</button>
-        </p>
+        <Row title="Version" desc="Which build this is, and what changed in it." setting="version, build, update, what changed, release notes">
+          <p className="field-help build-line">
+            <span className="mono num">Mayorly {info.version}{info.arch ? `  ${info.arch}` : ''}  build {info.commit}  built {builtOn(info)}</span>
+            <button type="button" className="btn ghost" onClick={openNotes}>What changed</button>
+          </p>
+        </Row>
       )}
-    </section>
+    </>
   )
 }
 
@@ -291,7 +470,7 @@ function DataSection({ kind, openNotes }: { kind: 'electron' | 'web'; openNotes:
  * you pick. Keys are sealed on this machine and, with a sync passphrase, shared
  * with the account's other computers, sealed with the passphrase first.
  */
-function AiSection({ clerk, setClerk }: { clerk: ClerkSettings; setClerk: (p: Partial<ClerkSettings>) => void }) {
+function AiRows({ clerk, setClerk }: { clerk: ClerkSettings; setClerk: (p: Partial<ClerkSettings>) => void }) {
   const ai = useAi()
   const [key, setKey] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -321,77 +500,82 @@ function AiSection({ clerk, setClerk }: { clerk: ClerkSettings; setClerk: (p: Pa
   const providers = [...new Set(working.map((k) => k.provider))]
 
   return (
-    <section>
-      <h3 className="side-title caps" data-setting="AI clerk, API key, keys, passphrase, key sync, Gemini, OpenAI, Anthropic, Claude, xAI, Grok, model, filing">AI clerk</h3>
-      <p className="field-help">
-        Bring your own key. Paste it and the provider is read from the key itself; the cheapest text model that answers is chosen.
-        The clerk then files whatever you capture: it picks the ledger from your criteria, trims the title and reads the estimate.
-        Keys stay on this machine unless you sync them below. Without one, the clerk files by prefix and tag only.
-      </p>
+    <>
+      <Row
+        title="AI keys"
+        desc="Bring your own key. Without one, the clerk files by prefix and tag only."
+        setting="AI clerk, API key, keys, Gemini, OpenAI, Anthropic, Claude, xAI, Grok, model, filing"
+      >
+        <p className="field-help">
+          Paste it and the provider is read from the key itself; the cheapest text model that answers is chosen.
+          The clerk then files whatever you capture: it picks the ledger from your criteria, trims the title and reads the estimate.
+          Keys stay on this machine unless you sync them below.
+        </p>
 
-      {ai.keys.map((k) => (
-        <div key={k.id} className={`ai-key ${k.status}`}>
-          <div className="ai-key-head">
-            <span className="caps">{ai.providers[k.provider]}</span>
-            <span className="mono dim">…{k.keyHint}</span>
-            <span className={`ai-status caps ${k.status}`}>{k.status === 'ok' ? 'working' : k.status === 'checking' ? 'checking' : 'failing'}</span>
-            <span className="ai-key-actions">
-              <button className="icon-btn" title="Check the key again" aria-label="Check again" disabled={busy !== null} onClick={() => void run(k.id, () => bridge.ai.recheckKey(k.id))}>
-                <ArrowsClockwise size={14} />
-              </button>
-              <button className="icon-btn" title="Remove this key" aria-label="Remove" disabled={busy !== null} onClick={() => void run(k.id, () => bridge.ai.removeKey(k.id))}>
-                <Trash size={14} />
-              </button>
-            </span>
+        {ai.keys.map((k) => (
+          <div key={k.id} className={`ai-key ${k.status}`}>
+            <div className="ai-key-head">
+              <span className="caps">{ai.providers[k.provider]}</span>
+              <span className="mono dim">…{k.keyHint}</span>
+              <span className={`ai-status caps ${k.status}`}>{k.status === 'ok' ? 'working' : k.status === 'checking' ? 'checking' : 'failing'}</span>
+              <span className="ai-key-actions">
+                <button className="icon-btn" title="Check the key again" aria-label="Check again" disabled={busy !== null} onClick={() => void run(k.id, () => bridge.ai.recheckKey(k.id))}>
+                  <ArrowsClockwise size={14} />
+                </button>
+                <button className="icon-btn" title="Remove this key" aria-label="Remove" disabled={busy !== null} onClick={() => void run(k.id, () => bridge.ai.removeKey(k.id))}>
+                  <Trash size={14} />
+                </button>
+              </span>
+            </div>
+            {k.status === 'failing' && k.lastError && <span className="field-error">{k.lastError}</span>}
+            {k.status === 'failing' && k.retryAt != null && <span className="field-help">Resting, not removed. The clerk tries it again on its own {restUntil(k.retryAt)}.</span>}
+            {k.status === 'checking' && <span className="field-help">From your other computer. Checking it here.</span>}
+            {k.models.length > 0 && <label className="field">
+              <span className="field-label caps">Model</span>
+              <select value={k.preferredModel ?? ''} onChange={(e) => void bridge.ai.setPreferredModel(k.id, e.target.value || null)}>
+                <option value="">Cheapest that answered ({k.defaultModel})</option>
+                {k.models.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </label>}
           </div>
-          {k.status === 'failing' && k.lastError && <span className="field-error">{k.lastError}</span>}
-          {k.status === 'failing' && k.retryAt != null && <span className="field-help">Resting, not removed. The clerk tries it again on its own {restUntil(k.retryAt)}.</span>}
-          {k.status === 'checking' && <span className="field-help">From your other computer. Checking it here.</span>}
-          {k.models.length > 0 && <label className="field">
-            <span className="field-label caps">Model</span>
-            <select value={k.preferredModel ?? ''} onChange={(e) => void bridge.ai.setPreferredModel(k.id, e.target.value || null)}>
-              <option value="">Cheapest that answered ({k.defaultModel})</option>
-              {k.models.map((m) => <option key={m} value={m}>{m}</option>)}
+        ))}
+
+        {providers.length > 1 && (
+          <label className="field">
+            <span className="field-label caps">Prefer</span>
+            <select value={ai.preferredProvider ?? ''} onChange={(e) => void bridge.ai.setPreferredProvider((e.target.value || null) as AiProvider | null)}>
+              <option value="">First working key</option>
+              {providers.map((p) => <option key={p} value={p}>{ai.providers[p]}</option>)}
             </select>
-          </label>}
+          </label>
+        )}
+
+        <div className="ai-add">
+          <input
+            className="mono"
+            type="password"
+            placeholder="Paste an API key: Gemini, Claude, OpenAI or Grok"
+            value={key}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => setKey(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void add()}
+            disabled={busy === 'add'}
+          />
+          <button className="btn primary" onClick={() => void add()} disabled={busy !== null || !key.trim()}>
+            {busy === 'add' ? 'Checking' : 'Add key'}
+          </button>
         </div>
-      ))}
-
-      {providers.length > 1 && (
-        <label className="field">
-          <span className="field-label caps">Prefer</span>
-          <select value={ai.preferredProvider ?? ''} onChange={(e) => void bridge.ai.setPreferredProvider((e.target.value || null) as AiProvider | null)}>
-            <option value="">First working key</option>
-            {providers.map((p) => <option key={p} value={p}>{ai.providers[p]}</option>)}
-          </select>
-        </label>
-      )}
-
-      <div className="ai-add">
-        <input
-          className="mono"
-          type="password"
-          placeholder="Paste an API key: Gemini, Claude, OpenAI or Grok"
-          value={key}
-          spellCheck={false}
-          autoComplete="off"
-          onChange={(e) => setKey(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && void add()}
-          disabled={busy === 'add'}
-        />
-        <button className="btn primary" onClick={() => void add()} disabled={busy !== null || !key.trim()}>
-          {busy === 'add' ? 'Checking' : 'Add key'}
-        </button>
-      </div>
-      {busy === 'add' && <span className="field-help">Listing the key's models, then one tiny request to the cheapest.</span>}
-      {error && <span className="field-error">{error}</span>}
-      {ai.usage.calls > 0 && (
-        <span className="field-help">Last {ai.usage.days} days: {ai.usage.calls} filed by the clerk, about {dollars(ai.usage.costMicroUsd)}.</span>
-      )}
+        {busy === 'add' && <span className="field-help">Listing the key's models, then one tiny request to the cheapest.</span>}
+        {error && <span className="field-error">{error}</span>}
+        {ai.usage.calls > 0 && (
+          <span className="field-help">Last {ai.usage.days} days: {ai.usage.calls} filed by the clerk, about {dollars(ai.usage.costMicroUsd)}.</span>
+        )}
+      </Row>
+      <KeySyncRow sync={ai.sync} />
       <ClerkShelf clerk={clerk} set={setClerk} ai={ai} />
       <ClerkAllowance clerk={clerk} set={setClerk} />
-      <KeySyncBlock sync={ai.sync} />
-    </section>
+    </>
   )
 }
 
@@ -422,10 +606,15 @@ function ClerkShelf({ clerk, set, ai }: { clerk: ClerkSettings; set: (p: Partial
   }
   const whose = clerk.minConfidence !== null ? 'your level' : tuned ? 'tuned' : 'until tuned'
   return (
-    <div className="clerk-shelf" data-setting="new ledger, create ledgers, consolidate, fold, merge ledgers, confidence, threshold, tune">
-      <h4 className="field-label caps" style={{ marginTop: 18 }}>The clerk and your shelf</h4>
-      <Check label="Start a ledger when nothing fits" value={clerk.createLedgers} onChange={(createLedgers) => set({ createLedgers })} />
-      <Check label="Fold its own ledgers into ones that overlap" value={clerk.consolidate} onChange={(consolidate) => set({ consolidate })} />
+    <Row
+      title="Your shelf"
+      desc={`What the clerk may do to your ledgers on its own. It starts a ledger only while the shelf has room for ${LEDGER_CAP}, folds a ledger it started only after a day, and never renames, folds or removes one you wrote or edited.`}
+      setting="new ledger, create ledgers, consolidate, fold, merge ledgers, confidence, threshold, tune"
+    >
+      <div className="checks">
+        <Check label="Start a ledger when nothing fits" value={clerk.createLedgers} onChange={(createLedgers) => set({ createLedgers })} />
+        <Check label="Fold its own ledgers into ones that overlap" value={clerk.consolidate} onChange={(consolidate) => set({ consolidate })} />
+      </div>
       {(clerk.createLedgers || clerk.consolidate) && (
         <>
           <label className="field">
@@ -443,7 +632,7 @@ function ClerkShelf({ clerk, set, ai }: { clerk: ClerkSettings; set: (p: Partial
                   : 'Needs a working key to tune.'}
           </p>
           <div className="form-actions">
-            <button type="button" className="btn ghost" disabled={running || !working} onClick={() => void tune()}>{running ? 'Tuning' : tuned ? 'Tune again' : 'Tune now'}</button>
+            <button type="button" className="btn" disabled={running || !working} onClick={() => void tune()}>{running ? 'Tuning' : tuned ? 'Tune again' : 'Tune now'}</button>
             {clerk.minConfidence !== null && (
               <button type="button" className="btn ghost" onClick={() => set({ minConfidence: null })}>{tuned ? `Use the tuned level, ${pct(tuned.threshold)}` : 'Use the tuned level'}</button>
             )}
@@ -451,14 +640,10 @@ function ClerkShelf({ clerk, set, ai }: { clerk: ClerkSettings; set: (p: Partial
           {error && <span className="field-error">{error}</span>}
         </>
       )}
-      <p className="field-help">
-        It starts a ledger only while the shelf has room for {LEDGER_CAP}, folds a ledger it started only after a day, and never renames, folds or removes one you wrote or edited.
-      </p>
-    </div>
+    </Row>
   )
 }
 
-/** Electron wraps an error thrown in main: "Error invoking remote method 'x': Error: text". */
 /** The rules that move the desk on their own. Each is built in and only turned on or off here. */
 const AUTO_SWITCH: { key: keyof AutoSwitchRules; label: string; help: string }[] = [
   {
@@ -493,16 +678,50 @@ const AUTO_SWITCH: { key: keyof AutoSwitchRules; label: string; help: string }[]
   },
 ]
 
-function AutoSwitchRulesField({ rules, set }: { rules: AutoSwitchRules; set: (r: AutoSwitchRules) => void }) {
+/** The rules in rows by what they listen to. */
+const SWITCH_GROUPS: { title: string; desc: string; setting: string; keys: (keyof AutoSwitchRules)[] }[] = [
+  {
+    title: 'AI prompts',
+    desc: 'While an AI works on your prompt, you work on something else.',
+    setting: 'claude code, claude, prompt, hook, project, gemini, codex, chatgpt, ai',
+    keys: ['aiPrompt'],
+  },
+  {
+    title: 'Streams',
+    desc: "Read from the stream's own page in Chrome through the Mayorly extension, never from your screen.",
+    setting: 'stream, streamer, twitch, youtube, kick, dies, death, ad, mute, watch',
+    keys: ['streamDeath', 'streamAd', 'streamOpen', 'streamMute'],
+  },
+  {
+    title: 'Games',
+    desc: 'Your own League of Legends match, known from the game itself on this computer.',
+    setting: 'league, lol, game, match, play',
+    keys: ['leaguePlay'],
+  },
+]
+
+function AutoSwitchRows({ rules, set }: { rules: AutoSwitchRules; set: (r: AutoSwitchRules) => void }) {
   return (
-    <div className="auto-switch" data-setting="auto switch, rules, claude code, claude, prompt, hook, project, stream, streamer, twitch, youtube, league, dies, death, ad, game, match, play, lol">
-      <span className="field-label caps">Auto switch</span>
-      {AUTO_SWITCH.map((r) => (
-        <div key={r.key}>
-          <Check label={r.label} value={rules[r.key]} onChange={(on) => set({ ...rules, [r.key]: on })} />
-          <p className="field-help">{r.help}</p>
-        </div>
+    <>
+      {SWITCH_GROUPS.map((g) => (
+        <Row key={g.title} title={g.title} desc={g.desc} setting={`auto switch, ${g.setting}`}>
+          {AUTO_SWITCH.filter((r) => g.keys.includes(r.key)).map((r) => (
+            <SwitchRule key={r.key} label={r.label} help={r.help} value={rules[r.key]} onChange={(on) => set({ ...rules, [r.key]: on })} />
+          ))}
+        </Row>
       ))}
+    </>
+  )
+}
+
+/** One rule: its switch and what it does, two lines of that until More opens the rest. */
+function SwitchRule({ label, help, value, onChange }: { label: string; help: string; value: boolean; onChange: (v: boolean) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="switch-rule">
+      <Check label={label} value={value} onChange={onChange} />
+      <p className={`field-help switch-rule-help ${open ? 'open' : ''}`}>{help}</p>
+      <button type="button" className="switch-rule-more" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Less' : 'More'}</button>
     </div>
   )
 }
@@ -523,14 +742,17 @@ function ClerkAllowance({ clerk, set }: { clerk: ClerkSettings; set: (p: Partial
     </div>
   )
   return (
-    <div className="clerk-shelf" data-setting="permissions, instructions, auto approve, ask first, what the clerk may do">
-      <h4 className="field-label caps">What the clerk may do</h4>
-      <p className="field-help">Type an instruction into Capture, like "set work to weekdays 7am to 4pm" or "every workday add PRO: CWILL {'{date}'}". Start a line with ! to make sure it is read as one. Do it: done at once, with Undo in the box. Ask first: the box shows Apply.</p>
+    <Row
+      title="Instructions"
+      desc={<>Type an instruction into Capture, like "set work to weekdays 7am to 4pm" or "every workday add PRO: CWILL {'{date}'}". Start a line with ! to make sure it is read as one.</>}
+      setting="permissions, instructions, auto approve, ask first, what the clerk may do"
+    >
       <div className="form-row">
         {row('settings', 'Settings', 'Work hours, days off, session lengths.')}
         {row('recipes', 'Recipes and shortcuts', 'Entries it adds every day, or on a key.')}
       </div>
-    </div>
+      <p className="field-help">Do it: done at once, with Undo in the box. Ask first: the box shows Apply.</p>
+    </Row>
   )
 }
 
@@ -542,13 +764,15 @@ const recipeWhen = (r: Recipe) => {
 }
 
 /** Standing orders the clerk set up: when each runs, what it adds; pause, run now, remove. */
-function RecipesSection({ s }: { s: MayorlyState }) {
+function RecipesRow({ s }: { s: MayorlyState }) {
   return (
-    <section data-setting="recipes, shortcuts, recurring, daily, every day, automation">
-      <h3 className="side-title caps">Recipes</h3>
-      <p className="field-help">Entries the clerk adds on its own, every day or on a key. Ask for one in Capture: "every workday, not on holidays, add PRO: CWILL {'{date}'}", or "Alt+H makes PRO: CWILL {'{date}'}, 16 tomatoes". {'{date}'} is the month and day.</p>
+    <Row
+      title="Recipes"
+      desc={<>Entries the clerk adds on its own, every day or on a key. Ask for one in Capture: "every workday, not on holidays, add PRO: CWILL {'{date}'}", or "Alt+H makes PRO: CWILL {'{date}'}, 16 tomatoes". {'{date}'} is the month and day.</>}
+      setting="recipes, shortcuts, recurring, daily, every day, automation"
+    >
       {s.recipes.length === 0 ? (
-        <p className="dim">None yet.</p>
+        <p className="field-help">None yet.</p>
       ) : (
         <div className="sources">
           {s.recipes.map((r) => (
@@ -565,7 +789,7 @@ function RecipesSection({ s }: { s: MayorlyState }) {
           ))}
         </div>
       )}
-    </section>
+    </Row>
   )
 }
 
@@ -588,7 +812,7 @@ function plainError(e: unknown): string {
  * the server, so no device asks for a passphrase (shared/ai/keysync.ts). A passphrase is asked for
  * only for an old vault no device has handed over yet, and the field for it stays out of the way.
  */
-function KeySyncBlock({ sync }: { sync: AiKeySync }) {
+function KeySyncRow({ sync }: { sync: AiKeySync }) {
   const now = useNow(30_000)
   const [available, setAvailable] = useState(false)
   const [pass, setPass] = useState('')
@@ -618,9 +842,8 @@ function KeySyncBlock({ sync }: { sync: AiKeySync }) {
   if (!available) return null
   const ago = sync.at ? Math.round((now - sync.at) / 60_000) : null
   return (
-    <div className="key-sync" data-setting="Key sync, AI keys between devices, passphrase">
-      <span className="field-label caps">Sync between devices</span>
-      {sync.phase === 'off' && <p className="field-help">Sign in under Account and these keys reach your other computers and your phone.</p>}
+    <Row title="Key sync" desc="The same keys on your other computers and your phone, through your account." setting="Key sync, AI keys between devices, passphrase">
+      {sync.phase === 'off' && <p className="field-help">Sign in under Account and data, and these keys reach your other computers and your phone.</p>}
       {(sync.phase === 'checking' || sync.phase === 'none') && <p className="field-help">Checking key sync</p>}
       {sync.phase === 'on' && (
         <p className="field-help">
@@ -641,7 +864,7 @@ function KeySyncBlock({ sync }: { sync: AiKeySync }) {
         </>
       )}
       {(error ?? sync.message) && <span className="field-error">{error ?? sync.message}</span>}
-    </div>
+    </Row>
   )
 }
 
@@ -650,7 +873,7 @@ function KeySyncBlock({ sync }: { sync: AiKeySync }) {
  * filed, and the correction is written here as a rule, with the ledger it chose
  * and the one you chose. Edit the wording, add your own, remove what no longer holds.
  */
-function HouseRulesSection({ s }: { s: MayorlyState }) {
+function HouseRulesRow({ s }: { s: MayorlyState }) {
   const [draft, setDraft] = useState('')
   const add = () => {
     if (!draft.trim()) return
@@ -658,15 +881,18 @@ function HouseRulesSection({ s }: { s: MayorlyState }) {
     setDraft('')
   }
   return (
-    <section>
-      <h3 className="side-title caps">House rules</h3>
-      <p className="field-help">
-        What the clerk reads before every filing, ahead of the ledger criteria. When you move an entry the clerk filed, the correction is written here on its own.
-      </p>
-      {s.houseRules.length === 0 && <p className="field-help">No rules yet. Correct the clerk once, or write one below.</p>}
-      <div className="rules-list">
-        {s.houseRules.map((r) => <HouseRuleRow key={r.id} id={r.id} text={r.text} learned={!!r.learnedFrom} />)}
-      </div>
+    <Row
+      title="House rules"
+      desc="What the clerk reads before every filing, ahead of the ledger criteria. When you move an entry the clerk filed, the correction is written here on its own."
+      setting="house rules, rules, corrections, learned"
+    >
+      {s.houseRules.length === 0 ? (
+        <p className="field-help">No rules yet. Correct the clerk once, or write one below.</p>
+      ) : (
+        <div className="rules-list">
+          {s.houseRules.map((r) => <HouseRuleRow key={r.id} id={r.id} text={r.text} learned={!!r.learnedFrom} />)}
+        </div>
+      )}
       <div className="ai-add">
         <input
           value={draft}
@@ -676,7 +902,7 @@ function HouseRulesSection({ s }: { s: MayorlyState }) {
         />
         <button className="btn" onClick={add} disabled={!draft.trim()}><Plus size={14} /> Add rule</button>
       </div>
-    </section>
+    </Row>
   )
 }
 
@@ -724,19 +950,6 @@ function HotkeyField({ label, value, onCommit }: { label: string; value: string;
   )
 }
 
-/** Work, your hours, sessions and the planner's knobs (the same panel as the Calendar tab's gear); then outside calendars and the feed. */
-function CalendarSection({ s }: { s: MayorlyState }) {
-  return (
-    <section>
-      <h3 className="side-title caps">Calendar</h3>
-      <p className="field-help">The clerk plans open entries into these hours automatically, from now. What does not fit waits beyond the plan.</p>
-      <PlanSettings s={s} />
-      <OutsideCalendars s={s} />
-      <PlanFeed />
-    </section>
-  )
-}
-
 /** The plan as a calendar Google subscribes to: one secret address per account, from the server. */
 function PlanFeed() {
   const account = useAccount()
@@ -771,9 +984,12 @@ function PlanFeed() {
   }
   if (!account) return null
   return (
-    <div className="plan-feed">
-      <h4 className="field-label caps" style={{ marginTop: 18 }}>Your plan in Google Calendar</h4>
-      <p className="field-help">A calendar address Google can subscribe to: the planned blocks and the events made here. In Google Calendar, Other calendars, plus, From URL. Google reads it on its own clock, often hours apart; the plan here is always current. Anyone with the address can read your plan, so keep it to yourself or make a new one.</p>
+    <Row
+      title="Your plan in Google Calendar"
+      desc="A calendar address Google can subscribe to: the planned blocks and the events made here."
+      setting="feed, subscribe, google calendar, ical, share the plan"
+    >
+      <p className="field-help">In Google Calendar, Other calendars, plus, From URL. Google reads it on its own clock, often hours apart; the plan here is always current. Anyone with the address can read your plan, so keep it to yourself or make a new one.</p>
       {url ? (
         <>
           <div className="form-row">
@@ -791,7 +1007,7 @@ function PlanFeed() {
         </div>
       )}
       {error && <span className="field-help field-error">{error}</span>}
-    </div>
+    </Row>
   )
 }
 
@@ -819,9 +1035,12 @@ function OutsideCalendars({ s }: { s: MayorlyState }) {
   }
   const fmt = (t: number) => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(t)
   return (
-    <div className="sources">
-      <h4 className="field-label caps" style={{ marginTop: 18 }}>Outside calendars</h4>
-      <p className="field-help">Your Google calendar, read as busy time so the planner routes around it. In Google Calendar, Settings, your calendar, copy the secret address in iCal format. The address stays on this machine; the events go into your account, with their titles unless you keep them out.</p>
+    <Row
+      title="Outside calendars"
+      desc="Your Google calendar, read as busy time so the planner routes around it."
+      setting="google calendar, ical, ics, busy, outside calendar, secret address"
+    >
+      <p className="field-help">In Google Calendar, Settings, your calendar, copy the secret address in iCal format. The address stays on this machine; the events go into your account, with their titles unless you keep them out.</p>
       {feeds.map((f) => (
         <div key={f.id} className="source-row">
           <span className="source-label">{f.label}</span>
@@ -844,7 +1063,7 @@ function OutsideCalendars({ s }: { s: MayorlyState }) {
         <button type="button" className="btn" disabled={busy || !url.trim()} onClick={() => void add()}>{busy ? 'Reading' : 'Add calendar'}</button>
         {msg && <span className="field-help">{msg}</span>}
       </div>
-    </div>
+    </Row>
   )
 }
 
