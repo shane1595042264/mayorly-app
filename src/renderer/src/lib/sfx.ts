@@ -87,41 +87,65 @@ function whoosh(a: BaseAudioContext, at: number, dur: number, gain: number, out:
   src.start(at)
 }
 
-/** A bus that squeezes the hit so it lands hard without clipping, then lifts it back. */
-function punch(a: BaseAudioContext): AudioNode {
-  const comp = a.createDynamicsCompressor()
-  comp.threshold.value = -20
-  comp.knee.value = 6
-  comp.ratio.value = 8
-  comp.attack.value = 0.002
-  comp.release.value = 0.12
-  const lift = a.createGain()
-  // About 3 dB under full scale at its peak: it plays dozens of times a day, so a hit, not a jump.
-  lift.gain.value = 1.15
-  comp.connect(lift).connect(a.destination)
-  return comp
+/** A curve that rounds a wave off instead of cutting it: drive pushes it into warm saturation, and nothing ever passes 1. */
+function softClip(a: BaseAudioContext, drive: number): WaveShaperNode {
+  const n = 1024
+  const curve = new Float32Array(n)
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1
+    curve[i] = Math.tanh(drive * x) / Math.tanh(drive)
+  }
+  const ws = a.createWaveShaper()
+  ws.curve = curve
+  ws.oversample = '4x'
+  return ws
 }
 
 /**
- * The task on the desk changed: a weapon swap. A short rising whoosh, then the hit: a deep thump
- * whose pitch falls away, a knock of body, a bright transient and the metal lock a beat later, all
- * through one compressed bus. About a third of a second. Built against any context, so it can be
- * rendered offline to listen to (`renderSwitch`).
+ * The bus the hit goes through: squeezed hard so it is dense and loud, lifted, then rounded off so its
+ * peak sits just under full scale and nothing clips. The low end goes through its own saturation
+ * first (`body`), whose overtones are what a laptop's small speakers can play of a 40 Hz thump.
+ */
+function punch(a: BaseAudioContext): { out: AudioNode; body: AudioNode } {
+  const comp = a.createDynamicsCompressor()
+  comp.threshold.value = -26
+  comp.knee.value = 4
+  comp.ratio.value = 12
+  comp.attack.value = 0.001
+  comp.release.value = 0.16
+  const lift = a.createGain()
+  lift.gain.value = 2.1
+  const limit = softClip(a, 1.6)
+  const trim = a.createGain()
+  trim.gain.value = 0.97
+  comp.connect(lift).connect(limit).connect(trim).connect(a.destination)
+  const body = softClip(a, 2.4)
+  body.connect(comp)
+  return { out: comp, body }
+}
+
+/**
+ * The task on the desk changed: a weapon swap. A short rising whoosh, then the hit: a sub thump that
+ * falls from 95 to 30 Hz under a warmer layer an octave up (both saturated, so the depth reaches
+ * small speakers), a knock of body, a bright transient and the metal lock a beat later, all through
+ * one compressed, rounded bus. Half a second, most of it the low tail. Built against any context, so
+ * it can be rendered offline to listen to (`renderSwitch`).
  */
 export function switchCue(a: BaseAudioContext, t: number) {
-  const out = punch(a)
-  whoosh(a, t, 0.09, 0.28, out)
+  const { out, body } = punch(a)
+  whoosh(a, t, 0.09, 0.32, out)
   const hit = t + 0.085
-  drop(a, 150, 42, hit, 0.17, 0.34, 0.95, 'sine', out)
-  drop(a, 240, 110, hit, 0.06, 0.12, 0.3, 'triangle', out)
-  click(a, hit, 1.0, 3400, out)
-  click(a, hit + 0.055, 0.75, 1900, out)
-  tone(a, 2637, hit + 0.055, 0.12, 0.05, 'triangle', out)
+  drop(a, 95, 30, hit, 0.26, 0.5, 1.0, 'sine', body)
+  drop(a, 190, 60, hit, 0.2, 0.36, 0.55, 'sine', body)
+  drop(a, 170, 75, hit, 0.07, 0.16, 0.45, 'triangle', body)
+  click(a, hit, 1.0, 3200, out)
+  click(a, hit + 0.055, 0.8, 1800, out)
+  tone(a, 2349, hit + 0.055, 0.14, 0.06, 'triangle', out)
 }
 
 /** The switch cue as samples, for listening to it outside the app. */
 export async function renderSwitch(sampleRate = 44100): Promise<AudioBuffer> {
-  const off = new OfflineAudioContext(1, Math.ceil(sampleRate * 0.5), sampleRate)
+  const off = new OfflineAudioContext(1, Math.ceil(sampleRate * 0.7), sampleRate)
   switchCue(off, 0.01)
   return off.startRendering()
 }

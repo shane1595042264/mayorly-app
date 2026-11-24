@@ -117,7 +117,15 @@ export interface ClerkQuestion {
 }
 
 /** A screen effect the shell asks its effects window to play (macOS), or the overlay plays itself (Windows). */
-export interface Effect {
+export type Effect = CashInEffect | PulseEffect
+
+/** The task on the desk changed: the screen's edges breathe in its colour (hud/SwitchPulse.tsx). */
+export interface PulseEffect {
+  kind: 'pulse'
+  color: string
+}
+
+export interface CashInEffect {
   kind: 'cashin'
   /** Coins just paid out. */
   amount: number

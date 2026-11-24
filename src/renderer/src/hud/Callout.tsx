@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { clock, span, type HudEvent } from '@core/index'
 import { playAlarm, sfx } from '../lib/sound'
 import { current, useHudEvents } from '../store'
+import { switchedIn } from '../../../shared/pulse'
 
 interface Shout {
   id: number
@@ -59,7 +60,7 @@ export function Callout({ quiet }: { quiet: boolean }) {
         // back, an AI prompt, a stream, your League match): one swap thud for the step, though
         // Alt+Q makes both a swap and a switch. A clear that moves to the next entry has its own
         // ding, and a fresh start its work alarm.
-        if (events.some((e) => e.type === 'swap' || e.type === 'switch') && !events.some((e) => e.type === 'cleared')) sfx.switch()
+        if (switchedIn(events)) sfx.switch()
       },
       [],
     ),

@@ -259,9 +259,23 @@ export class Overlay {
     const wa = this.display().workArea
     const a = this.anchor ?? this.defaultAnchor(wa)
     const effect: Effect = { kind: 'cashin', amount, balance, from: { x: a.x - wa.x, y: a.y - (TOMATO / 2) * this.scale - wa.y }, out }
+    this.showEffect(effect)
+  }
+
+  /**
+   * macOS: the task on the desk changed, and the screen's edges breathe in its colour. The pet window
+   * is too small, so the same display-only effects window as the coins' plays it.
+   */
+  pulse(color: string) {
+    if (!mac || this.win.isDestroyed()) return
+    this.showEffect({ kind: 'pulse', color })
+  }
+
+  /** The effects window, made the first time and kept a minute after each effect; plays `effect` once its page is up. */
+  private showEffect(effect: Effect) {
     if (!this.effects) {
       this.effects = new BrowserWindow({
-        ...wa,
+        ...this.display().workArea,
         show: false,
         frame: false,
         transparent: true,
@@ -324,7 +338,7 @@ export class Overlay {
     if (this.effectsClose) clearTimeout(this.effectsClose)
     this.effectsClose = null
     this.effects.setBounds(this.display().workArea)
-    debug('effect', e.kind, e.amount, 'from', e.from)
+    debug('effect', e.kind, e.kind === 'cashin' ? `${e.amount} from ${e.from.x},${e.from.y}` : e.color)
     this.effects.webContents.send(IPC.effect, e)
     if (!this.effects.isVisible()) this.effects.showInactive()
     // Whatever happens in the page, the window does not stay.

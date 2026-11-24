@@ -477,6 +477,8 @@ export interface Settings {
   autoStartFocus: boolean
   autoStartRest: boolean
   sound: boolean
+  /** The screen's edges glow in the new task's colour, with a jolt, when the task on the desk changes; on this machine. */
+  switchPulse: boolean
   alarms: Record<AlarmKind, AlarmChoice>
   hudSide: 'right' | 'left'
   hudScale: number

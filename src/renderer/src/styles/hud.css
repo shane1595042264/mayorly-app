@@ -566,3 +566,20 @@ body.effects { background: transparent; }
 .order-step.is-never, .order-step.is-undone { color: var(--ink-3); }
 .order-say { margin: 0; font-size: 13px; color: var(--ink-2); }
 .order-card .form-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ------------------------------------------------------------ the switch pulse (hud/SwitchPulse.tsx)
+   The task on the desk changed: the screen's sides breathe in the new task's colour, the top and
+   bottom softer. Painted once per pulse; only its opacity and the frame's position move, so it costs
+   the compositor, not the page. Behind every panel and the pet (first in the tree, z-index 0), and
+   never takes the pointer. The frame overhangs the screen so its jolt never bares an edge. */
+.switch-pulse { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.switch-pulse-frame { position: absolute; inset: -16px; }
+.switch-pulse-edge { position: absolute; display: block; }
+.switch-pulse-edge.is-left,
+.switch-pulse-edge.is-right { top: 0; bottom: 0; width: 24vw; }
+.switch-pulse-edge.is-left { left: 0; background: linear-gradient(to right, color-mix(in srgb, var(--pulse) 80%, transparent), color-mix(in srgb, var(--pulse) 24%, transparent) 36%, transparent); }
+.switch-pulse-edge.is-right { right: 0; background: linear-gradient(to left, color-mix(in srgb, var(--pulse) 80%, transparent), color-mix(in srgb, var(--pulse) 24%, transparent) 36%, transparent); }
+.switch-pulse-edge.is-top,
+.switch-pulse-edge.is-bottom { left: 0; right: 0; height: 15vh; }
+.switch-pulse-edge.is-top { top: 0; background: linear-gradient(to bottom, color-mix(in srgb, var(--pulse) 46%, transparent), transparent); }
+.switch-pulse-edge.is-bottom { bottom: 0; background: linear-gradient(to top, color-mix(in srgb, var(--pulse) 46%, transparent), transparent); }

@@ -16,6 +16,7 @@ import { SwitchLog } from './switchlog'
 import { deskEnd, endLabel, type SwitchWhy } from '../shared/switchlog'
 import { AGENT_NAME, HOOK_OF, PAIR_WAIT_MS, pairedHook, promptStep, type AgentPrompt } from '../shared/aiswitch'
 import { leagueHolds } from '../shared/leagueplay'
+import { pulseColor, switchedIn } from '../shared/pulse'
 import { sealedClerkStore } from './ai/store'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
@@ -518,6 +519,9 @@ function boot() {
       if (ev.type === 'spend' && ev.tokens > 0 && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0), true)
       if (ev.type === 'refund' && ev.tokens > 0 && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0))
     }
+    // macOS: the task on the desk changed, and the screen's edges breathe in its colour in the effects
+    // window; Windows and a Mac with a panel open draw it in the overlay (App.tsx).
+    if (process.platform === 'darwin' && overlay.mode === 'field' && state.settings.switchPulse && switchedIn(events)) overlay.pulse(pulseColor(state))
   })
   ipcMain.on(IPC.effectDone, () => overlay.effectDone())
   ipcMain.on(IPC.drawerClose, () => overlay.closeDrawer())

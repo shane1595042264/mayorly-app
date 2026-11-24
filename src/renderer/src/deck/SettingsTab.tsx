@@ -9,6 +9,7 @@ import { hotkeyLabel, IS_MAC } from '../lib/keys'
 import { GLOBAL_ACTIONS } from '../lib/keymap'
 import { dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
 import { decodeAlarm, playAlarm, sfx } from '../lib/sound'
+import { previewPulse } from '../hud/SwitchPulse'
 import { SoundSearch } from './SoundSearch'
 import { PlanSettings } from './PlanSettings'
 import { dayKey } from '../../../shared/windows'
@@ -40,9 +41,10 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
         <div className="checks">
           <Check label="Start the next focus or couch block on its own" value={st.autoStartFocus} onChange={(autoStartFocus) => set({ autoStartFocus })} />
           <Check label="Start rests on their own" value={st.autoStartRest} onChange={(autoStartRest) => set({ autoStartRest })} />
-          <div className="sound-cues" data-setting="sound, switch sound, swap, task switch, thud">
+          <div className="sound-cues" data-setting="sound, switch sound, swap, task switch, thud, flash, glow, pulse, edges, shake">
             <Check label="Sound cues" value={st.sound} onChange={(sound) => set({ sound })} />
-            <button className="btn ghost" type="button" title="The sound when the task on the desk changes" onClick={() => sfx.switch(true)}><Play size={14} /> Switch sound</button>
+            <Check label="Light the screen's edges when the task changes" value={st.switchPulse} onChange={(switchPulse) => set({ switchPulse })} />
+            <button className="btn ghost" type="button" title="The sound and the light when the task on the desk changes" onClick={() => { sfx.switch(true); previewPulse() }}><Play size={14} /> Try a switch</button>
           </div>
           {kind === 'electron' && <Check label="Open at login" value={st.openAtLogin} onChange={(openAtLogin) => set({ openAtLogin })} />}
           {kind === 'electron' && <AutoSwitchRulesField rules={st.autoSwitch} set={(autoSwitch) => set({ autoSwitch })} />}

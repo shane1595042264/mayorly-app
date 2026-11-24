@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoStartFocus: true,
   autoStartRest: true,
   sound: true,
+  switchPulse: true,
   alarms: DEFAULT_ALARMS,
   hudSide: 'right',
   hudScale: 1,

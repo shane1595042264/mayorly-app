@@ -15,6 +15,8 @@ import { actionFor, recordUse } from './lib/keymap'
 import { takeOrigin } from './lib/origin'
 import { Callout } from './hud/Callout'
 import { CashIn } from './hud/CashIn'
+import { SwitchPulse, onPulsePreview } from './hud/SwitchPulse'
+import { pulseColor, switchedIn } from '../../shared/pulse'
 import { shownCoins } from './lib/coinView'
 import { Feed } from './hud/Feed'
 import { Objectives } from './hud/Objectives'
@@ -110,6 +112,26 @@ export function App() {
   // window is then the whole work area. The coins start at whatever cleared the entry, else the tomato.
   const [cashIn, setCashIn] = useState<{ seq: number; amount: number; balance: number; from: { x: number; y: number }; out?: boolean; anchor: { x: number; y: number } | null; ceiling: number; startAt: number | null } | null>(null)
   const cashSeq = useRef(0)
+  // The task on the desk changed: the screen's edges breathe in its colour (hud/SwitchPulse.tsx). On
+  // Windows and in the browser the overlay is the screen; a Mac's pet-sized window leaves it to the
+  // shell's effects window, as with the coins.
+  const [pulse, setPulse] = useState<{ seq: number; color: string } | null>(null)
+  useHudEvents(
+    useCallback((events: HudEvent[]) => {
+      const st = current()
+      if (!st || !st.settings.switchPulse || !switchedIn(events)) return
+      if (layoutRef.current.compact && shellMode.current === 'field') return
+      setPulse((p) => ({ seq: (p?.seq ?? 0) + 1, color: pulseColor(st) }))
+    }, []),
+  )
+  useEffect(
+    () =>
+      onPulsePreview(() => {
+        const st = current()
+        if (st) setPulse((p) => ({ seq: (p?.seq ?? 0) + 1, color: pulseColor(st) }))
+      }),
+    [],
+  )
   useHudEvents(
     useCallback((events: HudEvent[]) => {
       for (const e of events) {
@@ -603,6 +625,8 @@ export function App() {
 
   return (
     <main className="stage" onPointerDownCapture={onStageDown}>
+      {/* First, so every panel and the pet paint over it. */}
+      {pulse && <SwitchPulse key={pulse.seq} color={pulse.color} onDone={() => { const mine = pulse.seq; setPulse((p) => (p?.seq === mine ? null : p)) }} />}
       <AnimatePresence>
         {/* The drawer is a small panel by the pet, as on a Mac where it is its own window: nothing dims. */}
         {shown !== 'field' && shown !== 'drawer' && shown !== 'switcher' && shown !== 'switchLog' && (
