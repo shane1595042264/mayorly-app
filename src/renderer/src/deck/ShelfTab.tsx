@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { ArrowLeft, Check, LockSimple, PencilSimple, Play, Plus, Trash } from '@phosphor-icons/react'
 import {
   completionHistory, dayStats, entrySpentMs, entryTomatoes, LEDGER_CAP, LEDGER_THEMES, ledgerEntries, span, startOfDay, type Entry, type GlyphName, type Ledger, type LedgerTheme, type MayorlyState,
@@ -14,11 +14,16 @@ import { current, dispatch, useNow } from '../store'
 import { Tomatoes } from './Tomatoes'
 import { EntryHistory } from './EntryHistory'
 import { CueCount, CueToggle, Cues } from './Cues'
-import { ShelfScene } from './ShelfScene'
+import { ShelfRoomArt, ShelfScene } from './ShelfScene'
+import { ROOM, roomLayout } from './shelfLayout'
+import { art } from '../lib/art'
 
 // The ledger shelf: nine bays. Every ledger here is hand-written by you, so the
 // clerk may file into it but never rename, merge or remove it. A bay opens the
-// ledger; the pencil on the bay edits it.
+// ledger; the pencil on the bay edits it. With room for it, the tab is the founder's
+// room (ShelfRoomArt): his bookshelf holds a spine for every ledger, and each card
+// hangs on the wall level with the bay its spine stands in; a narrow tab shows his
+// scene small over the grid of cards instead.
 
 export function ShelfTab({ s }: { s: MayorlyState }) {
   const now = useNow(10_000)
@@ -78,64 +83,140 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editing, cell, slotKey, firstEmpty])
 
+  // The room's size: the tab's width, and the height the deck shows without scrolling.
+  const wrap = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState<{ w: number; h: number } | null>(null)
+  const zoom = s.settings.text.deck || 1
+  useLayoutEffect(() => {
+    const el = wrap.current
+    const body = el?.closest('.deck-body') as HTMLElement | null
+    if (!el || !body) return
+    const measure = () => {
+      // Screen pixels: the body's padding and the note under the room are in the deck's zoom.
+      const w = Math.floor(el.getBoundingClientRect().width)
+      const h = Math.floor(body.getBoundingClientRect().height - (24 + 28 + 44) * zoom)
+      setSize((o) => (o && o.w === w && o.h === h ? o : { w, h }))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(body)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [zoom, !!open])
+  const [hot, setHot] = useState<string | null>(null)
+
   const opened = open ? s.ledgers.find((l) => l.id === open) : null
   if (opened) {
     return <LedgerView s={s} ledger={opened} now={now} back={() => setOpen(null)} edit={() => { setOpen(null); setEditing(opened.id) }} />
   }
 
+  const room = size && art('prop2x4.bookshelf') ? roomLayout(size.w, size.h, !!art('char.clerk.stand')) : null
+  const note = (
+    <p className="shelf-note dim">
+      {s.ledgers.length} of {LEDGER_CAP} bays. Each ledger carries a criterion; the clerk files against the criterion, not the name.
+    </p>
+  )
+
+  /** Bay i as a card: its ledger, the bay a new one would go in, or nothing. */
+  const card = (i: number, place?: CSSProperties): ReactNode => {
+    const l = slots[i]
+    if (!l) {
+      if (i !== firstEmpty) return room ? null : <div key={`e${i}`} className="bay bay-void" aria-hidden />
+      return (
+        <button key={`e${i}`} className={`bay bay-empty bay-card ${cell === i ? 'is-selected' : ''}`} style={place} onClick={() => setEditing(`new-${i}`)}>
+          <Plus size={18} />
+          <span className="caps">Write a ledger</span>
+        </button>
+      )
+    }
+    const openCount = ledgerEntries(s, l.id).length
+    const ms = today.byLedger.find((b) => b.ledgerId === l.id)?.focusMs ?? 0
+    // On the wall a card has room for so many lines of criterion: fewer on a short card, one fewer on a
+    // narrow one or one with the no coins badge, whose numbers wrap onto a second line.
+    const narrow = !!room && room.cards.width < ROOM.cardsFit
+    const critLines = room ? Math.max(0, (room.k >= 7 ? 2 : room.k >= 5 ? 1 : 0) - (narrow ? 1 : 0) - (l.pays === false ? 1 : 0)) : 2
+    return (
+      <div
+        key={l.id}
+        className={`bay bay-open bay-card ${cell === i ? 'is-selected' : ''} ${room && hot === l.id ? 'is-hot' : ''}`}
+        style={{ ...ledgerVars(l), ...place, ...(room ? { '--crit-lines': critLines } : null) } as CSSProperties}
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen(l.id)}
+        onKeyDown={(e) => e.key === 'Enter' && setOpen(l.id)}
+        onMouseEnter={() => setHot(l.id)}
+        onMouseLeave={() => setHot(null)}
+        aria-label={`Open ${l.name}`}
+      >
+        <span className="bay-n mono dim">{i + 1}</span>
+        <button
+          type="button"
+          className="icon-btn bay-edit"
+          title={`Edit ${l.name}`}
+          aria-label={`Edit ${l.name}`}
+          onClick={(e) => { e.stopPropagation(); setEditing(l.id) }}
+        >
+          <PencilSimple size={14} />
+        </button>
+        {/* On the wall the name has the top line to itself and the code goes down with the numbers. */}
+        <span className="bay-head">
+          <span className="bay-glyph"><Glyph name={l.glyph} size={room ? 20 : 26} /></span>
+          {room ? <span className="bay-name" title={l.name}>{l.name}</span> : <span className="bay-code mono">{l.code}</span>}
+        </span>
+        {!room && <span className="bay-name">{l.name}</span>}
+        {critLines > 0 && <span className="bay-crit">{l.criterion || 'No criterion written yet.'}</span>}
+        <span className="bay-stats mono num">
+          {room && <span className="bay-code mono">{l.code}</span>}
+          <span>{openCount} open</span>
+          <span title={`${span(ms)} today`}>{span(ms)}{narrow ? '' : ' today'}</span>
+          {l.pays === false && <span className="bay-nopay" title="Paid work: tomatoes count, no coin is minted">no coins</span>}
+          {l.handWritten && (
+            <span className="bay-lock" role="img" aria-label="Hand-written, locked from the clerk" title="Hand-written, locked from the clerk">
+              <ArtIcon id="icon.ledger.locked" size={12} fallback={<LockSimple size={12} />} />
+            </span>
+          )}
+        </span>
+      </div>
+    )
+  }
+
+  const editingSlot = editing ? slots.findIndex((l, i) => (l ? l.id === editing : editing === `new-${i}`)) : -1
+  const form = editingSlot >= 0 ? <LedgerForm key={editing} s={s} ledger={slots[editingSlot]} done={() => setEditing(null)} /> : null
+
+  if (room) {
+    const { k, cards } = room
+    const colW = (cards.width - 2 * 10) / 3
+    // The cards layer keeps the deck's text size; the room under it is in screen pixels.
+    const at = (x: number, y: number, w: number, h: number): CSSProperties => ({ left: x / zoom, top: y / zoom, width: w / zoom, height: h / zoom })
+    return (
+      <div className="shelf shelf-in-room" ref={wrap}>
+        <div className="shelf-room" style={{ height: room.height, '--k': `${k}px` } as CSSProperties}>
+          <ShelfRoomArt s={s} room={room} hot={hot} picked={slots[cell]?.id ?? null} onHot={setHot} open={setOpen} />
+          <div className="shelf-room-cards">
+            {form ? (
+              // The form takes the whole wall between the shelf and the desk, and the floor under it.
+              <div className="shelf-room-form" style={at(cards.left, 2 * k, cards.width, room.height - 4 * k)}>{form}</div>
+            ) : (
+              slots.map((_, i) => {
+                const row = cards.rows[Math.floor(i / 3)]
+                return card(i, at(cards.left + (i % 3) * (colW + 10), row.top, colW, row.height))
+              })
+            )}
+          </div>
+        </div>
+        {note}
+      </div>
+    )
+  }
+
   return (
-    <div className="shelf">
+    <div className="shelf" ref={wrap}>
       <div className="shelf-head">
         <ShelfScene s={s} open={setOpen} />
-        <p className="shelf-note dim">
-          {s.ledgers.length} of {LEDGER_CAP} bays. Each ledger carries a criterion; the clerk files against the criterion, not the name.
-        </p>
+        {note}
       </div>
       <div className="shelf-grid">
-        {slots.map((l, i) => {
-          if (l && editing === l.id) return <LedgerForm key={l.id} s={s} ledger={l} done={() => setEditing(null)} />
-          if (!l && editing === `new-${i}`) return <LedgerForm key={`new-${i}`} s={s} ledger={null} done={() => setEditing(null)} />
-          if (!l) {
-            return i === firstEmpty ? (
-              <button key={`e${i}`} className={`bay bay-empty ${cell === i ? 'is-selected' : ''}`} onClick={() => setEditing(`new-${i}`)}>
-                <Plus size={18} />
-                <span className="caps">Write a ledger</span>
-              </button>
-            ) : (
-              <div key={`e${i}`} className="bay bay-void" aria-hidden />
-            )
-          }
-          const openCount = ledgerEntries(s, l.id).length
-          const ms = today.byLedger.find((b) => b.ledgerId === l.id)?.focusMs ?? 0
-          return (
-            <div key={l.id} className={`bay bay-open ${cell === i ? 'is-selected' : ''}`} style={ledgerVars(l)} role="button" tabIndex={0} onClick={() => setOpen(l.id)} onKeyDown={(e) => e.key === 'Enter' && setOpen(l.id)} aria-label={`Open ${l.name}`}>
-              <span className="bay-n mono dim">{i + 1}</span>
-              <button
-                type="button"
-                className="icon-btn bay-edit"
-                title={`Edit ${l.name}`}
-                aria-label={`Edit ${l.name}`}
-                onClick={(e) => { e.stopPropagation(); setEditing(l.id) }}
-              >
-                <PencilSimple size={14} />
-              </button>
-              <span className="bay-glyph"><Glyph name={l.glyph} size={26} /></span>
-              <span className="bay-code mono">{l.code}</span>
-              <span className="bay-name">{l.name}</span>
-              <span className="bay-crit">{l.criterion || 'No criterion written yet.'}</span>
-              <span className="bay-stats mono num">
-                <span>{openCount} open</span>
-                <span>{span(ms)} today</span>
-                {l.pays === false && <span className="bay-nopay" title="Paid work: tomatoes count, no coin is minted">no coins</span>}
-                {l.handWritten && (
-                  <span className="bay-lock" role="img" aria-label="Hand-written, locked from the clerk" title="Hand-written, locked from the clerk">
-                    <ArtIcon id="icon.ledger.locked" size={12} fallback={<LockSimple size={12} />} />
-                  </span>
-                )}
-              </span>
-            </div>
-          )
-        })}
+        {slots.map((_, i) => (i === editingSlot ? form : card(i)))}
       </div>
     </div>
   )

@@ -7,7 +7,7 @@ import { sfx } from './sound'
 // (`--tx`, `--ty`, from -1 to 1), and flicks a soft tick as the pointer comes onto a card.
 
 /** Cards: they glow where the pointer is, and tick as it comes onto one. */
-export const HOVER_CARDS = '.bay, .tile, .opt, .ss-item'
+export const HOVER_CARDS = '.bay-card, .tile, .opt, .ss-item, .shelf-spine'
 /** Cards that also lean toward the pointer: text only, so no sprite is ever left turned. */
 export const HOVER_TILTS = '.tile'
 /** Ticks closer than this are one tick: sweeping across a row of cards is not a drum roll. */

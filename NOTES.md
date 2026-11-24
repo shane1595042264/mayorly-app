@@ -7,6 +7,11 @@ The top section is what the app shows once per build, the first time that build 
 - Alt+C now clears a couch item too: done with the show or the game, it leaves the couch list with the Done hit. If you swapped onto it from a task, you are back on that task with the clock still running; if you sat down on it directly, you stand up.
 - On the couch list, c clears the row you are on, and Clear in the Alt+T menu works on a couch item.
 
+## The Shelf is your room
+
+- The Shelf tab is now your room: your wall and floor fill the tab, your bookshelf stands at one side with a spine for every ledger, and your desk at the other. The ledger cards hang on the wall between them, each row level with the bay its spines sit in.
+- Point at a spine and its card lifts; point at a card and its spine lights up in the ledger's colour. Clicking either opens the ledger.
+
 ## Picked up under the mouse
 
 - Hover a ledger on the Shelf, a tile on Record, a superset or a tile in the Alt+T menu and it is picked up like a card: it wobbles up onto a shadow, a shine runs across it, it glows where the mouse is, and there is a soft flick. Record's numbers lean toward the mouse and turn amber.

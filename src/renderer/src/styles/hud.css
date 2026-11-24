@@ -749,41 +749,41 @@ body.effects { background: transparent; }
    are over in half a second and end at scale 1 and no turn, so nothing with a sprite in it rests
    scaled or turned. Only the thing under the pointer moves, so the overlay stays cheap to paint. */
 
-.bay, .tile, .opt, .ss-item { --glow: var(--ledger, var(--accent)); --lift: 5px; isolation: isolate; }
+.bay-card, .tile, .opt, .ss-item { --glow: var(--ledger, var(--accent)); --lift: 5px; isolation: isolate; }
 .opt { --glow: #fff; --lift: 3px; }
-.bay, .tile, .ss-item { position: relative; }
-.bay, .ss-item, .opt {
+.bay-card, .tile, .ss-item { position: relative; }
+.bay-card, .ss-item, .opt {
   transition-property: color, background, border-color, box-shadow, translate, scale;
   transition-duration: 0.15s, 0.15s, 0.15s, 0.22s, 0.36s, 0.3s;
   transition-timing-function: ease, ease, ease, ease, cubic-bezier(0.34, 1.9, 0.64, 1), cubic-bezier(0.34, 1.9, 0.64, 1);
 }
 /* The shine (::before) runs once as the pointer comes on; the glow (::after) follows it. Both sit
    on the card's face under its words (z-index -1 in the card's own stacking context). */
-.bay::before, .tile::before, .opt::before, .ss-item::before,
-.bay::after, .tile::after, .opt::after, .ss-item::after {
+.bay-card::before, .tile::before, .opt::before, .ss-item::before,
+.bay-card::after, .tile::after, .opt::after, .ss-item::after {
   content: '';
   position: absolute;
   inset: 0;
   z-index: -1;
   pointer-events: none;
 }
-.bay::before, .tile::before, .opt::before, .ss-item::before {
+.bay-card::before, .tile::before, .opt::before, .ss-item::before {
   opacity: 0;
   background: linear-gradient(105deg, transparent 40%, rgb(255 255 255 / 0.24) 48%, rgb(255 255 255 / 0.07) 53%, transparent 60%) no-repeat;
   background-size: 300% 100%;
   background-position: 100% 0;
 }
-.bay::after, .tile::after, .opt::after, .ss-item::after {
+.bay-card::after, .tile::after, .opt::after, .ss-item::after {
   opacity: 0;
   background: radial-gradient(240px circle at var(--mx, 50%) var(--my, 50%), color-mix(in srgb, var(--glow) 26%, transparent), transparent 70%) no-repeat;
   background-clip: content-box;
   background-origin: content-box;
   transition: opacity 0.2s;
 }
-.bay:hover::before, .tile:hover::before, .opt:hover:not(:disabled)::before, .ss-item:hover::before { animation: juice-shine 0.62s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.bay-card:hover::before, .tile:hover::before, .opt:hover:not(:disabled)::before, .ss-item:hover::before { animation: juice-shine 0.62s cubic-bezier(0.2, 0.7, 0.3, 1); }
 /* Hovered, the glow's box also reaches down under the lift, painting nothing there: the strip the
    card rose off stays the card's, so a pointer at its foot never drops it and picks it up again. */
-.bay:hover::after, .tile:hover::after, .opt:hover:not(:disabled)::after, .ss-item:hover::after {
+.bay-card:hover::after, .tile:hover::after, .opt:hover:not(:disabled)::after, .ss-item:hover::after {
   opacity: 1;
   bottom: calc(-1 * var(--lift) - 2px);
   padding-bottom: calc(var(--lift) + 2px);
@@ -791,7 +791,7 @@ body.effects { background: transparent; }
 }
 
 /* Picked up: up off the table onto a hard shadow, the edge in its colour, with a wobble. */
-.bay:hover, .ss-item:hover {
+.bay-card:hover, .ss-item:hover {
   translate: 0 -5px;
   border-color: var(--glow);
   background: rgb(237 240 241 / 0.07);
@@ -799,8 +799,8 @@ body.effects { background: transparent; }
   animation: juice-pickup 0.5s ease-out;
 }
 .ss-item.on:hover { box-shadow: inset 2px 0 0 var(--accent), 0 5px 0 rgb(0 0 0 / 0.55), 0 16px 30px rgb(0 0 0 / 0.45), 0 0 0 1px color-mix(in srgb, var(--glow) 55%, transparent); }
-.bay:hover .bay-glyph, .bay:hover .bay-code { animation: juice-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.bay:active, .ss-item:active { translate: 0 -1px; scale: 0.97; box-shadow: 0 1px 0 rgb(0 0 0 / 0.55); transition-duration: 0.06s; }
+.bay-card:hover .bay-glyph, .bay-card:hover .bay-code { animation: juice-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.bay-card:active, .ss-item:active { translate: 0 -1px; scale: 0.97; box-shadow: 0 1px 0 rgb(0 0 0 / 0.55); transition-duration: 0.06s; }
 
 /* The swap menu's tiles: up three pixels onto a shadow, a wobble, the number bouncing. */
 .opt:hover:not(:disabled) {
@@ -914,9 +914,9 @@ body.effects { background: transparent; }
   100% { opacity: 1; scale: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .bay, .tile, .opt, .ss-item, .row, .cleared li, .log li, .barlist li, .market-log li { animation: none !important; translate: none !important; transform: none !important; }
-  .bay *, .tile *, .opt *, .col *, .barlist * { animation: none !important; }
-  .bay::before, .tile::before, .opt::before, .ss-item::before { animation: none !important; }
+  .bay-card, .tile, .opt, .ss-item, .row, .cleared li, .log li, .barlist li, .market-log li { animation: none !important; translate: none !important; transform: none !important; }
+  .bay-card *, .tile *, .opt *, .col *, .barlist * { animation: none !important; }
+  .bay-card::before, .tile::before, .opt::before, .ss-item::before { animation: none !important; }
 }
 
 /* ------------------------------------------------------------ coins, Balatro's way (hud/CashIn.tsx) */

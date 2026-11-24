@@ -69,3 +69,86 @@ export function placeFurniture(clerk: boolean): { clerk: number | null; shelf: n
   const shelf = clerk ? left + CLERK.w + CLERK_GAP : left
   return { clerk: clerk ? left : null, shelf, desk: shelf + SHELF.w + DESK_GAP }
 }
+
+/**
+ * The Shelf tab as one room: the founder's wall and floor across the whole tab, his bookshelf and
+ * desk standing in it at one whole scale, and the ledger cards hung on the wall between them, each
+ * row level with the bay its spines stand in. Art numbers are art pixels; the rest is screen pixels.
+ */
+export const ROOM = {
+  /** Art pixels of wall between the tab's edges and the furniture. */
+  margin: 3,
+  /** Art pixels between the shelf and the cards, and the cards and the desk. */
+  gap: 4,
+  /** Art pixels of floor below the furniture's bottom edge (the floor is one tile; furniture stands four into it). */
+  below: TILE - 4,
+  /** Art pixels of wall above the shelf at the least, and at the most when the tab is tall. */
+  above: 4,
+  aboveMax: 28,
+  /** The scales tried, largest first. Under the smallest a card is too short to read: the cards go under the room. At 4 a card has room for its name and numbers, not its criterion. */
+  scales: [8, 7, 6, 5, 4],
+  /** Screen pixels: the three cards of a row together, wide enough for a name like Professional Work (`cardsFit`), the narrowest they may be when nothing else fits, the widest, and the gap between two. */
+  cardsFit: 3 * 200 + 2 * 10,
+  cardsMin: 3 * 170 + 2 * 10,
+  cardsMax: 3 * 340 + 2 * 10,
+  cardGap: 10,
+} as const
+
+export interface RoomLayout {
+  /** Screen pixels per art pixel. */
+  k: number
+  /** The wall's height, in art pixels; the floor tile row lies under it. */
+  wall: number
+  /** The room's height in screen pixels. */
+  height: number
+  /** Left edges in screen pixels; the clerk is null when not drawn. */
+  clerk: number | null
+  shelf: number
+  desk: number
+  /** Tops in screen pixels. */
+  shelfTop: number
+  deskTop: number
+  /** The wall between shelf and desk the cards hang on, in screen pixels, and each bay's row: its top and height. */
+  cards: { left: number; width: number; rows: { top: number; height: number }[] }
+}
+
+/**
+ * The largest whole scale at which the room fits `width` by `height` screen pixels with a row of
+ * three cards beside the shelf wide enough for their names, else the largest with cards that still
+ * read; null when none does (the cards then go under the room).
+ */
+export function roomLayout(width: number, height: number, clerk: boolean): RoomLayout | null {
+  for (const need of [ROOM.cardsFit, ROOM.cardsMin]) {
+    const r = roomAt(width, height, clerk, need)
+    if (r) return r
+  }
+  return null
+}
+
+function roomAt(width: number, height: number, clerk: boolean, need: number): RoomLayout | null {
+  const clerkW = clerk ? CLERK.w + 2 : 0
+  for (const k of ROOM.scales) {
+    const furniture = (ROOM.margin * 2 + clerkW + SHELF.w + ROOM.gap * 2 + DESK.w) * k
+    const room = (ROOM.above + SHELF.h + ROOM.below) * k
+    const free = width - furniture
+    if (free < need || room > height) continue
+    const above = Math.min(ROOM.aboveMax, Math.max(ROOM.above, Math.floor(height / k) - SHELF.h - ROOM.below))
+    const wall = above + SHELF.h - 4
+    const base = wall + 4
+    const shelf = (ROOM.margin + clerkW) * k
+    const shelfTop = (base - SHELF.h) * k
+    const left = shelf + (SHELF.w + ROOM.gap) * k
+    return {
+      k,
+      wall,
+      height: (wall + TILE) * k,
+      clerk: clerk ? ROOM.margin * k : null,
+      shelf,
+      desk: width - (ROOM.margin + DESK.w) * k,
+      shelfTop,
+      deskTop: (base - DESK.h) * k,
+      cards: { left, width: Math.min(ROOM.cardsMax, free), rows: BAYS.map(([, by, , bh]) => ({ top: shelfTop + by * k, height: bh * k })) },
+    }
+  }
+  return null
+}
