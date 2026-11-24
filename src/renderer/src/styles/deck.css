@@ -530,6 +530,8 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .settings .rules .field:nth-last-child(-n + 2) { grid-column: auto; }
 .setting-panel .alarm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .alarm-row .field-label { flex: 0 0 96px; }
+.impact-list { display: grid; gap: 8px; }
+.setting-panel .impact-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; align-items: center; gap: 10px; }
 .deck .alarm-row select { flex: 1 1 160px; width: auto; }
 .switch-rule { display: grid; gap: 4px; justify-items: start; }
 .switch-rule + .switch-rule { padding-top: 14px; border-top: 1px solid var(--line); }

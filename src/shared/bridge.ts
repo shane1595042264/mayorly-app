@@ -1,7 +1,8 @@
-import type { Action, AlarmKind, HudEvent, MayorlyState } from '../core/index'
+import type { Action, AlarmKind, HudEvent, ImpactMoment, ImpactStyle, MayorlyState } from '../core/index'
 import type { InstructionPlan } from './instruct'
 import type { StreamStatus } from './streamdeath'
 import type { SwitchRecord } from './switchlog'
+import type { Impact } from './impact'
 
 // The contract between a Mayorly client (the HUD) and whatever owns the state.
 // In Electron that is the main process over IPC; in a plain browser it is an
@@ -116,13 +117,27 @@ export interface ClerkQuestion {
   question: string
 }
 
-/** A screen effect the shell asks its effects window to play (macOS), or the overlay plays itself (Windows). */
-export type Effect = CashInEffect | PulseEffect
+/** A screen effect the shell asks an effects window to play (macOS, and the other screens), or the overlay plays itself (Windows). */
+export type Effect = CashInEffect | ImpactEffect
 
-/** The task on the desk changed: the screen's edges breathe in its colour (hud/SwitchPulse.tsx). */
-export interface PulseEffect {
-  kind: 'pulse'
-  color: string
+/**
+ * Something happened on the desk and hits the screen (hud/Impact.tsx). Every screen it plays on gets
+ * the same `at` and `reach`, with the tomato placed in its own pixels, so a tsunami leaving one screen
+ * runs on into the next.
+ */
+export interface ImpactEffect {
+  kind: 'impact'
+  impact: Impact
+  /** The tomato's centre in this window's CSS pixels, off it on another screen; null: the page's own tomato. */
+  origin: { x: number; y: number } | null
+  /** The farthest corner of every screen it plays on, from the tomato; null: this window's own corners. */
+  reach: number | null
+  /** A sweep's way and length across every screen; null: this window's own. */
+  sweep: { dir: 1 | -1; reachX: number } | null
+  /** When it started (epoch ms): a window that shows late joins it where it has got to. */
+  at: number
+  /** This window shows the words: the tomato's screen. */
+  words: boolean
 }
 
 export interface CashInEffect {
@@ -306,6 +321,8 @@ export interface Bridge {
   onEffect(fn: (e: Effect) => void): () => void
   /** The effects page is done; the shell may hide the window. */
   effectDone(): void
+  /** Settings' Try: play this moment now in this style, on every screen it would play on. */
+  previewImpact(moment: ImpactMoment, style: ImpactStyle): void
   /** The drawer page (macOS) is done: Esc, or nothing to show. The shell hides its window. */
   closeDrawer(): void
   /** Hotkeys that could not be registered (taken by another app, or refused by the OS). */
@@ -384,6 +401,7 @@ export const IPC = {
   petHeld: 'mayorly:pet-held',
   effect: 'mayorly:effect',
   effectDone: 'mayorly:effect-done',
+  impactPreview: 'mayorly:impact-preview',
   drawerClose: 'mayorly:drawer-close',
   hotkeyFailures: 'mayorly:hotkey-failures',
 } as const

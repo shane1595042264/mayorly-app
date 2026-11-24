@@ -2,7 +2,8 @@ import {
   firstRunState, migrate, randomTask, reduce, scheduledNow, SLEEP_GAP_MS, switchToAction,
   type Action, type HudEvent, type MayorlyState,
 } from '@core/index'
-import type { Bridge, Command, Layout, UiMode } from '../../../shared/bridge'
+import type { Bridge, Command, Effect, Layout, UiMode } from '../../../shared/bridge'
+import { deskSeen, impactFor, previewImpact, type Impact } from '../../../shared/impact'
 import { clampAnchor, cornerAnchor, homeAnchor, sideOf, type Point } from '../../../shared/pet'
 import { BUILD } from '../../../shared/build'
 import { machineZone, replanAction } from '../../../shared/windows'
@@ -43,6 +44,12 @@ export function createWebBridge(): Bridge {
   const stateSubs = new Set<(s: MayorlyState) => void>()
   const eventSubs = new Set<(e: HudEvent[]) => void>()
   const cmdSubs = new Set<(c: Command) => void>()
+  const effectSubs = new Set<(e: Effect) => void>()
+  /** A moment hitting this page's screen: the page finds its own tomato and corners (hud/Impact.tsx). */
+  const playImpact = (impact: Impact) => {
+    const e: Effect = { kind: 'impact', impact, origin: null, reach: null, sweep: null, at: Date.now(), words: state.settings.impact.words }
+    effectSubs.forEach((f) => f(e))
+  }
 
   function load(): MayorlyState | null {
     try {
@@ -69,6 +76,7 @@ export function createWebBridge(): Bridge {
     const r = reduce(state, action, { now, newId, random: Math.random, device: 'web' })
     const changed = r.state !== state
     const rec = changed ? switchRecord(state, r.state, action, r.events, undefined, now, newId()) : null
+    const before = deskSeen(state)
     state = r.state
     if (rec) {
       switches.unshift(rec)
@@ -80,6 +88,8 @@ export function createWebBridge(): Bridge {
       stateSubs.forEach((f) => f(state))
     }
     if (r.events.length) eventSubs.forEach((f) => f(r.events))
+    const hit = impactFor(r.events, before, state, 'web')
+    if (hit && !state.settings.gaming) playImpact(hit)
     if (action.type !== 'schedule/replan' && action.type !== 'desk/tick' && /^(entry\/|calendar\/|settings\/update|ledger\/delete)/.test(action.type)) replanSoon()
   }
 
@@ -287,8 +297,11 @@ export function createWebBridge(): Bridge {
     snap: (corner) => place(cornerAnchor(area(), corner, state.settings.hudScale)),
     placePet: (x, y) => place({ x, y }),
     setPetHeld: () => {},
-    onEffect: () => () => {},
+    onEffect: (fn) => sub(effectSubs, fn),
     effectDone: () => {},
+    previewImpact: (moment, style) => {
+      if (style !== 'off') playImpact(previewImpact(moment, style, state))
+    },
     closeDrawer: () => {},
     switchLog: {
       get: async () => switches.slice(),

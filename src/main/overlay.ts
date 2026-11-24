@@ -1,8 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { BrowserWindow, screen, type Display, type Rectangle } from 'electron'
+import { BrowserWindow, screen, type Display, type Rectangle, type WebContents } from 'electron'
 import { IPC, type CaptionStyle, type Effect, type Layout, type UiMode } from '../shared/bridge'
 import { CAPTION, DRAWER, LOG, TASKBAR, TOMATO, anchorInBox, captionBox, clampAnchor, cornerAnchor, drawerBox, homeAnchor, nearPet, overlaps, panelBox, petBox, sideOf, type Side } from '../shared/pet'
+import { reachOf, sweepOf, type Impact } from '../shared/impact'
 
 /** Windows: the panels drawn beside the pet in the click-through overlay, where only they and the pet take the pointer. */
 const besidePet = (mode: UiMode) => mode === 'drawer' || mode === 'switchLog'
@@ -76,11 +77,10 @@ export class Overlay {
   private caption: BrowserWindow | null = null
   private captionText: string | null = null
   private captionStyle: CaptionStyle | undefined
-  private effects: BrowserWindow | null = null
-  private effectsReady = false
-  private effectQueue: Effect[] = []
-  private effectsHide: NodeJS.Timeout | null = null
-  private effectsClose: NodeJS.Timeout | null = null
+  /** One effects window per display it has played on, by display id. */
+  private effects = new Map<number, EffectsWindow>()
+  /** Impacts play on every screen: the other screens' windows stay up, warm, so a wave reaches them on time. */
+  private everyScreen = false
   private fitting = false
   private settle: NodeJS.Timeout | null = null
   private heldTimer: NodeJS.Timeout | null = null
@@ -259,91 +259,72 @@ export class Overlay {
     const wa = this.display().workArea
     const a = this.anchor ?? this.defaultAnchor(wa)
     const effect: Effect = { kind: 'cashin', amount, balance, from: { x: a.x - wa.x, y: a.y - (TOMATO / 2) * this.scale - wa.y }, out }
-    this.showEffect(effect)
+    this.effectsOn(this.display()).play(effect)
   }
 
   /**
-   * macOS: the task on the desk changed, and the screen's edges breathe in its colour. The pet window
-   * is too small, so the same display-only effects window as the coins' plays it.
+   * Something happened on the desk and it hits the screen: on the tomato's display, drawn by the
+   * overlay itself on Windows and by an effects window on a Mac (the pet's window is too small), and
+   * with every screen on, by an effects window on each other display. All of them get one start time
+   * and the distance to the farthest corner of them all, with the tomato in their own pixels, so a
+   * tsunami from the tomato runs off one screen and on into the next. The words show on the tomato's.
    */
-  pulse(color: string) {
-    if (!mac || this.win.isDestroyed()) return
-    this.showEffect({ kind: 'pulse', color })
-  }
-
-  /** The effects window, made the first time and kept a minute after each effect; plays `effect` once its page is up. */
-  private showEffect(effect: Effect) {
-    if (!this.effects) {
-      this.effects = new BrowserWindow({
-        ...this.display().workArea,
-        show: false,
-        frame: false,
-        transparent: true,
-        backgroundColor: '#00000000',
-        hasShadow: false,
-        resizable: false,
-        movable: false,
-        minimizable: false,
-        maximizable: false,
-        fullscreenable: false,
-        skipTaskbar: true,
-        hiddenInMissionControl: true,
-        focusable: false,
-        alwaysOnTop: true,
-        type: 'panel',
-        title: 'Mayorly effects',
-        webPreferences: {
-          preload: join(import.meta.dirname, '../preload/index.cjs'),
-          sandbox: true,
-          contextIsolation: true,
-          nodeIntegration: false,
-          backgroundThrottling: false,
-          spellcheck: false,
-        },
-      })
-      this.effects.setAlwaysOnTop(true, 'screen-saver')
-      this.effects.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
-      this.effects.setIgnoreMouseEvents(true)
-      const page = process.env.ELECTRON_RENDERER_URL ? `${process.env.ELECTRON_RENDERER_URL}?effects` : null
-      if (page) void this.effects.loadURL(page)
-      else void this.effects.loadFile(join(import.meta.dirname, '../renderer/index.html'), { query: { effects: '1' } })
-      this.effects.webContents.on('did-finish-load', () => {
-        this.effectsReady = true
-        for (const e of this.effectQueue.splice(0)) this.playEffect(e)
-      })
-      this.effects.on('closed', () => {
-        this.effects = null
-        this.effectsReady = false
-      })
+  impact(impact: Impact, words: boolean) {
+    if (this.win.isDestroyed()) return
+    const own = this.display()
+    const displays = this.everyScreen ? screen.getAllDisplays() : [own]
+    const a = this.anchor ?? this.defaultAnchor(own.workArea)
+    const origin = { x: a.x, y: a.y - (TOMATO / 2) * this.scale }
+    const areas = displays.map((d) => d.workArea)
+    const reach = reachOf(origin, areas)
+    const sweep = sweepOf(origin, areas)
+    const at = Date.now()
+    debug('impact', impact.moment, impact.style, `${displays.length} screen(s)`, `reach ${reach}`)
+    for (const d of displays) {
+      const r = d.workArea
+      const e: Effect = { kind: 'impact', impact, origin: { x: origin.x - r.x, y: origin.y - r.y }, reach, sweep, at, words: words && d.id === own.id }
+      if (!mac && d.id === own.id) this.win.webContents.send(IPC.effect, e)
+      else this.effectsOn(d).play(e)
     }
-    if (this.effectsReady) this.playEffect(effect)
-    else this.effectQueue.push(effect)
   }
 
-  /** The effects page says it has finished. The window goes a minute later: a renderer should not idle all day for one harvest. */
-  effectDone() {
+  /**
+   * Impacts on every screen or only the tomato's. With every screen, each other display's window is
+   * made now and kept, so the first wave after a launch is not lost while its page loads.
+   */
+  setEveryScreen(on: boolean) {
+    if (this.everyScreen === on) return
+    this.everyScreen = on
+    this.dropGoneDisplays()
+    if (!on) return
+    const own = this.display().id
+    for (const d of screen.getAllDisplays()) if (mac || d.id !== own) this.effectsOn(d).warm()
+  }
+
+  private effectsOn(d: Display): EffectsWindow {
+    this.dropGoneDisplays()
+    let w = this.effects.get(d.id)
+    if (!w) {
+      w = new EffectsWindow(d.id, () => this.everyScreen)
+      this.effects.set(d.id, w)
+    }
+    return w
+  }
+
+  /** A display unplugged takes its effects window with it. */
+  private dropGoneDisplays() {
+    const live = new Set(screen.getAllDisplays().map((d) => d.id))
+    for (const [id, w] of this.effects) {
+      if (live.has(id)) continue
+      w.close()
+      this.effects.delete(id)
+    }
+  }
+
+  /** An effects page says it has finished: its window hides. */
+  effectDone(from: WebContents) {
     debug('effect done')
-    if (this.effectsHide) clearTimeout(this.effectsHide)
-    this.effectsHide = null
-    this.effects?.hide()
-    if (this.effectsClose) clearTimeout(this.effectsClose)
-    this.effectsClose = setTimeout(() => {
-      this.effectsClose = null
-      if (this.effects && !this.effects.isDestroyed() && !this.effects.isVisible()) this.effects.close()
-    }, 60_000)
-  }
-
-  private playEffect(e: Effect) {
-    if (!this.effects || this.effects.isDestroyed()) return
-    if (this.effectsClose) clearTimeout(this.effectsClose)
-    this.effectsClose = null
-    this.effects.setBounds(this.display().workArea)
-    debug('effect', e.kind, e.kind === 'cashin' ? `${e.amount} from ${e.from.x},${e.from.y}` : e.color)
-    this.effects.webContents.send(IPC.effect, e)
-    if (!this.effects.isVisible()) this.effects.showInactive()
-    // Whatever happens in the page, the window does not stay.
-    if (this.effectsHide) clearTimeout(this.effectsHide)
-    this.effectsHide = setTimeout(() => this.effectDone(), 6000)
+    for (const w of this.effects.values()) if (w.owns(from)) w.done()
   }
 
   private pushCaption() {
@@ -940,5 +921,127 @@ export class Overlay {
     const pet = petBox(a, b, this.scale, this.text)
     const d = this.mode === 'drawer' ? drawerBox(pet, b, sideOf(b, a)) : panelBox(pet, b, sideOf(b, a), LOG)
     return p.x >= d.x - margin && p.x < d.x + d.width + margin && p.y >= d.y - margin && p.y < d.y + d.height + margin
+  }
+}
+
+/**
+ * A display-only window over one display's work area that plays effects: a Mac's coins and impacts,
+ * and on any platform an impact on a screen the overlay is not on. It ignores the mouse, never takes
+ * focus, and shows only while something plays. Made on first use; closed a minute after its last
+ * effect, unless `keep` says every screen is on, when it stays warm.
+ */
+class EffectsWindow {
+  private win: BrowserWindow | null = null
+  private ready = false
+  private queue: Effect[] = []
+  private hideTimer: NodeJS.Timeout | null = null
+  private closeTimer: NodeJS.Timeout | null = null
+
+  constructor(
+    private readonly displayId: number,
+    private readonly keep: () => boolean,
+  ) {}
+
+  private area(): Rectangle | null {
+    return screen.getAllDisplays().find((d) => d.id === this.displayId)?.workArea ?? null
+  }
+
+  owns(wc: WebContents): boolean {
+    return !!this.win && !this.win.isDestroyed() && this.win.webContents === wc
+  }
+
+  warm() {
+    this.make()
+  }
+
+  play(e: Effect) {
+    this.make()
+    if (this.ready) this.send(e)
+    else this.queue.push(e)
+  }
+
+  private make() {
+    if (this.win) return
+    const area = this.area()
+    if (!area) return
+    const win = new BrowserWindow({
+      ...area,
+      show: false,
+      frame: false,
+      transparent: true,
+      backgroundColor: '#00000000',
+      hasShadow: false,
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      hiddenInMissionControl: true,
+      focusable: false,
+      alwaysOnTop: true,
+      ...(mac ? { type: 'panel' as const } : {}),
+      title: 'Mayorly effects',
+      webPreferences: {
+        preload: join(import.meta.dirname, '../preload/index.cjs'),
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        backgroundThrottling: false,
+        spellcheck: false,
+      },
+    })
+    this.win = win
+    win.setAlwaysOnTop(true, 'screen-saver')
+    if (mac) win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true })
+    win.setIgnoreMouseEvents(true)
+    const page = process.env.ELECTRON_RENDERER_URL ? `${process.env.ELECTRON_RENDERER_URL}?effects` : null
+    if (page) void win.loadURL(page)
+    else void win.loadFile(join(import.meta.dirname, '../renderer/index.html'), { query: { effects: '1' } })
+    win.webContents.on('did-finish-load', () => {
+      this.ready = true
+      for (const e of this.queue.splice(0)) this.send(e)
+    })
+    win.on('closed', () => {
+      if (this.win !== win) return
+      this.win = null
+      this.ready = false
+    })
+  }
+
+  private send(e: Effect) {
+    const win = this.win
+    const area = this.area()
+    if (!win || win.isDestroyed() || !area) return
+    if (this.closeTimer) clearTimeout(this.closeTimer)
+    this.closeTimer = null
+    win.setBounds(area)
+    debug('effect', e.kind, e.kind === 'cashin' ? `${e.amount} from ${e.from.x},${e.from.y}` : `${e.impact.style} on display ${this.displayId}`)
+    win.webContents.send(IPC.effect, e)
+    if (!win.isVisible()) win.showInactive()
+    // Whatever happens in the page, the window does not stay.
+    if (this.hideTimer) clearTimeout(this.hideTimer)
+    this.hideTimer = setTimeout(() => this.done(), 6000)
+  }
+
+  /** Its page has finished: hide, and close a minute later unless it is kept warm. */
+  done() {
+    if (this.hideTimer) clearTimeout(this.hideTimer)
+    this.hideTimer = null
+    this.win?.hide()
+    if (this.closeTimer) clearTimeout(this.closeTimer)
+    this.closeTimer = setTimeout(() => {
+      this.closeTimer = null
+      if (this.keep()) return
+      if (this.win && !this.win.isDestroyed() && !this.win.isVisible()) this.win.close()
+    }, 60_000)
+  }
+
+  close() {
+    if (this.hideTimer) clearTimeout(this.hideTimer)
+    if (this.closeTimer) clearTimeout(this.closeTimer)
+    if (this.win && !this.win.isDestroyed()) this.win.close()
+    this.win = null
+    this.ready = false
   }
 }

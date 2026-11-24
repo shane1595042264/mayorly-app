@@ -15,8 +15,9 @@ import { actionFor, recordUse } from './lib/keymap'
 import { takeOrigin } from './lib/origin'
 import { Callout } from './hud/Callout'
 import { CashIn } from './hud/CashIn'
-import { SwitchPulse, onPulsePreview } from './hud/SwitchPulse'
-import { pulseColor, switchedIn } from '../../shared/pulse'
+import { ImpactLayer } from './hud/Impact'
+import { lastImpact, withEffect } from '../../shared/impact'
+import type { ImpactEffect } from '../../shared/bridge'
 import { shownCoins } from './lib/coinView'
 import { Feed } from './hud/Feed'
 import { Objectives } from './hud/Objectives'
@@ -112,26 +113,17 @@ export function App() {
   // window is then the whole work area. The coins start at whatever cleared the entry, else the tomato.
   const [cashIn, setCashIn] = useState<{ seq: number; amount: number; balance: number; from: { x: number; y: number }; out?: boolean; anchor: { x: number; y: number } | null; ceiling: number; startAt: number | null } | null>(null)
   const cashSeq = useRef(0)
-  // The task on the desk changed: the screen's edges breathe in its colour (hud/SwitchPulse.tsx). On
-  // Windows and in the browser the overlay is the screen; a Mac's pet-sized window leaves it to the
-  // shell's effects window, as with the coins.
-  const [pulse, setPulse] = useState<{ seq: number; color: string } | null>(null)
-  useHudEvents(
-    useCallback((events: HudEvent[]) => {
-      const st = current()
-      if (!st || !st.settings.switchPulse || !switchedIn(events)) return
-      if (layoutRef.current.compact && shellMode.current === 'field') return
-      setPulse((p) => ({ seq: (p?.seq ?? 0) + 1, color: pulseColor(st) }))
-    }, []),
-  )
-  useEffect(
-    () =>
-      onPulsePreview(() => {
-        const st = current()
-        if (st) setPulse((p) => ({ seq: (p?.seq ?? 0) + 1, color: pulseColor(st) }))
-      }),
-    [],
-  )
+  // A moment on the desk hitting the screen (hud/Impact.tsx): on Windows the shell sends the overlay
+  // the tomato's screen's share, and in the browser the bridge sends the page its own. A Mac's pet
+  // window is too small, so there the shell plays it in effects windows and nothing comes here.
+  const [impacts, setImpacts] = useState<(ImpactEffect & { seq: number })[]>([])
+  useEffect(() => {
+    let seq = 0
+    return bridge.onEffect((e) => {
+      if (e.kind === 'impact') setImpacts((list) => withEffect(list, { ...e, seq: ++seq }))
+    })
+  }, [])
+  const speaks = lastImpact(impacts)
   useHudEvents(
     useCallback((events: HudEvent[]) => {
       for (const e of events) {
@@ -626,7 +618,9 @@ export function App() {
   return (
     <main className="stage" onPointerDownCapture={onStageDown}>
       {/* First, so every panel and the pet paint over it. */}
-      {pulse && <SwitchPulse key={pulse.seq} color={pulse.color} onDone={() => { const mine = pulse.seq; setPulse((p) => (p?.seq === mine ? null : p)) }} />}
+      {impacts.map((e) => (
+        <ImpactLayer key={e.seq} effect={e} words={e.words && e.seq === speaks} onDone={() => setImpacts((list) => list.filter((x) => x.seq !== e.seq))} />
+      ))}
       <AnimatePresence>
         {/* The drawer is a small panel by the pet, as on a Mac where it is its own window: nothing dims. */}
         {shown !== 'field' && shown !== 'drawer' && shown !== 'switcher' && shown !== 'switchLog' && (

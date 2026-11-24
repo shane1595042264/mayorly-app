@@ -1,22 +1,11 @@
 import { motion, useReducedMotion } from 'motion/react'
 import type { CSSProperties } from 'react'
 
-// The task on the desk changed: the screen's edges breathe in the new task's colour. The sides swell
+// The edge glow, one of the impact styles (hud/Impact.tsx): the screen's edges breathe in the moment's colour. The sides swell
 // in with the switch sound's hit (about 85 ms in), hold a beat and fade over most of a second, and
 // the frame jolts once and settles, which is the shake: only this layer moves, never the person's own
 // windows (Mayorly never captures the screen). Under reduced motion, the glow alone. It never takes
 // the pointer.
-
-const PREVIEW = 'mayorly:pulse-preview'
-
-/** Settings' Try a switch: App plays the pulse once, in the colour of the task on the desk, setting or not. */
-export const previewPulse = () => window.dispatchEvent(new Event(PREVIEW))
-
-/** App's ear for previewPulse. */
-export function onPulsePreview(fn: () => void): () => void {
-  window.addEventListener(PREVIEW, fn)
-  return () => window.removeEventListener(PREVIEW, fn)
-}
 
 /** When the sound's hit lands, so the glow peaks and the jolt starts with it (lib/sfx.ts, switchCue). */
 const HIT_S = 0.085

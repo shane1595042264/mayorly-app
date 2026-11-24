@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Every moment hits the screen
+
+- Switching tasks now sends a tsunami out from the tomato: three crests of the task's colour with foam on their lips, rolling to the far corners of the screen. In the middle of the screen, big: Switched to, and the task.
+- Every other moment hits too, each its own way: a task done is a shockwave (one heavy ring, a flash at the rim and a jolt), focus ending raises a tide of cool water from the bottom that drains away, rest ending sweeps a band across the screen, and start, pause, resume, a tomato and the sitting ending each have theirs. Each says what happened in the middle of the screen: Done, Focus done, Back to work, Paused.
+- Settings, Sound and impact: pick the style for each moment (Tsunami, Shockwave, Edge glow, Sweep, Tide or None) and Try it there. Turn on Every screen and the tsunami runs on across your other monitor as if they were one screen; turn the words off if you only want the hit.
+- Nothing plays over a game: not in gaming mode, and not while a League match of yours is running.
+
 ## Settings, one area at a time
 
 - Settings has a rail down the left: Timer, Auto switch, Sound and light, Pet and text, Calendar, Clerk, Hotkeys, Account and data. Each opens its own view, so nothing is lost in one long page. j and k step through them, like rows on the other tabs.

@@ -77,6 +77,7 @@ const bridge: Bridge = {
   setPetHeld: (held) => ipcRenderer.send(IPC.petHeld, held),
   onEffect: (fn) => sub(IPC.effect, fn),
   effectDone: () => ipcRenderer.send(IPC.effectDone),
+  previewImpact: (moment, style) => ipcRenderer.send(IPC.impactPreview, moment, style),
   closeDrawer: () => ipcRenderer.send(IPC.drawerClose),
   onHotkeyFailures: (fn) => sub(IPC.hotkeyFailures, fn),
   stream: {

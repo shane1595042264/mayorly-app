@@ -583,3 +583,60 @@ body.effects { background: transparent; }
 .switch-pulse-edge.is-bottom { left: 0; right: 0; height: 15vh; }
 .switch-pulse-edge.is-top { top: 0; background: linear-gradient(to bottom, color-mix(in srgb, var(--pulse) 46%, transparent), transparent); }
 .switch-pulse-edge.is-bottom { bottom: 0; background: linear-gradient(to top, color-mix(in srgb, var(--pulse) 46%, transparent), transparent); }
+
+/* A moment hitting the screen (hud/Impact.tsx): a canvas the size of the window, and
+   the moment in words in the middle of the tomato's screen. Neither ever takes the pointer. */
+/* Over every panel, the deck included (Try in Settings plays over it), under a toast; never in the pointer's way. */
+.impact { position: fixed; inset: 0; z-index: calc(var(--z-modal) + 5); pointer-events: none; overflow: hidden; }
+.impact-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* The shockwave's jolt, with the hit; the tsunami's, softer. Only this layer moves. */
+.impact-canvas.is-shockwave { animation: impact-jolt 0.36s ease-out both; }
+.impact-canvas.is-ripple { animation: impact-nudge 0.42s ease-out both; }
+@keyframes impact-jolt {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-12px, 7px); }
+  42% { transform: translate(9px, -6px); }
+  64% { transform: translate(-5px, 3px); }
+  82% { transform: translate(2px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes impact-nudge {
+  0% { transform: translate(0, 0); }
+  30% { transform: translate(-5px, 4px); }
+  60% { transform: translate(3px, -2px); }
+  100% { transform: translate(0, 0); }
+}
+.impact-words {
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px;
+  padding: 0 8vw; text-align: center; opacity: 0;
+  animation: impact-words 1.75s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* A soft dark pool behind the words, so they read over a white page or a game alike. */
+.impact-words::before {
+  content: ''; position: absolute; left: 50%; top: 50%; width: min(1100px, 90vw); height: 380px; translate: -50% -50%; z-index: -1;
+  background: radial-gradient(closest-side, rgb(0 0 0 / 0.5), rgb(0 0 0 / 0.22) 55%, transparent);
+}
+.impact-kicker {
+  font-size: 22px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;
+  color: color-mix(in srgb, var(--impact) 70%, white);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.8), 0 0 18px rgb(0 0 0 / 0.6);
+}
+.impact-title {
+  max-width: 80vw; font-size: clamp(44px, 5.4vw, 88px); font-weight: 600; line-height: 1.02; color: var(--ink);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+  text-shadow: 0 2px 3px rgb(0 0 0 / 0.75), 0 0 44px rgb(0 0 0 / 0.55), 0 0 26px color-mix(in srgb, var(--impact) 55%, transparent);
+}
+@keyframes impact-words {
+  0% { opacity: 0; transform: scale(1.22); filter: blur(6px); }
+  5% { opacity: 0; transform: scale(1.22); filter: blur(6px); }
+  13% { opacity: 1; transform: scale(1); filter: blur(0); }
+  17% { transform: scale(1.025); }
+  22% { transform: scale(1); }
+  62% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.97) translateY(-10px); filter: blur(2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .impact-canvas { animation: none !important; }
+  .impact-words { animation-name: impact-words-still; }
+  @keyframes impact-words-still { 0%, 100% { opacity: 0; } 10%, 60% { opacity: 1; } }
+}

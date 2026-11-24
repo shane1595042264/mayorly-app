@@ -357,6 +357,24 @@ export interface Segment {
 /** ready = a block is queued and waiting for you to start it (auto-start off). */
 export type DeskStatus = 'idle' | 'running' | 'paused' | 'ready'
 
+/**
+ * How a moment hits the screen: the edges breathe (edges), a tsunami rolls out from the tomato across
+ * every screen (ripple), one hard ring and a jolt (shockwave), a band of colour crosses the screens
+ * away from the tomato (sweep), the colour rises from the bottom and drains (tide), or nothing.
+ */
+export type ImpactStyle = 'off' | 'edges' | 'ripple' | 'shockwave' | 'sweep' | 'tide'
+
+/** The moments that hit the screen, each with a style of its own. */
+export type ImpactMoment = 'switch' | 'done' | 'rest' | 'work' | 'start' | 'pause' | 'resume' | 'stop' | 'tomato'
+
+export interface ImpactSettings {
+  styles: Record<ImpactMoment, ImpactStyle>
+  /** On every display, not only the tomato's; a tsunami crosses from one to the next. */
+  everyScreen: boolean
+  /** The moment in words, big in the middle of the tomato's screen: Switched to, Done, Rest. */
+  words: boolean
+}
+
 /** The task before a rest, including its place in a superset. Rest itself is never a swap target. */
 export interface RestTask {
   plan: Plan
@@ -477,8 +495,8 @@ export interface Settings {
   autoStartFocus: boolean
   autoStartRest: boolean
   sound: boolean
-  /** The screen's edges glow in the new task's colour, with a jolt, when the task on the desk changes; on this machine. */
-  switchPulse: boolean
+  /** How each moment hits the screen (a task switch, a task done, a rest ending...), on this machine. */
+  impact: ImpactSettings
   alarms: Record<AlarmKind, AlarmChoice>
   hudSide: 'right' | 'left'
   hudScale: number

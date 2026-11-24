@@ -1,4 +1,4 @@
-import { LEDGER_THEMES, type CalBlock, type CalendarSettings, type ClerkSettings, type CalEvent, type CalFeed, type ClerkCommand, type Epoch, type ExternalEvent, type HoursWindow, type Interval, type LedgerTheme, type Overflow, type ClerkAllow, type Recipe, type RecipeWhen } from './model'
+import { LEDGER_THEMES, type CalBlock, type CalendarSettings, type ClerkSettings, type CalEvent, type CalFeed, type ClerkCommand, type Epoch, type ExternalEvent, type HoursWindow, type Interval, type LedgerTheme, type Overflow, type ClerkAllow, type Recipe, type RecipeWhen, type ImpactMoment, type ImpactSettings, type ImpactStyle } from './model'
 import { normalize, plan, subtract, type Placement, type PlanResult, type PlanTask } from './schedule'
 import { DEFAULT_SETTINGS } from './seed'
 import { deriveCode, prefixClerk, type Clerk, type Filing } from './clerk'
@@ -14,7 +14,7 @@ import { couchCharges, couchCoin, ledgerKey, ledgerTomatoes, unharvestedTomatoes
 import { completionHistory } from './history'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
-export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'switchPulse', 'alarms', 'trayTimer', 'text', 'gaming', 'autoSwitch'] as const
+export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'impact', 'alarms', 'trayTimer', 'text', 'gaming', 'autoSwitch'] as const
 
 /** Only settings that belong to this computer: changing them says nothing about who is at the desk. */
 export const isDeviceOnly = (a: Action): boolean =>
@@ -1606,7 +1606,8 @@ function validFiling(s: MayorlyState, f: Filing): boolean {
 
 export function sanitiseSettings(x: Settings): Settings {
   // 0.1.66 kept the Claude rule as `claudeSwitch`; `migrate` carried it into the auto switch rules, and it goes.
-  const { claudeSwitch: _old, ...rest } = x as Settings & { claudeSwitch?: boolean }
+  // 0.1.97's one switch effect, `switchPulse`, became the switch's style in `impact`.
+  const { claudeSwitch: _old, switchPulse, ...rest } = x as Settings & { claudeSwitch?: boolean; switchPulse?: boolean }
   return {
     ...rest,
     focusMin: clampInt(x.focusMin, 1, 180, 25),
@@ -1620,10 +1621,24 @@ export function sanitiseSettings(x: Settings): Settings {
     alarms: sanitiseAlarms(x.alarms),
     clerk: sanitiseClerk(x.clerk),
     gaming: x.gaming === true,
-    switchPulse: x.switchPulse !== false,
+    impact: sanitiseImpact(x.impact, switchPulse),
     autoSwitch: { aiPrompt: x.autoSwitch?.aiPrompt !== false, streamDeath: x.autoSwitch?.streamDeath !== false, streamMute: x.autoSwitch?.streamMute !== false, streamOpen: x.autoSwitch?.streamOpen !== false, streamAd: x.autoSwitch?.streamAd !== false, leaguePlay: x.autoSwitch?.leaguePlay !== false },
     marketHidden: Array.isArray(x.marketHidden) ? [...new Set(x.marketHidden.filter((t): t is string => typeof t === 'string'))].slice(0, 50) : [],
   }
+}
+
+const IMPACT_STYLES: readonly ImpactStyle[] = ['off', 'edges', 'ripple', 'shockwave', 'sweep', 'tide']
+
+function sanitiseImpact(c: Partial<ImpactSettings> | undefined, switchPulse: boolean | undefined): ImpactSettings {
+  const base = DEFAULT_SETTINGS.impact
+  const styles = { ...base.styles }
+  // The edge glow turned off before there were styles: the switch stays quiet.
+  if (!c && switchPulse === false) styles.switch = 'off'
+  for (const k of Object.keys(styles) as ImpactMoment[]) {
+    const v = c?.styles?.[k]
+    if (v && IMPACT_STYLES.includes(v)) styles[k] = v
+  }
+  return { styles, everyScreen: c?.everyScreen === true, words: c?.words !== false }
 }
 
 function sanitiseClerk(c: Partial<ClerkSettings> | undefined): ClerkSettings {

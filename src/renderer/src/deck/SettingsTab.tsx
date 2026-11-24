@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { ArrowsClockwise, ArrowsLeftRight, CalendarBlank, GoogleLogo, Keyboard, Play, Plus, Robot, SpeakerHigh, TextAa, Timer, Trash, UploadSimple, UserCircle, type Icon } from '@phosphor-icons/react'
-import { ALARM_TONES, LEDGER_CAP, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type ClerkSettings, type MayorlyState, type Recipe, type Settings, type ClerkAllow, type AutoSwitchRules } from '@core/index'
+import { ALARM_TONES, LEDGER_CAP, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type ClerkSettings, type MayorlyState, type Recipe, type Settings, type ClerkAllow, type AutoSwitchRules, type ImpactMoment, type ImpactSettings, type ImpactStyle } from '@core/index'
 import type { AiKeySync, AiProvider, AiPublic, AppInfo } from '../../../shared/bridge'
 import { DEFAULT_THRESHOLD, TRIALS } from '../../../shared/ai/tuning'
 import { builtOn } from '../../../shared/build'
@@ -9,7 +9,7 @@ import { hotkeyLabel, IS_MAC } from '../lib/keys'
 import { actionFor, GLOBAL_ACTIONS, keymapOpen } from '../lib/keymap'
 import { current, dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
 import { decodeAlarm, playAlarm, sfx } from '../lib/sound'
-import { previewPulse } from '../hud/SwitchPulse'
+import { IMPACT_MOMENTS, IMPACT_STYLES } from '../../../shared/impact'
 import { ArtIcon } from '../lib/Pixel'
 import type { ArtId } from '../lib/art'
 import { SoundSearch } from './SoundSearch'
@@ -32,7 +32,7 @@ type AreaId = 'timer' | 'switch' | 'sound' | 'pet' | 'calendar' | 'clerk' | 'key
 const AREAS: { id: AreaId; label: string; icon: Icon; art?: ArtId; electron?: boolean }[] = [
   { id: 'timer', label: 'Timer', icon: Timer, art: 'icon.tomato' },
   { id: 'switch', label: 'Auto switch', icon: ArrowsLeftRight, electron: true },
-  { id: 'sound', label: 'Sound and light', icon: SpeakerHigh },
+  { id: 'sound', label: 'Sound and impact', icon: SpeakerHigh },
   { id: 'pet', label: 'Pet and text', icon: TextAa },
   { id: 'calendar', label: 'Calendar', icon: CalendarBlank },
   { id: 'clerk', label: 'Clerk', icon: Robot, art: 'icon.clerk' },
@@ -141,20 +141,13 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
             </Area>
           )}
 
-          <Area id="sound" title="Sound and light" open={area}>
-            <Row
-              title="Task switch"
-              desc="What a change of task on the desk sounds and looks like. Sound cues turns every sound off or on, the alarms included."
-              setting="sound, sound cues, switch sound, swap, task switch, thud, flash, glow, pulse, edges, shake"
-            >
+          <Area id="sound" title="Sound and impact" open={area}>
+            <Row title="Sound cues" desc="Every sound off or on, the alarms included: the switch's thud, a task's ding, a tomato." setting="sound, sound cues, switch sound, thud, mute, audio">
               <div className="checks">
                 <Check label="Sound cues" value={st.sound} onChange={(sound) => set({ sound })} />
-                <Check label="Light the screen's edges when the task changes" value={st.switchPulse} onChange={(switchPulse) => set({ switchPulse })} />
-              </div>
-              <div className="form-actions">
-                <button className="btn" type="button" title="The sound and the light when the task on the desk changes" onClick={() => { sfx.switch(true); previewPulse() }}><Play size={14} /> Try a switch</button>
               </div>
             </Row>
+            <ImpactRow impact={st.impact} set={(impact) => set({ impact })} />
             <AlarmRows s={s} kind={kind} />
           </Area>
 
@@ -273,6 +266,44 @@ function Row({ title, desc, setting, aside, children }: { title: string; desc?: 
       </div>
       <div className="setting-panel">{children}</div>
     </section>
+  )
+}
+
+/** The sound each moment's Try plays with it, so the hit is heard where it lands. */
+function cueOf(moment: ImpactMoment) {
+  if (moment === 'switch') sfx.switch(true)
+  else if (moment === 'done') sfx.clear()
+  else if (moment === 'tomato') sfx.tomato()
+  else sfx.block()
+}
+
+/** How each moment hits the screen: a style per moment, Try beside each, every screen or one, the words or none. */
+function ImpactRow({ impact, set }: { impact: ImpactSettings; set: (i: ImpactSettings) => void }) {
+  return (
+    <Row
+      title="Impact"
+      desc="How each moment hits the screen. A tsunami rolls out from the tomato, and with every screen on it runs on across your other monitors."
+      setting="impact, animation, effect, ripple, tsunami, wave, shockwave, sweep, tide, glow, edges, flash, pulse, shake, words, every screen, monitors"
+    >
+      <div className="impact-list">
+        {IMPACT_MOMENTS.map((m) => {
+          const style = impact.styles[m.id]
+          return (
+            <div className="field impact-row" key={m.id}>
+              <label className="field-label caps" htmlFor={`impact-${m.id}`}>{m.label}</label>
+              <select id={`impact-${m.id}`} value={style} onChange={(e) => set({ ...impact, styles: { ...impact.styles, [m.id]: e.target.value as ImpactStyle } })}>
+                {IMPACT_STYLES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+              </select>
+              <button className="btn" type="button" disabled={style === 'off'} aria-label={`Try ${m.label}`} onClick={() => { cueOf(m.id); bridge.previewImpact(m.id, style) }}><Play size={14} /> Try</button>
+            </div>
+          )
+        })}
+      </div>
+      <div className="checks">
+        <Check label="On every screen" value={impact.everyScreen} onChange={(everyScreen) => set({ ...impact, everyScreen })} />
+        <Check label="Say it big in the middle of the screen: Switched to, Done, Rest" value={impact.words} onChange={(words) => set({ ...impact, words })} />
+      </div>
+    </Row>
   )
 }
 

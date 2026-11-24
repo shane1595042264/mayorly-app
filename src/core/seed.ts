@@ -32,7 +32,11 @@ export const DEFAULT_SETTINGS: Settings = {
   autoStartFocus: true,
   autoStartRest: true,
   sound: true,
-  switchPulse: true,
+  impact: {
+    styles: { switch: 'ripple', done: 'shockwave', rest: 'tide', work: 'sweep', start: 'edges', pause: 'edges', resume: 'edges', stop: 'tide', tomato: 'edges' },
+    everyScreen: false,
+    words: true,
+  },
   alarms: DEFAULT_ALARMS,
   hudSide: 'right',
   hudScale: 1,

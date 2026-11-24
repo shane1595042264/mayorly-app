@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type MessageBoxOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
-import { isDeviceOnly, migrate, onDeskId, randomTask, scheduledNow, switchToAction, type Action, type ClerkCommand, type HudEvent, type MayorlyState, type Settings } from '@core/index'
+import { isDeviceOnly, migrate, onDeskId, randomTask, scheduledNow, switchToAction, type Action, type ClerkCommand, type HudEvent, type ImpactMoment, type ImpactStyle, type MayorlyState, type Settings } from '@core/index'
 import { IPC, type AiProvider, type Arrangement, type CaptionStyle, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from '../shared/ai/service'
@@ -10,13 +10,13 @@ import { makeCapture } from '../shared/capture'
 import { INSTRUCT_SYSTEM, instructContext, parseInstruction, permit, resolveInstruction, stripInstruction, type InstructionPlan } from '../shared/instruct'
 import { dayKey, recipeRunsOn, wallClock } from '../shared/windows'
 import { watchAgents } from './agents'
-import { leagueRule } from './leaguewatch'
+import { leagueRule, ownLeagueMatchNow } from './leaguewatch'
 import { streamRule } from './streamwatch'
 import { SwitchLog } from './switchlog'
 import { deskEnd, endLabel, type SwitchWhy } from '../shared/switchlog'
 import { AGENT_NAME, HOOK_OF, PAIR_WAIT_MS, pairedHook, promptStep, type AgentPrompt } from '../shared/aiswitch'
 import { leagueHolds } from '../shared/leagueplay'
-import { pulseColor, switchedIn } from '../shared/pulse'
+import { IMPACT_MOMENTS, IMPACT_STYLES, deskSeen, impactFor, previewImpact } from '../shared/impact'
 import { sealedClerkStore } from './ai/store'
 import { signInWithGoogle } from './auth'
 import { accountsConfigured, config } from './config'
@@ -506,6 +506,8 @@ function boot() {
     }
   })
 
+  // What the desk looked like before each step, for the moments only a change shows (a pause, a rest ending).
+  let seen = deskSeen(engine.state)
   engine.on((state, events) => {
     send(IPC.state, state)
     if (events.length) send(IPC.events, events)
@@ -519,11 +521,18 @@ function boot() {
       if (ev.type === 'spend' && ev.tokens > 0 && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0), true)
       if (ev.type === 'refund' && ev.tokens > 0 && process.platform === 'darwin' && overlay.mode === 'field') overlay.cashIn(ev.tokens, state.tokens.reduce((n, t) => n + t.amount, 0))
     }
-    // macOS: the task on the desk changed, and the screen's edges breathe in its colour in the effects
-    // window; Windows and a Mac with a panel open draw it in the overlay (App.tsx).
-    if (process.platform === 'darwin' && overlay.mode === 'field' && state.settings.switchPulse && switchedIn(events)) overlay.pulse(pulseColor(state))
+    // Something happened on the desk (a switch, a task done, a rest ending...): it hits the screen in
+    // the style chosen for that moment, from the tomato, on every screen when asked (shared/impact.ts).
+    const hit = impactFor(events, seen, state, device.id)
+    seen = deskSeen(state)
+    // Nothing rolls over a game: not in gaming mode, not while a League match of yours runs.
+    if (hit && !state.settings.gaming && ownLeagueMatchNow() !== true) overlay.impact(hit, state.settings.impact.words)
   })
-  ipcMain.on(IPC.effectDone, () => overlay.effectDone())
+  ipcMain.on(IPC.effectDone, (e) => overlay.effectDone(e.sender))
+  ipcMain.on(IPC.impactPreview, (_e, moment: ImpactMoment, style: ImpactStyle) => {
+    if (!IMPACT_STYLES.some((x) => x.id === style) || !IMPACT_MOMENTS.some((x) => x.id === moment) || style === 'off') return
+    overlay.impact(previewImpact(moment, style, engine.state), engine.state.settings.impact.words)
+  })
   ipcMain.on(IPC.drawerClose, () => overlay.closeDrawer())
   ipcMain.on(IPC.switchLogClose, () => overlay.closeSwitchLog())
   ipcMain.on(IPC.moving, (_e, on: boolean) => overlay.setMoving(!!on))
@@ -616,6 +625,7 @@ function boot() {
   const applySettings = (s: Settings) => {
     overlay.setScale(s.hudScale)
     overlay.setTextSize(s.text.pet)
+    overlay.setEveryScreen(s.impact.everyScreen && Object.values(s.impact.styles).some((v) => v !== 'off'))
     const recipes = JSON.stringify(recipeKeys(engine.state))
     if (applied && JSON.stringify(applied.hotkeys) === JSON.stringify(s.hotkeys) && applied.openAtLogin === s.openAtLogin && applied.gaming === s.gaming && recipes === appliedRecipes) return
     if (!applied || JSON.stringify(applied.hotkeys) !== JSON.stringify(s.hotkeys) || applied.gaming !== s.gaming || recipes !== appliedRecipes) {
