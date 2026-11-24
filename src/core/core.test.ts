@@ -1090,6 +1090,55 @@ describe('the quick switch', () => {
     expect(new Set(w.s.tokens.filter(t => t.reason === 'leisure').map(t => t.id)).size).toBe(2)
   })
 
+  it('clears a couch item: off the list, and back to the task it was swapped in from on the same clock', () => {
+    const w = world()
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: w.ledger('CAR').id })
+    w.wait(55 * MIN)
+    w.do({ type: 'desk/standDown' })
+    w.do({ type: 'leisure/add', title: 'Arcane' })
+    const leisureId = w.s.leisure[0].id
+    w.do({ type: 'entry/capture', text: 'legal: a', start: true })
+    w.wait(5 * MIN)
+    w.do({ type: 'desk/select', leisureId })
+    expect(w.s.desk.block).toMatchObject({ kind: 'leisure', leisureId })
+    w.wait(5 * MIN)
+    const r = w.do({ type: 'leisure/clear', id: leisureId })
+    expect(r.events).toContainEqual(expect.objectContaining({ type: 'cleared', entryId: null, leisureId, title: 'Arcane' }))
+    expect(w.s.leisure[0].archivedAt).toBe(w.now)
+    expect(w.s.desk.status).toBe('running')
+    expect(w.s.desk.block).toMatchObject({ kind: 'focus', entryId: w.entry('a').id })
+    expect(blockView(w.s, w.now)?.remainingMs).toBe(15 * MIN)
+    // Nothing to swap back to: the item is gone.
+    expect(w.s.desk.previous).toBeNull()
+  })
+
+  it('clears a couch item sat down on directly by standing up', () => {
+    const w = world()
+    w.do({ type: 'desk/deploy', mode: 'pomodoro', ledgerId: w.ledger('CAR').id })
+    w.wait(55 * MIN)
+    w.do({ type: 'desk/standDown' })
+    w.do({ type: 'leisure/add', title: 'Arcane' })
+    const leisureId = w.s.leisure[0].id
+    w.do({ type: 'desk/deploy', mode: 'couch', leisureId })
+    w.wait(5 * MIN)
+    const r = w.do({ type: 'leisure/clear', id: leisureId })
+    expect(r.events.map((e) => e.type)).toEqual(expect.arrayContaining(['cleared', 'sitting-end']))
+    expect(w.s.desk.status).toBe('idle')
+    expect(w.s.leisure[0].archivedAt).toBe(w.now)
+  })
+
+  it('clears a couch item that is not on the desk without touching the desk', () => {
+    const w = world()
+    w.do({ type: 'leisure/add', title: 'Arcane' })
+    w.do({ type: 'entry/capture', text: 'legal: a', start: true })
+    const before = structuredClone(w.s.desk)
+    w.do({ type: 'leisure/clear', id: w.s.leisure[0].id })
+    expect(w.s.desk).toEqual(before)
+    expect(w.s.leisure[0].archivedAt).toBe(w.now)
+    // A second clear does nothing.
+    expect(w.do({ type: 'leisure/clear', id: w.s.leisure[0].id }).events).toEqual([])
+  })
+
   it('resolves a rest parked by an older build from its recorded task', () => {
     const w = world()
     for (const title of ['a', 'b']) w.do({ type: 'entry/capture', text: `legal: ${title}` })

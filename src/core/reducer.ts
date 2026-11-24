@@ -93,6 +93,8 @@ export type Action =
   | { type: 'leisure/add'; title: string }
   | { type: 'leisure/update'; id: Id; patch: { title?: string } }
   | { type: 'leisure/delete'; id: Id }
+  /** Done with a couch item (the show watched, the game finished): off the list, and the desk goes back to the task before it. */
+  | { type: 'leisure/clear'; id: Id }
   /** The market: an action for sale at a price in coins; buying it takes them at once. */
   | { type: 'market/add'; title: string; price: number; note?: string; idea?: string }
   | { type: 'market/update'; id: Id; patch: { title?: string; price?: number; note?: string } }
@@ -663,6 +665,9 @@ export function reduce(state: MayorlyState, action: Action, ctx: Ctx, clerk: Cle
       it.archivedAt = now
       break
     }
+    case 'leisure/clear':
+      clearLeisure(s, ctx, ev, action.id)
+      break
     case 'entry/toLeisure': {
       const e = s.entries.find((x) => x.id === action.id)
       if (!e || e.doneAt !== null) break
@@ -1154,6 +1159,26 @@ function completeEntry(s: MayorlyState, ctx: Ctx, ev: HudEvent[], id: Id) {
   const stay = d.plan.anchorLedgerId
   const next = stay ? firstOpenInLedger(s, stay) : nextInFlow(s, id)
   swapTo(s, ctx, ev, next?.id ?? null, next?.ledgerId ?? stay ?? null)
+}
+
+/**
+ * A couch item cleared, as Alt+C clears a task: done with it, so it leaves the list. On the desk, the
+ * block goes back to the task the couch was swapped in from, on the same clock (the couch time so
+ * far is charged as any swap charges it); with no task to go back to, or during a rest, you stand up.
+ */
+function clearLeisure(s: MayorlyState, ctx: Ctx, ev: HudEvent[], id: Id) {
+  const it = s.leisure.find((x) => x.id === id && x.archivedAt === null)
+  if (!it) return
+  const d = s.desk
+  const live = d.block?.kind === 'leisure' && d.block.leisureId === id
+  const resting = !live && restSession(s)?.block.leisureId === id
+  const back = live ? switchBack(s) : null
+  ev.push({ type: 'cleared', at: ctx.now, entryId: null, leisureId: id, title: it.title })
+  if (live && back && (back.entryId || back.ledgerId)) {
+    swapAcross(s, ctx, ev, { entryId: back.entryId, ledgerId: back.ledgerId, leisureId: null })
+    s.desk.previous = null
+  } else if (live || resting || (d.plan?.mode === 'couch' && d.plan.leisureId === id)) endSitting(s, ctx.now, ev, 'stood')
+  it.archivedAt = ctx.now
 }
 
 function endSitting(s: MayorlyState, at: number, ev: HudEvent[], reason: 'stood' | 'complete' | 'flow-clear') {

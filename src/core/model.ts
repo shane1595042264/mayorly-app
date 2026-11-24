@@ -634,7 +634,7 @@ export type HudEvent =
   | { type: 'refund'; at: Epoch; tokens: number; marketId: Id | null }
   | { type: 'block'; at: Epoch; block: Block; started: boolean }
   | { type: 'swap'; at: Epoch; ledgerId: Id | null; entryId: Id | null }
-  | { type: 'cleared'; at: Epoch; entryId: Id; title: string }
+  | { type: 'cleared'; at: Epoch; entryId: Id | null; title: string; leisureId?: Id }
   | { type: 'sitting-end'; at: Epoch; reason: 'stood' | 'complete' | 'flow-clear'; focusMs: Ms; tomatoes: number; tokens: number }
   | { type: 'notice'; at: Epoch; text: string }
   /** The quick switch: now on `label`, the other session parked. */

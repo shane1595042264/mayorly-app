@@ -2,6 +2,11 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Clear works on the couch
+
+- Alt+C now clears a couch item too: done with the show or the game, it leaves the couch list with the Done hit. If you swapped onto it from a task, you are back on that task with the clock still running; if you sat down on it directly, you stand up.
+- On the couch list, c clears the row you are on, and Clear in the Alt+T menu works on a couch item.
+
 ## Tips, force mode, and everything hits harder
 
 - Click something a key also does and the key shows up big in the middle of the screen: the tab's number, Esc to close, Alt+T for the swap menu, Enter for the row you are on. Force mode is on: the click does nothing until you press the key, and pressing it says Nice. Ctrl+Alt+. turns force mode off, Ctrl+Alt+, turns tips off; every tip says so under it, and Settings, Hotkeys, has both.

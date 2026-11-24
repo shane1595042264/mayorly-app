@@ -1,5 +1,5 @@
 import {
-  firstRunState, migrate, randomTask, reduce, scheduledNow, SLEEP_GAP_MS, switchToAction,
+  firstRunState, migrate, randomTask, reduce, restSession, scheduledNow, SLEEP_GAP_MS, switchToAction,
   type Action, type HudEvent, type MayorlyState,
 } from '@core/index'
 import type { Bridge, Command, Effect, Layout, UiMode } from '../../../shared/bridge'
@@ -156,8 +156,10 @@ export function createWebBridge(): Bridge {
       dispatch(st === 'running' ? { type: 'desk/pause' } : { type: 'desk/resume' })
     } else if (cmd === 'skipRest') dispatch({ type: 'desk/skipRest' })
     else if (cmd === 'clear') {
-      const id = state.desk.block?.entryId
-      if (id) dispatch({ type: 'entry/complete', id })
+      const block = state.desk.block
+      const couch = block?.kind === 'leisure' ? block.leisureId : block?.kind === 'rest' ? restSession(state)?.block.leisureId : null
+      if (couch) dispatch({ type: 'leisure/clear', id: couch })
+      else if (block?.entryId) dispatch({ type: 'entry/complete', id: block.entryId })
     } else if (cmd === 'hide') {
       // A browser tab has nothing to hide behind.
     } else if (cmd === 'scheduled') {

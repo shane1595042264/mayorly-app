@@ -211,7 +211,9 @@ export function PlusMenu({ s, close, open, stage }: Props) {
               desk === 'running'
                 ? { key: 'hold', label: 'Hold', icon: <Pause size={18} weight="light" />, apply: () => finish({ type: 'desk/pause' }) }
                 : { key: 'resume', label: 'Resume', icon: <Play size={18} weight="light" />, apply: () => picked ? close() : finish({ type: 'desk/resume' }) },
-              { key: 'clear', label: 'Clear', icon: <ArtIcon id="icon.stamp" size={18} fallback={<Check size={18} weight="light" />} />, disabled: !entry || !live, apply: () => entry && finish({ type: 'entry/complete', id: entry.id }) },
+              onCouch && couchOn && pick.leisureId === couchOn
+                ? { key: 'clear', label: 'Clear', icon: <ArtIcon id="icon.stamp" size={18} fallback={<Check size={18} weight="light" />} />, apply: () => finish({ type: 'leisure/clear', id: couchOn }) }
+                : { key: 'clear', label: 'Clear', icon: <ArtIcon id="icon.stamp" size={18} fallback={<Check size={18} weight="light" />} />, disabled: !entry || !live, apply: () => entry && finish({ type: 'entry/complete', id: entry.id }) },
               { key: 'skip', label: 'Skip', icon: <SkipForward size={18} weight="light" />, apply: () => finish({ type: 'desk/skip' }) },
               { key: 'stand', label: 'Stand down', icon: <Stop size={18} weight="light" />, apply: () => finish({ type: 'desk/standDown' }) },
               { key: 'deck', label: 'Deck', icon: <SquaresFour size={18} weight="light" />, apply: () => open('deck') },

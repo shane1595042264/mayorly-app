@@ -80,8 +80,8 @@ export function momentOf(events: HudEvent[], before: DeskSeen, s: MayorlyState, 
   if (s.desk.device && s.desk.device.id !== device) return null
   const cleared = events.find((e): e is Extract<HudEvent, { type: 'cleared' }> => e.type === 'cleared')
   if (cleared) {
-    const entry = s.entries.find((x) => x.id === cleared.entryId)
-    return { moment: 'done', color: ledgerColor(s, entry?.ledgerId), kicker: 'Done', title: cleared.title }
+    const entry = cleared.entryId ? s.entries.find((x) => x.id === cleared.entryId) : undefined
+    return { moment: 'done', color: cleared.leisureId ? COUCH_COLOR : ledgerColor(s, entry?.ledgerId), kicker: 'Done', title: cleared.title }
   }
   if (switchedIn(events)) return { moment: 'switch', color: pulseColor(s), kicker: 'Switched to', title: deskTitle(s) }
   const block = [...events].reverse().find((e): e is Extract<HudEvent, { type: 'block' }> => e.type === 'block')

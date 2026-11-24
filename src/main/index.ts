@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { app, dialog, globalShortcut, ipcMain, Menu, nativeTheme, Notification, powerMonitor, type MessageBoxOptions, type OpenDialogOptions, type SaveDialogOptions } from 'electron'
-import { isDeviceOnly, migrate, onDeskId, randomTask, scheduledNow, switchToAction, type Action, type ClerkCommand, type HudEvent, type ImpactMoment, type ImpactStyle, type MayorlyState, type Settings } from '@core/index'
+import { isDeviceOnly, migrate, onDeskId, randomTask, restSession, scheduledNow, switchToAction, type Action, type ClerkCommand, type HudEvent, type ImpactMoment, type ImpactStyle, type MayorlyState, type Settings } from '@core/index'
 import { IPC, type AiProvider, type Arrangement, type CaptionStyle, type ClerkNotice, type Command, type UiMode } from '../shared/bridge'
 import { BUILD } from '../shared/build'
 import { AiClerk, KeyCheckError } from '../shared/ai/service'
@@ -562,8 +562,11 @@ function boot() {
   }
 
   const clearDesk = () => {
-    const id = engine.state.desk.block?.entryId
-    if (id) engine.act({ type: 'entry/complete', id }, { cause: 'you', via: 'Cleared with the clear key; the desk took the next' })
+    const block = engine.state.desk.block
+    // A couch item clears too: off the list, and the desk goes back to the task before it.
+    const couch = block?.kind === 'leisure' ? block.leisureId : block?.kind === 'rest' ? restSession(engine.state)?.block.leisureId : null
+    if (couch) engine.act({ type: 'leisure/clear', id: couch }, { cause: 'you', via: 'Cleared with the clear key; back to the task before it' })
+    else if (block?.entryId) engine.act({ type: 'entry/complete', id: block.entryId }, { cause: 'you', via: 'Cleared with the clear key; the desk took the next' })
     else say({ phase: 'done', text: 'Nothing on the desk to clear' })
   }
   /**

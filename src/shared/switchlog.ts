@@ -95,6 +95,8 @@ export function switchCause(action: Action, after: MayorlyState, events: HudEven
       return { cause: 'you', via: 'Captured and started' }
     case 'recipe/run':
       return { cause: 'you', via: 'A recipe started it' }
+    case 'leisure/clear':
+      return { cause: 'you', via: 'Cleared; back to the task before it' }
     case 'superset/delete':
     case 'leisure/delete':
       return { cause: 'you', via: 'Deleted what was running' }

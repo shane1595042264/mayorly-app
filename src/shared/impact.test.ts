@@ -37,6 +37,19 @@ describe('what hits the screen', () => {
     expect(done).toMatchObject({ moment: 'done', style: 'shockwave', kicker: 'Done', title: 'beta' })
   })
 
+  it('a couch item cleared is Done too, in the couch colour, though the desk goes back to the task', () => {
+    const d = desk()
+    d.act({ type: 'entry/capture', text: 'legal: alpha', start: true })
+    d.act({ type: 'leisure/add', title: 'Arcane' })
+    const leisureId = d.s.leisure[0].id
+    d.act({ type: 'desk/select', leisureId } as Action)
+    const sw = d.act({ type: 'desk/select', leisureId } as Action)
+    expect(sw).toBeNull()
+    const done = d.act({ type: 'leisure/clear', id: leisureId })
+    expect(done).toMatchObject({ moment: 'done', style: 'shockwave', kicker: 'Done', title: 'Arcane' })
+    expect(d.s.desk.block?.entryId).toBe(d.s.entries.find((e) => e.title === 'alpha')!.id)
+  })
+
   it('focus ending is a rest, and the rest ending is back to work, in cool and warm colours', () => {
     const d = desk()
     d.act({ type: 'entry/capture', text: 'legal: alpha', start: true })

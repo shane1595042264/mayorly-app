@@ -124,7 +124,8 @@ function CouchList({ s }: { s: MayorlyState }) {
     const live = onCouch?.block.leisureId === it.id
     if (action === 'list.go') {
       if (have >= price && !live) dispatch({ type: 'desk/deploy', mode: 'couch', leisureId: it.id })
-    } else if (action === 'list.delete') dispatch({ type: 'leisure/delete', id: it.id })
+    } else if (action === 'list.clear') dispatch({ type: 'leisure/clear', id: it.id })
+    else if (action === 'list.delete') dispatch({ type: 'leisure/delete', id: it.id })
     else if (action === 'list.cues') setOpen((o) => (o === it.id ? null : it.id))
     else if (action === 'list.rename') setRenaming(it.id)
     else return false
