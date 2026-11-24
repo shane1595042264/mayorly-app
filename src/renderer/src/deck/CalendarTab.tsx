@@ -10,6 +10,7 @@ import { ledgerVars } from '../lib/themes'
 import { current, dispatch, useNow } from '../store'
 import { AskClerk } from './AskClerk'
 import { PlanSettings } from './PlanSettings'
+import { tip } from '../lib/tips'
 
 // The calendar: a week of the plan. Blocks are what the planner placed (derived, redrawn on
 // every replan), events are yours and never move, outside events are busy time from Google.
@@ -199,10 +200,10 @@ export function CalendarTab({ s }: { s: MayorlyState }) {
     <div className={`cal ${panel ? 'wide-side' : ''}`}>
       <div className="cal-main">
         <header className="cal-head">
-          <button type="button" className="icon-btn" aria-label="Previous week" onClick={() => setWeekOffset((w) => w - 1)}><CaretLeft size={16} /></button>
+          <button type="button" className="icon-btn" aria-label="Previous week" onClick={() => setWeekOffset((w) => w - 1)} {...tip('cal.prevWeek', 'the week before')}><CaretLeft size={16} /></button>
           <h2 className="cal-week">{fmtDay(days[0])} to {fmtDay(days[6])}</h2>
-          <button type="button" className="icon-btn" aria-label="Next week" onClick={() => setWeekOffset((w) => w + 1)}><CaretRight size={16} /></button>
-          {weekOffset !== 0 && <button type="button" className="btn ghost" onClick={() => setWeekOffset(0)}>Today</button>}
+          <button type="button" className="icon-btn" aria-label="Next week" onClick={() => setWeekOffset((w) => w + 1)} {...tip('cal.nextWeek', 'the week after')}><CaretRight size={16} /></button>
+          {weekOffset !== 0 && <button type="button" className="btn ghost" onClick={() => setWeekOffset(0)} {...tip('cal.today', 'back to this week')}>Today</button>}
           <button type="button" className="btn ghost" onClick={() => setAdding(true)}>New event</button>
           <button type="button" className={`icon-btn ${panel ? 'on' : ''}`} aria-label="Plan settings" aria-pressed={panel} title="Plan settings: work, your hours, sessions" onClick={() => setPanel((p) => !p)}><GearSix size={16} /></button>
           <span className="cal-planned dim">

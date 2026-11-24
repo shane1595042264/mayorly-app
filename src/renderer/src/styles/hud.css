@@ -591,19 +591,14 @@ body.effects { background: transparent; }
 .impact-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 /* The shockwave's jolt, with the hit; the tsunami's, softer. Only this layer moves. */
 .impact-canvas.is-shockwave { animation: impact-jolt 0.36s ease-out both; }
-.impact-canvas.is-ripple { animation: impact-nudge 0.42s ease-out both; }
+/* The tsunami's jolt lands when its first crest crashes into an edge. */
+.impact-canvas.is-ripple { animation: impact-jolt 0.4s ease-out both; }
 @keyframes impact-jolt {
   0% { transform: translate(0, 0); }
   20% { transform: translate(-12px, 7px); }
   42% { transform: translate(9px, -6px); }
   64% { transform: translate(-5px, 3px); }
   82% { transform: translate(2px, -1px); }
-  100% { transform: translate(0, 0); }
-}
-@keyframes impact-nudge {
-  0% { transform: translate(0, 0); }
-  30% { transform: translate(-5px, 4px); }
-  60% { transform: translate(3px, -2px); }
   100% { transform: translate(0, 0); }
 }
 .impact-words {
@@ -619,24 +614,215 @@ body.effects { background: transparent; }
 .impact-kicker {
   font-size: 22px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;
   color: color-mix(in srgb, var(--impact) 70%, white);
-  text-shadow: 0 1px 2px rgb(0 0 0 / 0.8), 0 0 18px rgb(0 0 0 / 0.6);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.8), 0 0 10px rgb(0 0 0 / 0.6);
 }
 .impact-title {
   max-width: 80vw; font-size: clamp(44px, 5.4vw, 88px); font-weight: 600; line-height: 1.02; color: var(--ink);
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
-  text-shadow: 0 2px 3px rgb(0 0 0 / 0.75), 0 0 44px rgb(0 0 0 / 0.55), 0 0 26px color-mix(in srgb, var(--impact) 55%, transparent);
+  text-shadow: 0 2px 2px rgb(0 0 0 / 0.8), 0 0 14px rgb(0 0 0 / 0.6), 3px 4px 0 color-mix(in srgb, var(--impact) 45%, black);
 }
+/* Slammed in with an overshoot and a twist that settles, held, then lifted away. Transform and
+   opacity only: a blur or a filter would be repainted every frame. */
 @keyframes impact-words {
-  0% { opacity: 0; transform: scale(1.22); filter: blur(6px); }
-  5% { opacity: 0; transform: scale(1.22); filter: blur(6px); }
-  13% { opacity: 1; transform: scale(1); filter: blur(0); }
-  17% { transform: scale(1.025); }
-  22% { transform: scale(1); }
+  0% { opacity: 0; transform: scale(1.5) rotate(-4deg); }
+  5% { opacity: 0; transform: scale(1.5) rotate(-4deg); }
+  11% { opacity: 1; transform: scale(0.94) rotate(1.5deg); }
+  16% { transform: scale(1.04) rotate(-0.8deg); }
+  22% { transform: scale(1) rotate(0); }
   62% { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(0.97) translateY(-10px); filter: blur(2px); }
+  100% { opacity: 0; transform: scale(0.96) translateY(-14px); }
 }
+/* Balatro's dancing letters (hud/Wobble.tsx). */
+.wobble-word { display: inline-block; white-space: nowrap; }
+.wobble-ch { display: inline-block; animation: wobble-ch 1.5s ease-in-out infinite; animation-delay: calc(var(--i) * -0.11s); }
+@keyframes wobble-ch {
+  0%, 100% { transform: translateY(1px) rotate(-3deg); }
+  50% { transform: translateY(-3px) rotate(3deg); }
+}
+.wobble.is-still .wobble-ch { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .impact-canvas { animation: none !important; }
   .impact-words { animation-name: impact-words-still; }
   @keyframes impact-words-still { 0%, 100% { opacity: 0; } 10%, 60% { opacity: 1; } }
+}
+
+/* ------------------------------------------------------------ tips (hud/Tips.tsx) */
+
+/* Over every panel, never in the pointer's way: the click that brought it is already done with. */
+.tip-layer { position: fixed; inset: 0; z-index: calc(var(--z-modal) + 8); display: grid; place-items: center; pointer-events: none; }
+.tip-card {
+  display: grid; justify-items: center; gap: 16px; min-width: min(680px, 88vw); max-width: min(860px, 92vw);
+  padding: 32px 44px 26px; text-align: center;
+  background: rgb(11 13 14 / 0.92); border: 2px solid var(--accent); box-shadow: 0 10px 0 rgb(0 0 0 / 0.45), 0 24px 70px rgb(0 0 0 / 0.55);
+  clip-path: polygon(var(--chamfer) 0, 100% 0, 100% calc(100% - var(--chamfer)), calc(100% - var(--chamfer)) 100%, 0 100%, 0 var(--chamfer));
+}
+.tip-card.is-forced { border-color: #ff9b8c; }
+.tip-card.is-nice { border-color: var(--accent); }
+.tip-kicker { font-size: 24px; letter-spacing: 0.2em; color: var(--accent); }
+.tip-card.is-forced.is-tip .tip-kicker { color: #ff9b8c; }
+.tip-keys { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+/* A chunky keycap that keeps inviting a press: down onto its base and back, over and over. */
+.tip-key {
+  display: inline-grid; place-items: center; min-width: 140px; height: 140px; padding: 0 32px;
+  font-size: 70px; font-weight: 500; line-height: 1; color: var(--void); background: var(--ink);
+  border-radius: 6px; box-shadow: 0 10px 0 #8b9296, 0 12px 18px rgb(0 0 0 / 0.5);
+  animation: tip-press 1.1s cubic-bezier(0.3, 0, 0.2, 1) 0.35s infinite;
+}
+.tip-card.is-nice .tip-key { animation: tip-nice 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; background: var(--accent); box-shadow: 0 3px 0 #9a6a1d, 0 0 40px var(--accent-2); }
+@keyframes tip-press {
+  0%, 55%, 100% { transform: translateY(0); box-shadow: 0 10px 0 #8b9296, 0 12px 18px rgb(0 0 0 / 0.5); }
+  68% { transform: translateY(7px); box-shadow: 0 3px 0 #8b9296, 0 5px 8px rgb(0 0 0 / 0.5); }
+  80% { transform: translateY(-2px); }
+}
+@keyframes tip-nice {
+  0% { transform: translateY(7px) scale(1); }
+  45% { transform: translateY(-6px) scale(1.18) rotate(-4deg); }
+  100% { transform: translateY(0) scale(1) rotate(0); }
+}
+.tip-does { margin: 0; font-size: 34px; font-weight: 500; line-height: 1.2; color: var(--ink); }
+.tip-forced { margin: -4px 0 0; font-size: 18px; color: #ff9b8c; }
+.tip-off { display: flex; gap: 26px; justify-content: center; flex-wrap: wrap; margin: 6px 0 0; font-size: 16px; color: var(--ink-2); }
+.tip-off kbd { display: inline-block; margin-right: 7px; padding: 3px 8px; font-size: 15px; color: var(--ink); border: 1px solid var(--line-2); border-bottom-width: 3px; border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  .tip-key { animation: none; }
+}
+
+/* ------------------------------------------------------------ juice
+   Balatro's lesson: everything answers, and overshoots a little on the way. Every move here ends
+   where it started (scale 1, no turn, no offset), so a sprite never rests resampled; and only small
+   things move, never the whole screen, so the transparent overlay stays cheap to paint. */
+
+/* A press squashes; the release springs back past its size and settles. The `scale` and `rotate`
+   properties, so a control's own transform and translate are kept. */
+.btn, .icon-btn, .tab, .seg button, .settings-rail-item, .leisure-switch-btn, .deck-close {
+  transition-property: color, background, border-color, box-shadow, scale, rotate;
+  transition-duration: 0.15s, 0.15s, 0.15s, 0.15s, 0.34s, 0.34s;
+  transition-timing-function: ease, ease, ease, ease, cubic-bezier(0.34, 1.9, 0.64, 1), cubic-bezier(0.34, 1.9, 0.64, 1);
+}
+.btn:active:not(:disabled), .icon-btn:active:not(:disabled), .tab:active, .seg button:active, .settings-rail-item:active, .leisure-switch-btn:active, .deck-close:active { scale: 0.9; transition-duration: 0.06s; }
+/* Hover a tab and it jiggles, as a card does under the pointer. */
+.tab:hover:not(.on), .settings-rail-item:hover:not(.on), .leisure-switch-btn:hover:not(.on) { animation: juice-jiggle 0.4s ease-out; }
+/* Chosen: it pops. */
+.tab.on, .settings-rail-item.on, .leisure-switch-btn.on, .seg button.on { animation: juice-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1); }
+/* The row j and k move to snaps into place. */
+.row.is-selected, .find-row.is-on, .keymap-row.is-selected, .cal-item.is-selected, .opt.cursor { animation: juice-select 0.26s cubic-bezier(0.34, 1.7, 0.64, 1); }
+/* A keystroke in a box: the box thumps (App adds .juice-type to the field's box). */
+.juice-type { animation: juice-type 0.18s ease-out; }
+/* Results arrive one after another, each popping in. */
+.find-list > li[role='option'], .settings-search-results li { animation: juice-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) backwards; animation-delay: calc(var(--i, 0) * 18ms); }
+
+@keyframes juice-jiggle {
+  0% { rotate: 0deg; }
+  25% { rotate: -4deg; }
+  55% { rotate: 3deg; }
+  80% { rotate: -1.5deg; }
+  100% { rotate: 0deg; }
+}
+@keyframes juice-pop {
+  0% { scale: 1.32; }
+  55% { scale: 0.93; }
+  100% { scale: 1; }
+}
+@keyframes juice-select {
+  0% { translate: 7px 0; scale: 1.015; }
+  100% { translate: 0 0; scale: 1; }
+}
+@keyframes juice-type {
+  0% { scale: 1.014; }
+  45% { scale: 0.996; }
+  100% { scale: 1; }
+}
+@keyframes juice-in {
+  0% { opacity: 0; scale: 0.86; translate: 0 6px; }
+  100% { opacity: 1; scale: 1; translate: 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab, .settings-rail-item, .leisure-switch-btn, .seg button, .row, .find-row, .keymap-row, .cal-item, .opt, .juice-type, .find-list > li, .settings-search-results li { animation: none !important; }
+}
+
+/* ------------------------------------------------------------ coins, Balatro's way (hud/CashIn.tsx) */
+
+/* A coin lands: the counter jolts (whole pixels, the translate property, apart from Motion's transform) and flashes. */
+.cashin-counter.is-hit { animation: cashin-hit 0.3s steps(1, end); }
+.cashin-counter.is-spend.is-hit { animation-name: cashin-hit-out; }
+@keyframes cashin-hit {
+  0% { translate: -4px 2px; border-color: #ffd27a; box-shadow: 0 0 0 2px rgb(240 174 60 / 0.6), 0 12px 40px rgb(0 0 0 / 0.45); }
+  20% { translate: 3px -2px; }
+  40% { translate: -2px 1px; }
+  60% { translate: 1px 0; border-color: var(--accent-2); }
+  80%, 100% { translate: 0 0; box-shadow: 0 12px 40px rgb(0 0 0 / 0.45); }
+}
+@keyframes cashin-hit-out {
+  0% { translate: 5px -2px; border-color: #ff8a7a; box-shadow: 0 0 0 2px rgb(255 111 97 / 0.6), 0 12px 40px rgb(0 0 0 / 0.45); }
+  20% { translate: -4px 2px; }
+  40% { translate: 3px -1px; }
+  60% { translate: -1px 0; border-color: var(--leisure-2); }
+  80%, 100% { translate: 0 0; box-shadow: 0 12px 40px rgb(0 0 0 / 0.45); }
+}
+/* Its number: text swells and settles; the founder's digits hop instead, never scaled. */
+.cashin-num.is-pop, .deck-balance .num.is-pop { display: inline-block; animation: cashin-pop 0.32s cubic-bezier(0.34, 1.8, 0.64, 1); }
+.cashin-num.is-hop { animation: cashin-hop 0.28s steps(4, end); }
+@keyframes cashin-pop {
+  0% { scale: 1.45; rotate: -6deg; color: #ffd27a; }
+  100% { scale: 1; rotate: 0deg; }
+}
+@keyframes cashin-hop {
+  0% { translate: 0 -8px; }
+  50% { translate: 0 -3px; }
+  100% { translate: 0 0; }
+}
+/* Sparks and a little chip, thrown from where the coin landed. */
+.cashin-burst { position: absolute; width: 0; height: 0; --spark: #ffd27a; --spark-2: var(--accent); }
+.cashin-burst.is-out { --spark: #ff8a7a; --spark-2: var(--leisure); }
+.cashin-spark {
+  position: absolute; left: -3px; top: -3px; width: 6px; height: 6px; background: var(--spark);
+  box-shadow: 0 0 6px var(--spark-2); animation: cashin-spark 0.62s cubic-bezier(0.15, 0.75, 0.3, 1) both;
+}
+.cashin-spark:nth-child(even) { width: 4px; height: 4px; background: var(--spark-2); }
+@keyframes cashin-spark {
+  0% { transform: translate(0, 0) scale(1.3) rotate(0); opacity: 1; }
+  60% { transform: translate(var(--dx), var(--dy)) scale(0.9) rotate(var(--r)); opacity: 1; }
+  100% { transform: translate(calc(var(--dx) * 1.15), calc(var(--dy) + 26px)) scale(0.3) rotate(var(--r)); opacity: 0; }
+}
+.cashin-chip {
+  position: absolute; left: 0; top: 0; translate: -50% -50%; font-size: 18px; font-weight: 700; color: var(--spark);
+  text-shadow: 2px 2px 0 rgb(0 0 0 / 0.75); animation: cashin-chip 0.7s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+@keyframes cashin-chip {
+  0% { transform: translate(0, 0) scale(0.4) rotate(-14deg); opacity: 0; }
+  18% { transform: translate(-18px, -26px) scale(1.25) rotate(6deg); opacity: 1; }
+  100% { transform: translate(-30px, -64px) scale(0.9) rotate(-4deg); opacity: 0; }
+}
+/* The whole amount, slammed in under the counter, its letters dancing. */
+.cashin-total {
+  position: absolute; translate: -70% 34px; font-size: 46px; font-weight: 700; line-height: 1; color: #ffd27a; white-space: nowrap;
+  text-shadow: 3px 3px 0 rgb(0 0 0 / 0.8), 0 0 22px rgb(240 174 60 / 0.55);
+  animation: cashin-total 1.1s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.cashin-total.is-out { color: #ff8a7a; text-shadow: 3px 3px 0 rgb(0 0 0 / 0.8), 0 0 22px rgb(255 111 97 / 0.5); }
+.cashin-total.is-deck { translate: -100% 18px; font-size: 34px; }
+@keyframes cashin-total {
+  0% { transform: scale(2.6) rotate(-12deg); opacity: 0; }
+  14% { transform: scale(0.9) rotate(4deg); opacity: 1; }
+  24% { transform: scale(1.06) rotate(-2deg); }
+  34%, 80% { transform: scale(1) rotate(0); opacity: 1; }
+  100% { transform: translateY(-16px) scale(0.95); opacity: 0; }
+}
+
+/* ------------------------------------------------------------ the keys you press (hud/KeyCast.tsx) */
+
+.keycast { position: fixed; left: 50%; bottom: 7%; translate: -50% 0; z-index: calc(var(--z-modal) + 6); display: flex; align-items: center; gap: 10px; pointer-events: none; }
+.keycast-cap {
+  display: inline-grid; place-items: center; min-width: 52px; height: 52px; padding: 0 14px; font-size: 22px; font-weight: 500; line-height: 1;
+  color: var(--void); background: var(--ink); border-radius: 5px; box-shadow: 0 6px 0 #8b9296, 0 10px 18px rgb(0 0 0 / 0.45);
+}
+.keycast-combo {
+  position: absolute; left: 100%; top: 50%; margin: -0.6em 0 0 18px; font-weight: 700; line-height: 1.2; white-space: nowrap;
+  color: color-mix(in srgb, #ff4d3d calc(var(--heat, 0) * 100%), var(--accent));
+  text-shadow: 3px 3px 0 rgb(0 0 0 / 0.75), 0 0 18px rgb(0 0 0 / 0.5);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cashin-counter.is-hit, .cashin-num.is-pop, .cashin-num.is-hop, .deck-balance .num.is-pop { animation: none; }
+  .cashin-spark, .cashin-chip { display: none; }
+  .cashin-total { animation-name: impact-words-still; }
 }

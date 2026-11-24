@@ -24,9 +24,9 @@ export function Switcher({ s, rows, at, point, pick }: Props) {
       className="switcher"
       role="listbox"
       aria-label="Recent tasks"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ delay: 0.12, duration: 0.1 }}
+      initial={{ opacity: 0, scale: 0.88 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ delay: 0.12, type: 'spring', stiffness: 560, damping: 20 }}
     >
       <ul className="find-list">
         {rows.map((row, i) => {

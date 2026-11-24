@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { AnimatePresence, motion, type TransformProperties } from 'motion/react'
 import { art, specOf } from '../lib/art'
 import { Pixel, PixelAnim } from '../lib/Pixel'
 import { PixelNumber } from '../lib/PixelNumber'
 import { setShownCoins } from '../lib/coinView'
 import { sfx } from '../lib/sound'
+import { Wobble } from './Wobble'
 
 // The harvest, seen: coins fly from the tomato to a counter in the top right, the
 // balance counts up as they land, a last ding, and it all fades. Pointer events never
@@ -13,6 +14,10 @@ import { sfx } from '../lib/sound'
 // it for the tomato, the count goes down as it lands, and the sound falls instead of rising.
 // Once the founder draws the coin turning (icon.coin.spin), each flying coin plays that strip
 // and only travels, on whole pixels; until then it turns and swells by CSS as it always has.
+// Balatro's money: every coin that lands hits. The counter jolts and flashes, its number hops,
+// sparks burst from it and a little +1 flies off; the last coin slams the whole amount in, big,
+// letters dancing. Spending does the same in red. The jolt is whole pixels on the CSS `translate`
+// property, apart from Motion's own transform, and the founder's coin and digits are never scaled.
 
 interface Props {
   amount: number
@@ -40,6 +45,22 @@ const SPIN_FPS = 10
 /** The counter's number in the founder's digits: 18x24 a glyph, about the height of its 30 px text. */
 const COUNT_SCALE = 3
 
+/** The sparks a landing throws: which way and how far, the same every time. */
+const SPARKS = Array.from({ length: 10 }, (_, k) => {
+  const a = (k / 10) * Math.PI * 2 + (k % 3) * 0.21
+  const len = 34 + ((k * 23) % 5) * 9
+  return { dx: Math.round(Math.cos(a) * len), dy: Math.round(Math.sin(a) * len) - 10, r: (k * 47) % 180 }
+})
+const BURST_MS = 700
+
+/** Plays a stylesheet animation again from its start. */
+function restart(el: Element | null | undefined, cls: string) {
+  if (!el) return
+  el.classList.remove(cls)
+  void (el as HTMLElement).offsetWidth
+  el.classList.add(cls)
+}
+
 const whole = (v: string | number | undefined): number => Math.round(parseFloat(String(v ?? 0)) || 0)
 /** Motion's translation on whole pixels and nothing else, so a drawn coin never lands between two. */
 const wholePixels = (t: TransformProperties): string => {
@@ -64,6 +85,8 @@ export function CashIn({ amount, balance, from, out: spend = false, anchor = nul
   }, [anchor, shown])
   useEffect(() => () => setShownCoins(null), [])
   const [landed, setLanded] = useState(0)
+  const [bursts, setBursts] = useState<{ seq: number; n: number }[]>([])
+  const shownRef = useRef(start)
   const [gone, setGone] = useState(false)
   const target = useRef<HTMLDivElement>(null)
   const [to, setTo] = useState<{ x: number; y: number } | null>(null)
@@ -74,12 +97,23 @@ export function CashIn({ amount, balance, from, out: spend = false, anchor = nul
     if (r) setTo({ x: r.left + r.width / 2, y: r.top + r.height / 2 })
   }, [])
 
-  // Each landing moves the count by its share; the last one rounds to the exact balance.
+  // Each landing moves the count by its share; the last one rounds to the exact balance. And it hits.
   const land = (i: number) => {
     if (out) sfx.coinOut(i)
     else sfx.coin(i)
     setLanded((n) => n + 1)
-    setShown(i === coins - 1 ? balance : Math.round(start + ((balance - start) * (i + 1)) / coins))
+    const next = i === coins - 1 ? balance : Math.round(start + ((balance - start) * (i + 1)) / coins)
+    const share = Math.abs(next - shownRef.current)
+    shownRef.current = next
+    setShown(next)
+    setBursts((b) => [...b.slice(-5), { seq: i, n: share }])
+    setTimeout(() => setBursts((b) => b.filter((x) => x.seq !== i)), BURST_MS)
+    const counter = target.current
+    restart(counter, 'is-hit')
+    const num = counter?.querySelector('.cashin-num')
+    // The founder's digits only hop, on whole pixels; text may swell.
+    restart(num, num?.classList.contains('px-num') ? 'is-hop' : 'is-pop')
+    if (anchor) restart(document.querySelector('.deck-balance .num'), 'is-pop')
   }
 
   useEffect(() => {
@@ -168,6 +202,19 @@ export function CashIn({ amount, balance, from, out: spend = false, anchor = nul
           )
         })}
       </AnimatePresence>
+      {to && bursts.map((b) => (
+        <span key={b.seq} className={`cashin-burst ${out ? 'is-out' : ''}`} style={{ left: to.x, top: to.y }}>
+          {SPARKS.map((sp, k) => (
+            <i key={k} className="cashin-spark" style={{ '--dx': `${sp.dx}px`, '--dy': `${sp.dy}px`, '--r': `${sp.r}deg`, animationDelay: `${(k % 3) * 12}ms` } as CSSProperties} />
+          ))}
+          {b.n > 0 && <b className="cashin-chip mono">{out ? '-' : '+'}{b.n}</b>}
+        </span>
+      ))}
+      {to && coins > 0 && landed >= coins && !gone && (
+        <span className={`cashin-total ${out ? 'is-out' : ''} ${anchor ? 'is-deck' : ''}`} style={{ left: to.x, top: to.y }}>
+          <Wobble text={`${out ? '-' : '+'}${amount}`} />
+        </span>
+      )}
     </div>
   )
 }

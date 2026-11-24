@@ -163,6 +163,32 @@ export function reachOf(origin: { x: number; y: number }, rects: Rect[]): number
   return Math.max(1, Math.ceil(far))
 }
 
+/** A screen's edges a wave crashes into, by side. */
+export interface Walls {
+  left: boolean
+  right: boolean
+  top: boolean
+  bottom: boolean
+}
+
+/**
+ * The edges of `r` a wave crashes into: every one but those another of the screens touches along it,
+ * where the wave runs on into the next screen instead. A few pixels of slack, as screens line up.
+ */
+export function wallsOf(r: Rect, others: Rect[]): Walls {
+  const slack = 4
+  const near = (a: number, b: number) => Math.abs(a - b) <= slack
+  const spanY = (o: Rect) => o.y < r.y + r.height - slack && o.y + o.height > r.y + slack
+  const spanX = (o: Rect) => o.x < r.x + r.width - slack && o.x + o.width > r.x + slack
+  const rest = others.filter((o) => o !== r)
+  return {
+    left: !rest.some((o) => near(o.x + o.width, r.x) && spanY(o)),
+    right: !rest.some((o) => near(o.x, r.x + r.width) && spanY(o)),
+    top: !rest.some((o) => near(o.y + o.height, r.y) && spanX(o)),
+    bottom: !rest.some((o) => near(o.y, r.y + r.height) && spanX(o)),
+  }
+}
+
 /** A sweep runs away from the tomato: to the far left of every screen from a tomato on the right half, else to the far right. */
 export function sweepOf(origin: { x: number; y: number }, rects: Rect[]): { dir: 1 | -1; reachX: number } {
   const left = Math.min(...rects.map((r) => r.x))

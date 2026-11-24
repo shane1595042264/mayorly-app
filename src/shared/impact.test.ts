@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS, reduce, sampleState, sanitiseSettings, type Action, type HudEvent, type MayorlyState, type Settings } from '../core/index'
-import { deskSeen, impactFor, lastImpact, momentOf, previewImpact, reachOf, sweepOf, withEffect, type Impact } from './impact'
+import { deskSeen, impactFor, lastImpact, momentOf, previewImpact, reachOf, sweepOf, wallsOf, withEffect, type Impact } from './impact'
 
 const now = Date.parse('2026-11-24T18:00:00Z')
 
@@ -120,6 +120,15 @@ describe('one wave across every screen', () => {
     const tomato = { x: 2500, y: 1400 }
     expect(reachOf(tomato, [main])).toBe(Math.ceil(Math.hypot(2500, 1400)))
     expect(reachOf(tomato, [main, left])).toBe(Math.ceil(Math.hypot(2500 + 1920, 1400)))
+  })
+
+  it('crashes into every edge but the ones another screen touches', () => {
+    const portrait = { x: 2560, y: -300, width: 1080, height: 1920 }
+    expect(wallsOf(main, [main])).toEqual({ left: true, right: true, top: true, bottom: true })
+    expect(wallsOf(main, [main, left])).toEqual({ left: false, right: true, top: true, bottom: true })
+    expect(wallsOf(left, [main, left])).toEqual({ left: true, right: false, top: true, bottom: true })
+    expect(wallsOf(main, [main, left, portrait])).toEqual({ left: false, right: false, top: true, bottom: true })
+    expect(wallsOf(portrait, [main, left, portrait])).toEqual({ left: false, right: true, top: true, bottom: true })
   })
 
   it('sweeps away from the tomato, across them all', () => {

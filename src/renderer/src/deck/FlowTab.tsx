@@ -14,6 +14,7 @@ import { ledgerVars } from '../lib/themes'
 import { Tomatoes } from './Tomatoes'
 import { EntryHistory } from './EntryHistory'
 import { CueCount, CueToggle, Cues } from './Cues'
+import { tip } from '../lib/tips'
 
 export function FlowTab({ s }: { s: MayorlyState }) {
   const now = useNow(5000)
@@ -110,10 +111,11 @@ export function FlowTab({ s }: { s: MayorlyState }) {
               disabled={!clerkOn || trayCount === 0 || sorting}
               title={!clerkOn ? 'Add an AI key in Settings for the clerk to sort the tray' : trayCount === 0 ? 'The tray is empty' : 'Send the tray to the clerk now'}
               onClick={() => void autoClassify()}
+              {...tip('list.sort', 'send the tray to the clerk')}
             >
               <ArtIcon id="icon.clerk" size={16} fallback={<Sparkle size={16} />} /> {sorting ? 'Sorting' : 'Auto-classify'}
             </button>
-            <button type="button" className="btn" disabled={flow.length === 0} onClick={() => dispatch({ type: 'desk/deploy', mode: 'blitz' })}>
+            <button type="button" className="btn" disabled={flow.length === 0} onClick={() => dispatch({ type: 'desk/deploy', mode: 'blitz' })} {...tip('list.blitz', 'blitz the flow')}>
               <Lightning size={16} /> Blitz the flow
             </button>
           </div>
@@ -145,7 +147,7 @@ export function FlowTab({ s }: { s: MayorlyState }) {
       </section>
 
       <aside className="flow-side">
-        <div className="history-heading"><h3 className="side-title caps">Cleared today</h3><button type="button" className="btn ghost small" title="Everything cleared, and the trash (H)" onClick={() => setHistory('')}>History</button></div>
+        <div className="history-heading"><h3 className="side-title caps">Cleared today</h3><button type="button" className="btn ghost small" title="Everything cleared, and the trash (H)" onClick={() => setHistory('')} {...tip('list.history', 'open the history')}>History</button></div>
         {cleared.length === 0 ? (
           <p className="dim small">Nothing cleared yet today. That is fine.</p>
         ) : (
@@ -243,13 +245,13 @@ function Row({ e, s, index, live, selected, renameTick, now, onDrop, expanded, o
         />
       </span>
       <span className="row-actions">
-        <button className="icon-btn" aria-label={`Focus on ${e.title}`} title="Pomodoro on this entry" onClick={() => dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })}>
+        <button className="icon-btn" aria-label={`Focus on ${e.title}`} title="Pomodoro on this entry" onClick={() => dispatch({ type: 'desk/deploy', mode: 'pomodoro', entryId: e.id })} {...tip('list.go', 'start the row you are on; j and k pick the row')}>
           <Play size={14} />
         </button>
-        <button className="icon-btn" aria-label={`Clear ${e.title}`} title="Clear" onClick={(ev) => { noteOrigin(ev.currentTarget); dispatch({ type: 'entry/complete', id: e.id }) }}>
+        <button className="icon-btn" aria-label={`Clear ${e.title}`} title="Clear" onClick={(ev) => { noteOrigin(ev.currentTarget); dispatch({ type: 'entry/complete', id: e.id }) }} {...tip('list.clear', 'clear the row you are on; j and k pick the row')}>
           <Check size={14} />
         </button>
-        <button className="icon-btn" aria-label={`Delete ${e.title}`} title="Delete" onClick={() => dispatch({ type: 'entry/delete', id: e.id })}>
+        <button className="icon-btn" aria-label={`Delete ${e.title}`} title="Delete" onClick={() => dispatch({ type: 'entry/delete', id: e.id })} {...tip('list.delete', 'delete the row you are on; j and k pick the row')}>
           <Trash size={14} />
         </button>
       </span>

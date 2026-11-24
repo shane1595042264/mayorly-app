@@ -17,6 +17,7 @@ import { ledgerVars } from '../lib/themes'
 import { sfx } from '../lib/sound'
 import { useHudEvents, useNow } from '../store'
 import { ARM_OF_ACTION, onArm, onPick, pointArm, takeArmHint, takePickHint, type Arm } from './arms'
+import { tip } from '../lib/tips'
 
 interface Opt {
   key: string
@@ -479,6 +480,7 @@ function ArmView(props: {
             className={`opt ${o.current ? 'current' : ''} ${active && i === cursor ? 'cursor' : ''}`}
             onMouseEnter={() => onHover(i)}
             onClick={() => onApply(o)}
+            {...((o.n ?? i + 1) <= 9 ? tip('plus.pick', `pick ${o.label}`, String(o.n ?? i + 1)) : tip('plus.apply', `pick ${o.label}; the arrows reach it`))}
           >
             {(o.n ?? i + 1) <= 9 && <span className="opt-n mono num" aria-hidden="true">{o.n ?? i + 1}</span>}
             {o.icon && <span className="opt-icon">{o.icon}</span>}

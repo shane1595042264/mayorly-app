@@ -143,10 +143,10 @@ export function Capture({ s, close }: { s: MayorlyState; close: () => void }) {
   return (
     <motion.div
       className="capture"
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 16, transition: { duration: 0.15 } }}
-      transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+      initial={{ opacity: 0, y: 24, scale: 0.86, rotate: -2 }}
+      animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
+      exit={{ opacity: 0, y: 16, scale: 0.96, transition: { duration: 0.15 } }}
+      transition={{ type: 'spring', stiffness: 520, damping: 18 }}
     >
       <label className="capture-label caps" htmlFor="capture-input">Capture</label>
       <div className="capture-line" key={flash}>

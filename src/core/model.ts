@@ -484,7 +484,18 @@ export interface ClerkLine {
   text: string
 }
 
-export type HotkeyAction = 'plus' | 'capture' | 'find' | 'deck' | 'pause' | 'skipRest' | 'hide' | 'switch' | 'clear' | 'move' | 'drawer' | 'schedule' | 'scheduled' | 'gaming' | 'switchLog'
+export type HotkeyAction = 'plus' | 'capture' | 'find' | 'deck' | 'pause' | 'skipRest' | 'hide' | 'switch' | 'clear' | 'move' | 'drawer' | 'schedule' | 'scheduled' | 'gaming' | 'switchLog' | 'tipsForce' | 'tips'
+
+/**
+ * Tips: a click on something a key does shows that key, big, in the middle of the screen. In force
+ * mode the click does nothing, so the key is the way. Each has a global hotkey to turn it off.
+ */
+export interface TipSettings {
+  on: boolean
+  force: boolean
+  /** The keys you press, echoed at the foot of the screen, with a combo for keys in a row. */
+  echo: boolean
+}
 
 export interface Settings {
   /** Focus length, and the tomato interval. */
@@ -497,6 +508,8 @@ export interface Settings {
   sound: boolean
   /** How each moment hits the screen (a task switch, a task done, a rest ending...), on this machine. */
   impact: ImpactSettings
+  /** Tips for the mouse, and force mode; on this machine. */
+  tips: TipSettings
   alarms: Record<AlarmKind, AlarmChoice>
   hudSide: 'right' | 'left'
   hudScale: number

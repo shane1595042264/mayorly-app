@@ -2,6 +2,15 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Tips, force mode, and everything hits harder
+
+- Click something a key also does and the key shows up big in the middle of the screen: the tab's number, Esc to close, Alt+T for the swap menu, Enter for the row you are on. Force mode is on: the click does nothing until you press the key, and pressing it says Nice. Ctrl+Alt+. turns force mode off, Ctrl+Alt+, turns tips off; every tip says so under it, and Settings, Hotkeys, has both.
+- The keys you press in a panel pop up at the foot of the screen, and keys in a row build a combo: x3, x4, bigger and redder the longer it runs.
+- Coins land like Balatro's: the counter jolts and flashes with each one, sparks fly, a little +1 pops off, and the last coin slams the whole amount in, letters dancing. Spending does it in red.
+- Buttons squash and spring back, tabs jiggle and pop, each tab's page slides in from the side you moved toward, the deck bounces as it opens, Capture and Find pop in with a twist, every keystroke in a search box thumps it and the results pop in one by one.
+- The tsunami now crashes into the edges of the screen: spray where each crest hits, running along the edge, and the wave bouncing back. With every screen on it crashes only at the outer edges and runs on between your monitors.
+- The tsunami should no longer lag: it is drawn at half the resolution (the water is soft anyway), and the big words no longer blur as they move. If a wave is still slow on your PC, the app log says how slow, so it can be tuned.
+
 ## Every moment hits the screen
 
 - Switching tasks now sends a tsunami out from the tomato: three crests of the task's colour with foam on their lips, rolling to the far corners of the screen. In the middle of the screen, big: Switched to, and the task.

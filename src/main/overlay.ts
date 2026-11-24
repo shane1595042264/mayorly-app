@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { BrowserWindow, screen, type Display, type Rectangle, type WebContents } from 'electron'
 import { IPC, type CaptionStyle, type Effect, type Layout, type UiMode } from '../shared/bridge'
 import { CAPTION, DRAWER, LOG, TASKBAR, TOMATO, anchorInBox, captionBox, clampAnchor, cornerAnchor, drawerBox, homeAnchor, nearPet, overlaps, panelBox, petBox, sideOf, type Side } from '../shared/pet'
-import { reachOf, sweepOf, type Impact } from '../shared/impact'
+import { reachOf, sweepOf, wallsOf, type Impact } from '../shared/impact'
 
 /** Windows: the panels drawn beside the pet in the click-through overlay, where only they and the pet take the pointer. */
 const besidePet = (mode: UiMode) => mode === 'drawer' || mode === 'switchLog'
@@ -280,9 +280,12 @@ export class Overlay {
     const sweep = sweepOf(origin, areas)
     const at = Date.now()
     debug('impact', impact.moment, impact.style, `${displays.length} screen(s)`, `reach ${reach}`)
-    for (const d of displays) {
+    // Where screens touch the wave runs on; everywhere else it crashes into the edge.
+    const bounds = displays.map((d) => d.bounds)
+    for (const [i, d] of displays.entries()) {
       const r = d.workArea
-      const e: Effect = { kind: 'impact', impact, origin: { x: origin.x - r.x, y: origin.y - r.y }, reach, sweep, at, words: words && d.id === own.id }
+      const walls = wallsOf(bounds[i], bounds)
+      const e: Effect = { kind: 'impact', impact, origin: { x: origin.x - r.x, y: origin.y - r.y }, reach, sweep, walls, at, words: words && d.id === own.id }
       if (!mac && d.id === own.id) this.win.webContents.send(IPC.effect, e)
       else this.effectsOn(d).play(e)
     }

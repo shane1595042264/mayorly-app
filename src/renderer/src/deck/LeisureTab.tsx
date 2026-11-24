@@ -14,6 +14,7 @@ import { current, dispatch, useNow } from '../store'
 import { useShownCoins } from '../lib/coinView'
 import { CueCount, CueToggle, Cues } from './Cues'
 import { Market } from './Market'
+import { tip } from '../lib/tips'
 
 // Entertainment lives here, outside the ledgers: games, shows, streams. The couch runs
 // on the same focus and rest cadence as a pomodoro; each completed leisure block costs one coin,
@@ -47,7 +48,7 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
       {band}
       <div className="leisure-switch" role="tablist" aria-label="Leisure">
         {(['couch', 'market'] as const).map((v) => (
-          <button key={v} type="button" role="tab" aria-selected={view === v} className={`leisure-switch-btn caps ${view === v ? 'on' : ''}`} onClick={() => { if (v !== view) sfx.tick(); setView(v) }}>
+          <button key={v} type="button" role="tab" aria-selected={view === v} className={`leisure-switch-btn caps ${view === v ? 'on' : ''}`} onClick={() => { if (v !== view) sfx.tick(); setView(v) }} {...tip('list.market', 'switch between the couch and the market')}>
             {v === 'couch' ? <ArtIcon id="icon.couch" size={15} fallback={<Couch size={15} />} /> : <ArtIcon id="icon.market" size={15} fallback={<Storefront size={15} />} />}
             {v === 'couch' ? 'Couch' : 'Market'}
             <span className="leisure-switch-n mono num">{v === 'couch' ? couchN : marketN}</span>

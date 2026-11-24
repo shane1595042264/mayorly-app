@@ -16,6 +16,8 @@ import { takeOrigin } from './lib/origin'
 import { Callout } from './hud/Callout'
 import { CashIn } from './hud/CashIn'
 import { ImpactLayer } from './hud/Impact'
+import { Tips } from './hud/Tips'
+import { KeyCast } from './hud/KeyCast'
 import { lastImpact, withEffect } from '../../shared/impact'
 import type { ImpactEffect } from '../../shared/bridge'
 import { shownCoins } from './lib/coinView'
@@ -124,6 +126,22 @@ export function App() {
     })
   }, [])
   const speaks = lastImpact(impacts)
+
+  // Every keystroke in a box thumps the box it is in (.juice-type, hud.css): the search, the capture
+  // line, a field in Settings. The class is taken off and put back so each key restarts it.
+  useEffect(() => {
+    const onInput = (e: Event) => {
+      const field = e.target as HTMLInputElement | null
+      if (!field || (field.tagName !== 'INPUT' && field.tagName !== 'TEXTAREA') || field.type === 'range' || field.type === 'checkbox') return
+      const box = field.parentElement
+      if (!box) return
+      box.classList.remove('juice-type')
+      void box.offsetWidth
+      box.classList.add('juice-type')
+    }
+    document.addEventListener('input', onInput, true)
+    return () => document.removeEventListener('input', onInput, true)
+  }, [])
   useHudEvents(
     useCallback((events: HudEvent[]) => {
       for (const e of events) {
@@ -657,6 +675,10 @@ export function App() {
       />
       <Feed />
       <Callout quiet={mode !== 'field'} />
+      {/* Tips for the mouse, big in the middle; not in a Mac's pet-sized window, which has no middle. */}
+      {s && <Tips enabled={!layout.compact} tips={s.settings.tips} hotkeys={s.settings.hotkeys} />}
+      {/* The keys pressed in a panel, echoed, with a combo; the field hears no keys. */}
+      <KeyCast enabled={!!s?.settings.tips.echo && shown !== 'field' && !layout.compact} />
 
       <AnimatePresence>
         {shown === 'plus' && <PlusMenu key="plus" s={s} close={close} open={setMode} stage={stagePlus} />}

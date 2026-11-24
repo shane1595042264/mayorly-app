@@ -19,6 +19,7 @@ import { SettingsTab } from './SettingsTab'
 import { ShelfTab } from './ShelfTab'
 import { SupersetsTab } from './SupersetsTab'
 import { WhatsNew } from './WhatsNew'
+import { tip } from '../lib/tips'
 
 const TABS = ['Flow', 'Calendar', 'Shelf', 'Supersets', 'Leisure', 'Record', 'Settings'] as const
 type Tab = (typeof TABS)[number]
@@ -60,7 +61,10 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
   useEffect(() => panel.current?.focus(), [])
   const reduce = useReducedMotion()
 
+  /** Which way the last tab change went: the new page slides in from that side. */
+  const turn = useRef(1)
   const setTab = (t: Tab) => {
+    turn.current = TABS.indexOf(t) >= TABS.indexOf(remembered as Tab) ? 1 : -1
     remembered = t
     setTabState(t)
     sfx.tick()
@@ -107,7 +111,8 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
         className="deck"
         initial={reduce ? false : { z: -120, opacity: 0 }}
         animate={{ z: 0, opacity: 1 }}
-        transition={{ type: 'spring', stiffness: 180, damping: 24 }}
+        // Springier than it was: it rises a touch past the screen and settles back, Balatro's bounce.
+        transition={{ type: 'spring', stiffness: 300, damping: 17 }}
         role="dialog"
         aria-modal="true"
         aria-label="Deck"
@@ -119,7 +124,7 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
           <nav className="tabs" role="tablist">
             <span className="key">Q</span>
             {TABS.map((t, i) => (
-              <button key={t} id={`tab-${t}`} role="tab" aria-selected={tab === t} aria-controls="deck-panel" className={`tab caps ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>
+              <button key={t} id={`tab-${t}`} role="tab" aria-selected={tab === t} aria-controls="deck-panel" className={`tab caps ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)} {...tip('deck.tab', `open ${t}`, String(i + 1))}>
                 {t}
                 <span className="tab-n mono num" aria-hidden="true">{i + 1}</span>
                 {tab === t && <motion.i layoutId="tab-bar" className="tab-bar" />}
@@ -131,13 +136,25 @@ export function Deck({ s, close, kind }: { s: MayorlyState; close: () => void; k
             <span className="mono num">{shownCoins.toLocaleString()}</span>
             <span className="caps dim">Coins</span>
           </span>
-          <button className="deck-close" onClick={close} aria-label="Close deck">
+          <button className="deck-close" onClick={close} aria-label="Close deck" {...tip('deck.close', 'close the deck')}>
             <X size={18} />
           </button>
         </header>
 
         {/* layoutScroll: cards that animate their layout (the market's) stay put while this box scrolls. */}
-        <motion.div layoutScroll className="deck-body" role="tabpanel" id="deck-panel" aria-labelledby={`tab-${tab}`}>
+        {/* Each tab's page slides in from the side you moved toward, past its place and back (the body is
+            remade for each tab, so it starts at its top). */}
+        <motion.div
+          layoutScroll
+          key={tab}
+          className="deck-body"
+          role="tabpanel"
+          id="deck-panel"
+          aria-labelledby={`tab-${tab}`}
+          initial={reduce ? false : { opacity: 0, x: 28 * turn.current }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ type: 'spring', stiffness: 520, damping: 26 }}
+        >
           {tab === 'Flow' && <FlowTab s={s} />}
           {tab === 'Calendar' && <CalendarTab s={s} />}
           {tab === 'Shelf' && <ShelfTab s={s} />}

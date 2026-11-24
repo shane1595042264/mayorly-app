@@ -5,6 +5,7 @@ import { balance, findTasks, COUCH_COINS_PER_TOMATO, recentTasks, type FoundTask
 import { actionFor, keyLabel, keysFor, recordUse } from '../lib/keymap'
 import { dispatch } from '../store'
 import { plan } from './Capture'
+import { tip } from '../lib/tips'
 
 // Search and capture in one line. Typing narrows the open tasks and the couch list; Enter starts
 // the one selected. A line nothing matches is a new task, read the way the capture box reads it.
@@ -68,10 +69,10 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
   return (
     <motion.div
       className="capture find"
-      initial={{ opacity: 0, y: -18 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -12, transition: { duration: 0.15 } }}
-      transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+      initial={{ opacity: 0, y: -18, scale: 0.86, rotate: 2 }}
+      animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
+      exit={{ opacity: 0, y: -12, scale: 0.96, transition: { duration: 0.15 } }}
+      transition={{ type: 'spring', stiffness: 520, damping: 18 }}
     >
       <label className="capture-label caps" htmlFor="find-input">Find or start</label>
       <div className="capture-line">
@@ -107,7 +108,9 @@ export function Find({ s, close }: { s: MayorlyState; close: () => void }) {
                 'aria-selected': i === at,
                 className: `find-row ${i === at ? 'is-on' : ''}`,
                 onPointerMove: () => setPicked(i),
+                style: { '--i': i } as React.CSSProperties,
                 onClick: () => start(row),
+                ...tip('find.start', 'start the highlighted task; the arrows move it'),
               }
               const heading = recent === 0 ? null : i === 0 ? 'Recent' : i === recent ? 'Flow' : null
               const titled = (li: React.ReactNode) => (

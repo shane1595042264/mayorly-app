@@ -19,6 +19,9 @@ export const DEFAULT_HOTKEYS: Record<HotkeyAction, string> = {
   scheduled: 'Alt+I',
   gaming: 'Alt+Shift+G',
   switchLog: 'Alt+Shift+H',
+  // Side by side, and clear of every Alt key above: force mode and tips.
+  tipsForce: 'Ctrl+Alt+.',
+  tips: 'Ctrl+Alt+,',
 }
 
 /** Nine to five, minutes from midnight. */
@@ -37,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
     everyScreen: false,
     words: true,
   },
+  tips: { on: true, force: true, echo: true },
   alarms: DEFAULT_ALARMS,
   hudSide: 'right',
   hudScale: 1,

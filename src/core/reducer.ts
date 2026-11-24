@@ -14,7 +14,7 @@ import { couchCharges, couchCoin, ledgerKey, ledgerTomatoes, unharvestedTomatoes
 import { completionHistory } from './history'
 
 /** Settings that belong to the machine, not the account: a sync never overwrites them. */
-export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'impact', 'alarms', 'trayTimer', 'text', 'gaming', 'autoSwitch'] as const
+export const DEVICE_SETTINGS = ['hotkeys', 'hudSide', 'hudScale', 'openAtLogin', 'sound', 'impact', 'tips', 'alarms', 'trayTimer', 'text', 'gaming', 'autoSwitch'] as const
 
 /** Only settings that belong to this computer: changing them says nothing about who is at the desk. */
 export const isDeviceOnly = (a: Action): boolean =>
@@ -1622,6 +1622,7 @@ export function sanitiseSettings(x: Settings): Settings {
     clerk: sanitiseClerk(x.clerk),
     gaming: x.gaming === true,
     impact: sanitiseImpact(x.impact, switchPulse),
+    tips: { on: x.tips?.on !== false, force: x.tips?.force !== false, echo: x.tips?.echo !== false },
     autoSwitch: { aiPrompt: x.autoSwitch?.aiPrompt !== false, streamDeath: x.autoSwitch?.streamDeath !== false, streamMute: x.autoSwitch?.streamMute !== false, streamOpen: x.autoSwitch?.streamOpen !== false, streamAd: x.autoSwitch?.streamAd !== false, leaguePlay: x.autoSwitch?.leaguePlay !== false },
     marketHidden: Array.isArray(x.marketHidden) ? [...new Set(x.marketHidden.filter((t): t is string => typeof t === 'string'))].slice(0, 50) : [],
   }

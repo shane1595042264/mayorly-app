@@ -620,6 +620,18 @@ function boot() {
     const key = (a: string) => (process.platform === 'darwin' ? a.replace('Alt', 'Option') : a)
     say({ phase: 'done', text: on ? `Gaming mode: shortcuts off. ${key(engine.state.settings.hotkeys.gaming)} turns them on.` : 'Gaming mode off: shortcuts on' })
   }
+  // Tips and force mode, each on its own key, so a tip on screen can be turned off without the mouse.
+  const toggleTips = (what: 'on' | 'force') => {
+    const t = engine.state.settings.tips
+    const next = what === 'on' ? { ...t, on: !t.on } : { ...t, force: !t.force }
+    engine.dispatch({ type: 'settings/update', patch: { tips: next } })
+    const key = (a: string) => (process.platform === 'darwin' ? a.replace('Ctrl', 'Control').replace('Alt', 'Option') : a)
+    const hk = engine.state.settings.hotkeys
+    say({
+      phase: 'done',
+      text: what === 'on' ? (next.on ? `Tips on. ${key(hk.tips)} turns them off.` : `Tips off. ${key(hk.tips)} turns them on.`) : next.force ? `Force mode on: a click a key does waits for the key. ${key(hk.tipsForce)} turns it off.` : `Force mode off: clicks work again. ${key(hk.tipsForce)} turns it on.`,
+    })
+  }
   let applied: Settings | null = null
   let appliedRecipes = ''
   const applySettings = (s: Settings) => {
@@ -653,6 +665,8 @@ function boot() {
         schedule: () => command('schedule'),
         scheduled: goScheduled,
         gaming: toggleGaming,
+        tipsForce: () => toggleTips('force'),
+        tips: () => toggleTips('on'),
       }, s.gaming ? [] : recipeKeys(engine.state).map((r) => ({ key: r.key, run: () => runKeyRecipe(r.id) })))
       if (failed.length) {
         const failures = { keys: failed, reason: refusedAsOptionOnly(failed) ? ('option-only' as const) : undefined }

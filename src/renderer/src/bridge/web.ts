@@ -47,7 +47,7 @@ export function createWebBridge(): Bridge {
   const effectSubs = new Set<(e: Effect) => void>()
   /** A moment hitting this page's screen: the page finds its own tomato and corners (hud/Impact.tsx). */
   const playImpact = (impact: Impact) => {
-    const e: Effect = { kind: 'impact', impact, origin: null, reach: null, sweep: null, at: Date.now(), words: state.settings.impact.words }
+    const e: Effect = { kind: 'impact', impact, origin: null, reach: null, sweep: null, walls: null, at: Date.now(), words: state.settings.impact.words }
     effectSubs.forEach((f) => f(e))
   }
 
@@ -125,6 +125,17 @@ export function createWebBridge(): Bridge {
 
   // Browsers have no global hotkeys, so the same combos work while the tab has focus.
   window.addEventListener('keydown', (e) => {
+    // Tips and force mode: Ctrl+Alt with a key, by its position (Option composes another character on a Mac).
+    if (e.ctrlKey && e.altKey && !e.metaKey) {
+      const k = e.code === 'Period' ? '.' : e.code === 'Comma' ? ',' : physicalKey(e)
+      const combo = `Ctrl+Alt+${e.shiftKey ? 'Shift+' : ''}${k.length === 1 ? k.toUpperCase() : k}`
+      const { tips: tipsKey, tipsForce } = state.settings.hotkeys
+      if (combo !== tipsKey && combo !== tipsForce) return
+      e.preventDefault()
+      const t = state.settings.tips
+      dispatch({ type: 'settings/update', patch: { tips: combo === tipsKey ? { ...t, on: !t.on } : { ...t, force: !t.force } } })
+      return
+    }
     if (!e.altKey || e.ctrlKey || e.metaKey) return
     const hk = state.settings.hotkeys
     // By key position: with Option held, macOS reports the composed character, not the letter.

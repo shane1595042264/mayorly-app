@@ -2,7 +2,7 @@ import type { Action, AlarmKind, HudEvent, ImpactMoment, ImpactStyle, MayorlySta
 import type { InstructionPlan } from './instruct'
 import type { StreamStatus } from './streamdeath'
 import type { SwitchRecord } from './switchlog'
-import type { Impact } from './impact'
+import type { Impact, Walls } from './impact'
 
 // The contract between a Mayorly client (the HUD) and whatever owns the state.
 // In Electron that is the main process over IPC; in a plain browser it is an
@@ -134,6 +134,8 @@ export interface ImpactEffect {
   reach: number | null
   /** A sweep's way and length across every screen; null: this window's own. */
   sweep: { dir: 1 | -1; reachX: number } | null
+  /** Which of this window's edges a wave crashes into: not one shared with another screen it runs on into. Null: all four. */
+  walls: Walls | null
   /** When it started (epoch ms): a window that shows late joins it where it has got to. */
   at: number
   /** This window shows the words: the tomato's screen. */

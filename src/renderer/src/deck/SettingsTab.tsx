@@ -16,10 +16,11 @@ import { SoundSearch } from './SoundSearch'
 import { HoursFields, PLAN_HELP, PlanFields, SessionFields, WorkFields } from './PlanSettings'
 import { dayKey } from '../../../shared/windows'
 import { SettingsSearch } from '../lib/settingsSearch'
+import { tip } from '../lib/tips'
 
 const EXAMPLE = IS_MAC ? 'Option+T' : 'Alt+T'
 /** Electron's accelerator grammar, every modifier spelling it accepts, one key. */
-const ACCELERATOR = /^((Ctrl|Control|Alt|Option|AltGr|Shift|Super|Meta|Cmd|Command|CmdOrCtrl|CommandOrControl)\+)+([A-Z0-9]|F\d{1,2}|Space|Tab|`)$/i
+const ACCELERATOR = /^((Ctrl|Control|Alt|Option|AltGr|Shift|Super|Meta|Cmd|Command|CmdOrCtrl|CommandOrControl)\+)+([A-Z0-9]|F\d{1,2}|Space|Tab|`|[.,/;'=[\]\-])$/i
 /** Stored accelerators keep Electron's cross-platform spelling: Option is Alt. */
 const normalise = (v: string) => v.trim().replace(/\bOption\b/gi, 'Alt')
 
@@ -108,6 +109,7 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
               className={`settings-rail-item ${area === a.id ? 'on' : ''}`}
               aria-current={area === a.id ? 'page' : undefined}
               onClick={() => go(a.id)}
+              {...tip('list.down', 'step through the areas', 'j k')}
             >
               {a.art ? <ArtIcon id={a.art} size={16} fallback={<a.icon size={17} />} /> : <a.icon size={17} />}
               <span>{a.id === 'account' && kind === 'web' ? 'Your data' : a.label}</span>
@@ -213,11 +215,22 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
 
           <Area id="keys" title="Hotkeys" open={area}>
             <Row
+              title="Tips"
+              desc="Click something a key also does and that key shows, big, in the middle of the screen. In force mode the click does nothing until you press the key."
+              setting="tips, force mode, mouse, learn the keys, shortcuts"
+            >
+              <div className="checks">
+                <Check label={`Tips when you click something a key does (${hotkeyLabel(st.hotkeys.tips)})`} value={st.tips.on} onChange={(on) => set({ tips: { ...st.tips, on } })} />
+                <Check label={`Force mode: the click waits for the key (${hotkeyLabel(st.hotkeys.tipsForce)})`} value={st.tips.force} onChange={(force) => set({ tips: { ...st.tips, force } })} />
+                <Check label="Echo the keys you press, with a combo for keys in a row" value={st.tips.echo} onChange={(echo) => set({ tips: { ...st.tips, echo } })} />
+              </div>
+            </Row>
+            <Row
               title="Global hotkeys"
               desc={<>They work from any app. Use a modifier combo such as {EXAMPLE} or Ctrl+Shift+Space.{IS_MAC && ' Option combos replace the characters they would type while Mayorly runs.'}</>}
               setting="hotkeys, shortcuts, keys, global"
               aside={
-                <button type="button" className="btn" onClick={openKeymap} title="Every key in the app, and the ones you changed (? in the deck)">
+                <button type="button" className="btn" onClick={openKeymap} title="Every key in the app, and the ones you changed (? in the deck)" {...tip('deck.keymap', 'every key in the app')}>
                   <Keyboard size={14} /> Keymap
                 </button>
               }

@@ -11,6 +11,7 @@ import { hotkeyLabel } from '../lib/keys'
 import { ledgerVars } from '../lib/themes'
 import { useNow } from '../store'
 import { PetSprite, drawnPet, petStates, type PetTone } from './PetSprite'
+import { tip } from '../lib/tips'
 
 // The resting HUD is the founder's tomato holding one sign: the clock while a block
 // runs, with the tomatoes finished on that task in a small number beside it, and today's
@@ -316,6 +317,7 @@ export function Pet({ s, away, moving, open, side, dragging, compact, notice, nu
                 className={`pet-sign num tone-${tone} ${tone === 'hold' ? 'pulse' : ''}`}
                 onClick={() => open('plus')}
                 title={v ? 'Swap' : 'Deploy'}
+                {...tip('hotkey:plus', v ? 'open the swap menu' : 'open the menu to start something')}
               >
                 <PixelNumber text={sign} scale={SIGN_SCALE} maxWidth={SIGN_TEXT_PX} />
               </button>

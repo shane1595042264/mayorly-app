@@ -167,7 +167,7 @@ export function SettingsSearch({ root, placeholder = 'Search settings', reveal }
       {open && q.trim() && (
         <ul className="settings-search-results" id="settings-search-results" role="listbox">
           {hits.map((h, i) => (
-            <li key={i} role="option" aria-selected={i === sel}>
+            <li key={i} role="option" aria-selected={i === sel} style={{ '--i': i } as React.CSSProperties}>
               <button type="button" onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setSel(i)} onClick={() => choose(h)}>
                 <span className="settings-search-label">{marked(h.label, q)}</span>
                 {h.section && <span className="settings-search-section">{h.section}</span>}
