@@ -53,10 +53,13 @@ export function Callout({ quiet }: { quiet: boolean }) {
             sfx.clear()
           } else if (e.type === 'tomato') {
             sfx.tomato()
-          } else if (e.type === 'swap') {
-            sfx.swap()
           }
         }
+        // The task on the desk changed inside the running clock (Alt+Q, a pick, a session brought
+        // back, an AI prompt, a stream, your League match): one swap thud for the step, though
+        // Alt+Q makes both a swap and a switch. A clear that moves to the next entry has its own
+        // ding, and a fresh start its work alarm.
+        if (events.some((e) => e.type === 'swap' || e.type === 'switch') && !events.some((e) => e.type === 'cleared')) sfx.switch()
       },
       [],
     ),

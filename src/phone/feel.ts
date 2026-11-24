@@ -64,9 +64,12 @@ export function afterAct(before: MayorlyState, after: MayorlyState, kind?: strin
   // Only acts that pick what the desk is on count as a start; a delete or a move that changes the
   // task under a running block is not one, and does not pull the person to the timer.
   const picks = !kind || STARTS.has(kind)
+  const otherTask = !!onDeskId(before) && !!onDeskId(after) && onDeskId(before) !== onDeskId(after)
   if (picks && ((running && !wasRunning && (b.status === 'idle' || !b.block)) || (running && moved))) {
     lastStart = Date.now()
-    sfx.block()
+    // From one task to another, the swap thud; a start from nothing, the start's rise.
+    if (otherTask) sfx.switch()
+    else sfx.block()
     impact(ImpactStyle.Medium)
     tell('start')
   } else if (running && !wasRunning) {
@@ -84,7 +87,8 @@ export function afterAct(before: MayorlyState, after: MayorlyState, kind?: strin
     tell('stop')
   } else if (picks && moved) {
     // A switch or a pick that leaves the clock where it was (a paused desk) is still felt.
-    sfx.swap()
+    if (otherTask) sfx.switch()
+    else sfx.swap()
     impact(ImpactStyle.Light)
   }
 }

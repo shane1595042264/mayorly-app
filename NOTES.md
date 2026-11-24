@@ -2,6 +2,12 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## A switch you can hear
+
+- Every time the task on the desk changes, you hear a weapon swap: a quick whoosh into a deep thump and a metal lock. Alt+Q, a pick, a parked session brought back, an AI prompt, a streamer's death, an ad, your League match. Switching back to a parked session used to make no sound at all.
+- Browsing in the Plus menu keeps its light click, a fresh start keeps your work alarm, and a clear keeps its ding.
+- Settings, next to Sound cues: Switch sound plays it once.
+
 ## Your drawings, in the app
 
 - The Shelf tab opens on your own room: your wall and floor, your bookshelf with each ledger standing on it as a spine (hand-written ones in your locked spine), and your desk, with the mail tray on it while the tray holds something. Click a spine to open that ledger.

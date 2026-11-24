@@ -1,6 +1,7 @@
 // Synthesised cues, with nothing to load: the desktop's HUD and the phone both play these.
-// Each one marks a state change you might not be looking at: a clack for a swap, a two-note rise
-// for a tomato. One AudioContext, made on first use; cues are off while sound is off.
+// Each one marks a state change you might not be looking at: a weapon-swap thud when the task on the
+// desk changes, a clack for a pick being browsed, a two-note rise for a tomato. One AudioContext,
+// made on first use; cues are off while sound is off.
 
 let ctx: AudioContext | null = null
 let enabled = true
@@ -20,7 +21,7 @@ export function ac(preview = false): AudioContext | null {
   }
 }
 
-export function tone(a: AudioContext, freq: number, at: number, dur: number, gain: number, type: OscillatorType = 'sine') {
+export function tone(a: BaseAudioContext, freq: number, at: number, dur: number, gain: number, type: OscillatorType = 'sine', to: AudioNode = a.destination) {
   const o = a.createOscillator()
   const g = a.createGain()
   o.type = type
@@ -28,12 +29,12 @@ export function tone(a: AudioContext, freq: number, at: number, dur: number, gai
   g.gain.setValueAtTime(0, at)
   g.gain.linearRampToValueAtTime(gain, at + 0.006)
   g.gain.exponentialRampToValueAtTime(0.0001, at + dur)
-  o.connect(g).connect(a.destination)
+  o.connect(g).connect(to)
   o.start(at)
   o.stop(at + dur + 0.02)
 }
 
-export function click(a: AudioContext, at: number, gain: number, hz: number) {
+export function click(a: BaseAudioContext, at: number, gain: number, hz: number, to: AudioNode = a.destination) {
   const len = Math.floor(a.sampleRate * 0.03)
   const buf = a.createBuffer(1, len, a.sampleRate)
   const d = buf.getChannelData(0)
@@ -46,12 +47,93 @@ export function click(a: AudioContext, at: number, gain: number, hz: number) {
   bp.Q.value = 1.4
   const g = a.createGain()
   g.gain.value = gain
-  src.connect(bp).connect(g).connect(a.destination)
+  src.connect(bp).connect(g).connect(to)
   src.start(at)
 }
 
+/** A pitch that falls as it fades: the body of a hit. */
+function drop(a: BaseAudioContext, from: number, to: number, at: number, fall: number, dur: number, gain: number, type: OscillatorType, out: AudioNode) {
+  const o = a.createOscillator()
+  const g = a.createGain()
+  o.type = type
+  o.frequency.setValueAtTime(from, at)
+  o.frequency.exponentialRampToValueAtTime(to, at + fall)
+  g.gain.setValueAtTime(0, at)
+  g.gain.linearRampToValueAtTime(gain, at + 0.003)
+  g.gain.exponentialRampToValueAtTime(0.0001, at + dur)
+  o.connect(g).connect(out)
+  o.start(at)
+  o.stop(at + dur + 0.02)
+}
+
+/** Air pulled past the ear: noise through a band that rises, swelling into the moment it ends. */
+function whoosh(a: BaseAudioContext, at: number, dur: number, gain: number, out: AudioNode) {
+  const len = Math.floor(a.sampleRate * dur)
+  const buf = a.createBuffer(1, len, a.sampleRate)
+  const d = buf.getChannelData(0)
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1
+  const src = a.createBufferSource()
+  src.buffer = buf
+  const bp = a.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.Q.value = 0.9
+  bp.frequency.setValueAtTime(500, at)
+  bp.frequency.exponentialRampToValueAtTime(4200, at + dur)
+  const g = a.createGain()
+  g.gain.setValueAtTime(0.0001, at)
+  g.gain.exponentialRampToValueAtTime(gain, at + dur * 0.85)
+  g.gain.linearRampToValueAtTime(0, at + dur)
+  src.connect(bp).connect(g).connect(out)
+  src.start(at)
+}
+
+/** A bus that squeezes the hit so it lands hard without clipping, then lifts it back. */
+function punch(a: BaseAudioContext): AudioNode {
+  const comp = a.createDynamicsCompressor()
+  comp.threshold.value = -20
+  comp.knee.value = 6
+  comp.ratio.value = 8
+  comp.attack.value = 0.002
+  comp.release.value = 0.12
+  const lift = a.createGain()
+  // About 3 dB under full scale at its peak: it plays dozens of times a day, so a hit, not a jump.
+  lift.gain.value = 1.15
+  comp.connect(lift).connect(a.destination)
+  return comp
+}
+
+/**
+ * The task on the desk changed: a weapon swap. A short rising whoosh, then the hit: a deep thump
+ * whose pitch falls away, a knock of body, a bright transient and the metal lock a beat later, all
+ * through one compressed bus. About a third of a second. Built against any context, so it can be
+ * rendered offline to listen to (`renderSwitch`).
+ */
+export function switchCue(a: BaseAudioContext, t: number) {
+  const out = punch(a)
+  whoosh(a, t, 0.09, 0.28, out)
+  const hit = t + 0.085
+  drop(a, 150, 42, hit, 0.17, 0.34, 0.95, 'sine', out)
+  drop(a, 240, 110, hit, 0.06, 0.12, 0.3, 'triangle', out)
+  click(a, hit, 1.0, 3400, out)
+  click(a, hit + 0.055, 0.75, 1900, out)
+  tone(a, 2637, hit + 0.055, 0.12, 0.05, 'triangle', out)
+}
+
+/** The switch cue as samples, for listening to it outside the app. */
+export async function renderSwitch(sampleRate = 44100): Promise<AudioBuffer> {
+  const off = new OfflineAudioContext(1, Math.ceil(sampleRate * 0.5), sampleRate)
+  switchCue(off, 0.01)
+  return off.startRendering()
+}
+
 export const sfx = {
-  /** Mechanical clack: two transients and a low knock. */
+  /** The task on the desk changed (Alt+Q, a pick, an AI prompt, a stream, your League match): the swap thud. */
+  switch(preview = false) {
+    const a = ac(preview)
+    if (!a) return
+    switchCue(a, a.currentTime)
+  },
+  /** Mechanical clack: two transients and a low knock. A pick being browsed, a skip, a stop. */
   swap() {
     const a = ac()
     if (!a) return

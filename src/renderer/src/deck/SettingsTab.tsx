@@ -8,7 +8,7 @@ import { bridge } from '../bridge'
 import { hotkeyLabel, IS_MAC } from '../lib/keys'
 import { GLOBAL_ACTIONS } from '../lib/keymap'
 import { dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
-import { decodeAlarm, playAlarm } from '../lib/sound'
+import { decodeAlarm, playAlarm, sfx } from '../lib/sound'
 import { SoundSearch } from './SoundSearch'
 import { PlanSettings } from './PlanSettings'
 import { dayKey } from '../../../shared/windows'
@@ -40,7 +40,10 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
         <div className="checks">
           <Check label="Start the next focus or couch block on its own" value={st.autoStartFocus} onChange={(autoStartFocus) => set({ autoStartFocus })} />
           <Check label="Start rests on their own" value={st.autoStartRest} onChange={(autoStartRest) => set({ autoStartRest })} />
-          <Check label="Sound cues" value={st.sound} onChange={(sound) => set({ sound })} />
+          <div className="sound-cues" data-setting="sound, switch sound, swap, task switch, thud">
+            <Check label="Sound cues" value={st.sound} onChange={(sound) => set({ sound })} />
+            <button className="btn ghost" type="button" title="The sound when the task on the desk changes" onClick={() => sfx.switch(true)}><Play size={14} /> Switch sound</button>
+          </div>
           {kind === 'electron' && <Check label="Open at login" value={st.openAtLogin} onChange={(openAtLogin) => set({ openAtLogin })} />}
           {kind === 'electron' && <AutoSwitchRulesField rules={st.autoSwitch} set={(autoSwitch) => set({ autoSwitch })} />}
           {kind === 'electron' && IS_MAC && <Check label="Timer beside the menu bar tomato" value={st.trayTimer} onChange={(trayTimer) => set({ trayTimer })} />}
