@@ -45,6 +45,7 @@ export const ART = {
   'prop2x2.desk.idle': { w: 32, h: 32, frames: 1 },
   'prop2x2.desk.working': { w: 32, h: 32, frames: 1 },
   'prop2x4.bookshelf': { w: 32, h: 64, frames: 1 },
+  'prop4x3.ledger.open': { w: 64, h: 48, frames: 1 },
   'char.clerk.stand': { w: 16, h: 32, frames: 1 },
   'tile.floor.wood': ICON,
   'tile.wall.plaster': ICON,

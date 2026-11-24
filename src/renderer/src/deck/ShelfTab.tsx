@@ -15,15 +15,19 @@ import { Tomatoes } from './Tomatoes'
 import { EntryHistory } from './EntryHistory'
 import { CueCount, CueToggle, Cues } from './Cues'
 import { ShelfRoomArt, ShelfScene } from './ShelfScene'
-import { ROOM, roomLayout } from './shelfLayout'
+import { OPEN, PAGES, roomLayout } from './shelfLayout'
 import { art } from '../lib/art'
+import { Pixel } from '../lib/Pixel'
+import { keyLabel, keysFor } from '../lib/keymap'
+import { tip } from '../lib/tips'
 
 // The ledger shelf: nine bays. Every ledger here is hand-written by you, so the
-// clerk may file into it but never rename, merge or remove it. A bay opens the
-// ledger; the pencil on the bay edits it. With room for it, the tab is the founder's
-// room (ShelfRoomArt): his bookshelf holds a spine for every ledger, and each card
-// hangs on the wall level with the bay its spine stands in; a narrow tab shows his
-// scene small over the grid of cards instead.
+// clerk may file into it but never rename, merge or remove it. With room for it, the
+// tab is the founder's room (ShelfRoomArt): his bookshelf in the middle holds a spine
+// for every ledger, and the one you point at or the keys are on comes off the shelf
+// and lies open on the wall beside it (OpenLedger, his prop4x3.ledger.open once drawn),
+// its name and numbers written on the pages. A narrow tab shows his scene small over
+// a grid of cards instead.
 
 export function ShelfTab({ s }: { s: MayorlyState }) {
   const now = useNow(10_000)
@@ -103,7 +107,11 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
     ro.observe(el)
     return () => ro.disconnect()
   }, [zoom, !!open])
-  const [hot, setHot] = useState<string | null>(null)
+  // The slot the open ledger shows: the one picked, or the nearest that holds something.
+  const shown = slots[cell] || cell === firstEmpty ? cell : Math.max(0, Math.min(cell, s.ledgers.length - 1))
+  useEffect(() => {
+    if (shown !== cell) setCell(shown)
+  }, [shown, cell])
 
   const opened = open ? s.ledgers.find((l) => l.id === open) : null
   if (opened) {
@@ -117,13 +125,13 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
     </p>
   )
 
-  /** Bay i as a card: its ledger, the bay a new one would go in, or nothing. */
-  const card = (i: number, place?: CSSProperties): ReactNode => {
+  /** Bay i as a card in the grid of a narrow tab: its ledger, the bay a new one would go in, or nothing. */
+  const card = (i: number): ReactNode => {
     const l = slots[i]
     if (!l) {
-      if (i !== firstEmpty) return room ? null : <div key={`e${i}`} className="bay bay-void" aria-hidden />
+      if (i !== firstEmpty) return <div key={`e${i}`} className="bay bay-void" aria-hidden />
       return (
-        <button key={`e${i}`} className={`bay bay-empty bay-card ${cell === i ? 'is-selected' : ''}`} style={place} onClick={() => setEditing(`new-${i}`)}>
+        <button key={`e${i}`} className={`bay bay-empty bay-card ${cell === i ? 'is-selected' : ''}`} onClick={() => setEditing(`new-${i}`)}>
           <Plus size={18} />
           <span className="caps">Write a ledger</span>
         </button>
@@ -131,21 +139,15 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
     }
     const openCount = ledgerEntries(s, l.id).length
     const ms = today.byLedger.find((b) => b.ledgerId === l.id)?.focusMs ?? 0
-    // On the wall a card has room for so many lines of criterion: fewer on a short card, one fewer on a
-    // narrow one or one with the no coins badge, whose numbers wrap onto a second line.
-    const narrow = !!room && room.cards.width < ROOM.cardsFit
-    const critLines = room ? Math.max(0, (room.k >= 7 ? 2 : room.k >= 5 ? 1 : 0) - (narrow ? 1 : 0) - (l.pays === false ? 1 : 0)) : 2
     return (
       <div
         key={l.id}
-        className={`bay bay-open bay-card ${cell === i ? 'is-selected' : ''} ${room && hot === l.id ? 'is-hot' : ''}`}
-        style={{ ...ledgerVars(l), ...place, ...(room ? { '--crit-lines': critLines } : null) } as CSSProperties}
+        className={`bay bay-open bay-card ${cell === i ? 'is-selected' : ''}`}
+        style={ledgerVars(l)}
         role="button"
         tabIndex={0}
         onClick={() => setOpen(l.id)}
         onKeyDown={(e) => e.key === 'Enter' && setOpen(l.id)}
-        onMouseEnter={() => setHot(l.id)}
-        onMouseLeave={() => setHot(null)}
         aria-label={`Open ${l.name}`}
       >
         <span className="bay-n mono dim">{i + 1}</span>
@@ -158,17 +160,15 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
         >
           <PencilSimple size={14} />
         </button>
-        {/* On the wall the name has the top line to itself and the code goes down with the numbers. */}
         <span className="bay-head">
-          <span className="bay-glyph"><Glyph name={l.glyph} size={room ? 20 : 26} /></span>
-          {room ? <span className="bay-name" title={l.name}>{l.name}</span> : <span className="bay-code mono">{l.code}</span>}
+          <span className="bay-glyph"><Glyph name={l.glyph} size={26} /></span>
+          <span className="bay-code mono">{l.code}</span>
         </span>
-        {!room && <span className="bay-name">{l.name}</span>}
-        {critLines > 0 && <span className="bay-crit">{l.criterion || 'No criterion written yet.'}</span>}
+        <span className="bay-name">{l.name}</span>
+        <span className="bay-crit">{l.criterion || 'No criterion written yet.'}</span>
         <span className="bay-stats mono num">
-          {room && <span className="bay-code mono">{l.code}</span>}
           <span>{openCount} open</span>
-          <span title={`${span(ms)} today`}>{span(ms)}{narrow ? '' : ' today'}</span>
+          <span>{span(ms)} today</span>
           {l.pays === false && <span className="bay-nopay" title="Paid work: tomatoes count, no coin is minted">no coins</span>}
           {l.handWritten && (
             <span className="bay-lock" role="img" aria-label="Hand-written, locked from the clerk" title="Hand-written, locked from the clerk">
@@ -184,23 +184,36 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
   const form = editingSlot >= 0 ? <LedgerForm key={editing} s={s} ledger={slots[editingSlot]} done={() => setEditing(null)} /> : null
 
   if (room) {
-    const { k, cards } = room
-    const colW = (cards.width - 2 * 10) / 3
-    // The cards layer keeps the deck's text size; the room under it is in screen pixels.
+    const { k, book } = room
+    // The text layer keeps the deck's text size; the room under it is in screen pixels.
     const at = (x: number, y: number, w: number, h: number): CSSProperties => ({ left: x / zoom, top: y / zoom, width: w / zoom, height: h / zoom })
+    const l = slots[shown]
+    const write = () => firstEmpty >= 0 && setEditing(`new-${firstEmpty}`)
     return (
       <div className="shelf shelf-in-room" ref={wrap}>
         <div className="shelf-room" style={{ height: room.height, '--k': `${k}px` } as CSSProperties}>
-          <ShelfRoomArt s={s} room={room} hot={hot} picked={slots[cell]?.id ?? null} onHot={setHot} open={setOpen} />
+          <ShelfRoomArt s={s} room={room} picked={shown} pick={setCell} open={setOpen} write={write} />
           <div className="shelf-room-cards">
             {form ? (
-              // The form takes the whole wall between the shelf and the desk, and the floor under it.
-              <div className="shelf-room-form" style={at(cards.left, 2 * k, cards.width, room.height - 4 * k)}>{form}</div>
+              // The form takes the wall left of the shelf, where the open ledger lies.
+              <div className="shelf-room-form" style={at(room.side.left, 2 * k, room.side.width, room.height - 4 * k)}>{form}</div>
             ) : (
-              slots.map((_, i) => {
-                const row = cards.rows[Math.floor(i / 3)]
-                return card(i, at(cards.left + (i % 3) * (colW + 10), row.top, colW, row.height))
-              })
+              (l || shown === firstEmpty) && (
+                <OpenLedger
+                  key={l?.id ?? 'new'}
+                  s={s}
+                  ledger={l}
+                  slot={shown}
+                  k={k}
+                  zoom={zoom}
+                  box={at(book.left, book.top, OPEN.w * k, OPEN.h * k)}
+                  openCount={l ? ledgerEntries(s, l.id).length : 0}
+                  ms={l ? (today.byLedger.find((b) => b.ledgerId === l.id)?.focusMs ?? 0) : 0}
+                  open={() => l && setOpen(l.id)}
+                  edit={() => l && setEditing(l.id)}
+                  write={write}
+                />
+              )
             )}
           </div>
         </div>
@@ -218,6 +231,103 @@ export function ShelfTab({ s }: { s: MayorlyState }) {
       <div className="shelf-grid">
         {slots.map((_, i) => (i === editingSlot ? form : card(i)))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * The ledger picked, off the shelf and lying open: the founder's prop4x3.ledger.open at the room's
+ * scale (until it is drawn, a plain book in CSS of the same size), with its words on the two pages
+ * (PAGES): on the left its glyph, code, name and criterion; on the right its numbers and what the
+ * keys do. The empty bay's is a blank ledger, to write.
+ */
+function OpenLedger({ s, ledger, slot, k, zoom, box, openCount, ms, open, edit, write }: {
+  s: MayorlyState
+  ledger: Ledger | null
+  slot: number
+  k: number
+  zoom: number
+  box: CSSProperties
+  openCount: number
+  ms: number
+  open: () => void
+  edit: () => void
+  write: () => void
+}) {
+  const page = (i: number): CSSProperties => {
+    const [x, y, w, h] = PAGES[i]
+    return { left: (x * k) / zoom, top: (y * k) / zoom, width: (w * k) / zoom, height: (h * k) / zoom }
+  }
+  const small = k <= 5
+  // Lines of criterion the left page has room for under the name and the code.
+  const critLines = Math.max(0, Math.floor(((PAGES[0][3] * k) / zoom - (small ? 62 : 78)) / (small ? 15 : 17)))
+  const key = (id: string) => keysFor(id, s.settings).map(keyLabel)[0] ?? ''
+  const plain = (
+    <span className="ledger-open-plain" aria-hidden>
+      <i />
+      <i />
+    </span>
+  )
+  return (
+    <div
+      className={`ledger-open ${small ? 'is-small' : ''}`}
+      style={{ ...box, ...ledgerVars(ledger ?? undefined) }}
+      role="group"
+      aria-label={ledger ? `${ledger.code} ${ledger.name}, open` : 'A blank ledger'}
+      onClick={ledger ? open : write}
+    >
+      <Pixel id="prop4x3.ledger.open" scale={k} className="ledger-open-px" fallback={plain} />
+      {ledger ? (
+        <>
+          <div className="ledger-page" style={page(0)}>
+            <span className="lp-top">
+              <span className="lp-glyph"><Glyph name={ledger.glyph} size={small ? 18 : 22} /></span>
+              <span className="lp-code mono">{ledger.code}</span>
+              {ledger.handWritten && (
+                <span className="lp-lock" role="img" aria-label="Hand-written, locked from the clerk" title="Hand-written, locked from the clerk">
+                  <ArtIcon id="icon.ledger.locked" size={12} fallback={<LockSimple size={12} />} />
+                </span>
+              )}
+              <span className="lp-n mono">{slot + 1}</span>
+            </span>
+            <h3 className="lp-name" title={ledger.name}>{ledger.name}</h3>
+            {critLines > 0 && (
+              <p className="lp-crit" style={{ WebkitLineClamp: critLines } as CSSProperties}>{ledger.criterion || 'No criterion written yet.'}</p>
+            )}
+          </div>
+          <div className="ledger-page lp-right" style={page(1)}>
+            <span className="lp-stat"><b className="mono num">{openCount}</b> open</span>
+            <span className="lp-stat"><b className="mono num">{span(ms)}</b> today</span>
+            {ledger.pays === false && <span className="lp-nopay" title="Paid work: tomatoes count, no coin is minted">No coins</span>}
+            <span className="lp-actions">
+              <button type="button" className="lp-btn" onClick={(e) => { e.stopPropagation(); open() }} {...tip('shelf.open', `open ${ledger.name}`)}>
+                Open <kbd className="mono">{key('shelf.open')}</kbd>
+              </button>
+              <button type="button" className="lp-btn" onClick={(e) => { e.stopPropagation(); edit() }} {...tip('shelf.edit', `edit ${ledger.name}`)}>
+                <PencilSimple size={12} /> Edit <kbd className="mono">{key('shelf.edit')}</kbd>
+              </button>
+            </span>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="ledger-page" style={page(0)}>
+            <span className="lp-top">
+              <span className="lp-glyph"><Plus size={small ? 18 : 22} /></span>
+              <span className="lp-n mono">{slot + 1}</span>
+            </span>
+            <h3 className="lp-name">A blank ledger</h3>
+            {critLines > 0 && <p className="lp-crit" style={{ WebkitLineClamp: critLines } as CSSProperties}>Bay {slot + 1} of {LEDGER_CAP} is free. Give it a name and a criterion; the clerk files by the criterion.</p>}
+          </div>
+          <div className="ledger-page lp-right" style={page(1)}>
+            <span className="lp-actions">
+              <button type="button" className="lp-btn" onClick={(e) => { e.stopPropagation(); write() }} {...tip('shelf.new', 'write a ledger')}>
+                <Plus size={12} /> Write it <kbd className="mono">{key('shelf.new')}</kbd>
+              </button>
+            </span>
+          </div>
+        </>
+      )}
     </div>
   )
 }

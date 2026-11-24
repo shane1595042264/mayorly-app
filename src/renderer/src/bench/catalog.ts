@@ -128,8 +128,9 @@ export const GROUPS: BenchGroup[] = [
     note: 'The Shelf tab\'s picture as the app draws it, then each piece at 2x. Tiles also repeat side by side, so a seam shows.',
     items: [
       { id: 'prop2x4.bookshelf', where: 'The Shelf tab: your ledgers stand on it as spines, up to nine.', today: 'the Shelf tab\'s cards alone.', views: [{ scale: 2 }] },
+      { id: 'prop4x3.ledger.open', where: 'The Shelf tab: the ledger you point at or pick, out of the shelf and lying open on the wall beside it, its name and numbers written on the two pages.', today: 'a plain book in CSS of the same size.', views: [{ scale: 1 }, { scale: 2 }] },
       { id: 'icon.ledger.closed', where: 'A ledger on the shelf: its spine.', today: 'a dashed outline where the spine goes.', views: [{ scale: 1 }, { scale: 2 }] },
-      { id: 'icon.ledger.locked', where: 'A hand-written ledger\'s spine, and its lock on the Shelf tab\'s cards.', today: 'Phosphor LockSimple.', stand: LockSimple, views: [{ scale: 1 }, { scale: 2 }] },
+      { id: 'icon.ledger.locked', where: 'A hand-written ledger\'s spine, and its lock on the open ledger.', today: 'Phosphor LockSimple.', stand: LockSimple, views: [{ scale: 1 }, { scale: 2 }] },
       { id: 'prop2x2.desk.idle', where: 'The desk in the shelf scene, and the empty Flow.', today: 'text only.', views: [{ scale: 2 }] },
       { id: 'prop2x2.desk.working', where: 'The desk in the shelf scene while a block runs: the lamp lit.', today: 'the idle desk.', views: [{ scale: 2 }] },
       { id: 'tile.wall.plaster', where: 'The wall of the shelf scene. It repeats left to right; its bottom two rows meet the floor.', today: 'no wall.', views: [{ scale: 2 }], swatch: [row('tile.wall.plaster'), row('tile.floor.wood'), row('tile.floor.wood')] },

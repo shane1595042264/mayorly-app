@@ -103,11 +103,21 @@ export function ShelfScene({ s, open }: { s: MayorlyState; open?: (ledgerId: str
 
 /**
  * The Shelf tab as the founder's room (`roomLayout`): his wall tiled across the whole tab and his
- * floor along its foot, his bookshelf at one side with a spine for every ledger and his desk at the
- * other, all at one whole scale. The cards hang on the wall between them (ShelfTab draws them over
- * this); a spine and its card light together (`hot`), and the bay the keys are on shows on its spine.
+ * floor along its foot, his bookshelf in the middle with a spine for every ledger, the clerk (once
+ * drawn) and his desk to its right, all at one whole scale. The ledger picked (pointed at, or the one
+ * the keys are on) is out of the shelf: its spine leaves a marked gap, and ShelfTab shows it lying
+ * open on the wall to the left. Pointing at a spine picks it; the bay a new ledger would go in shows
+ * as an outline to point at or click.
  */
-export function ShelfRoomArt({ s, room, hot, picked, onHot, open }: { s: MayorlyState; room: RoomLayout; hot: string | null; picked: string | null; onHot: (id: string | null) => void; open: (ledgerId: string) => void }) {
+export function ShelfRoomArt({ s, room, picked, pick, open, write }: {
+  s: MayorlyState
+  room: RoomLayout
+  /** The slot picked: a ledger's, or the empty one a new ledger would go in. */
+  picked: number
+  pick: (slot: number) => void
+  open: (ledgerId: string) => void
+  write: () => void
+}) {
   const K = room.k
   const wall = art('tile.wall.plaster')
   const floor = art('tile.floor.wood')
@@ -118,8 +128,13 @@ export function ShelfRoomArt({ s, room, hot, picked, onHot, open }: { s: Mayorly
   const tile = `${TILE * K}px ${TILE * K}px`
   const rows = wallRows(room.wall)
   const px = (x: number, y: number): CSSProperties => ({ left: x, top: y })
+  const spineBox = (i: number): CSSProperties => {
+    const p = spineAt(i)
+    return { ...px(room.shelf + p.x * K, room.shelfTop + p.y * K), width: SPINE.w * K, height: SPINE.h * K }
+  }
+  const next = ledgers.length < LEDGER_CAP ? ledgers.length : -1
   return (
-    <div className="shelf-room-art" aria-hidden={false}>
+    <div className="shelf-room-art">
       {wall && (
         <div
           className="shelf-scene-wall"
@@ -133,35 +148,48 @@ export function ShelfRoomArt({ s, room, hot, picked, onHot, open }: { s: Mayorly
         />
       )}
       {floor && <div className="shelf-scene-floor" style={{ top: room.wall * K, height: TILE * K, backgroundImage: `url("${floor}")`, backgroundSize: tile }} />}
-      {room.clerk !== null && art('char.clerk.stand') && <Pixel id="char.clerk.stand" scale={K} className="shelf-scene-thing" style={px(room.clerk, (room.wall + 4 - CLERK.h) * K)} title="The clerk" />}
       <Pixel id="prop2x4.bookshelf" scale={K} className="shelf-scene-thing" style={px(room.shelf, room.shelfTop)} />
-      {ledgers.map((l, i) => {
-        const p = spineAt(i)
-        return (
-          <button
-            key={l.id}
-            type="button"
-            className={`shelf-spine ${hot === l.id ? 'is-hot' : ''} ${picked === l.id ? 'is-picked' : ''}`}
-            style={{ ...px(room.shelf + p.x * K, room.shelfTop + p.y * K), width: SPINE.w * K, height: SPINE.h * K, ...ledgerVars(l) }}
-            title={`${l.code} ${l.name}`}
-            aria-label={`Open ${l.code} ${l.name}`}
-            onClick={() => open(l.id)}
-            onMouseEnter={() => onHot(l.id)}
-            onMouseLeave={() => onHot(null)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
-            }}
-          >
-            <Pixel
-              id={l.handWritten ? 'icon.ledger.locked' : 'icon.ledger.closed'}
-              scale={K}
-              className="shelf-spine-px"
-              style={{ left: -SPINE.x * K, top: -SPINE.y * K }}
-              fallback={<span className="shelf-spine-empty" />}
-            />
-          </button>
-        )
-      })}
+      {ledgers.map((l, i) => (
+        <button
+          key={l.id}
+          type="button"
+          className={`shelf-spine ${picked === i ? 'is-out' : ''}`}
+          style={{ ...spineBox(i), ...ledgerVars(l) }}
+          title={`${l.code} ${l.name}`}
+          aria-label={`Open ${l.code} ${l.name}`}
+          aria-current={picked === i ? 'true' : undefined}
+          onClick={() => open(l.id)}
+          onMouseEnter={() => pick(i)}
+          onFocus={() => pick(i)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+          }}
+        >
+          <Pixel
+            id={l.handWritten ? 'icon.ledger.locked' : 'icon.ledger.closed'}
+            scale={K}
+            className="shelf-spine-px"
+            style={{ left: -SPINE.x * K, top: -SPINE.y * K }}
+            fallback={<span className="shelf-spine-empty" />}
+          />
+        </button>
+      ))}
+      {next >= 0 && (
+        <button
+          type="button"
+          className={`shelf-spine shelf-spine-new ${picked === next ? 'is-out' : ''}`}
+          style={spineBox(next)}
+          title="Write a ledger"
+          aria-label="Write a ledger"
+          onClick={write}
+          onMouseEnter={() => pick(next)}
+          onFocus={() => pick(next)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+          }}
+        />
+      )}
+      {room.clerk !== null && art('char.clerk.stand') && <Pixel id="char.clerk.stand" scale={K} className="shelf-scene-thing" style={px(room.clerk, (room.wall + 4 - CLERK.h) * K)} title="The clerk" />}
       <Pixel id={desk} scale={K} className="shelf-scene-thing" style={px(room.desk, room.deskTop)} title={working ? 'A block runs at the desk' : 'The desk'} />
       {inTray > 0 && (
         <Pixel
