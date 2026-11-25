@@ -6,7 +6,7 @@ The top section is what the app shows once per build, the first time that build 
 
 - The Shelf tab no longer has a second grid of cards beside your bookshelf. The shelf stands in the middle of the room, and the ledger you point at, or move to with the keys, comes off the shelf and lies open on the wall to its left, with its name, criterion, open entries and time today on the pages. Its spine leaves a gap in its colour.
 - Click the open ledger, or press Enter, to go into it; Edit (r) opens the form on the same wall. The dashed place after your last ledger is where a new one goes.
-- The open book is a stand-in until the drawing of a ledger lying open is done; it is next in the art queue.
+- The open ledger is your own drawing now, with the ledger's words written on its pages.
 
 ## Keys work again after Got it
 

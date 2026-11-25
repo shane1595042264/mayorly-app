@@ -25,6 +25,10 @@ if (!existsSync(src)) {
   process.exit(0)
 }
 const { validate } = await import(pathToFileURL(join(assets, 'lib', 'validate.mjs')).href)
+// A canvas that is still only its base (a pet state's new canvas, the tomato placed to draw from)
+// passes every rule but is not a drawing yet; older checkouts of mayorly-assets have no bases at all.
+const baseLib = join(assets, 'lib', 'base.mjs')
+const { isBaseOnly } = existsSync(baseLib) ? await import(pathToFileURL(baseLib).href) : { isBaseOnly: async () => false }
 mkdirSync(out, { recursive: true })
 
 const same = (a, b) => existsSync(b) && readFileSync(a).equals(readFileSync(b))
@@ -44,9 +48,10 @@ async function sync() {
     const cls = classes[slot.class]
     if (!cls) continue
     const from = join(src, f)
-    const r = await validate(new Uint8Array(readFileSync(from)), { ...cls, id, bays: slot.bays })
-    // Not ready yet (a blank canvas, or a rule broken): the app keeps its last good copy, if any.
-    if (!r.ok) {
+    const bytes = new Uint8Array(readFileSync(from))
+    const r = await validate(bytes, { ...cls, id, bays: slot.bays })
+    // Not ready yet (a blank canvas, only its base, or a rule broken): the app keeps its last good copy, if any.
+    if (!r.ok || (slot.base && (await isBaseOnly(bytes, slot, cls, assets)))) {
       if (existsSync(join(out, `${id}.png`))) wanted.add(id)
       continue
     }
