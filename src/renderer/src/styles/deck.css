@@ -1162,6 +1162,14 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .market-log li { display: grid; grid-template-columns: minmax(0, 1fr) auto 58px 24px; align-items: center; gap: 8px; min-height: 28px; font-size: 13px; }
 .market-log-title { color: var(--ink); }
 .market-log-ago { font-size: 12px; color: var(--ink-3); text-align: right; }
+/* Picked with the keys (h j k l): an idea, Bring back, a purchase to undo, an item to put back. */
+.market-chip-wrap.is-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.market-ideas-back.is-selected { color: var(--accent); outline: 1px solid var(--accent); outline-offset: 3px; }
+.market-log li.is-selected { margin: 0 -6px; padding: 0 6px; background: rgb(249 194 43 / 0.07); box-shadow: inset 2px 0 0 var(--accent); }
+/* What the keys do here, always on the page. */
+.market-keys { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 6px 0 0; color: var(--ink-3); font-size: 12px; }
+.market-keys span { display: inline-flex; align-items: center; gap: 3px; }
+.market-keys .key { font-style: normal; }
 .market-edit-need { margin: -2px 0 0; font-size: 12px; color: var(--ink-2); }
 .price-input { position: relative; }
 .price-need {

@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## The market works from the keys
+
+- In Leisure, Market, everything can be reached without the mouse: h j k l or the arrows move over the cards, the ideas, Bring back, and the side column's purchases and removed items, by where they sit on screen. Something is picked as soon as the market opens.
+- Enter does what the picked thing does: buys the card, puts the idea up for sale, brings the ideas back, undoes the purchase, puts a removed item back. x removes a card or puts an idea away, r edits, n jumps into the box, u undoes the last purchase or removal, Esc leaves a box. The keys are listed at the foot of the market.
+- In the price box, the up and down arrows change the price by one coin, by ten with Shift.
+- Anywhere in the deck, a button you reach with Tab now takes Enter itself, instead of Enter acting on the row picked with j and k.
+
 ## Ledgers come off the shelf
 
 - The Shelf tab no longer has a second grid of cards beside your bookshelf. The shelf stands in the middle of the room, and the ledger you point at, or move to with the keys, comes off the shelf and lies open on the wall to its left, with its name, criterion, open entries and time today on the pages. Its spine leaves a gap in its colour.

@@ -88,9 +88,11 @@ export const KEYS: KeyDef[] = [
 
   { id: 'list.down', scope: 'list', label: 'Next row', keys: ['j', 'ArrowDown'] },
   { id: 'list.up', scope: 'list', label: 'Previous row', keys: ['k', 'ArrowUp'] },
+  { id: 'list.left', scope: 'list', label: 'Left', keys: ['h', 'ArrowLeft'], note: 'Where the list is a grid: the market' },
+  { id: 'list.right', scope: 'list', label: 'Right', keys: ['l', 'ArrowRight'], note: 'Where the list is a grid: the market' },
   { id: 'list.top', scope: 'list', label: 'First row', keys: ['g'] },
   { id: 'list.bottom', scope: 'list', label: 'Last row', keys: ['G'] },
-  { id: 'list.go', scope: 'list', label: 'Deploy on the row', keys: ['Enter'], note: 'A pomodoro on the entry; on the couch list, sit down' },
+  { id: 'list.go', scope: 'list', label: 'Deploy on the row', keys: ['Enter'], note: 'A pomodoro on the entry; on the couch list, sit down; in the market, buy the card, add the idea or undo the purchase' },
   { id: 'list.clear', scope: 'list', label: 'Clear the entry', keys: ['c'], note: 'On the couch list, done with it: off the list' },
   { id: 'list.delete', scope: 'list', label: 'Delete the row', keys: ['x'] },
   { id: 'list.rename', scope: 'list', label: 'Rename', keys: ['r'] },
@@ -104,7 +106,7 @@ export const KEYS: KeyDef[] = [
   { id: 'list.blitz', scope: 'list', label: 'Blitz the flow', keys: ['b'] },
   { id: 'list.sort', scope: 'list', label: 'Auto-classify the tray', keys: ['s'] },
   { id: 'list.history', scope: 'list', label: 'Open the history', keys: ['H'], note: 'Everything cleared, and the trash' },
-  { id: 'list.restore', scope: 'list', label: 'Restore the row', keys: ['u'], note: 'In the history: reopen a cleared entry, or bring one back from the trash' },
+  { id: 'list.restore', scope: 'list', label: 'Restore the row', keys: ['u'], note: 'In the history: reopen a cleared entry, or bring one back from the trash; in the market, undo the last purchase or removal' },
   { id: 'list.trash', scope: 'list', label: 'Cleared or the trash', keys: ['t'], note: 'In the history' },
   { id: 'list.search', scope: 'list', label: 'Search', keys: ['/'], note: 'In the history' },
 
