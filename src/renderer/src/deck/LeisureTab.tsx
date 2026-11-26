@@ -51,7 +51,8 @@ export function LeisureTab({ s }: { s: MayorlyState }) {
           <button key={v} type="button" role="tab" aria-selected={view === v} className={`leisure-switch-btn caps ${view === v ? 'on' : ''}`} onClick={() => { if (v !== view) sfx.tick(); setView(v) }} {...tip('list.market', 'switch between the couch and the market')}>
             {v === 'couch' ? <ArtIcon id="icon.couch" size={15} fallback={<Couch size={15} />} /> : <ArtIcon id="icon.market" size={15} fallback={<Storefront size={15} />} />}
             {v === 'couch' ? 'Couch' : 'Market'}
-            <span className="leisure-switch-n mono num">{v === 'couch' ? couchN : marketN}</span>
+            {/* A count, in words, so it never reads as a key like the deck's tab numbers above. */}
+            <span className="leisure-switch-n">{v === 'couch' ? `${couchN} on the list` : `${marketN} for sale`}</span>
             {view === v && <motion.span layoutId="leisure-switch-bar" className="leisure-switch-bar" transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
           </button>
         ))}

@@ -2,6 +2,10 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Couch and Market say what their numbers are
+
+- In Leisure, the numbers beside Couch and Market were counts, not keys, and looked like the deck's tab keys. They now read "9 on the list" and "1 for sale". The key that switches between the two is still m.
+
 ## The market works from the keys
 
 - In Leisure, Market, everything can be reached without the mouse: h j k l or the arrows move over the cards, the ideas, Bring back, and the side column's purchases and removed items, by where they sit on screen. Something is picked as soon as the market opens.

@@ -977,7 +977,7 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .leisure-switch-btn:hover { color: var(--ink-2); }
 .leisure-switch-btn.on { color: var(--ink); }
 .leisure-switch-btn.on svg { color: var(--leisure); }
-.leisure-switch-n { font-size: 11px; letter-spacing: 0; color: var(--ink-3); }
+.leisure-switch-n { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--ink-3); }
 .leisure-switch-bar { position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; background: var(--leisure); }
 .leisure-switch-hint { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
 .row-time .row-paid { color: var(--ink-3); }
