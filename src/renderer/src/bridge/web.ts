@@ -123,8 +123,11 @@ export function createWebBridge(): Bridge {
   // ?demo and ?fresh: a handle for driving the HUD from the console or a screenshot script.
   if (scratch) (window as unknown as { __mayorly?: unknown }).__mayorly = { dispatch, state: () => state }
 
-  // Browsers have no global hotkeys, so the same combos work while the tab has focus.
+  // Browsers have no global hotkeys, so the same combos work while the tab has focus; not while
+  // Settings listens for a new one (`holdHotkeys`).
+  let hotkeysHeld = false
   window.addEventListener('keydown', (e) => {
+    if (hotkeysHeld) return
     // Tips and force mode: Ctrl+Alt with a key, by its position (Option composes another character on a Mac).
     if (e.ctrlKey && e.altKey && !e.metaKey) {
       const k = e.code === 'Period' ? '.' : e.code === 'Comma' ? ',' : physicalKey(e)
@@ -325,6 +328,9 @@ export function createWebBridge(): Bridge {
       close: () => {},
     },
     onHotkeyFailures: () => () => {},
+    holdHotkeys: (on) => {
+      hotkeysHeld = on
+    },
   }
 }
 

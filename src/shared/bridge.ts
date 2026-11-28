@@ -329,6 +329,11 @@ export interface Bridge {
   closeDrawer(): void
   /** Hotkeys that could not be registered (taken by another app, or refused by the OS). */
   onHotkeyFailures(fn: (failures: HotkeyFailures) => void): () => void
+  /**
+   * A new global hotkey is being pressed in Settings: let go of every global shortcut until it is
+   * done, or a combo already in use would run its command instead of reaching the page.
+   */
+  holdHotkeys?(on: boolean): void
   /** The stream rule's word for the couch list (Watching the stream, No stream seen...). The desktop app only. */
   stream?: { get(): Promise<StreamStatus>; onStatus(fn: (s: StreamStatus) => void): () => void }
   /** The switch log: the recent switches of the desk, newest first, and each new one as it happens; close is the Mac window's. */
@@ -406,4 +411,5 @@ export const IPC = {
   impactPreview: 'mayorly:impact-preview',
   drawerClose: 'mayorly:drawer-close',
   hotkeyFailures: 'mayorly:hotkey-failures',
+  hotkeysHold: 'mayorly:hotkeys-hold',
 } as const

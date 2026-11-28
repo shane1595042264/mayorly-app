@@ -80,6 +80,7 @@ const bridge: Bridge = {
   previewImpact: (moment, style) => ipcRenderer.send(IPC.impactPreview, moment, style),
   closeDrawer: () => ipcRenderer.send(IPC.drawerClose),
   onHotkeyFailures: (fn) => sub(IPC.hotkeyFailures, fn),
+  holdHotkeys: (on) => ipcRenderer.send(IPC.hotkeysHold, on),
   stream: {
     get: () => ipcRenderer.invoke(IPC.streamGet),
     onStatus: (fn) => sub(IPC.streamStatus, fn),

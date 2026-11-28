@@ -585,7 +585,23 @@ button.bay:hover { border-color: var(--line-2); background: rgb(237 240 241 / 0.
 .rules.rules-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .rules.rules-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 /* Inputs on one line across a row whatever their labels' wrapping. */
-.hotkeys { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); align-items: end; gap: 14px; margin-top: 12px; }
+.hotkeys { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); align-items: start; gap: 14px; margin-top: 12px; }
+/* A global hotkey's box: click it and press the new keys. It looks like a text box, and while it
+   listens its edge takes the accent and breathes. */
+.hotkey-box {
+  width: 100%; min-width: 0; height: 38px; padding: 0 11px;
+  border: 1px solid var(--line-2); background: rgb(237 240 241 / 0.05);
+  color: var(--ink); font-size: 15px; text-align: left; cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.hotkey-box:hover { border-color: rgb(237 240 241 / 0.4); }
+.hotkey-box:focus-visible { outline: none; border-color: var(--accent); }
+.hotkey-box.is-listening { border-color: var(--accent); background: rgb(237 240 241 / 0.09); color: var(--accent); animation: hotkey-listen 1.1s ease-in-out infinite; }
+.hotkey-box.invalid { border-color: #ff9b8c; }
+@keyframes hotkey-listen { 50% { box-shadow: 0 0 0 3px rgb(240 174 60 / 0.2); } }
+.hotkey-reset { justify-self: start; padding: 0; border: 0; background: none; font-size: 13px; color: rgb(237 240 241 / 0.6); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.hotkey-reset:hover { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .hotkey-box.is-listening { animation: none; } }
 .settings .rules .field:nth-last-child(-n + 2) { grid-column: auto; }
 .setting-panel .alarm-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .alarm-row .field-label { flex: 0 0 96px; }

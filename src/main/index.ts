@@ -637,10 +637,15 @@ function boot() {
   }
   let applied: Settings | null = null
   let appliedRecipes = ''
+  // Settings is listening for a new hotkey: every global shortcut is let go until it is done, or the
+  // combo being pressed would run its command instead of reaching the page. Back after 30 s whatever
+  // happens, so a page that went away mid-press never leaves the keys dead.
+  let hotkeysHeld: ReturnType<typeof setTimeout> | null = null
   const applySettings = (s: Settings) => {
     overlay.setScale(s.hudScale)
     overlay.setTextSize(s.text.pet)
     overlay.setEveryScreen(s.impact.everyScreen && Object.values(s.impact.styles).some((v) => v !== 'off'))
+    if (hotkeysHeld) return
     const recipes = JSON.stringify(recipeKeys(engine.state))
     if (applied && JSON.stringify(applied.hotkeys) === JSON.stringify(s.hotkeys) && applied.openAtLogin === s.openAtLogin && applied.gaming === s.gaming && recipes === appliedRecipes) return
     if (!applied || JSON.stringify(applied.hotkeys) !== JSON.stringify(s.hotkeys) || applied.gaming !== s.gaming || recipes !== appliedRecipes) {
@@ -688,6 +693,19 @@ function boot() {
   }
   applySettings(engine.state.settings)
   engine.on((state) => applySettings(state.settings))
+  const holdHotkeys = (on: boolean) => {
+    if (hotkeysHeld) clearTimeout(hotkeysHeld)
+    hotkeysHeld = null
+    if (on) {
+      globalShortcut.unregisterAll()
+      armAccels.length = 0
+      hotkeysHeld = setTimeout(() => holdHotkeys(false), 30_000)
+      return
+    }
+    applied = null
+    applySettings(engine.state.settings)
+  }
+  ipcMain.on(IPC.hotkeysHold, (_e, on: boolean) => holdHotkeys(!!on))
 
   // Daily recipes: each enabled one makes its entry once a day, from its time on, on the days
   // it names. Any computer may; the entry's id is the recipe and the day, so a merge keeps one.

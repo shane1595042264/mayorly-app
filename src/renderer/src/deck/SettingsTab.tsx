@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { ArrowsClockwise, ArrowsLeftRight, CalendarBlank, GoogleLogo, Keyboard, Play, Plus, Robot, SpeakerHigh, TextAa, Timer, Trash, UploadSimple, UserCircle, type Icon } from '@phosphor-icons/react'
-import { ALARM_TONES, LEDGER_CAP, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type ClerkSettings, type MayorlyState, type Recipe, type Settings, type ClerkAllow, type AutoSwitchRules, type ImpactMoment, type ImpactSettings, type ImpactStyle } from '@core/index'
+import { ALARM_TONES, DEFAULT_HOTKEYS, LEDGER_CAP, TEXT_MAX, TEXT_MIN, type AlarmKind, type AlarmTone, type ClerkSettings, type MayorlyState, type Recipe, type HotkeyAction, type Settings, type ClerkAllow, type AutoSwitchRules, type ImpactMoment, type ImpactSettings, type ImpactStyle } from '@core/index'
 import type { AiKeySync, AiProvider, AiPublic, AppInfo } from '../../../shared/bridge'
 import { DEFAULT_THRESHOLD, TRIALS } from '../../../shared/ai/tuning'
 import { builtOn } from '../../../shared/build'
 import { bridge } from '../bridge'
-import { hotkeyLabel, IS_MAC } from '../lib/keys'
+import { acceleratorOf, hotkeyLabel, IS_MAC, MODIFIER_KEYS, modifiersOf } from '../lib/keys'
 import { actionFor, GLOBAL_ACTIONS, keymapOpen } from '../lib/keymap'
 import { current, dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
 import { decodeAlarm, playAlarm, sfx } from '../lib/sound'
@@ -19,10 +19,6 @@ import { SettingsSearch } from '../lib/settingsSearch'
 import { tip } from '../lib/tips'
 
 const EXAMPLE = IS_MAC ? 'Option+T' : 'Alt+T'
-/** Electron's accelerator grammar, every modifier spelling it accepts, one key. */
-const ACCELERATOR = /^((Ctrl|Control|Alt|Option|AltGr|Shift|Super|Meta|Cmd|Command|CmdOrCtrl|CommandOrControl)\+)+([A-Z0-9]|F\d{1,2}|Space|Tab|`|[.,/;'=[\]\-])$/i
-/** Stored accelerators keep Electron's cross-platform spelling: Option is Alt. */
-const normalise = (v: string) => v.trim().replace(/\bOption\b/gi, 'Alt')
 
 type AreaId = 'timer' | 'switch' | 'sound' | 'pet' | 'calendar' | 'clerk' | 'keys' | 'account'
 
@@ -227,7 +223,7 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
             </Row>
             <Row
               title="Global hotkeys"
-              desc={<>They work from any app. Use a modifier combo such as {EXAMPLE} or Ctrl+Shift+Space.{IS_MAC && ' Option combos replace the characters they would type while Mayorly runs.'}</>}
+              desc={<>They work from any app. To change one, click its box and press the new keys, a combo such as {EXAMPLE} or Ctrl+Shift+Space; Esc keeps the old one.{IS_MAC && ' Option combos replace the characters they would type while Mayorly runs.'}</>}
               setting="hotkeys, shortcuts, keys, global"
               aside={
                 <button type="button" className="btn" onClick={openKeymap} title="Every key in the app, and the ones you changed (? in the deck)" {...tip('deck.keymap', 'every key in the app')}>
@@ -237,7 +233,7 @@ export function SettingsTab({ s, kind, openKeymap, openNotes }: { s: MayorlyStat
             >
               <div className="hotkeys">
                 {GLOBAL_ACTIONS.map(([action, label]) => (
-                  <HotkeyField key={action} label={label} value={st.hotkeys[action]} onCommit={(v) => set({ hotkeys: { ...st.hotkeys, [action]: v } })} />
+                  <HotkeyField key={action} action={action} label={label} hotkeys={st.hotkeys} onCommit={(v) => set({ hotkeys: { ...st.hotkeys, [action]: v } })} />
                 ))}
               </div>
             </Row>
@@ -968,29 +964,103 @@ function HouseRuleRow({ id, text, learned }: { id: string; text: string; learned
   )
 }
 
-function HotkeyField({ label, value, onCommit }: { label: string; value: string; onCommit: (v: string) => void }) {
-  const [v, setV] = useState(value)
-  const valid = ACCELERATOR.test(v)
-  const reads = hotkeyLabel(normalise(v))
+/**
+ * A global hotkey, set by pressing it: click the box (or Enter on it), press the new combo, and it is
+ * kept. While the box listens the shell lets go of every global shortcut (`holdHotkeys`), so a combo
+ * already in use reaches the box instead of running. Esc, or a click away, keeps the old one.
+ */
+function HotkeyField({ action, label, hotkeys, onCommit }: {
+  action: HotkeyAction
+  label: string
+  hotkeys: Settings['hotkeys']
+  onCommit: (v: string) => void
+}) {
+  const value = hotkeys[action]
+  const [listening, setListening] = useState(false)
+  const [held, setHeld] = useState('')
+  const [say, setSay] = useState<string | null>(null)
+  // The keys are read through a ref, so the listener (and the shell's hold) lasts the whole press.
+  const now = useRef({ value, hotkeys, onCommit })
+  now.current = { value, hotkeys, onCommit }
+  useEffect(() => {
+    if (!listening) return
+    bridge.holdHotkeys?.(true)
+    const stop = () => {
+      setListening(false)
+      setHeld('')
+    }
+    const onKey = (e: KeyboardEvent) => {
+      // Nothing else in the app hears these keys while the box listens.
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      // The modifiers held so far show in the box as they go down and up.
+      if (MODIFIER_KEYS.has(e.key)) {
+        // A modifier let go is no longer held, whatever its own keyup event says.
+        const gone = e.type === 'keyup' ? ({ Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Meta: IS_MAC ? 'Cmd' : 'Super' } as Record<string, string>)[e.key] : undefined
+        setHeld(modifiersOf(e).split('+').filter((m) => m && m !== gone).join('+'))
+        return
+      }
+      if (e.type === 'keyup') return
+      if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        setSay(null)
+        stop()
+        return
+      }
+      const accel = acceleratorOf(e)
+      if (!accel) {
+        setSay(IS_MAC ? 'Hold Control, Option or Cmd with the key' : 'Hold Ctrl, Alt or the Windows key with the key')
+        return
+      }
+      const { value: was, hotkeys: all, onCommit: commit } = now.current
+      const other = GLOBAL_ACTIONS.find(([a]) => a !== action && all[a] === accel)
+      if (other) {
+        setSay(`${hotkeyLabel(accel)} is already ${other[1].split(/[,:]/)[0].toLowerCase()}. Press another`)
+        return
+      }
+      setSay(null)
+      stop()
+      if (accel !== was) {
+        sfx.tick()
+        commit(accel)
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('keyup', onKey, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('keyup', onKey, true)
+      bridge.holdHotkeys?.(false)
+    }
+  }, [listening, action])
+  const def = DEFAULT_HOTKEYS[action]
   return (
-    <label className="field">
+    <div className="field">
       <span className="field-label caps">{label}</span>
-      <input
-        className={`mono ${valid ? '' : 'invalid'}`}
-        value={v}
-        spellCheck={false}
-        onChange={(e) => setV(e.target.value)}
-        onBlur={() => {
-          if (!valid) return setV(value)
-          const next = normalise(v)
-          setV(next)
-          if (next !== value) onCommit(next)
+      <button
+        type="button"
+        className={`hotkey-box mono ${listening ? 'is-listening' : ''} ${say ? 'invalid' : ''}`}
+        aria-label={`${label}: ${hotkeyLabel(value)}. Click and press the new keys`}
+        onClick={() => {
+          setSay(null)
+          setHeld('')
+          setListening((on) => !on)
         }}
-        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-      />
-      {!valid && <span className="field-error">Needs a modifier and one key, like {EXAMPLE}</span>}
-      {valid && reads !== v && <span className="field-help">{reads}</span>}
-    </label>
+        onBlur={() => {
+          setListening(false)
+          setHeld('')
+          setSay(null)
+        }}
+      >
+        {listening ? (held ? `${hotkeyLabel(held)}+` : 'Press the new keys') : hotkeyLabel(value)}
+      </button>
+      {say ? (
+        <span className="field-error">{say}</span>
+      ) : listening ? (
+        <span className="field-help">Esc keeps {hotkeyLabel(value)}</span>
+      ) : value !== def ? (
+        <button type="button" className="hotkey-reset" onClick={() => onCommit(def)}>Back to {hotkeyLabel(def)}</button>
+      ) : null}
+    </div>
   )
 }
 

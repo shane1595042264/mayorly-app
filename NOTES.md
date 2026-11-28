@@ -2,6 +2,13 @@
 
 The top section is what the app shows once per build, the first time that build launches on a machine. Keep it short and in plain words: what changed for the person using it, not how.
 
+## Set a hotkey by pressing it
+
+- In Settings, Hotkeys, click a global hotkey's box and press the new keys: it is kept as you press them. Esc, or a click away, keeps the old one.
+- A combo another hotkey already has is refused with its name, so press another. A key without Ctrl, Alt or the Windows key is refused too, since it would take that key from every app.
+- While the box listens, Mayorly lets go of its own shortcuts, so pressing one it already uses reaches the box instead of running. The Keymap screen does the same for its global rows.
+- A changed hotkey shows Back to and its default under it.
+
 ## Couch and Market say what their numbers are
 
 - In Leisure, the numbers beside Couch and Market were counts, not keys, and looked like the deck's tab keys. They now read "9 on the list" and "1 for sale". The key that switches between the two is still m.

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowCounterClockwise, Keyboard, MagnifyingGlass } from '@phosphor-icons/react'
 import { DEFAULT_HOTKEYS, type HotkeyAction, type MayorlyState } from '@core/index'
-import { IS_MAC, MODIFIER_KEYS, hotkeyLabel, physicalKey } from '../lib/keys'
+import { IS_MAC, MODIFIER_KEYS, acceleratorOf, hotkeyLabel } from '../lib/keys'
+import { bridge } from '../bridge'
 import { conflictsOf, GLOBAL_ACTIONS, KEYS, keyLabel, keyOf, keysFor, SCOPES, setKeymapOpen, usesOf, type Scope } from '../lib/keymap'
 import { reveal } from '../lib/listkeys'
 import { dispatch } from '../store'
@@ -28,25 +29,6 @@ interface Row {
 }
 
 type Slot = 0 | 1
-
-/** An Electron accelerator from a key event, or null when the shell could not register it. */
-function acceleratorOf(e: KeyboardEvent): string | null {
-  if (!e.ctrlKey && !e.altKey && !e.metaKey) return null
-  const mods: string[] = []
-  if (e.ctrlKey) mods.push('Ctrl')
-  if (e.altKey) mods.push('Alt')
-  if (e.shiftKey) mods.push('Shift')
-  // Electron spells the Windows key Super; Cmd is a Mac key and registers nowhere else.
-  if (e.metaKey) mods.push(IS_MAC ? 'Cmd' : 'Super')
-  let key: string
-  if (e.code.startsWith('Key') || e.code.startsWith('Digit')) key = physicalKey(e).toUpperCase()
-  else if (e.code === 'Space') key = 'Space'
-  else if (/^F\d{1,2}$/.test(e.key)) key = e.key
-  else if (e.key.startsWith('Arrow')) key = e.key.slice(5)
-  else if (['Enter', 'Tab', 'Backspace', 'Delete', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) key = e.key
-  else return null
-  return [...mods, key].join('+')
-}
 
 const scopeTitle = (id: Scope) => SCOPES.find((x) => x.id === id)?.title ?? id
 
@@ -173,6 +155,13 @@ export function Keymap({ s, close }: { s: MayorlyState; close: () => void }) {
     setSel(r.id)
     setWaiting({ id: r.id, slot })
   }
+  // Waiting on a global hotkey: the shell lets go of its shortcuts, so one already in use reaches here.
+  const waitingGlobal = !!waiting && waiting.id.startsWith('global.')
+  useEffect(() => {
+    if (!waitingGlobal) return
+    bridge.holdHotkeys?.(true)
+    return () => bridge.holdHotkeys?.(false)
+  }, [waitingGlobal])
 
   // This screen's own keys, ahead of everyone else's while it is open.
   useEffect(() => {

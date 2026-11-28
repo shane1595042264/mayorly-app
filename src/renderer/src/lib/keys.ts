@@ -26,6 +26,40 @@ export function matchesAcceleratorKey(e: KeyboardEvent, accelerator: string): bo
 
 export const MODIFIER_KEYS = new Set(['Alt', 'Control', 'Meta', 'Shift'])
 
+/** Punctuation keys by position, as Electron spells them in an accelerator. */
+const PUNCTUATION: Record<string, string> = {
+  Period: '.', Comma: ',', Slash: '/', Semicolon: ';', Quote: "'", Equal: '=', Minus: '-', BracketLeft: '[', BracketRight: ']', Backquote: '`',
+}
+
+/** The modifiers held in this event, in an accelerator's order and spelling ('Ctrl+Alt'). */
+export function modifiersOf(e: KeyboardEvent): string {
+  const mods: string[] = []
+  if (e.ctrlKey) mods.push('Ctrl')
+  if (e.altKey) mods.push('Alt')
+  if (e.shiftKey) mods.push('Shift')
+  // Electron spells the Windows key Super; Cmd is a Mac key and registers nowhere else.
+  if (e.metaKey) mods.push(IS_MAC ? 'Cmd' : 'Super')
+  return mods.join('+')
+}
+
+/**
+ * A global hotkey (an Electron accelerator) from a key event: the modifiers held and the key, by its
+ * position. Null without Ctrl, Alt or the Windows key (Cmd on a Mac), since a global shortcut on a
+ * plain or shifted key would take that key from every app, and for a key the shell cannot register.
+ */
+export function acceleratorOf(e: KeyboardEvent): string | null {
+  if (!e.ctrlKey && !e.altKey && !e.metaKey) return null
+  let key: string
+  if (e.code.startsWith('Key') || e.code.startsWith('Digit')) key = physicalKey(e).toUpperCase()
+  else if (e.code === 'Space') key = 'Space'
+  else if (PUNCTUATION[e.code]) key = PUNCTUATION[e.code]
+  else if (/^F\d{1,2}$/.test(e.key)) key = e.key
+  else if (e.key.startsWith('Arrow')) key = e.key.slice(5)
+  else if (['Enter', 'Tab', 'Backspace', 'Delete', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) key = e.key
+  else return null
+  return `${modifiersOf(e)}+${key}`
+}
+
 const MAC_NAMES: Record<string, string> = {
   alt: 'Option',
   option: 'Option',
