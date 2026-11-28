@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowCounterClockwise, Keyboard, MagnifyingGlass } from '@phosphor-icons/react'
 import { DEFAULT_HOTKEYS, type HotkeyAction, type MayorlyState } from '@core/index'
-import { IS_MAC, MODIFIER_KEYS, acceleratorOf, hotkeyLabel } from '../lib/keys'
+import { MODIFIER_KEYS, acceleratorOf, hotkeyLabel, hotkeyRefusal } from '../lib/keys'
 import { bridge } from '../bridge'
 import { conflictsOf, GLOBAL_ACTIONS, KEYS, keyLabel, keyOf, keysFor, SCOPES, setKeymapOpen, usesOf, type Scope } from '../lib/keymap'
 import { reveal } from '../lib/listkeys'
@@ -127,7 +127,7 @@ export function Keymap({ s, close }: { s: MayorlyState; close: () => void }) {
     if (r.global) {
       const accel = acceleratorOf(e)
       if (!accel) {
-        say(IS_MAC ? 'A global hotkey needs Control, Option or Cmd in it' : 'A global hotkey needs Ctrl, Alt or the Windows key in it')
+        say(hotkeyRefusal(e) ?? '')
         return
       }
       setGlobal(r.global, accel)

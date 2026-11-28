@@ -8,6 +8,7 @@ The top section is what the app shows once per build, the first time that build 
 - A combo another hotkey already has is refused with its name, so press another. A key without Ctrl, Alt or the Windows key is refused too, since it would take that key from every app.
 - While the box listens, Mayorly lets go of its own shortcuts, so pressing one it already uses reaches the box instead of running. The Keymap screen does the same for its global rows.
 - A changed hotkey shows Back to and its default under it.
+- The backslash key (Alt+\), Insert and the numpad keys can be hotkeys now. A key Mayorly cannot use says so by name, instead of asking for a modifier you were already holding.
 
 ## Couch and Market say what their numbers are
 

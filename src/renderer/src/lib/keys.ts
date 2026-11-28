@@ -21,14 +21,16 @@ export function matchesAcceleratorKey(e: KeyboardEvent, accelerator: string): bo
   if (!key) return false
   if (key.length === 1) return physicalKey(e) === key
   if (key === 'space') return e.code === 'Space'
+  if (/^num\d$/.test(key)) return e.code === `Numpad${key.slice(3)}`
   return e.key.toLowerCase() === key || e.code.toLowerCase() === key
 }
 
 export const MODIFIER_KEYS = new Set(['Alt', 'Control', 'Meta', 'Shift'])
 
-/** Punctuation keys by position, as Electron spells them in an accelerator. */
+/** Punctuation and numpad keys by position, as Electron spells them in an accelerator. */
 const PUNCTUATION: Record<string, string> = {
-  Period: '.', Comma: ',', Slash: '/', Semicolon: ';', Quote: "'", Equal: '=', Minus: '-', BracketLeft: '[', BracketRight: ']', Backquote: '`',
+  Period: '.', Comma: ',', Slash: '/', Semicolon: ';', Quote: "'", Equal: '=', Minus: '-', BracketLeft: '[', BracketRight: ']', Backquote: '`', Backslash: '\\',
+  NumpadAdd: 'numadd', NumpadSubtract: 'numsub', NumpadMultiply: 'nummult', NumpadDivide: 'numdiv', NumpadDecimal: 'numdec',
 }
 
 /** The modifiers held in this event, in an accelerator's order and spelling ('Ctrl+Alt'). */
@@ -42,22 +44,36 @@ export function modifiersOf(e: KeyboardEvent): string {
   return mods.join('+')
 }
 
+/** The key of a global hotkey, by its position, as Electron spells it; null for one it cannot register. */
+export function acceleratorKey(e: KeyboardEvent): string | null {
+  if (e.code.startsWith('Key') || e.code.startsWith('Digit')) return physicalKey(e).toUpperCase()
+  if (/^Numpad\d$/.test(e.code)) return `num${e.code.slice(6)}`
+  if (e.code === 'Space') return 'Space'
+  if (PUNCTUATION[e.code]) return PUNCTUATION[e.code]
+  if (/^F\d{1,2}$/.test(e.key)) return e.key
+  if (e.key.startsWith('Arrow')) return e.key.slice(5)
+  if (['Enter', 'Tab', 'Backspace', 'Delete', 'Insert', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) return e.key
+  return null
+}
+
+/** Ctrl, Alt or the Windows key (Cmd on a Mac) is held: Shift alone does not make a global hotkey. */
+export const hasHotkeyModifier = (e: KeyboardEvent) => e.ctrlKey || e.altKey || e.metaKey
+
 /**
  * A global hotkey (an Electron accelerator) from a key event: the modifiers held and the key, by its
  * position. Null without Ctrl, Alt or the Windows key (Cmd on a Mac), since a global shortcut on a
  * plain or shifted key would take that key from every app, and for a key the shell cannot register.
  */
 export function acceleratorOf(e: KeyboardEvent): string | null {
-  if (!e.ctrlKey && !e.altKey && !e.metaKey) return null
-  let key: string
-  if (e.code.startsWith('Key') || e.code.startsWith('Digit')) key = physicalKey(e).toUpperCase()
-  else if (e.code === 'Space') key = 'Space'
-  else if (PUNCTUATION[e.code]) key = PUNCTUATION[e.code]
-  else if (/^F\d{1,2}$/.test(e.key)) key = e.key
-  else if (e.key.startsWith('Arrow')) key = e.key.slice(5)
-  else if (['Enter', 'Tab', 'Backspace', 'Delete', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) key = e.key
-  else return null
-  return `${modifiersOf(e)}+${key}`
+  const key = hasHotkeyModifier(e) ? acceleratorKey(e) : null
+  return key ? `${modifiersOf(e)}+${key}` : null
+}
+
+/** Why this key event cannot be a global hotkey, in words, or null when it can. */
+export function hotkeyRefusal(e: KeyboardEvent): string | null {
+  if (!hasHotkeyModifier(e)) return IS_MAC ? 'Hold Control, Option or Cmd with the key' : 'Hold Ctrl, Alt or the Windows key with the key'
+  if (!acceleratorKey(e)) return `The ${e.key === ' ' ? 'Space' : e.key} key cannot be in a hotkey. Press another`
+  return null
 }
 
 const MAC_NAMES: Record<string, string> = {

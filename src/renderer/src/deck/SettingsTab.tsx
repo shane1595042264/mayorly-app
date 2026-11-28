@@ -5,7 +5,7 @@ import type { AiKeySync, AiProvider, AiPublic, AppInfo } from '../../../shared/b
 import { DEFAULT_THRESHOLD, TRIALS } from '../../../shared/ai/tuning'
 import { builtOn } from '../../../shared/build'
 import { bridge } from '../bridge'
-import { acceleratorOf, hotkeyLabel, IS_MAC, MODIFIER_KEYS, modifiersOf } from '../lib/keys'
+import { acceleratorOf, hotkeyLabel, hotkeyRefusal, IS_MAC, MODIFIER_KEYS, modifiersOf } from '../lib/keys'
 import { actionFor, GLOBAL_ACTIONS, keymapOpen } from '../lib/keymap'
 import { current, dispatch, useAccount, useAi, useNow, useSyncStatus } from '../store'
 import { decodeAlarm, playAlarm, sfx } from '../lib/sound'
@@ -1008,7 +1008,7 @@ function HotkeyField({ action, label, hotkeys, onCommit }: {
       }
       const accel = acceleratorOf(e)
       if (!accel) {
-        setSay(IS_MAC ? 'Hold Control, Option or Cmd with the key' : 'Hold Ctrl, Alt or the Windows key with the key')
+        setSay(hotkeyRefusal(e))
         return
       }
       const { value: was, hotkeys: all, onCommit: commit } = now.current
